@@ -4,6 +4,7 @@ import argparse
 from contextlib import contextmanager
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -67,7 +68,7 @@ from .pipeline import (
 )
 from .providers import get_citation_support_provider, get_provider
 from .revisions import write_revision_suggestions
-from .session import create_session, get_current_session_id, load_session
+from .session import create_session, get_current_session_id, load_session, run_dir
 from .source_obligations import write_source_obligations
 from .teach import prepare_teach_bundle
 
@@ -105,6 +106,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     status_parser = sub.add_parser("status", help="Show current session state")
     status_parser.add_argument("--json", action="store_true")
+    status_parser.add_argument("--summary", action="store_true", help="Print a compact first-user session summary")
+
+    export_parser = sub.add_parser("export-artifacts", help="Copy the current session's main outputs to an easy-to-share directory")
+    export_parser.add_argument("--output", required=True, help="Destination directory for exported outputs")
+    export_parser.add_argument("--include-all-artifacts", action="store_true", help="Also copy the complete session artifacts/ directory")
+    export_parser.add_argument("--json", action="store_true", help="Print machine-readable export details")
+
+    export_current_parser = sub.add_parser("export-current", help="Alias for export-artifacts")
+    export_current_parser.add_argument("--output", required=True, help="Destination directory for exported outputs")
+    export_current_parser.add_argument("--include-all-artifacts", action="store_true", help="Also copy the complete session artifacts/ directory")
+    export_current_parser.add_argument("--json", action="store_true", help="Print machine-readable export details")
 
     quickstart_parser = sub.add_parser("quickstart", help="Print a short operator guide for common PaperOrchestra workflows")
     quickstart_parser.add_argument("--scenario", default="new-paper", choices=["new-paper", "testset", "curated-prior-work", "environment"])
@@ -493,6 +505,103 @@ def _write_full_fidelity_artifacts(cwd: Path, reference_case: str | None) -> dic
     return paths
 
 
+def _path_or_missing(value: str | None) -> str:
+    return value if value else "missing"
+
+
+def _session_artifact_dir(cwd: Path, state) -> Path:
+    if state.artifacts.paper_full_tex:
+        return Path(state.artifacts.paper_full_tex).resolve().parent
+    return run_dir(cwd, state.session_id) / "artifacts"
+
+
+def _status_summary_lines(cwd: Path, payload: dict[str, object]) -> list[str]:
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, dict):
+        artifacts = {}
+    recovery = payload.get("session_recovery")
+    if not isinstance(recovery, dict):
+        recovery = {}
+    artifact_dir = Path(str(artifacts.get("paper_full_tex"))).resolve().parent if artifacts.get("paper_full_tex") else run_dir(cwd, str(payload["session_id"])) / "artifacts"
+    lines = [
+        f"Session: {payload['session_id']}",
+        f"Phase: {payload['current_phase']}",
+        "",
+        "Main files:",
+        f"  TeX: {_path_or_missing(artifacts.get('paper_full_tex'))}",
+        f"  PDF: {_path_or_missing(artifacts.get('compiled_pdf'))}",
+        f"  Review: {_path_or_missing(artifacts.get('latest_review_json'))}",
+        f"  Reproducibility: {_path_or_missing(artifacts.get('latest_reproducibility_json'))}",
+        f"  Artifact directory: {artifact_dir}",
+        "",
+        "Next:",
+    ]
+    next_commands = recovery.get("next_commands")
+    if isinstance(next_commands, list) and next_commands:
+        lines.extend(f"  {command}" for command in next_commands)
+    elif not artifacts.get("compiled_pdf"):
+        lines.extend(
+            [
+                "  paperorchestra check-compile-env",
+                "  PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile",
+            ]
+        )
+    else:
+        lines.append("  paperorchestra export-artifacts --output ./paperorchestra-output")
+    return lines
+
+
+def _copy_if_present(label: str, source: str | None, destination: Path, copied: list[dict[str, str]], skipped: list[dict[str, str]]) -> None:
+    if not source:
+        skipped.append({"label": label, "reason": "not recorded"})
+        return
+    source_path = Path(source)
+    if not source_path.exists():
+        skipped.append({"label": label, "source": str(source_path), "reason": "missing on disk"})
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_path, destination)
+    copied.append({"label": label, "source": str(source_path), "destination": str(destination)})
+
+
+def _export_current_artifacts(cwd: Path, output: str | Path, *, include_all_artifacts: bool = False) -> dict[str, object]:
+    state = load_session(cwd)
+    output_dir = Path(output).expanduser().resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    copied: list[dict[str, str]] = []
+    skipped: list[dict[str, str]] = []
+    artifacts = state.artifacts
+    export_map = [
+        ("paper_full_tex", artifacts.paper_full_tex, output_dir / "paper.full.tex"),
+        ("compiled_pdf", artifacts.compiled_pdf, output_dir / "paper.full.pdf"),
+        ("references_bib", artifacts.references_bib, output_dir / "references.bib"),
+        ("latest_review_json", artifacts.latest_review_json, output_dir / "review.latest.json"),
+        ("latest_reproducibility_json", artifacts.latest_reproducibility_json, output_dir / "reproducibility.audit.json"),
+        ("latest_fidelity_json", artifacts.latest_fidelity_json, output_dir / "fidelity.audit.json"),
+        ("latest_runtime_parity_json", artifacts.latest_runtime_parity_json, output_dir / "runtime-parity.json"),
+        ("latest_compile_report_json", artifacts.latest_compile_report_json, output_dir / "compile-report.json"),
+        ("session_json", str(run_dir(cwd, state.session_id) / "session.json"), output_dir / "session.json"),
+    ]
+    for label, source, destination in export_map:
+        _copy_if_present(label, source, destination, copied, skipped)
+
+    if include_all_artifacts:
+        artifact_dir = _session_artifact_dir(cwd, state)
+        if artifact_dir.exists():
+            shutil.copytree(artifact_dir, output_dir / "artifacts", dirs_exist_ok=True)
+            copied.append({"label": "artifacts_dir", "source": str(artifact_dir), "destination": str(output_dir / "artifacts")})
+        else:
+            skipped.append({"label": "artifacts_dir", "source": str(artifact_dir), "reason": "missing on disk"})
+
+    return {
+        "status": "ok",
+        "session_id": state.session_id,
+        "output_dir": str(output_dir),
+        "copied": copied,
+        "skipped": skipped,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -523,6 +632,8 @@ def main(argv: list[str] | None = None) -> int:
             payload["session_recovery"] = build_session_recovery_hint(cwd)
             if args.json:
                 print(json.dumps(payload, indent=2, ensure_ascii=False))
+            elif args.summary:
+                print("\n".join(_status_summary_lines(cwd, payload)))
             else:
                 print(f"session_id: {payload['session_id']}")
                 print(f"current_phase: {payload['current_phase']}")
@@ -547,6 +658,23 @@ def main(argv: list[str] | None = None) -> int:
                     for command in recovery["next_commands"]:
                         print(f"  - {command}")
                 print(f"artifacts: {json.dumps(payload['artifacts'], indent=2, ensure_ascii=False)}")
+            return 0
+
+        if args.command in {"export-artifacts", "export-current"}:
+            payload = _export_current_artifacts(cwd, args.output, include_all_artifacts=args.include_all_artifacts)
+            if args.json:
+                print(json.dumps(payload, indent=2, ensure_ascii=False))
+            else:
+                print(f"Exported PaperOrchestra outputs for session {payload['session_id']}")
+                print(f"Output: {payload['output_dir']}")
+                print("Copied:")
+                for item in payload["copied"]:
+                    print(f"  - {item['label']}: {item['destination']}")
+                if payload["skipped"]:
+                    print("Skipped:")
+                    for item in payload["skipped"]:
+                        reason = item.get("reason", "unknown")
+                        print(f"  - {item['label']}: {reason}")
             return 0
 
         if args.command == "quickstart":

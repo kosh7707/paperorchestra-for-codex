@@ -3119,6 +3119,75 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             self.assertIn(".paper-orchestra/preflight/compile-environment.json", payload["path"])
             self.assertIn("ready_for_compile", payload["report"])
 
+    def test_status_summary_highlights_main_outputs_and_next_steps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\documentclass{article}\\begin{document}ok\\end{document}\n", encoding="utf-8")
+            review = review_path(root, "review.latest.json")
+            review.write_text('{"overall_score": 0.8}\n', encoding="utf-8")
+            repro = artifact_path(root, "reproducibility.audit.json")
+            repro.write_text('{"verdict": "BLOCK"}\n', encoding="utf-8")
+            state.current_phase = "draft_complete"
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.latest_review_json = str(review)
+            state.artifacts.latest_reproducibility_json = str(repro)
+            save_session(root, state)
+            old_cwd = Path.cwd()
+            stdout = io.StringIO()
+            try:
+                os.chdir(root)
+                with contextlib.redirect_stdout(stdout):
+                    code = cli_main(["status", "--summary"])
+            finally:
+                os.chdir(old_cwd)
+
+        self.assertEqual(code, 0)
+        output = stdout.getvalue()
+        self.assertIn(f"Session: {state.session_id}", output)
+        self.assertIn("Phase: draft_complete", output)
+        self.assertIn(str(paper), output)
+        self.assertIn(str(review), output)
+        self.assertIn("paperorchestra check-compile-env", output)
+
+    def test_export_artifacts_copies_current_main_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\documentclass{article}\\begin{document}ok\\end{document}\n", encoding="utf-8")
+            pdf = root / ".paper-orchestra" / "runs" / state.session_id / "build" / "compiled" / "paper.full.pdf"
+            pdf.parent.mkdir(parents=True)
+            pdf.write_bytes(b"%PDF-1.5\n")
+            refs = artifact_path(root, "references.bib")
+            refs.write_text("@article{x,title={X}}\n", encoding="utf-8")
+            review = review_path(root, "review.latest.json")
+            review.write_text('{"overall_score": 0.8}\n', encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.compiled_pdf = str(pdf)
+            state.artifacts.references_bib = str(refs)
+            state.artifacts.latest_review_json = str(review)
+            save_session(root, state)
+            out_dir = root / "out"
+            old_cwd = Path.cwd()
+            stdout = io.StringIO()
+            try:
+                os.chdir(root)
+                with contextlib.redirect_stdout(stdout):
+                    code = cli_main(["export-artifacts", "--output", str(out_dir), "--include-all-artifacts", "--json"])
+            finally:
+                os.chdir(old_cwd)
+            self.assertEqual(code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["status"], "ok")
+            self.assertTrue((out_dir / "paper.full.tex").exists())
+            self.assertTrue((out_dir / "paper.full.pdf").exists())
+            self.assertTrue((out_dir / "references.bib").exists())
+            self.assertTrue((out_dir / "review.latest.json").exists())
+            self.assertTrue((out_dir / "session.json").exists())
+            self.assertTrue((out_dir / "artifacts" / "paper.full.tex").exists())
+
     def test_compile_env_bootstrap_uses_root_commands_without_sudo(self) -> None:
         def fake_which(name: str) -> str | None:
             return "/usr/bin/apt-get" if name == "apt-get" else None
