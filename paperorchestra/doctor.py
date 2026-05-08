@@ -10,6 +10,7 @@ from .compile_env import inspect_compile_environment
 from .environment import (
     build_environment_inventory,
     build_readiness_profiles,
+    package_context,
 )
 from .fidelity import build_reproducibility_audit
 from .omx_bridge import _resolve_omx_model, _resolve_omx_reasoning_effort
@@ -141,8 +142,14 @@ def build_doctor_report(cwd: str | Path | None = None) -> dict[str, Any]:
         strict_omx_native=_truthy_env('PAPERO_STRICT_OMX_NATIVE'),
     )
     docs = build_environment_inventory()['docs']
+    pkg_context = package_context(root)
 
     checks = [
+        {
+            'code': 'package_import_context',
+            'status': 'warning' if pkg_context.get('stale_install_warning') else 'ok',
+            'detail': pkg_context,
+        },
         {'code': 'omx_available', 'status': 'ok' if omx_path else 'missing', 'detail': omx_path},
         {'code': 'omx_version', 'status': 'ok' if omx_version else 'warning', 'detail': omx_version or 'version unavailable'},
         {'code': 'codex_available', 'status': 'ok' if codex_path else 'missing', 'detail': codex_path},
@@ -193,6 +200,7 @@ def build_doctor_report(cwd: str | Path | None = None) -> dict[str, Any]:
         'cwd': str(root),
         'omx_model': _resolve_omx_model(),
         'omx_reasoning_effort': _resolve_omx_reasoning_effort(),
+        'package_context': pkg_context,
         'provider_command_configured': bool(os.environ.get('PAPERO_MODEL_CMD')),
         'environment_docs': docs,
         'readiness_profiles': profiles,

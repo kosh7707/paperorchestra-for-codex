@@ -14,7 +14,9 @@ It reconstructs the paper's manuscript-writing contract around explicit artifact
 ```bash
 git clone https://github.com/kosh7707/paperorchestra-for-codex.git
 cd paperorchestra-for-codex
-python3 -m pip install -e .
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
 
 # Safe self-contained demo: no live search/model calls, no reference PDF required.
 ./scripts/demo-mock.sh
@@ -193,8 +195,15 @@ The intended operating model is:
 ```bash
 git clone https://github.com/kosh7707/paperorchestra-for-codex.git
 cd paperorchestra-for-codex
-python3 -m pip install -e .
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
 ```
+
+Use a virtual environment first. Some Linux distributions mark the system
+Python as externally managed, so direct `python3 -m pip install -e .` can fail
+with a PEP 668 error. The `.venv` flow also prevents a stale globally installed
+`paperorchestra` command from shadowing the checkout you just cloned.
 
 This installs:
 
@@ -243,9 +252,13 @@ If you want the shortest newcomer path that proves the repo is usable:
 ```bash
 git clone https://github.com/kosh7707/paperorchestra-for-codex.git
 cd paperorchestra-for-codex
-python3 -m pip install -e .
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
 
-# confirm the CLI is alive
+# confirm the local CLI is alive; `paperorchestra doctor` reports package_context
+# so stale installs are visible.
+python -m paperorchestra.cli --help
 paperorchestra --help
 paperorchestra doctor
 paperorchestra environment
@@ -289,7 +302,7 @@ Recommended first live setup:
 
 ```bash
 cat > .env <<'EOF'
-PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.4","-c","model_reasoning_effort=\"high\""]'
+PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"high\""]'
 SEMANTIC_SCHOLAR_API_KEY='<your-key>'
 PAPERO_PROVIDER_TIMEOUT_SECONDS=1800
 PAPERO_PROVIDER_TIMEOUT_GRACE_SECONDS=180
@@ -312,7 +325,7 @@ PAPERO_OMX_TIMEOUT_GRACE_SECONDS=180
 PAPERO_CODEX_RETRY_ATTEMPTS=1
 PAPERO_CODEX_RETRY_BACKOFF_SECONDS=15
 PAPERO_CODEX_RETRY_JITTER_SECONDS=3
-PAPERO_OMX_MODEL=gpt-5.4
+PAPERO_OMX_MODEL=gpt-5.5
 PAPERO_OMX_REASONING_EFFORT=high
 PAPERO_STRICT_CONTENT_GATES=1
 # Enable only if you want PDF compilation in this run:
@@ -370,7 +383,7 @@ paperorchestra cleanup-tmp --max-age-seconds 3600
 Most important live-run environment variables:
 
 ```bash
-export PAPERO_OMX_MODEL=gpt-5.4
+export PAPERO_OMX_MODEL=gpt-5.5
 export PAPERO_OMX_REASONING_EFFORT=xhigh
 export PAPERO_OMX_EXEC_TIMEOUT_SECONDS=900
 export SEMANTIC_SCHOLAR_API_KEY='<recommended for --verify-mode live>'
@@ -404,7 +417,7 @@ For most users, the minimum variables worth setting first are:
 # ---------------------------------------------------------------------------
 # Common runtime knobs (optional)
 # ---------------------------------------------------------------------------
-# PAPERO_OMX_MODEL=gpt-5.4
+# PAPERO_OMX_MODEL=gpt-5.5
 # PAPERO_OMX_REASONING_EFFORT=xhigh
 # PAPERO_OMX_EXEC_TIMEOUT_SECONDS=900
 # PAPERO_OMX_CONTROL_TIMEOUT_SECONDS=120
@@ -421,7 +434,7 @@ For most users, the minimum variables worth setting first are:
 # ---------------------------------------------------------------------------
 # Shell provider (required for --provider shell)
 # ---------------------------------------------------------------------------
-# PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.4","-c","model_reasoning_effort=\"high\""]'
+# PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"high\""]'
 # PAPERO_PROVIDER_TIMEOUT_SECONDS=600
 # PAPERO_PROVIDER_TIMEOUT_GRACE_SECONDS=120
 # Provider replay requires explicit retry-safe declaration and transport evidence;
@@ -501,7 +514,7 @@ For most users, the minimum variables worth setting first are:
 
 The short version:
 
-- basic CLI/demo: Python 3.11+ and `python3 -m pip install -e .`
+- basic CLI/demo: Python 3.11+, `.venv`, and `python -m pip install -e .`
 - shell-provider live runs: set `PAPERO_MODEL_CMD`
 - OMX-native runs: install `omx` and `codex`
 - live verification: set `SEMANTIC_SCHOLAR_API_KEY`
@@ -525,8 +538,8 @@ Full install/package/env details now live in **`ENVIRONMENT.md`** so this README
 The full inventory is in **`ENVIRONMENT.md`**. A copyable commented template now lives in the `Copyable environment template` section of this README. The most common operator-set variables are:
 
 ```bash
-export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.4","-c","model_reasoning_effort=\"high\""]'
-export PAPERO_OMX_MODEL=gpt-5.4
+export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"high\""]'
+export PAPERO_OMX_MODEL=gpt-5.5
 export PAPERO_OMX_REASONING_EFFORT=xhigh
 export PAPERO_OMX_EXEC_TIMEOUT_SECONDS=900
 export PAPERO_STRICT_OMX_NATIVE=1
@@ -775,7 +788,7 @@ paperorchestra run \
 
 ```bash
 export PAPERO_ALLOW_TEX_COMPILE=1
-export PAPERO_OMX_MODEL=gpt-5.4
+export PAPERO_OMX_MODEL=gpt-5.5
 export PAPERO_OMX_REASONING_EFFORT=xhigh
 export SEMANTIC_SCHOLAR_API_KEY='<optional but recommended>'
 
@@ -1006,7 +1019,7 @@ paperorchestra compare-partitioned-citation-coverage \
 
 ## MCP server
 
-`python3 -m pip install -e .` installs the MCP server binary, but it does **not**
+`python -m pip install -e .` inside your repo `.venv` installs the MCP server binary, but it does **not**
 automatically register that server with Codex, Claude, or any other MCP client.
 Register it in the client you use.
 
@@ -1071,7 +1084,7 @@ MCP tool inventory (current surfaces):
 
 ## Skill installation
 
-`python3 -m pip install -e .` does not install Codex local skills. Install the repo
+`python -m pip install -e .` does not install Codex local skills. Install the repo
 skill explicitly after cloning:
 
 ```bash

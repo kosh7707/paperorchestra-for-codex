@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 import os
 from pathlib import Path
+import sys
 from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PACKAGE_ROOT = Path(__file__).resolve().parent
 
 
 @dataclass(frozen=True)
@@ -29,8 +31,8 @@ ENVIRONMENT_VARIABLES: tuple[EnvironmentVariableSpec, ...] = (
         name="PAPERO_OMX_MODEL",
         category="core_runtime",
         operator_settable=True,
-        default="gpt-5.4-mini",
-        example="gpt-5.4",
+        default="gpt-5.5",
+        example="gpt-5.5",
         description="Override the default OMX-native model used by PaperOrchestra stages.",
         notes=("Optional quality/cost knob.",),
     ),
@@ -97,7 +99,7 @@ ENVIRONMENT_VARIABLES: tuple[EnvironmentVariableSpec, ...] = (
         category="shell_provider",
         operator_settable=True,
         default=None,
-        example='["codex","exec","--skip-git-repo-check","-m","gpt-5.4-mini","-c","model_reasoning_effort=\\"low\\""]',
+        example='["codex","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\\"low\\""]',
         description="Shell-provider command: reads prompt from stdin and writes response to stdout.",
         required_for=("shell_provider_ready", "full_live_run_ready", "claim_safe_full_run_ready"),
     ),
@@ -575,8 +577,30 @@ def operator_environment_variable_names() -> list[str]:
     return [spec.name for spec in ENVIRONMENT_VARIABLES if spec.operator_settable]
 
 
+def package_context(cwd: str | Path | None = None) -> dict[str, Any]:
+    """Return import/install context useful for diagnosing stale installs."""
+
+    root = Path(cwd or ".").resolve()
+    stale_warning = None
+    if (root / "pyproject.toml").exists() and PROJECT_ROOT != root:
+        stale_warning = (
+            "The imported paperorchestra package is not from the current working "
+            "tree. Activate the repo .venv or run `python -m pip install -e .` "
+            "from this checkout."
+        )
+    return {
+        "cwd": str(root),
+        "project_root": str(PROJECT_ROOT),
+        "package_root": str(PACKAGE_ROOT),
+        "package_file": str(PACKAGE_ROOT / "__init__.py"),
+        "python_executable": sys.executable,
+        "stale_install_warning": stale_warning,
+    }
+
+
 def build_environment_inventory() -> dict[str, Any]:
     return {
+        "package_context": package_context(),
         "docs": {
             "environment_guide": str(environment_guide_path()),
             "env_example": str(env_example_path()),
@@ -584,10 +608,11 @@ def build_environment_inventory() -> dict[str, Any]:
         "python": {
             "requires_python": ">=3.11",
             "python_dependencies": [],
-            "install_command": "python3 -m pip install -e .",
+            "install_command": "python3 -m venv .venv && . .venv/bin/activate && python -m pip install -e .",
+            "direct_pip_note": "On externally managed Python installs, use a virtual environment instead of system pip.",
         },
         "prerequisites": {
-            "basic_operation": ["Python 3.11+", "python3 -m pip install -e ."],
+            "basic_operation": ["Python 3.11+", "venv-local editable install of this checkout"],
             "shell_provider": ["Set PAPERO_MODEL_CMD to a compatible executable (for example Codex CLI)."],
             "omx_native": ["omx", "codex"],
             "compile": {

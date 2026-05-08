@@ -36,7 +36,7 @@ fi
 
 if [[ "$PROVIDER" == "shell" && -z "${PAPERO_MODEL_CMD:-}" ]]; then
   if command -v codex >/dev/null 2>&1; then
-    export PAPERO_MODEL_CMD='["codex","exec","--skip-git-repo-check","-m","gpt-5.4-mini","-c","model_reasoning_effort=\"low\""]'
+    export PAPERO_MODEL_CMD='["codex","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"low\""]'
   else
     echo "[smoke] shell provider requested but codex/PAPERO_MODEL_CMD unavailable" >&2
     exit 1

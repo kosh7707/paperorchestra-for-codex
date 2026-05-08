@@ -15,8 +15,14 @@ trap cleanup EXIT
 mkdir -p "$WORKDIR"
 cd "$WORKDIR"
 
-if command -v paperorchestra >/dev/null 2>&1; then
-  PAPERO_CMD=(paperorchestra)
+# Prefer the freshly cloned repository over any stale globally installed
+# `paperorchestra` command. Operators may opt in to a custom command for
+# debugging with PAPERO_CMD_OVERRIDE, but the public demo path should exercise
+# this checkout's code.
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
+if [[ -n "${PAPERO_CMD_OVERRIDE:-}" ]]; then
+  # shellcheck disable=SC2206
+  PAPERO_CMD=(${PAPERO_CMD_OVERRIDE})
 else
   PAPERO_CMD=(python3 -m paperorchestra.cli)
 fi

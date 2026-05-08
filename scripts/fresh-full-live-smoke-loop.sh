@@ -56,11 +56,11 @@ export PAPERO_ALLOW_TEX_COMPILE=1
 export PAPERO_STRICT_CONTENT_GATES=1
 export PAPERO_STRICT_OMX_NATIVE=1
 export PAPERO_ALLOWED_PROVIDER_BINARIES="${PAPERO_ALLOWED_PROVIDER_BINARIES:-codex,bash,python3}"
-export PAPERO_GEN_MODEL="${PAPERO_GEN_MODEL:-gpt-5.4}"
+export PAPERO_GEN_MODEL="${PAPERO_GEN_MODEL:-gpt-5.5}"
 export PAPERO_GEN_REASONING_EFFORT="${PAPERO_GEN_REASONING_EFFORT:-medium}"
-export PAPERO_WEB_MODEL="${PAPERO_WEB_MODEL:-gpt-5.4-mini}"
+export PAPERO_WEB_MODEL="${PAPERO_WEB_MODEL:-gpt-5.5}"
 export PAPERO_WEB_REASONING_EFFORT="${PAPERO_WEB_REASONING_EFFORT:-low}"
-export PAPERO_OMX_MODEL="${PAPERO_OMX_MODEL:-gpt-5.4}"
+export PAPERO_OMX_MODEL="${PAPERO_OMX_MODEL:-gpt-5.5}"
 export PAPERO_OMX_REASONING_EFFORT="${PAPERO_OMX_REASONING_EFFORT:-medium}"
 export PAPERO_OMX_EXEC_TIMEOUT_SECONDS="${PAPERO_OMX_EXEC_TIMEOUT_SECONDS:-2400}"
 export PAPERO_OMX_CONTROL_TIMEOUT_SECONDS="${PAPERO_OMX_CONTROL_TIMEOUT_SECONDS:-240}"
@@ -682,9 +682,9 @@ payload = {
 meta_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False)+"\n", encoding="utf-8")
 PY_TRACE_META
 if [[ "$mode" == "web" ]]; then
-  cmd=(codex --search exec --skip-git-repo-check -m "${PAPERO_WEB_MODEL:-gpt-5.4-mini}" -c "model_reasoning_effort=\"${PAPERO_WEB_REASONING_EFFORT:-low}\"")
+  cmd=(codex --search exec --skip-git-repo-check -m "${PAPERO_WEB_MODEL:-gpt-5.5}" -c "model_reasoning_effort=\"${PAPERO_WEB_REASONING_EFFORT:-low}\"")
 else
-  cmd=(codex exec --skip-git-repo-check -m "${PAPERO_GEN_MODEL:-gpt-5.4}" -c "model_reasoning_effort=\"${PAPERO_GEN_REASONING_EFFORT:-medium}\"")
+  cmd=(codex exec --skip-git-repo-check -m "${PAPERO_GEN_MODEL:-gpt-5.5}" -c "model_reasoning_effort=\"${PAPERO_GEN_REASONING_EFFORT:-medium}\"")
 fi
 attempts=$(( ${PAPERO_CODEX_RETRY_ATTEMPTS:-0} + 1 ))
 backoff="${PAPERO_CODEX_RETRY_BACKOFF_SECONDS:-0}"
@@ -865,7 +865,7 @@ Meta leakage scan: $ARTIFACTS/meta-leakage-scan.json
 Schema: {"intent":"approve_existing_candidate|generate_new_operator_candidate|reject_candidate_with_reason","issues":[{"source_artifact_role":"paper_full_tex|quality_eval|qa_loop_plan|qa_loop_execution|operator_feedback_execution|section_review|citation_support_review|compiled_pdf","source_item_key":"short locator","target_section":"Abstract|Introduction|Background and Related Work|Construction|Security Model and Proof|Evaluation|Discussion and Limitations|Conclusion|Whole manuscript","severity":"blocker|major|minor","rationale":"specific reason grounded in artifacts","suggested_action":"specific rewrite instruction","authority_class":"author_feedback|claim_safety|proof_preservation|benchmark_framing|citation_support|narrative_quality|meta_leakage","owner_category":"author|experiment|proof|bibliography|implementation"}]}
 If the packet contains an unpromoted qa_loop_execution/operator_feedback_execution candidate_approval with candidate_progress.forward_progress=true, choose intent=approve_existing_candidate and include issue(s) whose source_artifact_role targets only that candidate approval source. Do not include extra diagnostic issues from stale candidate sources when approving. A historical approval whose candidate_sha256 already equals the packet manuscript_sha256 is not actionable; in that case choose generate_new_operator_candidate unless rejecting is safer.
 PROMPT
-  run_codex_last_message "operator_feedback_author_cycle_${cycle}" "$prompt" "$response" "$OPFB/operator-feedback-author.cycle-${cycle}.jsonl" "$OPFB/operator-feedback-author.cycle-${cycle}.stderr.log" "$OPFB/operator-feedback-author.cycle-${cycle}.exitcode" "gpt-5.4" "high"
+  run_codex_last_message "operator_feedback_author_cycle_${cycle}" "$prompt" "$response" "$OPFB/operator-feedback-author.cycle-${cycle}.jsonl" "$OPFB/operator-feedback-author.cycle-${cycle}.stderr.log" "$OPFB/operator-feedback-author.cycle-${cycle}.exitcode" "gpt-5.5" "high"
   local rc=$?
   [[ "$rc" == "0" ]] || return "$rc"
   python3 - "$packet" "$response" "$feedback" <<'PY'
@@ -1119,10 +1119,10 @@ Operator feedback: $OPFB
 PROMPT
 echo "==> q1_loop_critic"
 write_timeline "- $(date -u +%Y-%m-%dT%H:%M:%SZ) start q1_loop_critic"
-printf '%q ' codex exec --skip-git-repo-check -C "$REPO_ROOT" -m gpt-5.4 -c 'model_reasoning_effort="high"' --output-last-message "$CRITIC/q1-loop-critic.response.md" - > "$LOGS/q1_loop_critic.command"
+printf '%q ' codex exec --skip-git-repo-check -C "$REPO_ROOT" -m gpt-5.5 -c 'model_reasoning_effort="high"' --output-last-message "$CRITIC/q1-loop-critic.response.md" - > "$LOGS/q1_loop_critic.command"
 printf '\n' >> "$LOGS/q1_loop_critic.command"
 set +e
-run_codex_last_message "q1_loop_critic" "$CRITIC/q1-loop-critic.prompt.md" "$CRITIC/q1-loop-critic.response.md" "$LOGS/q1_loop_critic.stdout.log" "$LOGS/q1_loop_critic.stderr.log" "$LOGS/q1_loop_critic.exitcode" "gpt-5.4" "high"
+run_codex_last_message "q1_loop_critic" "$CRITIC/q1-loop-critic.prompt.md" "$CRITIC/q1-loop-critic.response.md" "$LOGS/q1_loop_critic.stdout.log" "$LOGS/q1_loop_critic.stderr.log" "$LOGS/q1_loop_critic.exitcode" "gpt-5.5" "high"
 q1_rc=$?
 set -e
 COMMAND_ROWS+=("q1_loop_critic|${q1_rc}")

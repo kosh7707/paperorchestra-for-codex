@@ -606,7 +606,7 @@ def get_provider(name: str, command: str | None = None) -> BaseProvider:
 
 
 def default_codex_web_provider_command() -> str:
-    model = os.environ.get("PAPERO_OMX_MODEL") or "gpt-5.4-mini"
+    model = os.environ.get("PAPERO_OMX_MODEL") or "gpt-5.5"
     effort = os.environ.get("PAPERO_OMX_REASONING_EFFORT") or "low"
     return json.dumps(
         [

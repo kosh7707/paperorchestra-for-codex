@@ -4496,6 +4496,9 @@ Related \\cite{alpha}.
         inventory = build_environment_inventory()
         self.assertIn("docs", inventory)
         self.assertIn("groups", inventory)
+        self.assertIn("package_context", inventory)
+        self.assertIn("package_root", inventory["package_context"])
+        self.assertIn("python_executable", inventory["package_context"])
         self.assertTrue(Path(inventory["docs"]["environment_guide"]).exists())
         self.assertTrue(Path(inventory["docs"]["env_example"]).exists())
 
@@ -4505,6 +4508,8 @@ Related \\cite{alpha}.
         self.assertEqual(code, 0)
         payload = json.loads(stdout.getvalue())
         self.assertIn("readiness_profiles", payload)
+        self.assertIn("package_context", payload)
+        self.assertIn("package_root", payload["package_context"])
         self.assertTrue(any(profile["name"] == "compile_ready" for profile in payload["readiness_profiles"]))
 
     def test_environment_docs_and_example_cover_operator_vars(self) -> None:

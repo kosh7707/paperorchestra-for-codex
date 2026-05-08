@@ -24,15 +24,21 @@ paperorchestra doctor
 ```bash
 git clone https://github.com/kosh7707/paperorchestra-for-codex.git
 cd paperorchestra-for-codex
-python3 -m pip install -e .
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
 ```
+
+Prefer the `.venv` flow for fresh clones. Direct system `pip install -e .` can
+be blocked by externally managed Python installs (PEP 668), and a local venv
+keeps stale global `paperorchestra` commands from shadowing this checkout.
 
 PaperOrchestra currently has **no extra Python package dependencies** beyond the standard library.
 
 Required baseline:
 
 - Python **3.11+**
-- editable install of this repo (`python3 -m pip install -e .`)
+- editable install of this repo inside a venv (`python -m pip install -e .`)
 
 Sanity checks:
 
@@ -180,7 +186,7 @@ Below is the operator-facing inventory. Variables not listed here are either aut
 
 | Variable | Required? | Default | Why it exists |
 | --- | --- | --- | --- |
-| `PAPERO_OMX_MODEL` | Optional | `gpt-5.4-mini` | Override the OMX-native model |
+| `PAPERO_OMX_MODEL` | Optional | `gpt-5.5` | Override the OMX-native model |
 | `PAPERO_OMX_REASONING_EFFORT` | Optional | `low` | Trade latency/cost vs reasoning depth |
 | `PAPERO_OMX_EXEC_TIMEOUT_SECONDS` | Optional | code-bounded | Give slow live runs more time |
 | `PAPERO_OMX_CONTROL_TIMEOUT_SECONDS` | Optional | `60` | Bound OMX control-plane calls like `omx status` / `omx state` |
@@ -217,7 +223,7 @@ Quality-loop commands use explicit CLI flags rather than environment variables f
 For cited-sentence claim-support review, `paperorchestra review-citations --evidence-mode model` uses this same provider surface. `--evidence-mode web` is intended for a web-search-capable provider; when no provider command is configured, the CLI falls back to a Codex command shaped like:
 
 ```bash
-codex --search exec --skip-git-repo-check -m "${PAPERO_OMX_MODEL:-gpt-5.4-mini}"
+codex --search exec --skip-git-repo-check -m "${PAPERO_OMX_MODEL:-gpt-5.5}"
 ```
 
 This path is independent of Semantic Scholar. It checks whether cited manuscript sentences are supported by evidence; it is not the same as `verify-papers --mode live`, which only builds bibliographic metadata. If `review-citations --evidence-mode web` is requested and the active shell writing provider is a non-search `codex exec` command, PaperOrchestra uses the Codex `--search exec` default for the citation-support critic unless an explicit `--provider-command` is supplied.
@@ -324,7 +330,7 @@ scripts/demo-mock.sh
 ### Shell-provider live run
 
 ```bash
-export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.4","-c","model_reasoning_effort=\"high\""]'
+export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"high\""]'
 # export PAPERO_PROVIDER_SEED=7
 # export PAPERO_PROVIDER_TEMPERATURE=0.2
 # export PAPERO_PROVIDER_MAX_OUTPUT_TOKENS=4096
@@ -334,14 +340,14 @@ paperorchestra run --provider shell --verify-mode mock --runtime-mode compatibil
 ### OMX-native live run
 
 ```bash
-export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.4","-c","model_reasoning_effort=\"high\""]'
+export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"high\""]'
 paperorchestra run --provider shell --verify-mode mock --runtime-mode omx_native
 ```
 
 ### Live verification + compile
 
 ```bash
-export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.4","-c","model_reasoning_effort=\"high\""]'
+export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"high\""]'
 export SEMANTIC_SCHOLAR_API_KEY='<your-key>'
 export PAPERO_ALLOW_TEX_COMPILE=1
 paperorchestra run \

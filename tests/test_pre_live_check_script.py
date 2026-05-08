@@ -67,7 +67,43 @@ class PreLiveCheckScriptTests(unittest.TestCase):
 
         self.assertIn("PAPERO_DEMO_WORKDIR", text)
         self.assertIn("--allow-outside-workspace", text)
+        self.assertIn("python3 -m paperorchestra.cli", text)
+        self.assertIn("PAPERO_CMD_OVERRIDE", text)
+        self.assertNotIn("command -v paperorchestra", text)
         self.assertNotIn("rm -rf .paper-orchestra", text)
+
+    def test_demo_mock_ignores_stale_global_paperorchestra_on_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            marker = root / "stale-global-used.txt"
+            fake = fake_bin / "paperorchestra"
+            fake.write_text(
+                "#!/usr/bin/env bash\n"
+                f"echo stale-global > {str(marker)!r}\n"
+                "exit 99\n",
+                encoding="utf-8",
+            )
+            fake.chmod(0o755)
+            workdir = root / "demo"
+            env = os.environ.copy()
+            env["PATH"] = f"{fake_bin}{os.pathsep}{env.get('PATH', '')}"
+            env["PAPERO_DEMO_WORKDIR"] = str(workdir)
+            env["PAPERO_DEMO_KEEP_WORKDIR"] = "1"
+
+            result = subprocess.run(
+                ["bash", "scripts/demo-mock.sh"],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr[-2000:])
+            self.assertFalse(marker.exists())
+            self.assertTrue((workdir / ".paper-orchestra" / "current_session.txt").exists())
 
     def test_strict_smoke_policy_script_exists_and_runs_full_claim_safe_stack(self) -> None:
         path = Path("scripts/live-smoke-claim-safe.sh")

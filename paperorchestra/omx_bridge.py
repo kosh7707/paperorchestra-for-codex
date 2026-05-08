@@ -102,7 +102,7 @@ def _resolve_exec_timeout(env_var: str, default: float, *, minimum: float = 1.0,
 
 
 def _resolve_omx_model(model: str | None = None) -> str:
-    return model or os.environ.get("PAPERO_OMX_MODEL") or "gpt-5.4-mini"
+    return model or os.environ.get("PAPERO_OMX_MODEL") or "gpt-5.5"
 
 
 def _resolve_omx_reasoning_effort(default: str = "low") -> str:
