@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
+import contextlib
+import io
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from paperorchestra.cli import build_parser
+from paperorchestra.cli import build_parser, main as cli_main
 from paperorchestra.mcp_server import TOOLS as MCP_TOOLS, TOOL_HANDLERS
 from paperorchestra.quality_gate import build_quality_gate_report, write_quality_gate
 
@@ -179,6 +181,20 @@ class QualityGateTests(unittest.TestCase):
         mcp_tool_names = {tool["name"] for tool in MCP_TOOLS}
         self.assertIn("quality_gate", mcp_tool_names)
         self.assertIn("quality_gate", TOOL_HANDLERS)
+
+    def test_quality_gate_cli_blocks_by_default_and_can_report_only(self) -> None:
+        payload = {"decision": {"blocked": True, "verdict": "block"}}
+        with patch("paperorchestra.cli.write_quality_gate", return_value=(Path("quality-gate.report.json"), payload)):
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = cli_main(["quality-gate"])
+            self.assertEqual(code, 10)
+            self.assertIn('"verdict": "block"', stdout.getvalue())
+
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = cli_main(["quality-gate", "--no-fail-on-block"])
+            self.assertEqual(code, 0)
 
 
 if __name__ == "__main__":
