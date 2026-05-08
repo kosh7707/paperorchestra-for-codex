@@ -386,11 +386,19 @@ Most important live-run environment variables:
 export PAPERO_OMX_MODEL=gpt-5.5
 export PAPERO_OMX_REASONING_EFFORT=xhigh
 export PAPERO_OMX_EXEC_TIMEOUT_SECONDS=900
+export PAPERO_DOMAIN=generic
 export SEMANTIC_SCHOLAR_API_KEY='<recommended for --verify-mode live>'
 export PAPERO_ALLOW_TEX_COMPILE=1
 ```
 
 Use `--strict-omx-native` or `PAPERO_STRICT_OMX_NATIVE=1` when a run is meant to support a reproducibility/fidelity claim and should fail instead of falling back to the Python provider.
+
+`PAPERO_DOMAIN` defaults to the public domain-neutral `generic` profile. External
+plugins or private material packs can register a profile with
+`paperorchestra.domains.register_domain(profile)`, then set `PAPERO_DOMAIN` to
+that name. Register profiles before importing modules that cache domain fields
+(`pipeline`, `critics`, `source_obligations`, `quality_loop_source_checks`);
+unknown names fail closed instead of silently falling back.
 
 ---
 
@@ -431,6 +439,7 @@ For most users, the minimum variables worth setting first are:
 # PAPERO_REFINE_AXIS_TOLERANCE=2
 # PAPERO_STRICT_CONTENT_GATES=1
 # PAPERO_LATEX_TIMEOUT_SEC=120
+# PAPERO_DOMAIN=generic
 
 # ---------------------------------------------------------------------------
 # Shell provider (required for --provider shell)
@@ -543,6 +552,7 @@ export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m"
 export PAPERO_OMX_MODEL=gpt-5.5
 export PAPERO_OMX_REASONING_EFFORT=xhigh
 export PAPERO_OMX_EXEC_TIMEOUT_SECONDS=900
+export PAPERO_DOMAIN=generic
 export PAPERO_STRICT_OMX_NATIVE=1
 export SEMANTIC_SCHOLAR_API_KEY='<recommended for live verification>'
 export PAPERO_ALLOW_TEX_COMPILE=1

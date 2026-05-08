@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+from dataclasses import replace
 import hashlib
 import io
 import json
@@ -25,6 +26,7 @@ from paperorchestra.critics import (
     write_section_review,
 )
 from paperorchestra.doctor import build_doctor_report
+from paperorchestra.domains import GENERIC, available_domains, detect_domain_for_text, get_domain, register_domain
 from paperorchestra.environment import (
     build_environment_inventory,
     env_example_path,
@@ -9732,6 +9734,47 @@ class RalphCandidateWriteAtomicityTests(unittest.TestCase):
         for path in (Path("paperorchestra/ralph_bridge.py"), Path("paperorchestra/ralph_bridge_repair.py")):
             source = path.read_text(encoding="utf-8")
             self.assertNotIn("paper_path.write_text", source)
+
+
+class DomainRegistrySemanticsTests(unittest.TestCase):
+    def test_unknown_domain_env_fails_closed(self) -> None:
+        with patch.dict(os.environ, {"PAPERO_DOMAIN": "not-a-real-domain"}):
+            with self.assertRaisesRegex(ValueError, "Unknown PaperOrchestra domain profile"):
+                get_domain()
+
+    def test_register_domain_selects_external_profile_and_rejects_duplicates(self) -> None:
+        name = f"unit_test_domain_{os.getpid()}_{int(time.time() * 1000)}"
+        profile = replace(GENERIC, name=name)
+
+        registered = register_domain(profile)
+
+        self.assertIs(registered, profile)
+        self.assertIn(name, available_domains())
+        self.assertIs(get_domain(name.replace("_", "-")), profile)
+        with patch.dict(os.environ, {"PAPERO_DOMAIN": name}):
+            self.assertIs(get_domain(), profile)
+            self.assertIs(detect_domain_for_text("text that should not auto-select another domain"), profile)
+        with self.assertRaisesRegex(ValueError, "already registered"):
+            register_domain(profile)
+
+        replacement = replace(GENERIC, name=name, method_scope_tail=" Replacement domain profile.")
+        self.assertIs(register_domain(replacement, replace=True), replacement)
+        self.assertIs(get_domain(name), replacement)
+
+    def test_domain_docs_and_environment_inventory_explain_plugin_lifecycle(self) -> None:
+        inventory = build_environment_inventory()
+        names = {
+            variable["name"]
+            for group in inventory["groups"]
+            for variable in group.get("variables", [])
+        }
+        self.assertIn("PAPERO_DOMAIN", names)
+        readme = Path("README.md").read_text(encoding="utf-8")
+        environment = Path("ENVIRONMENT.md").read_text(encoding="utf-8")
+        self.assertIn("register_domain", readme)
+        self.assertIn("PAPERO_DOMAIN", readme)
+        self.assertIn("register_domain", environment)
+        self.assertIn("PAPERO_DOMAIN", environment)
 
 
 

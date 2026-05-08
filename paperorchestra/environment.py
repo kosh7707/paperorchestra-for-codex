@@ -104,6 +104,19 @@ ENVIRONMENT_VARIABLES: tuple[EnvironmentVariableSpec, ...] = (
         notes=("Useful for larger papers or slower CI/sandboxed TeX environments.",),
     ),
     EnvironmentVariableSpec(
+        name="PAPERO_DOMAIN",
+        category="core_runtime",
+        operator_settable=True,
+        default="generic",
+        example="generic",
+        description="Select a registered deterministic writing/checking domain profile.",
+        notes=(
+            "The public package bundles only the domain-neutral generic profile.",
+            "External plugins must call paperorchestra.domains.register_domain() before importing modules that cache domain fields.",
+            "Unknown profile names fail closed instead of silently falling back.",
+        ),
+    ),
+    EnvironmentVariableSpec(
         name="PAPERO_MODEL_CMD",
         category="shell_provider",
         operator_settable=True,

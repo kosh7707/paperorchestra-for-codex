@@ -198,8 +198,17 @@ Below is the operator-facing inventory. Variables not listed here are either aut
 | `PAPERO_REFINE_AXIS_TOLERANCE` | Advanced optional | `0` | Allow bounded per-axis reviewer-score drops during refinement |
 | `PAPERO_STRICT_CONTENT_GATES` | Claim-safe only | `0` | Promote unsupported comparative claims and severe figure-placement warnings to reproducibility BLOCK |
 | `PAPERO_LATEX_TIMEOUT_SEC` | Optional | `30` | Timeout in seconds for each sandboxed LaTeX/BibTeX command (1-3600) |
+| `PAPERO_DOMAIN` | Optional | `generic` | Select a registered deterministic writing/checking domain profile |
 
 Quality-loop commands use explicit CLI flags rather than environment variables for loop policy: `--quality-mode draft|ralph|claim_safe`, `--max-iterations`, `--quality-eval`, `--record-history`, and `--accept-mixed-provenance`. `paperorchestra run` alone is draft generation, not a full quality gate; use `scripts/live-smoke-claim-safe.sh` for a recorded full quality-gated smoke with validate/source-obligation/compile/review/section/figure-placement/citation/quality-loop evidence. The QA loop never emits a `success` verdict; `ready_for_human_finalization` still means Tier 4 is owned by humans. Plain `quality-eval` writes a diagnostic snapshot without consuming repair-attempt budget unless `--record-history` is supplied, and even recorded diagnostics/plans are marked non-budget. `qa-loop-plan`, `qa-loop-brief`, and `ralph-start --dry-run` are planning/briefing surfaces; they may append audit history but do not spend execution attempts. `ralph-start --dry-run` also bootstraps the `.omx/prd.json` expected by the OMX Ralph CLI. `qa-loop-step` performs exactly one bounded repair iteration and is the budget-consuming event; persistent multi-agent looping is delegated to OMX Ralph via `qa-loop-brief` / `ralph-start`, not reimplemented inside PaperOrchestra. Semi-auto repair candidates are candidate-scoped: if a candidate is rejected or remains uncommitted, canonical validation/compile/citation/quality artifacts are restored or regenerated for the current manuscript before the step returns. Terminal `human_needed`, `failed`, and `ready_for_human_finalization` plans are no-ops for `qa-loop-step`; continuation past those states must be an explicit Ralph/HITL decision. Claim-safe strict gates include prompt/meta leakage across manuscript source, generated plot text assets, and compiled-PDF text when extractable. Generated placeholder figures are failed/non-reviewable until replaced by human-authored final artwork.
+
+`PAPERO_DOMAIN` is intentionally conservative. The public package bundles only
+the domain-neutral `generic` profile. External/private material packs may call
+`paperorchestra.domains.register_domain(profile)` and then set `PAPERO_DOMAIN`
+to that registered name, but they must do this **before** importing modules that
+cache domain fields at import time, including `pipeline`, `critics`,
+`source_obligations`, and `quality_loop_source_checks`. Unknown domain names fail
+closed instead of silently falling back to `generic`.
 
 ### Shell provider
 
