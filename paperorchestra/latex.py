@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import hashlib
+import math
 import os
 import re
 import shlex
@@ -111,6 +112,8 @@ def _latex_timeout_seconds(timeout: int | float | None = None) -> int:
             value = float(raw)
         except ValueError as exc:
             raise LatexBuildError("PAPERO_LATEX_TIMEOUT_SEC must be a number of seconds between 1 and 3600.") from exc
+    if not math.isfinite(float(value)):
+        raise LatexBuildError("PAPERO_LATEX_TIMEOUT_SEC must be a finite number of seconds between 1 and 3600.")
     if value < 1 or value > 3600:
         raise LatexBuildError("PAPERO_LATEX_TIMEOUT_SEC must be between 1 and 3600 seconds.")
     return int(value)

@@ -3195,6 +3195,12 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             os.environ["PAPERO_LATEX_TIMEOUT_SEC"] = "0"
             with self.assertRaisesRegex(LatexBuildError, "between 1 and 3600"):
                 _run_wrapped_command(["latexmk"], env={}, cwd=Path.cwd())
+            os.environ["PAPERO_LATEX_TIMEOUT_SEC"] = "nan"
+            with self.assertRaisesRegex(LatexBuildError, "finite number"):
+                _run_wrapped_command(["latexmk"], env={}, cwd=Path.cwd())
+            os.environ["PAPERO_LATEX_TIMEOUT_SEC"] = "inf"
+            with self.assertRaisesRegex(LatexBuildError, "finite number"):
+                _run_wrapped_command(["latexmk"], env={}, cwd=Path.cwd())
         finally:
             if old_timeout is None:
                 os.environ.pop("PAPERO_LATEX_TIMEOUT_SEC", None)
