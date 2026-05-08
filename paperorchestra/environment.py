@@ -95,6 +95,15 @@ ENVIRONMENT_VARIABLES: tuple[EnvironmentVariableSpec, ...] = (
         ),
     ),
     EnvironmentVariableSpec(
+        name="PAPERO_LATEX_TIMEOUT_SEC",
+        category="core_runtime",
+        operator_settable=True,
+        default="30",
+        example="120",
+        description="Timeout in seconds for each sandboxed LaTeX/BibTeX command; valid range is 1-3600.",
+        notes=("Useful for larger papers or slower CI/sandboxed TeX environments.",),
+    ),
+    EnvironmentVariableSpec(
         name="PAPERO_MODEL_CMD",
         category="shell_provider",
         operator_settable=True,

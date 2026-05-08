@@ -430,6 +430,7 @@ For most users, the minimum variables worth setting first are:
 # PAPERO_STRICT_OMX_NATIVE=1
 # PAPERO_REFINE_AXIS_TOLERANCE=2
 # PAPERO_STRICT_CONTENT_GATES=1
+# PAPERO_LATEX_TIMEOUT_SEC=120
 
 # ---------------------------------------------------------------------------
 # Shell provider (required for --provider shell)
@@ -518,7 +519,7 @@ The short version:
 - shell-provider live runs: set `PAPERO_MODEL_CMD`
 - OMX-native runs: install `omx` and `codex`
 - live verification: set `SEMANTIC_SCHOLAR_API_KEY`
-- compile: install a supported LaTeX engine + sandbox tool, then set `PAPERO_ALLOW_TEX_COMPILE=1`
+- compile: install a supported LaTeX engine + sandbox tool, then set `PAPERO_ALLOW_TEX_COMPILE=1`; use `PAPERO_LATEX_TIMEOUT_SEC` for slower builds
 
 Fast inspection/remediation commands:
 

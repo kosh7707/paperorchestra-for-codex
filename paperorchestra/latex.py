@@ -100,19 +100,36 @@ def _summarize_compile_warnings(log_text: str) -> list[str]:
     return warnings
 
 
-def _run_wrapped_command(full_cmd: list[str], *, env: dict[str, str], cwd: Path, timeout: int = 30) -> subprocess.CompletedProcess:
+def _latex_timeout_seconds(timeout: int | float | None = None) -> int:
+    if timeout is not None:
+        value = timeout
+    else:
+        raw = os.environ.get("PAPERO_LATEX_TIMEOUT_SEC", "").strip()
+        if not raw:
+            return 30
+        try:
+            value = float(raw)
+        except ValueError as exc:
+            raise LatexBuildError("PAPERO_LATEX_TIMEOUT_SEC must be a number of seconds between 1 and 3600.") from exc
+    if value < 1 or value > 3600:
+        raise LatexBuildError("PAPERO_LATEX_TIMEOUT_SEC must be between 1 and 3600 seconds.")
+    return int(value)
+
+
+def _run_wrapped_command(full_cmd: list[str], *, env: dict[str, str], cwd: Path, timeout: int | float | None = None) -> subprocess.CompletedProcess:
+    timeout_seconds = _latex_timeout_seconds(timeout)
     try:
         return subprocess.run(
             full_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             check=False,
-            timeout=timeout,
+            timeout=timeout_seconds,
             env=env,
             cwd=cwd,
         )
     except subprocess.TimeoutExpired as exc:
-        raise LatexBuildError("LaTeX build timed out after 30 seconds.") from exc
+        raise LatexBuildError(f"LaTeX build timed out after {timeout_seconds} seconds.") from exc
 
 
 def _prepare_compile_inputs(source_path: Path, workdir_path: Path) -> None:

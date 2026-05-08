@@ -42,7 +42,7 @@ from paperorchestra.eval import (
     write_session_eval_summary,
 )
 from paperorchestra.jobs import get_job_status, list_jobs, start_run_job, tail_job_log
-from paperorchestra.latex import compile_latex_with_report
+from paperorchestra.latex import LatexBuildError, _run_wrapped_command, compile_latex_with_report
 from paperorchestra.literature import mock_verified_paper
 from paperorchestra.mcp_server import TOOLS as MCP_TOOLS, TOOL_HANDLERS, tool_write_sections
 from paperorchestra.omx_bridge import (
@@ -3150,6 +3150,49 @@ The regressed mock paper keeps enough method text to satisfy structural validati
                 os.environ.pop("PAPERO_TEX_SANDBOX_CMD", None)
             else:
                 os.environ["PAPERO_TEX_SANDBOX_CMD"] = old_sandbox
+
+    def test_latex_wrapped_command_timeout_defaults_to_30_seconds(self) -> None:
+        old_timeout = os.environ.get("PAPERO_LATEX_TIMEOUT_SEC")
+        try:
+            os.environ.pop("PAPERO_LATEX_TIMEOUT_SEC", None)
+            with patch("paperorchestra.latex.subprocess.run") as run:
+                run.return_value = subprocess.CompletedProcess(["latexmk"], 0, stdout=b"", stderr=b"")
+                _run_wrapped_command(["latexmk"], env={}, cwd=Path.cwd())
+            self.assertEqual(run.call_args.kwargs["timeout"], 30)
+        finally:
+            if old_timeout is None:
+                os.environ.pop("PAPERO_LATEX_TIMEOUT_SEC", None)
+            else:
+                os.environ["PAPERO_LATEX_TIMEOUT_SEC"] = old_timeout
+
+    def test_latex_wrapped_command_uses_configured_timeout(self) -> None:
+        old_timeout = os.environ.get("PAPERO_LATEX_TIMEOUT_SEC")
+        try:
+            os.environ["PAPERO_LATEX_TIMEOUT_SEC"] = "120"
+            with patch("paperorchestra.latex.subprocess.run") as run:
+                run.return_value = subprocess.CompletedProcess(["latexmk"], 0, stdout=b"", stderr=b"")
+                _run_wrapped_command(["latexmk"], env={}, cwd=Path.cwd())
+            self.assertEqual(run.call_args.kwargs["timeout"], 120)
+        finally:
+            if old_timeout is None:
+                os.environ.pop("PAPERO_LATEX_TIMEOUT_SEC", None)
+            else:
+                os.environ["PAPERO_LATEX_TIMEOUT_SEC"] = old_timeout
+
+    def test_latex_wrapped_command_rejects_invalid_timeout(self) -> None:
+        old_timeout = os.environ.get("PAPERO_LATEX_TIMEOUT_SEC")
+        try:
+            os.environ["PAPERO_LATEX_TIMEOUT_SEC"] = "not-a-number"
+            with self.assertRaisesRegex(LatexBuildError, "PAPERO_LATEX_TIMEOUT_SEC"):
+                _run_wrapped_command(["latexmk"], env={}, cwd=Path.cwd())
+            os.environ["PAPERO_LATEX_TIMEOUT_SEC"] = "0"
+            with self.assertRaisesRegex(LatexBuildError, "between 1 and 3600"):
+                _run_wrapped_command(["latexmk"], env={}, cwd=Path.cwd())
+        finally:
+            if old_timeout is None:
+                os.environ.pop("PAPERO_LATEX_TIMEOUT_SEC", None)
+            else:
+                os.environ["PAPERO_LATEX_TIMEOUT_SEC"] = old_timeout
 
     def test_compile_latex_sets_bib_and_bst_search_paths(self) -> None:
         old_allow = os.environ.get("PAPERO_ALLOW_TEX_COMPILE")
