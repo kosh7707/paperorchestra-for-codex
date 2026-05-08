@@ -12,8 +12,8 @@ It reconstructs the paper's manuscript-writing contract around explicit artifact
 ## TL;DR
 
 ```bash
-git clone https://github.com/kosh7707/paperorchestra.git
-cd paperorchestra
+git clone https://github.com/kosh7707/paperorchestra-for-codex.git
+cd paperorchestra-for-codex
 python3 -m pip install -e .
 
 # Safe self-contained demo: no live search/model calls, no reference PDF required.
@@ -28,6 +28,14 @@ Repository evidence currently checked in:
 
 - smoke scripts for a safe reference path and a live-ish OMX/Codex path
 - test coverage evolves with the repo; verify the current suite locally instead of relying on a hard-coded count in this README
+
+### If you are using Codex
+
+A good first prompt after opening Codex is:
+
+> Clone `https://github.com/kosh7707/paperorchestra-for-codex.git`, read `README.md` and `ENVIRONMENT.md`, run the safe mock demo first, and only then explain what I need to configure for shell/Codex, OMX, Semantic Scholar, MCP, and the local skill. Do not start a live model/search run until the mock path works.
+
+Codex CLI and oh-my-codex are external prerequisites for the advanced paths. This repo documents how to use them after they are installed; it does not install them for you.
 
 ---
 
@@ -183,8 +191,8 @@ The intended operating model is:
 ## Install
 
 ```bash
-git clone https://github.com/kosh7707/paperorchestra.git
-cd paperorchestra
+git clone https://github.com/kosh7707/paperorchestra-for-codex.git
+cd paperorchestra-for-codex
 python3 -m pip install -e .
 ```
 
@@ -233,8 +241,8 @@ vendor or bootstrap them for you.
 If you want the shortest newcomer path that proves the repo is usable:
 
 ```bash
-git clone https://github.com/kosh7707/paperorchestra.git
-cd paperorchestra
+git clone https://github.com/kosh7707/paperorchestra-for-codex.git
+cd paperorchestra-for-codex
 python3 -m pip install -e .
 
 # confirm the CLI is alive

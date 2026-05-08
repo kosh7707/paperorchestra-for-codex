@@ -22,8 +22,8 @@ paperorchestra doctor
 ## 1. Minimal install
 
 ```bash
-git clone https://github.com/kosh7707/paperorchestra.git
-cd paperorchestra
+git clone https://github.com/kosh7707/paperorchestra-for-codex.git
+cd paperorchestra-for-codex
 python3 -m pip install -e .
 ```
 
