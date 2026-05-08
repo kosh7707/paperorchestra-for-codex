@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -744,6 +745,27 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             scan = (artifact_root / "meta-leakage-scan.json").read_text(encoding="utf-8")
             self.assertIn('"finding_count": 0', scan)
+
+    def test_pre_live_check_unittest_selectors_are_loadable(self) -> None:
+        text = Path("scripts/pre-live-check.sh").read_text(encoding="utf-8")
+        selectors = sorted(set(re.findall(r"tests\.[A-Za-z0-9_\.]+\.test_[A-Za-z0-9_]+", text)))
+        self.assertTrue(selectors)
+
+        def iter_cases(suite: unittest.TestSuite):
+            for item in suite:
+                if isinstance(item, unittest.TestSuite):
+                    yield from iter_cases(item)
+                else:
+                    yield item
+
+        loader = unittest.TestLoader()
+        broken = []
+        for selector in selectors:
+            suite = loader.loadTestsFromName(selector)
+            failed = [case for case in iter_cases(suite) if case.__class__.__name__ == "_FailedTest"]
+            if failed:
+                broken.append(selector)
+        self.assertEqual(broken, [])
 
 
 if __name__ == "__main__":
