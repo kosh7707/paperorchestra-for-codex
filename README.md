@@ -288,6 +288,47 @@ Only then move to:
 - `--verify-mode live` after `SEMANTIC_SCHOLAR_API_KEY` is set
 - `--compile` after `paperorchestra check-compile-env` passes
 
+### Developer fresh-QA checklist
+
+For contributor/debugging work, install the small dev extra and run the one-shot
+fresh QA wrapper:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
+
+scripts/fresh-qa.sh
+```
+
+The script writes logs and a machine-readable summary under
+`.paper-orchestra/fresh-qa/`. It verifies the CLI, `doctor`, environment
+inventory, the bundled minimal mock pipeline, fidelity/eval artifact surfaces,
+compile readiness, optional compile when ready, and `pytest`.
+
+Useful variants:
+
+```bash
+scripts/fresh-qa.sh --skip-tests
+scripts/fresh-qa.sh --skip-compile
+python -m pytest -q
+```
+
+Minimal containers may need extra system packages for the tool surfaces used by
+developers:
+
+```bash
+# OMX explore harness extraction in very small images
+sudo apt-get install -y xz-utils
+
+# PDF compile path
+sudo apt-get install -y pkg-config libpng-dev texlive-latex-base texlive-latex-recommended texlive-fonts-recommended latexmk bubblewrap
+```
+
+If `bwrap` is installed but `paperorchestra check-compile-env` reports it as
+unusable because user namespaces are blocked, install a fallback sandbox such as
+`firejail` or set `PAPERO_TEX_SANDBOX_CMD`.
+
 ### Beast-proof live path: Codex discovers, S2 verifies
 
 If you want the closest practical path to the PaperOrchestra paper's literature lane, use this mental model:
@@ -1189,6 +1230,18 @@ WARNING: stage ... fell back to Python provider after OMX-native failure: ...
 ```
 
 then that stage did not complete via OMX-native execution. Inspect lane manifests and `.paper-orchestra/tmp/omx-*` artifacts. For CI or fidelity-sensitive runs, rerun with `--strict-omx-native` so the first fallback fails the run instead of producing a mixed OMX/Python session.
+
+### `bwrap` is installed but PDF compile still fails in a container
+
+Some Docker/CI environments install `bubblewrap` but block unprivileged user
+namespace creation. In that case `paperorchestra check-compile-env` should mark
+`bwrap` unusable and either select another sandbox or explain why no sandbox is
+ready. Install `firejail`/`nsjail`, or provide a custom wrapper:
+
+```bash
+sudo apt-get install -y firejail
+export PAPERO_TEX_SANDBOX_CMD='["/absolute/path/to/tex-sandbox.sh"]'
+```
 
 ### Semantic Scholar rate limits or bad-looking search results
 

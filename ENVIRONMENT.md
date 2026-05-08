@@ -90,7 +90,7 @@ Needed for `paperorchestra compile` or any run that uses `--compile`.
 
 Usually means:
 - a supported LaTeX engine exists: `latexmk`, `pdflatex`, or `tectonic`
-- a supported sandbox exists: `bwrap`, `firejail`, or `nsjail`
+- a supported sandbox is installed and passes a runtime usability probe: `bwrap`, `firejail`, or `nsjail`
 - `PAPERO_ALLOW_TEX_COMPILE=1`
 
 ### `full_live_run_ready`
@@ -158,6 +158,36 @@ sudo apt-get install -y pkg-config libpng-dev texlive-latex-base texlive-latex-r
 ```
 
 On other package managers, use `paperorchestra bootstrap-compile-env` instead of guessing.
+
+#### Container notes
+
+Minimal Docker/CI containers can make `binary exists != binary usable`.
+`bubblewrap` (`bwrap`) is lightweight, but it can fail at runtime when the
+kernel/container policy disables unprivileged user namespaces:
+
+```text
+bwrap: No permissions to create new namespace
+```
+
+`paperorchestra check-compile-env` therefore probes sandbox tools by running a
+small command through them before reporting `compile_ready`. If `bwrap` is
+installed but unusable, install/configure another sandbox:
+
+```bash
+sudo apt-get install -y firejail
+# or:
+export PAPERO_TEX_SANDBOX_CMD='["/absolute/path/to/tex-sandbox.sh"]'
+```
+
+`firejail` can work well in locked-down containers, but it may install a larger
+dependency set on Debian/Ubuntu. `nsjail` is also supported when available.
+
+For OMX control surfaces in very small containers, `omx explore` may also need
+`xz-utils` to unpack its harness archive:
+
+```bash
+sudo apt-get install -y xz-utils
+```
 
 ---
 

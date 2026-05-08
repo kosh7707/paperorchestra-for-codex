@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import shutil
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -41,11 +42,79 @@ def detect_latex_engine() -> str | None:
 
 
 def detect_sandbox_tool() -> str | None:
+    return _detect_sandbox_tool_with_notes()[0]
+
+
+def _command_text(command: list[str]) -> str:
+    return " ".join(command)
+
+
+def _trim_probe_output(text: str, *, limit: int = 240) -> str:
+    cleaned = " ".join(text.split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return f"{cleaned[: limit - 3]}..."
+
+
+def _sandbox_probe_command(tool_path: str) -> list[str]:
+    tool_name = Path(tool_path).name
+    if tool_name == "bwrap":
+        command = [
+            tool_path,
+            "--unshare-all",
+            "--share-net",
+            "--die-with-parent",
+            "--ro-bind",
+            "/usr",
+            "/usr",
+            "--ro-bind",
+            "/bin",
+            "/bin",
+        ]
+        if Path("/lib").exists():
+            command.extend(["--ro-bind", "/lib", "/lib"])
+        if Path("/lib64").exists():
+            command.extend(["--ro-bind", "/lib64", "/lib64"])
+        command.extend(["--proc", "/proc", "--dev", "/dev", "/bin/true"])
+        return command
+    if tool_name == "firejail":
+        return [tool_path, "--quiet", "--net=none", "--private", "/bin/true"]
+    if tool_name == "nsjail":
+        return [tool_path, "-Mo", "--chroot", "/", "--cwd", "/", "--disable_clone_newnet", "--", "/bin/true"]
+    return [tool_path, "--help"]
+
+
+def _sandbox_tool_usable(tool_path: str) -> tuple[bool, str]:
+    command = _sandbox_probe_command(tool_path)
+    try:
+        proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=8, check=False)
+    except subprocess.TimeoutExpired:
+        return False, f"probe timed out: {_command_text(command)}"
+    except OSError as exc:
+        return False, f"probe could not start: {exc}"
+    except Exception as exc:
+        return False, f"probe raised {type(exc).__name__}: {exc}"
+
+    output = _trim_probe_output("\n".join(part for part in (proc.stderr, proc.stdout) if part))
+    if proc.returncode == 0:
+        return True, f"probe passed: {_command_text(command)}"
+    if output:
+        return False, f"probe failed with exit {proc.returncode}: {output}"
+    return False, f"probe failed with exit {proc.returncode}: {_command_text(command)}"
+
+
+def _detect_sandbox_tool_with_notes() -> tuple[str | None, list[str]]:
+    notes: list[str] = []
     for tool in SANDBOX_TOOLS:
         path = shutil.which(tool)
-        if path:
-            return path
-    return None
+        if not path:
+            continue
+        usable, reason = _sandbox_tool_usable(path)
+        if usable:
+            notes.append(f"Detected usable sandbox tool: {path} ({reason})")
+            return path, notes
+        notes.append(f"Detected sandbox tool {path}, but it failed usability probe: {reason}")
+    return None, notes
 
 
 def detect_package_manager() -> str | None:
@@ -198,7 +267,7 @@ def ensure_sandbox_wrapper(cwd: str | Path | None) -> str | None:
 def inspect_compile_environment(cwd: str | Path | None, *, auto_configure_wrapper: bool = True) -> CompileEnvironmentReport:
     notes: list[str] = []
     latex_engine = detect_latex_engine()
-    sandbox_tool = detect_sandbox_tool()
+    sandbox_tool, sandbox_probe_notes = _detect_sandbox_tool_with_notes()
     package_manager = detect_package_manager()
     cargo_path = detect_cargo()
     pkg_config_path = detect_pkg_config()
@@ -214,10 +283,16 @@ def inspect_compile_environment(cwd: str | Path | None, *, auto_configure_wrappe
     else:
         notes.append(f"Detected LaTeX engine: {latex_engine}")
 
+    notes.extend(sandbox_probe_notes)
     if not sandbox_tool:
-        notes.append("No supported sandbox tool found (bwrap/firejail/nsjail).")
+        notes.append("No supported sandbox tool passed runtime usability probe (bwrap/firejail/nsjail).")
     else:
-        notes.append(f"Detected sandbox tool: {sandbox_tool}")
+        notes.append(f"Selected sandbox tool: {sandbox_tool}")
+    if not sandbox_tool and package_manager and Path(package_manager).name in {"apt-get", "apt"}:
+        notes.append(
+            "If bwrap is installed but unusable in this container, install a fallback sandbox such as firejail "
+            "(sudo apt-get install -y firejail) or set PAPERO_TEX_SANDBOX_CMD."
+        )
 
     if package_manager:
         notes.append(f"Detected package manager: {package_manager}")

@@ -15,6 +15,7 @@ from typing import Any
 from unittest.mock import patch
 
 from paperorchestra.cli import build_parser, main as cli_main
+from paperorchestra import compile_env as compile_env_module
 from paperorchestra.revisions import build_revision_suggestions
 from paperorchestra.cost import estimate_run_cost
 from paperorchestra.critics import (
@@ -3117,6 +3118,53 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             self.assertTrue(Path(payload["path"]).exists())
             self.assertIn(".paper-orchestra/preflight/compile-environment.json", payload["path"])
             self.assertIn("ready_for_compile", payload["report"])
+
+    def test_sandbox_detection_skips_installed_but_unusable_bwrap(self) -> None:
+        def fake_which(name: str) -> str | None:
+            return {
+                "bwrap": "/usr/bin/bwrap",
+                "firejail": "/usr/bin/firejail",
+            }.get(name)
+
+        def fake_run(command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+            if command[0] == "/usr/bin/bwrap":
+                return subprocess.CompletedProcess(
+                    command,
+                    1,
+                    stdout="",
+                    stderr=(
+                        "bwrap: No permissions to create new namespace, "
+                        "likely because the kernel does not allow non-privileged user namespaces."
+                    ),
+                )
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("paperorchestra.compile_env.shutil.which", side_effect=fake_which), patch(
+                "paperorchestra.compile_env.subprocess.run", side_effect=fake_run
+            ):
+                self.assertEqual(compile_env_module.detect_sandbox_tool(), "/usr/bin/firejail")
+                report = compile_env_module.inspect_compile_environment(tmp, auto_configure_wrapper=False)
+
+        self.assertEqual(report.sandbox_tool, "/usr/bin/firejail")
+        self.assertTrue(any("bwrap" in note and "failed usability probe" in note for note in report.notes))
+        self.assertTrue(any("Selected sandbox tool: /usr/bin/firejail" == note for note in report.notes))
+
+    def test_sandbox_detection_rejects_unusable_sandbox_tools(self) -> None:
+        def fake_which(name: str) -> str | None:
+            return "/usr/bin/bwrap" if name == "bwrap" else None
+
+        def fake_run(command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="namespace creation denied")
+
+        with patch("paperorchestra.compile_env.shutil.which", side_effect=fake_which), patch(
+            "paperorchestra.compile_env.subprocess.run", side_effect=fake_run
+        ):
+            self.assertIsNone(compile_env_module.detect_sandbox_tool())
+            report = compile_env_module.inspect_compile_environment(Path("."), auto_configure_wrapper=False)
+
+        self.assertIsNone(report.sandbox_tool)
+        self.assertTrue(any("No supported sandbox tool passed runtime usability probe" in note for note in report.notes))
 
     def test_compile_latex_supports_tectonic_backend(self) -> None:
         old_allow = os.environ.get("PAPERO_ALLOW_TEX_COMPILE")
