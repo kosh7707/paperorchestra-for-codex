@@ -16,9 +16,13 @@ from .pipeline import (
 from .providers import BaseProvider
 from .ralph_bridge_state import (
     NON_SUPPORTED_CITATION_STATUSES,
+    atomic_write_text,
+    clear_pending_manuscript_write,
+    guarded_replace_manuscript_text,
     _read_json,
     _restore_session_mutation_snapshot,
     _session_mutation_snapshot,
+    recover_pending_manuscript_write,
 )
 from .session import artifact_path, load_session, save_session
 from .validator import extract_citation_keys
@@ -72,6 +76,7 @@ def repair_citation_claims(
     require_compile: bool = False,
     commit: bool = False,
 ) -> dict[str, Any]:
+    recover_pending_manuscript_write(cwd)
     state = load_session(cwd)
     if not state.artifacts.paper_full_tex:
         raise ContractError("Need paper.full.tex before repairing citation claims.")
@@ -123,11 +128,18 @@ def repair_citation_claims(
     if unknown:
         result.update({"reason": "unknown_citation_keys", "completed_at": utc_now_iso()})
         return result
-    paper_path.write_text(candidate, encoding="utf-8")
+    guarded_replace_manuscript_text(
+        cwd,
+        paper_path,
+        candidate,
+        reason="citation_repair_candidate_validation",
+        original_text=original,
+    )
     validation_path, validation_payload = record_current_validation_report(cwd, name="validation.citation-repair.json")
     result["validation"] = {"path": str(validation_path), "ok": validation_payload.get("ok"), "blocking_issue_count": validation_payload.get("blocking_issue_count")}
     if not validation_payload.get("ok"):
-        paper_path.write_text(original, encoding="utf-8")
+        atomic_write_text(paper_path, original)
+        clear_pending_manuscript_write(cwd, status="restored", reason="citation_repair_validation_failed")
         _restore_session_mutation_snapshot(cwd, mutation_snapshot)
         result.update({"reason": "validation_failed", "completed_at": utc_now_iso()})
         return result
@@ -136,14 +148,18 @@ def repair_citation_claims(
             pdf_path = compile_current_paper(cwd)
             result["compile"] = {"ok": True, "pdf": str(pdf_path)}
         except Exception as exc:
-            paper_path.write_text(original, encoding="utf-8")
+            atomic_write_text(paper_path, original)
+            clear_pending_manuscript_write(cwd, status="restored", reason="citation_repair_compile_failed")
             _restore_session_mutation_snapshot(cwd, mutation_snapshot)
             result["compile"] = {"ok": False, "error": str(exc)}
             result.update({"reason": "compile_failed", "completed_at": utc_now_iso()})
             return result
     if not commit:
-        paper_path.write_text(original, encoding="utf-8")
+        atomic_write_text(paper_path, original)
+        clear_pending_manuscript_write(cwd, status="restored", reason="citation_repair_uncommitted_candidate_restored")
         _restore_session_mutation_snapshot(cwd, mutation_snapshot)
+    else:
+        clear_pending_manuscript_write(cwd, status="resolved", reason="citation_repair_candidate_committed")
     state = load_session(cwd)
     state.notes.append("Citation-claim repair candidate accepted." + (" Committed." if commit else " Awaiting citation-support approval."))
     save_session(cwd, state)

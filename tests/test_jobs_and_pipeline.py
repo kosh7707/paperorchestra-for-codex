@@ -134,6 +134,11 @@ from paperorchestra.ralph_bridge import (
     repair_citation_claims,
     run_qa_loop_step,
 )
+from paperorchestra.ralph_bridge_state import (
+    MANUSCRIPT_CANDIDATE_WRITE_MARKER_FILENAME,
+    guarded_replace_manuscript_text,
+    recover_pending_manuscript_write,
+)
 from paperorchestra.runtime_parity import record_lane_manifest, record_runtime_parity_report
 from paperorchestra.session import artifact_path, create_session, load_session, review_path, save_session
 from paperorchestra.teach import prepare_teach_bundle
@@ -9638,6 +9643,95 @@ class ReproducibilityAndParityTests(unittest.TestCase):
         self.assertIn('import_prior_work', skill)
         self.assertIn('critique', skill)
         self.assertIn('paperorchestra environment', skill)
+
+
+class RalphCandidateWriteAtomicityTests(unittest.TestCase):
+    def _init_session(self, root: Path) -> None:
+        files = {
+            "idea.md": "## Problem Statement\nDemo\n",
+            "experimental_log.md": "# Experimental Log\n\n## 1. Experimental Setup\n* **Datasets:** DemoSet\n",
+            "template.tex": "\\documentclass{article}\\begin{document}\\section{Intro}\\end{document}\n",
+            "guidelines.md": "Target venue: DemoConf\n",
+        }
+        for name, content in files.items():
+            (root / name).write_text(content, encoding="utf-8")
+        (root / "figures").mkdir()
+        create_session(
+            root,
+            InputBundle(
+                idea_path=str(root / "idea.md"),
+                experimental_log_path=str(root / "experimental_log.md"),
+                template_path=str(root / "template.tex"),
+                guidelines_path=str(root / "guidelines.md"),
+                figures_dir=str(root / "figures"),
+            ),
+        )
+
+    def test_pending_candidate_write_recovers_original_manuscript(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_session(root)
+            paper_path = root / "paper.full.tex"
+            original = "\\documentclass{article}\\begin{document}original\\end{document}\n"
+            candidate = "\\documentclass{article}\\begin{document}candidate\\end{document}\n"
+            paper_path.write_text(original, encoding="utf-8")
+
+            marker_path = guarded_replace_manuscript_text(
+                root,
+                paper_path,
+                candidate,
+                reason="unit_test_candidate",
+                original_text=original,
+            )
+
+            self.assertEqual(paper_path.read_text(encoding="utf-8"), candidate)
+            self.assertTrue(marker_path.exists())
+            self.assertEqual(marker_path.name, MANUSCRIPT_CANDIDATE_WRITE_MARKER_FILENAME)
+            recovery = recover_pending_manuscript_write(root)
+            self.assertEqual(recovery["status"], "restored_original")
+            self.assertEqual(paper_path.read_text(encoding="utf-8"), original)
+            self.assertFalse(marker_path.exists())
+
+    def test_failed_candidate_replace_leaves_original_and_recoverable_marker(self) -> None:
+        from paperorchestra import ralph_bridge_state
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_session(root)
+            paper_path = root / "paper.full.tex"
+            original = "\\documentclass{article}\\begin{document}original\\end{document}\n"
+            candidate = "\\documentclass{article}\\begin{document}candidate\\end{document}\n"
+            paper_path.write_text(original, encoding="utf-8")
+            real_replace = ralph_bridge_state.os.replace
+            calls = {"count": 0}
+
+            def flaky_replace(src: str | Path, dst: str | Path) -> None:
+                calls["count"] += 1
+                if calls["count"] == 3:
+                    raise RuntimeError("simulated destination replace crash")
+                real_replace(src, dst)
+
+            with patch("paperorchestra.ralph_bridge_state.os.replace", side_effect=flaky_replace):
+                with self.assertRaisesRegex(RuntimeError, "simulated destination replace crash"):
+                    guarded_replace_manuscript_text(
+                        root,
+                        paper_path,
+                        candidate,
+                        reason="unit_test_candidate",
+                        original_text=original,
+                    )
+
+            marker_path = artifact_path(root, MANUSCRIPT_CANDIDATE_WRITE_MARKER_FILENAME)
+            self.assertEqual(paper_path.read_text(encoding="utf-8"), original)
+            self.assertTrue(marker_path.exists())
+            recovery = recover_pending_manuscript_write(root)
+            self.assertEqual(recovery["status"], "already_original")
+            self.assertFalse(marker_path.exists())
+
+    def test_ralph_active_manuscript_paths_do_not_use_truncating_write_text(self) -> None:
+        for path in (Path("paperorchestra/ralph_bridge.py"), Path("paperorchestra/ralph_bridge_repair.py")):
+            source = path.read_text(encoding="utf-8")
+            self.assertNotIn("paper_path.write_text", source)
 
 
 

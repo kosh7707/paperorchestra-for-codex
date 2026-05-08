@@ -57,6 +57,7 @@ from .ralph_bridge_state import (
     TERMINAL_VERDICTS,
     StepResult,
     _artifact_sha,
+    atomic_write_text,
     _citation_issue_count,
     _citation_summary,
     _file_content_snapshot,
@@ -68,9 +69,12 @@ from .ralph_bridge_state import (
     _restore_file_content_snapshot,
     _restore_session_mutation_snapshot,
     _session_mutation_snapshot,
+    clear_pending_manuscript_write,
     compute_progress_delta,
+    guarded_replace_manuscript_text,
     qa_loop_exit_code,
     quality_eval_status,
+    recover_pending_manuscript_write,
 )
 
 
@@ -94,7 +98,8 @@ def _restore_current_after_uncommitted_candidate(
 ) -> dict[str, Any] | None:
     if paper_path is None or original_paper is None:
         return None
-    paper_path.write_text(original_paper, encoding="utf-8")
+    atomic_write_text(paper_path, original_paper)
+    clear_pending_manuscript_write(cwd, status="restored", reason="uncommitted_candidate_restored")
     _restore_session_mutation_snapshot(cwd, mutation_snapshot)
     _restore_file_content_snapshot(citation_review_snapshot)
     _restore_file_content_snapshot(citation_trace_snapshot)
@@ -224,6 +229,7 @@ def run_qa_loop_step(
     citation_provider_name: str | None = None,
     citation_provider_command: str | None = None,
 ) -> StepResult:
+    recover_pending_manuscript_write(cwd)
     started = utc_now_iso()
     before_eval_path, before_eval = write_quality_eval(
         cwd,
@@ -383,7 +389,13 @@ def run_qa_loop_step(
                     repair["candidate_path"] = preserved_candidate_path
                     repair["candidate_sha256"] = _artifact_sha(preserved_candidate_path)
                 citation_candidate_path = str(repair["candidate_path"])
-                paper_path.write_text(Path(citation_candidate_path).read_text(encoding="utf-8"), encoding="utf-8")
+                guarded_replace_manuscript_text(
+                    cwd,
+                    paper_path,
+                    Path(citation_candidate_path).read_text(encoding="utf-8"),
+                    reason="qa_loop_citation_candidate_for_validation",
+                    original_text=original_paper,
+                )
                 citation_candidate_applied = True
             execution["actions_attempted"].append({"code": code, "handler": "repair_citation_claims", "result": repair})
         else:
@@ -577,7 +589,8 @@ def run_qa_loop_step(
             execution["no_progress_override"] = True
     except Exception as exc:
         if citation_candidate_applied and paper_path and original_paper is not None:
-            paper_path.write_text(original_paper, encoding="utf-8")
+            atomic_write_text(paper_path, original_paper)
+            clear_pending_manuscript_write(cwd, status="restored", reason="qa_loop_candidate_exception")
             _restore_session_mutation_snapshot(cwd, mutation_snapshot)
         execution.update(
             {
