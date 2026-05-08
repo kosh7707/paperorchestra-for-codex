@@ -4692,8 +4692,10 @@ Related \\cite{alpha}.
             self.assertIn(report["overall_status"], {"ok", "warning"})
             codes = {check["code"] for check in report["checks"]}
             self.assertIn("omx_available", codes)
+            self.assertIn("paperorchestra_mcp_health", codes)
             self.assertIn("compile_environment_ready", codes)
             self.assertIn("semantic_scholar_api_key", codes)
+            self.assertIn("paperorchestra_mcp_health", report)
             self.assertIn("readiness_profiles", report)
             self.assertIn("environment_docs", report)
 

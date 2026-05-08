@@ -13,6 +13,7 @@ from .environment import (
     package_context,
 )
 from .fidelity import build_reproducibility_audit
+from .mcp_smoke import build_mcp_smoke_report
 from .omx_bridge import _resolve_omx_model, _resolve_omx_reasoning_effort
 from .session import get_current_session_id, load_session
 
@@ -202,6 +203,7 @@ def build_doctor_report(cwd: str | Path | None = None) -> dict[str, Any]:
     omx_version = _command_version(['omx', '--version']) if omx_path else None
     codex_version = _command_version(['codex', '--version']) if codex_path else None
     omx_control_surface_probe = build_omx_control_surface_probe(omx_path, codex_path)
+    mcp_smoke = build_mcp_smoke_report(cwd=root, timeout_sec=5.0)
     compile_report = inspect_compile_environment(root).to_dict()
     disk = shutil.disk_usage(root)
     current_session_id: str | None = None
@@ -246,6 +248,11 @@ def build_doctor_report(cwd: str | Path | None = None) -> dict[str, Any]:
             'code': 'omx_control_surface_probe',
             'status': omx_control_surface_probe['status'],
             'detail': omx_control_surface_probe,
+        },
+        {
+            'code': 'paperorchestra_mcp_health',
+            'status': mcp_smoke['status'],
+            'detail': mcp_smoke,
         },
         {
             'code': 'compile_environment_ready',
@@ -297,6 +304,7 @@ def build_doctor_report(cwd: str | Path | None = None) -> dict[str, Any]:
         'provider_command_configured': bool(os.environ.get('PAPERO_MODEL_CMD')),
         'environment_docs': docs,
         'omx_control_surface_probe': omx_control_surface_probe,
+        'paperorchestra_mcp_health': mcp_smoke,
         'readiness_profiles': profiles,
         'missing_summary': missing_summary,
         'session_recovery': session_recovery,
@@ -313,5 +321,6 @@ def build_doctor_report(cwd: str | Path | None = None) -> dict[str, Any]:
             'Set PAPERO_ALLOW_TEX_COMPILE=1 before compiling TeX sources.',
             'Set SEMANTIC_SCHOLAR_API_KEY for more reliable live citation verification.',
             'Use `paperorchestra audit-reproducibility` to classify whether the current run is suitable for reproducibility/fidelity claims.',
+            '`codex mcp list` confirms registration, not that the active Codex conversation received mcp__paperorchestra__ tools; run scripts/smoke-paperorchestra-mcp.py to separate server health from session attachment.',
         ],
     }

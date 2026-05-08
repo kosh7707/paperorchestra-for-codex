@@ -1193,6 +1193,18 @@ which paperorchestra-mcp
 paperorchestra environment
 ```
 
+MCP health smoke:
+
+```bash
+scripts/smoke-paperorchestra-mcp.py
+scripts/smoke-paperorchestra-mcp.py --json
+```
+
+This smoke test checks Codex config registration, executable availability,
+MCP `initialize`, `tools/list`, expected PaperOrchestra tool names, and a
+harmless `status` tool call. It intentionally does **not** prove that the
+current Codex conversation has received `mcp__paperorchestra__...` tools.
+
 Minimal Codex App / JSON-style MCP config shape:
 
 ```json
@@ -1226,8 +1238,16 @@ Do not put secrets in a committed config. Keep `SEMANTIC_SCHOLAR_API_KEY` in
 your shell environment or a local `.env` that is never committed.
 
 After registration, restart the MCP client/session and verify that the
-`paperorchestra` tools are visible. If the server starts but tools cannot make live
-model calls, check `PAPERO_MODEL_CMD`, `PAPERO_ALLOWED_PROVIDER_BINARIES`, and
+`paperorchestra` tools are visible. For Codex, `codex mcp list` only confirms
+that the server is registered in config; it does **not** guarantee that the
+current conversation was started with `mcp__paperorchestra__...` tools attached.
+If the namespace is absent but `scripts/smoke-paperorchestra-mcp.py` passes, the
+server is healthy and the remaining issue is active session attachment/tool
+injection in the Codex runtime. Use the CLI fallback while restarting Codex or
+inspecting MCP attach logs.
+
+If the server starts but tools cannot make live model calls, check
+`PAPERO_MODEL_CMD`, `PAPERO_ALLOWED_PROVIDER_BINARIES`, and
 `SEMANTIC_SCHOLAR_API_KEY`.
 If your MCP client does not inherit the same Python environment or `PATH`, register
 `paperorchestra-mcp` with an absolute path from `which paperorchestra-mcp`.

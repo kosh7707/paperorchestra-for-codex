@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import tomllib
 import unittest
@@ -245,6 +246,81 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             text = config.read_text(encoding="utf-8")
             self.assertIn("[mcp_servers.paperorchestra]", text)
             self.assertIn(f'command = "{command}"', text)
+
+    def test_paperorchestra_mcp_smoke_script_checks_stdio_server_health(self) -> None:
+        path = Path("scripts/smoke-paperorchestra-mcp.py")
+        self.assertTrue(path.exists())
+        self.assertTrue(path.stat().st_mode & 0o111)
+        subprocess.run([sys.executable, "-m", "py_compile", str(path), "paperorchestra/mcp_smoke.py"], check=True)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = root / "config.toml"
+            config.write_text(
+                "[mcp_servers.paperorchestra]\n"
+                f"command = {json.dumps(sys.executable)}\n"
+                f"args = {json.dumps(['-m', 'paperorchestra.mcp_server'])}\n"
+                "enabled = true\n"
+                "\n"
+                "[mcp_servers.paperorchestra.env]\n"
+                f"PYTHONPATH = {json.dumps(str(Path.cwd()))}\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(path),
+                    "--config",
+                    str(config),
+                    "--cwd",
+                    str(root),
+                    "--json",
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["status"], "ok")
+        self.assertTrue(payload["config"]["registered"])
+        self.assertTrue(payload["server"]["initialize_ok"])
+        self.assertTrue(payload["server"]["tools_list_ok"])
+        self.assertGreaterEqual(payload["server"]["tool_count"], 50)
+        self.assertTrue(payload["server"]["expected_tools_present"])
+        self.assertTrue(payload["server"]["status_call_reached_server"])
+        self.assertFalse(payload["active_session_attachment"]["checked"])
+
+    def test_register_codex_mcp_script_explains_registration_vs_active_attachment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = root / "config.toml"
+            command = root / "paperorchestra-mcp"
+            command.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+            command.chmod(0o755)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/register-codex-mcp.sh",
+                    "--config",
+                    str(config),
+                    "--command",
+                    str(command),
+                    "--no-backup",
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("mcp__paperorchestra__status", result.stderr)
+        self.assertIn("scripts/smoke-paperorchestra-mcp.py", result.stderr)
+        self.assertIn("config registration, not active session attachment", result.stderr)
 
     def test_strict_smoke_policy_script_exists_and_runs_full_claim_safe_stack(self) -> None:
         path = Path("scripts/live-smoke-claim-safe.sh")
