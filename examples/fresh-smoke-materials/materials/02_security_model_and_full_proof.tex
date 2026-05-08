@@ -1,0 +1,7 @@
+\section{Analysis Core}
+\begin{theorem}[Artifact preservation]
+If every writing lane reads from the registered artifact set and every promotion step validates the resulting manuscript against the current artifact hashes, then a promoted draft cannot silently depend on an unregistered source artifact.
+\end{theorem}
+\begin{proof}
+The proof is by invariant preservation over the pipeline stages. Initialization records the registered input hashes. Each lane receives those hashes as part of the handoff trace. A candidate draft is promoted only after validation recomputes the manuscript-facing artifact hashes and rejects stale or missing evidence. Therefore any promoted draft that depends on an unregistered artifact would require either an omitted handoff trace entry or a stale validation report, both of which are rejected by the stated promotion rule.
+\end{proof}

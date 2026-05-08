@@ -1,0 +1,92 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage[capitalize]{cleveref}
+\begin{document}
+\title{PaperOrchestra Demo}
+\maketitle
+\section{Introduction}
+
+Writing a strong AI research paper from loosely structured project materials is not just a text generation problem. It is a coordination problem in which narrative synthesis, citation coverage, and figure or plot planning can drift apart as the draft grows. This drift is especially visible when a system must simultaneously decide what the paper claims, which evidence supports those claims, and how the manuscript should be organized so that the argument remains coherent. Prior work on large language models established the general feasibility of flexible prompt-based generation \cite{author2024LanguageModelsAre}, while later work on reasoning-and-action loops showed that generation quality can depend on explicit control over intermediate steps rather than a single pass \cite{author2024ReactSynergizingReasoning,author2024TreeOfThoughts,author2024PlanAndExecute}. Related iterative-improvement methods further suggest that drafts benefit from feedback-driven revision when the system can inspect and refine its own outputs \cite{author2024SelfRefine,author2024Reflexion}.
+
+This paper studies whether that observation transfers to the specific setting of AI-assisted scientific writing. Our core hypothesis is that a staged multi-agent pipeline with explicit artifacts can improve grounding, literature synthesis, and paper structure. The proposed workflow separates outline generation, plot planning, literature review, section drafting, and gated refinement into explicit phases, rather than asking a single agent to synthesize the entire manuscript in one shot. This design follows a broader systems pattern in which planning and execution are decoupled so that each stage can be checked before the next begins \cite{author2024PlanAndExecute,author2024TreeOfThoughts}. It also aligns with the intuition behind persistent agentic workflows, where intermediate state is treated as a first-class object that can be revisited and revised \cite{author2024GenerativeAgentsInteractive,author2024Reflexion}.
+
+The experimental results support this framing. On a synthetic writing benchmark, our pipeline achieved a literature review quality score of 78.3, compared with 45.4 for a single-agent baseline and 43.6 for AI Scientist-v2. On overall paper quality, the pipeline scored 54.0, compared with 44.3 for the single-agent baseline and 43.6 for AI Scientist-v2. The qualitative logs indicate that the staged design improved citation coverage and the coherence of the manuscript structure. Taken together, these results suggest that explicit decomposition is most valuable not because it makes generation more verbose, but because it creates checkpoints where missing evidence, weak transitions, and structural inconsistencies can be corrected before they propagate through the draft.
+
+Our contribution is therefore not a new language model, but a structured workflow for paper generation. The central claim is that explicit artifacts---such as outlines, review notes, and refinement targets---provide a useful interface between evidence collection and prose generation. In the context of scientific writing, this interface matters because a convincing manuscript must do more than summarize sources: it must organize them into a defensible narrative with stable citation support. The remainder of the paper describes the method, experiments, and observed benefits of this staged approach.
+
+\section{Related Work}
+
+The most relevant backdrop for this work is research on agentic generation pipelines, especially systems that decompose a task into planning, acting, and iterative revision. ReAct shows how reasoning and action can be interleaved in a loop rather than fused into a single generation step, making control over intermediate decisions part of the algorithmic design \cite{author2024ReactSynergizingReasoning}. Tree of Thoughts similarly treats intermediate states as searchable objects, which is conceptually close to our use of explicit artifacts and gated refinement \cite{author2024TreeOfThoughts}. Plan-and-execute agents provide an additional foundation for the idea that a high-level plan can be separated from downstream execution without sacrificing flexibility \cite{author2024PlanAndExecute}. These works do not target scientific manuscript writing specifically, but they motivate the more general reliability argument that complex generation tasks benefit from staged control.
+
+A second line of work concerns iterative self-improvement. Self-Refine proposes that a model can critique and revise its own drafts over multiple passes, while Reflexion emphasizes learning or improving from feedback signals across episodes \cite{author2024SelfRefine,author2024Reflexion}. Our pipeline uses a similar logic, but with a stronger structural constraint: refinement is not just a generic feedback loop, it is applied to named artifacts such as outlines, literature summaries, and section drafts. This distinction matters because revision is only useful when the system can preserve the intended role of each artifact and route feedback to the correct stage. In that sense, the present work can be read as an application of iterative refinement to a manuscript-production workflow rather than to open-ended text generation.
+
+Within scientific writing assistance, AI Scientist is the nearest named reference point in the provided evaluation context. It is an autonomous scientific writing and paper-generation workflow, making it the most direct adjacent system for comparison \cite{author2024AiScientist}. AI Scientist-v2 is also relevant as a directly compared baseline in our experiments \cite{author2024AiScientistV2}. However, the experimental log shows that our contribution should be interpreted carefully: the paper reports gains on literature review quality and overall paper quality in the synthetic writing benchmark, but it does not support broad claims of dominance beyond the measured setting. Accordingly, we position our method as a pipeline-level improvement under the reported benchmark, not as a universal replacement for earlier systems.
+
+More specialized writing-assistance and literature-review systems further motivate the need for citation-aware drafting. Write with the Help of AI frames literature review generation and citation support as a dedicated problem, while ResearchBuddy-style literature assistant systems highlight source gathering and evidence-backed outlining as core capabilities \cite{author2024WriteWithThe,author2024ResearchbuddyStyleLiterature}. SciMON targets scientific monologue-style research and writing assistance, again emphasizing that structured drafting is distinct from generic generation \cite{author2024ScimonScientificMonologue}. These systems collectively suggest that scientific writing benefits from explicit organization around sources and intermediate notes. Our method extends that idea by making the workflow itself multi-stage and by treating the transition between stages as a point where grounding can be checked.
+
+Finally, the evaluation perspective is related to work on factual consistency and scientific corpora. QAGS-style factual consistency evaluation is relevant because citation coverage and grounding are closely tied to whether generated text stays faithful to its evidence \cite{author2024QagsFactualConsistency}. Scientific corpora such as S2ORC motivate the broader need for citation-rich benchmarks and retrieval-aware writing tasks \cite{author2024S2orcScientificCorpus}. Although our benchmark is synthetic rather than corpus-scale, these references help situate the task as one of evidence-conditioned synthesis rather than unconstrained generation. More broadly, canonical sequence-generation and summarization models provide the foundation on which these higher-level workflows are built \cite{author2024AttentionIsAll,author2024BartOrPegasus}. The present paper differs by focusing on orchestration: instead of optimizing a single generator, it studies how staged artifacts and gated refinement change the quality of the final manuscript.
+
+\section{Method}
+
+Figure~\cref{fig:pipeline} summarizes the proposed workflow. The method is organized as five explicit stages: outline generation, plot planning, literature review, section drafting, and gated refinement. Each stage produces an artifact that becomes the input to the next stage, so the pipeline is not merely a sequence of prompts but a sequence of structured handoffs. The design goal is to keep the manuscript grounded in a stable set of intermediate representations rather than allowing later drafting steps to overwrite earlier decisions implicitly.
+
+\begin{figure}[t]
+  \centering
+  \input{.paper-orchestra/runs/po-5dee30492fdd/build/plot-assets/fig1.tex}
+  \caption{Overview of the staged writing pipeline and the explicit artifacts passed between phases to stabilize manuscript development.}
+  \label{fig:pipeline}
+\end{figure}
+
+The first stage, outline generation, establishes the paper's argumentative skeleton. This artifact determines the intended section structure, the major claims, and the order in which evidence will be introduced. The second stage, plot planning, converts the outline into a concrete visualization plan. In practice, this means deciding which figures are needed, what each figure should communicate, and how the figures should map onto the paper's narrative. This separation is important because figure planning is not a post hoc formatting task; it is part of the argument design.
+
+The third stage, literature review, gathers and organizes background material relevant to the planned claims. Its output is a review artifact rather than raw notes, which makes it possible to assess whether the sources actually support the intended storyline. The fourth stage, section drafting, turns the outline and review artifacts into prose. At this point, the system is no longer free to redefine the paper's structure; instead, it must instantiate the agreed plan in coherent text. Finally, gated refinement applies explicit checks before the draft is finalized. This stage is meant to catch missing citations, weak transitions, inconsistent terminology, and mismatches between sections and figures. The gate is therefore a control mechanism rather than a stylistic preference.
+
+The key method-level hypothesis is that these artifact boundaries reduce drift. If a later stage finds a problem, the correction is localized to the corresponding artifact instead of being blended into a monolithic draft. This design also makes the pipeline easier to inspect, because each stage has a distinct deliverable that can be reviewed independently. In that sense, the method is a workflow-level intervention: it changes how evidence, structure, and prose are coordinated during manuscript construction.
+
+\section{Experiments}
+
+We evaluate the proposed pipeline on a synthetic writing benchmark. The experimental log reports two metrics: literature review quality and overall paper quality. The compared baselines are Single Agent and AI Scientist-v2. No additional datasets, baselines, or metrics are claimed beyond those listed in the log.
+
+\begin{table}[t]
+  \centering
+  \caption{Synthetic writing benchmark results from the experimental log.}
+  \label{tab:results}
+  \begin{tabular}{lcc}
+    \toprule
+    Method & Literature Review Quality & Overall Paper Quality \\
+    \midrule
+    Single Agent & 45.4 & 44.3 \\
+    AI Scientist-v2 & 43.6 & 43.6 \\
+    Our pipeline & 78.3 & 54.0 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Figure~\cref{fig:comparison} visualizes the same comparison as a grouped bar chart. The strongest result is on literature review quality, where the pipeline scores 78.3 versus 45.4 for Single Agent and 43.6 for AI Scientist-v2. On overall paper quality, the pipeline scores 54.0, compared with 44.3 and 43.6 for the two baselines, respectively. These numbers indicate that the staged design improves both the review component and the end-to-end manuscript, with a larger gain in the review dimension.
+
+\begin{figure}[t]
+  \centering
+  \input{.paper-orchestra/runs/po-5dee30492fdd/build/plot-assets/fig2.tex}
+  \caption{Comparison of Single Agent, AI Scientist-v2, and the proposed pipeline on the synthetic writing benchmark for literature review quality and overall paper quality.}
+  \label{fig:comparison}
+\end{figure}
+
+The log also reports a qualitative observation: the staged pipeline improved citation coverage and the coherence of the manuscript structure. Figure~\cref{fig:grounding} summarizes these observations as a two-column callout panel. This qualitative result is consistent with the method design, since explicit artifacts and gated refinement are intended to keep evidence, citation choices, and prose structure aligned across stages. Importantly, this observation is descriptive rather than a separate numeric metric.
+
+\begin{figure}[t]
+  \centering
+  \input{.paper-orchestra/runs/po-5dee30492fdd/build/plot-assets/fig3.tex}
+  \caption{Qualitative summary of the reported effects of staging on citation coverage and manuscript coherence.}
+  \label{fig:grounding}
+\end{figure}
+
+Overall, the experimental evidence supports the main claim that explicit staging improves manuscript grounding. The most pronounced improvement appears in literature review quality, which is the part of the workflow most directly tied to source selection, citation coverage, and evidence organization. The gains in overall paper quality are smaller but still consistent with the same mechanism, suggesting that better grounded intermediate artifacts also help the final draft remain coherent.
+
+\section{Conclusion}
+
+This paper argues that AI-assisted paper writing is fundamentally a coordination problem, not just a text generation problem. The proposed staged pipeline addresses that problem by making outline generation, plot planning, literature review, section drafting, and gated refinement explicit artifacts in a controlled workflow. Across the synthetic writing benchmark, the pipeline improves literature review quality and overall paper quality relative to the reported baselines, with the largest gain on literature review quality.
+
+The main takeaway is conservative but practical: explicit intermediate structure can improve grounding and coherence in manuscript production. Future work could evaluate richer artifact checks, broader benchmark suites, and stronger gating criteria, but those directions remain outside the scope of the present study.
+
+\end{document}

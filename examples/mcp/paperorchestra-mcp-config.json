@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "paperorchestra": {
+      "command": "paperorchestra-mcp",
+      "args": [],
+      "env": {
+        "SEMANTIC_SCHOLAR_API_KEY": "<optional>",
+        "PAPERO_ALLOWED_PROVIDER_BINARIES": "codex,openai,ollama,llm,claude,gemini"
+      }
+    }
+  }
+}

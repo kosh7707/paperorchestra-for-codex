@@ -1,0 +1,35 @@
+{
+  "schema_version": "fresh-smoke-material-manifest/1",
+  "materials": [
+    {
+      "path": "materials/00_core_macros.tex",
+      "sha256": "sha256:725e64ea4a0caa8210a32398c50a4aaa00dab7e0e845d0dea52878dbb857c5ee",
+      "bytes": 97
+    },
+    {
+      "path": "materials/01_methodology_core.tex",
+      "sha256": "sha256:aef3d73b934c82715721952823db07052c0b277874b076a40351a64ec295990a",
+      "bytes": 384
+    },
+    {
+      "path": "materials/02_security_model_and_full_proof.tex",
+      "sha256": "sha256:ac86057586463b5a5c75e475427ed3ac513e6dc6e0fd97adf652d7420761ff5c",
+      "bytes": 870
+    },
+    {
+      "path": "materials/03_benchmark_method_and_results_core.tex",
+      "sha256": "sha256:0aced5179462c769fd0d71f249e27ee1fb9729a0dd7788b5d12bb6aae5fac482",
+      "bytes": 416
+    },
+    {
+      "path": "materials/04_claim_boundaries.tex",
+      "sha256": "sha256:94b82f4b9cd758f9dae8224ba4ea1df3beb33351b58a9e65bdae0caceec0376b",
+      "bytes": 420
+    },
+    {
+      "path": "materials/05_author_notes_for_positioning.tex",
+      "sha256": "sha256:4f711d07d3261e96d3802caa0243187a9d00cc46ab35e03630c8451a93ff6190",
+      "bytes": 384
+    }
+  ]
+}

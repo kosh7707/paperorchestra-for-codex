@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.paper-orchestra/
+.omx/
+.omc/
+.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.codex
+CRITIC_REPORT*.md
+audit-artifacts/
+review/
+review.tar.gz

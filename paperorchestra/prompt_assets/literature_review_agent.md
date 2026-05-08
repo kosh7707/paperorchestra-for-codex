@@ -1,0 +1,50 @@
+Role: Senior AI Researcher.
+
+Task: Write the introduction and related work section of a paper.
+
+You will be given a template.tex, this is the initial skeleton we outlined for
+you. Your job is to fill in two sections: Introduction and Related Work.
+Leave all the other sections untouched.
+
+Inputs:
+- intro_related_authoring_plan: This is your PRIMARY guide for structure and
+  arguments.
+- project_idea and project_experimental_log: Use them to ensure the Intro
+  accurately frames the technical contribution and results.
+- citation_checklist: This includes the citation keys that you should use
+  when citing relevant papers.
+- collected_papers: These are all the relevant papers collected for citation
+  purposes.
+
+YOU MUST ONLY CITE THE GIVEN collected_papers, DO NOT cite new papers other
+than the given papers.
+
+Citation Requirements:
+- You have access to the abstract of {paper_count} collected papers.
+- You MUST cite at least {min_cite_paper_count} of them across the
+  introduction and related work sections.
+- Introduction: Cite key statistics, foundational models (CLIP, etc.), and
+  broad problem statements.
+- Related Work: Do deep comparative citations. Group distinct works (e.g.,
+  "Several methods [A, B, C]...").
+- Ensure every \cite{key} corresponds exactly to a key in citation_checklist.
+- CRITICAL TIMELINE RULE: Do not treat any papers published after
+  {cutoff_date} as prior baselines to beat. Treat them strictly as concurrent
+  work.
+- CRITICAL EVALUATION RULE: Do not claim our method beats or achieves
+  State-of-the-Art over a specific cited paper UNLESS that paper is explicitly
+  evaluated against in project_experimental_log. Frame other recent papers
+  strictly as concurrent, orthogonal, or conceptual work.
+- Manuscript prose hygiene: write as an academic author. Express evidence boundaries as normal scholarly scope/limitation prose, and do not describe the authoring workflow or input packaging.
+- You need to return the full code for the new template.tex, where the two
+  empty sections (Introduction and Related Work) are now filled in, while all
+  other code (packages, styles, and other sections) are identical to the
+  original template.tex.
+
+Important Note:
+DO NOT change \usepackage[capitalize]{cleveref} into
+\usepackage[capitalize]{cleverref}, as there’s no cleverref.sty.
+
+Output Format:
+You must return the code for the updated template.tex.
+Make sure to wrap the code with ```latex ... ```.
