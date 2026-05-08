@@ -4474,6 +4474,132 @@ Related \\cite{alpha}.
             self.assertIn("checks", cli_payload)
             self.assertIn("readiness_profiles", cli_payload)
 
+    def test_doctor_omx_probe_requires_xz_for_control_surface(self) -> None:
+        class FakeCompileReport:
+            def to_dict(self) -> dict[str, object]:
+                return {"ready_for_compile": False}
+
+        def fake_which(name: str) -> str | None:
+            return {"omx": "/usr/bin/omx", "codex": "/usr/bin/codex"}.get(name)
+
+        with tempfile.TemporaryDirectory() as tmp, patch("paperorchestra.doctor.shutil.which", side_effect=fake_which), patch(
+            "paperorchestra.doctor._command_version", return_value="version"
+        ), patch("paperorchestra.doctor.inspect_compile_environment", return_value=FakeCompileReport()):
+            report = build_doctor_report(Path(tmp))
+
+        probe = report["omx_control_surface_probe"]
+        self.assertEqual(probe["status"], "missing")
+        self.assertFalse(probe["ready"])
+        self.assertFalse(probe["checks"]["xz_available"])
+        self.assertTrue(any("xz-utils" in step for step in probe["next_steps"]))
+        omx_profile = next(profile for profile in report["readiness_profiles"] if profile["name"] == "omx_native_ready")
+        self.assertFalse(omx_profile["ready"])
+        self.assertTrue(any("xz-utils" in missing for missing in omx_profile["missing"]))
+
+    def test_doctor_omx_probe_warns_on_bwrap_namespace_denial(self) -> None:
+        class FakeCompileReport:
+            def to_dict(self) -> dict[str, object]:
+                return {"ready_for_compile": False}
+
+        def fake_which(name: str) -> str | None:
+            return {
+                "omx": "/usr/bin/omx",
+                "codex": "/usr/bin/codex",
+                "xz": "/usr/bin/xz",
+                "bwrap": "/usr/bin/bwrap",
+            }.get(name)
+
+        def fake_run(command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="bwrap: No permissions to create new namespace")
+
+        with tempfile.TemporaryDirectory() as tmp, patch("paperorchestra.doctor.shutil.which", side_effect=fake_which), patch(
+            "paperorchestra.doctor._command_version", return_value="version"
+        ), patch("paperorchestra.doctor.inspect_compile_environment", return_value=FakeCompileReport()), patch(
+            "paperorchestra.doctor.subprocess.run", side_effect=fake_run
+        ):
+            report = build_doctor_report(Path(tmp))
+
+        probe = report["omx_control_surface_probe"]
+        self.assertEqual(probe["status"], "warning")
+        self.assertFalse(probe["ready"])
+        self.assertFalse(probe["checks"]["bwrap_namespace_usable"])
+        self.assertIn("namespace", probe["detail"])
+        omx_profile = next(profile for profile in report["readiness_profiles"] if profile["name"] == "omx_native_ready")
+        self.assertFalse(omx_profile["ready"])
+        self.assertTrue(any("compatibility" in step for step in omx_profile["next_steps"]))
+
+    def test_doctor_omx_probe_gates_full_live_profiles(self) -> None:
+        class FakeCompileReport:
+            def to_dict(self) -> dict[str, object]:
+                return {"ready_for_compile": True}
+
+        def fake_which(name: str) -> str | None:
+            return {
+                "omx": "/usr/bin/omx",
+                "codex": "/usr/bin/codex",
+                "xz": "/usr/bin/xz",
+                "bwrap": "/usr/bin/bwrap",
+            }.get(name)
+
+        def fake_run(command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="bwrap: No permissions to create new namespace")
+
+        old_env = {key: os.environ.get(key) for key in [
+            "PAPERO_MODEL_CMD",
+            "SEMANTIC_SCHOLAR_API_KEY",
+            "PAPERO_ALLOW_TEX_COMPILE",
+            "PAPERO_STRICT_OMX_NATIVE",
+            "PAPERO_STRICT_CONTENT_GATES",
+        ]}
+        try:
+            os.environ["PAPERO_MODEL_CMD"] = '["codex"]'
+            os.environ["SEMANTIC_SCHOLAR_API_KEY"] = "test"
+            os.environ["PAPERO_ALLOW_TEX_COMPILE"] = "1"
+            os.environ["PAPERO_STRICT_OMX_NATIVE"] = "1"
+            os.environ["PAPERO_STRICT_CONTENT_GATES"] = "1"
+            with tempfile.TemporaryDirectory() as tmp, patch("paperorchestra.doctor.shutil.which", side_effect=fake_which), patch(
+                "paperorchestra.doctor._command_version", return_value="version"
+            ), patch("paperorchestra.doctor.inspect_compile_environment", return_value=FakeCompileReport()), patch(
+                "paperorchestra.doctor.subprocess.run", side_effect=fake_run
+            ):
+                report = build_doctor_report(Path(tmp))
+        finally:
+            for key, value in old_env.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+        profiles = {profile["name"]: profile for profile in report["readiness_profiles"]}
+        self.assertFalse(profiles["omx_native_ready"]["ready"])
+        self.assertFalse(profiles["full_live_run_ready"]["ready"])
+        self.assertFalse(profiles["claim_safe_full_run_ready"]["ready"])
+        self.assertIn("OMX control surface probe did not pass.", profiles["full_live_run_ready"]["missing"])
+
+    def test_doctor_omx_probe_allows_ready_when_prerequisites_pass(self) -> None:
+        class FakeCompileReport:
+            def to_dict(self) -> dict[str, object]:
+                return {"ready_for_compile": False}
+
+        def fake_which(name: str) -> str | None:
+            return {
+                "omx": "/usr/bin/omx",
+                "codex": "/usr/bin/codex",
+                "xz": "/usr/bin/xz",
+            }.get(name)
+
+        with tempfile.TemporaryDirectory() as tmp, patch("paperorchestra.doctor.shutil.which", side_effect=fake_which), patch(
+            "paperorchestra.doctor._command_version", return_value="version"
+        ), patch("paperorchestra.doctor.inspect_compile_environment", return_value=FakeCompileReport()):
+            report = build_doctor_report(Path(tmp))
+
+        probe = report["omx_control_surface_probe"]
+        self.assertEqual(probe["status"], "ok")
+        self.assertTrue(probe["ready"])
+        self.assertIsNone(probe["checks"]["bwrap_namespace_usable"])
+        omx_profile = next(profile for profile in report["readiness_profiles"] if profile["name"] == "omx_native_ready")
+        self.assertTrue(omx_profile["ready"])
+
     def test_doctor_treats_falsey_compile_opt_in_as_warning(self) -> None:
         old_allow = os.environ.get("PAPERO_ALLOW_TEX_COMPILE")
         try:

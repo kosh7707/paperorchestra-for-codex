@@ -675,6 +675,9 @@ def build_readiness_profiles(
     *,
     omx_available: bool,
     codex_available: bool,
+    omx_control_surface_ready: bool = True,
+    omx_control_surface_missing: list[str] | None = None,
+    omx_control_surface_next_steps: list[str] | None = None,
     provider_command_configured: bool,
     semantic_scholar_api_key_set: bool,
     compile_environment_ready: bool,
@@ -714,17 +717,23 @@ def build_readiness_profiles(
 
     omx_missing: list[str] = []
     omx_steps: list[str] = []
+    omx_control_surface_missing = omx_control_surface_missing or []
+    omx_control_surface_next_steps = omx_control_surface_next_steps or []
     if not omx_available:
         omx_missing.append("Install `omx` and ensure it is on PATH.")
         omx_steps.append("omx doctor")
     if not codex_available:
         omx_missing.append("Install `codex` and ensure it is on PATH.")
         omx_steps.append("codex --help")
+    if omx_available and codex_available and not omx_control_surface_ready:
+        omx_missing.extend(omx_control_surface_missing or ["OMX control surface probe did not pass."])
+        omx_steps.extend(omx_control_surface_next_steps)
+    omx_ready = omx_available and codex_available and omx_control_surface_ready
     profiles.append(
         _profile(
             "omx_native_ready",
             "Live OMX-native stage execution (`--runtime-mode omx_native`).",
-            omx_available and codex_available,
+            omx_ready,
             omx_missing,
             omx_steps or ["paperorchestra run --provider shell --runtime-mode omx_native --verify-mode mock"],
         )
@@ -767,8 +776,11 @@ def build_readiness_profiles(
     full_steps: list[str] = []
     if not provider_command_configured:
         full_missing.append("Shell-provider command not configured.")
-    if not omx_available or not codex_available:
-        full_missing.append("OMX/Codex toolchain not fully installed.")
+    if not omx_ready:
+        if not omx_available or not codex_available:
+            full_missing.append("OMX/Codex toolchain not fully installed.")
+        else:
+            full_missing.append("OMX control surface probe did not pass.")
     if not semantic_scholar_api_key_set:
         full_missing.append("Semantic Scholar API key missing.")
     if not (compile_environment_ready and tex_compile_opt_in):
@@ -783,7 +795,7 @@ def build_readiness_profiles(
         _profile(
             "full_live_run_ready",
             "Live shell-provider + OMX-native + live verification + compile runs.",
-            provider_command_configured and omx_available and codex_available and semantic_scholar_api_key_set and compile_environment_ready and tex_compile_opt_in,
+            provider_command_configured and omx_ready and semantic_scholar_api_key_set and compile_environment_ready and tex_compile_opt_in,
             full_missing,
             full_steps or ["paperorchestra run --provider shell --runtime-mode omx_native --verify-mode live --compile"],
         )
@@ -802,8 +814,7 @@ def build_readiness_profiles(
             "claim_safe_full_run_ready",
             "The stricter posture for reproducibility/fidelity claims: full live run plus strict OMX-native no-fallback policy.",
             provider_command_configured
-            and omx_available
-            and codex_available
+            and omx_ready
             and semantic_scholar_api_key_set
             and compile_environment_ready
             and tex_compile_opt_in

@@ -36,6 +36,90 @@ def _command_version(argv: list[str]) -> str | None:
     return output.splitlines()[0]
 
 
+
+def _run_bwrap_namespace_probe(bwrap_path: str) -> tuple[bool, str]:
+    command = [
+        bwrap_path,
+        "--unshare-all",
+        "--die-with-parent",
+        "--ro-bind",
+        "/usr",
+        "/usr",
+        "--ro-bind",
+        "/bin",
+        "/bin",
+    ]
+    if Path("/lib").exists():
+        command.extend(["--ro-bind", "/lib", "/lib"])
+    if Path("/lib64").exists():
+        command.extend(["--ro-bind", "/lib64", "/lib64"])
+    command.extend(["--proc", "/proc", "--dev", "/dev", "/bin/true"])
+    try:
+        proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False, timeout=5)
+    except subprocess.TimeoutExpired:
+        return False, "bwrap namespace probe timed out"
+    except Exception as exc:
+        return False, f"bwrap namespace probe could not run: {exc}"
+    output = " ".join(part.strip() for part in (proc.stderr, proc.stdout) if part.strip())
+    if proc.returncode == 0:
+        return True, "bwrap namespace probe passed"
+    if "No permissions to create new namespace" in output:
+        return False, "bwrap cannot create namespaces in this container"
+    return False, output or f"bwrap namespace probe failed with exit {proc.returncode}"
+
+
+def build_omx_control_surface_probe(omx_path: str | None, codex_path: str | None) -> dict[str, Any]:
+    xz_path = shutil.which("xz")
+    bwrap_path = shutil.which("bwrap")
+    checks: dict[str, Any] = {
+        "omx_available": bool(omx_path),
+        "codex_available": bool(codex_path),
+        "xz_available": bool(xz_path),
+        "bwrap_available": bool(bwrap_path),
+        "bwrap_namespace_usable": None,
+    }
+    missing: list[str] = []
+    next_steps: list[str] = []
+    detail_parts: list[str] = []
+
+    if not omx_path:
+        missing.append("Install `omx` and ensure it is on PATH.")
+        next_steps.append("omx doctor")
+    if not codex_path:
+        missing.append("Install `codex` and ensure it is on PATH.")
+        next_steps.append("codex --help")
+    if not xz_path:
+        missing.append("Install xz-utils so OMX can extract .tar.xz control harness archives.")
+        next_steps.append("apt-get install -y xz-utils")
+
+    status = "missing" if missing else "ok"
+    if bwrap_path:
+        usable, reason = _run_bwrap_namespace_probe(bwrap_path)
+        checks["bwrap_namespace_usable"] = usable
+        detail_parts.append(reason)
+        if not usable and status == "ok":
+            status = "warning"
+            missing.append(f"OMX local control harness namespace probe failed: {reason}.")
+            next_steps.extend([
+                "Use --runtime-mode compatibility for local mock/demo runs.",
+                "Run OMX-native workflows outside this restricted container or configure an OMX-compatible runtime sandbox.",
+            ])
+    else:
+        detail_parts.append("bwrap not found; bounded probe did not treat this as a blocker because OMX runtime packaging may vary.")
+
+    ready = status == "ok"
+    if not detail_parts:
+        detail_parts.append("bounded OMX prerequisite probe passed")
+    return {
+        "ready": ready,
+        "status": status,
+        "checks": checks,
+        "detail": "; ".join(detail_parts),
+        "missing": missing,
+        "next_steps": list(dict.fromkeys(next_steps)),
+        "note": "This is a bounded local prerequisite/control-surface probe, not a full OMX-native model run.",
+    }
+
 def build_session_recovery_hint(cwd: str | Path | None = None) -> dict[str, Any]:
     root = Path(cwd or '.').resolve()
     try:
@@ -117,6 +201,7 @@ def build_doctor_report(cwd: str | Path | None = None) -> dict[str, Any]:
     codex_path = shutil.which('codex')
     omx_version = _command_version(['omx', '--version']) if omx_path else None
     codex_version = _command_version(['codex', '--version']) if codex_path else None
+    omx_control_surface_probe = build_omx_control_surface_probe(omx_path, codex_path)
     compile_report = inspect_compile_environment(root).to_dict()
     disk = shutil.disk_usage(root)
     current_session_id: str | None = None
@@ -135,6 +220,9 @@ def build_doctor_report(cwd: str | Path | None = None) -> dict[str, Any]:
     profiles = build_readiness_profiles(
         omx_available=bool(omx_path),
         codex_available=bool(codex_path),
+        omx_control_surface_ready=bool(omx_control_surface_probe.get('ready')),
+        omx_control_surface_missing=list(omx_control_surface_probe.get('missing') or []),
+        omx_control_surface_next_steps=list(omx_control_surface_probe.get('next_steps') or []),
         provider_command_configured=bool(os.environ.get('PAPERO_MODEL_CMD')),
         semantic_scholar_api_key_set=bool(os.environ.get('SEMANTIC_SCHOLAR_API_KEY')),
         compile_environment_ready=bool(compile_report.get('ready_for_compile')),
@@ -154,6 +242,11 @@ def build_doctor_report(cwd: str | Path | None = None) -> dict[str, Any]:
         {'code': 'omx_version', 'status': 'ok' if omx_version else 'warning', 'detail': omx_version or 'version unavailable'},
         {'code': 'codex_available', 'status': 'ok' if codex_path else 'missing', 'detail': codex_path},
         {'code': 'codex_version', 'status': 'ok' if codex_version else 'warning', 'detail': codex_version or 'version unavailable'},
+        {
+            'code': 'omx_control_surface_probe',
+            'status': omx_control_surface_probe['status'],
+            'detail': omx_control_surface_probe,
+        },
         {
             'code': 'compile_environment_ready',
             'status': 'ok' if compile_report.get('ready_for_compile') else 'missing',
@@ -203,6 +296,7 @@ def build_doctor_report(cwd: str | Path | None = None) -> dict[str, Any]:
         'package_context': pkg_context,
         'provider_command_configured': bool(os.environ.get('PAPERO_MODEL_CMD')),
         'environment_docs': docs,
+        'omx_control_surface_probe': omx_control_surface_probe,
         'readiness_profiles': profiles,
         'missing_summary': missing_summary,
         'session_recovery': session_recovery,
