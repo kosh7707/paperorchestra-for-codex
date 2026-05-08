@@ -235,7 +235,10 @@ sudo apt-get install -y xz-utils   # normal sudo user
 If `doctor` reports an `omx_control_surface_probe` warning, the `detail` and
 `next_steps` fields distinguish common causes such as missing `xz-utils` and
 `bwrap` namespace denial. Use compatibility mode for the mock path when OMX
-native control surfaces are blocked by the container.
+native control surfaces are blocked by the container. This is a conservative
+local prerequisite probe: actual `omx explore` may still work if OMX uses a
+different runtime fallback, so run the suggested `omx explore` smoke when you
+need to distinguish a local bwrap warning from an actual OMX runtime failure.
 
 ---
 

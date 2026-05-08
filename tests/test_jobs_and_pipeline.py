@@ -4762,6 +4762,8 @@ Related \\cite{alpha}.
         self.assertFalse(probe["ready"])
         self.assertFalse(probe["checks"]["bwrap_namespace_usable"])
         self.assertIn("namespace", probe["detail"])
+        self.assertTrue(any("actual `omx explore` may still work" in missing for missing in probe["missing"]))
+        self.assertTrue(any("omx explore" in step for step in probe["next_steps"]))
         omx_profile = next(profile for profile in report["readiness_profiles"] if profile["name"] == "omx_native_ready")
         self.assertFalse(omx_profile["ready"])
         self.assertTrue(any("compatibility" in step for step in omx_profile["next_steps"]))

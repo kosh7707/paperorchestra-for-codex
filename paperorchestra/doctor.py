@@ -100,9 +100,13 @@ def build_omx_control_surface_probe(omx_path: str | None, codex_path: str | None
         detail_parts.append(reason)
         if not usable and status == "ok":
             status = "warning"
-            missing.append(f"OMX local control harness namespace probe failed: {reason}.")
+            missing.append(
+                f"OMX local bwrap namespace probe failed: {reason}. "
+                "This is a conservative prerequisite warning; actual `omx explore` may still work if OMX uses a different runtime fallback."
+            )
             next_steps.extend([
                 "Use --runtime-mode compatibility for local mock/demo runs.",
+                "Optionally run `omx explore --prompt \"Return exactly OK\"` to test the actual OMX runtime path on this machine.",
                 "Run OMX-native workflows outside this restricted container or configure an OMX-compatible runtime sandbox.",
             ])
     else:
