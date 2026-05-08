@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -104,6 +105,146 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr[-2000:])
             self.assertFalse(marker.exists())
             self.assertTrue((workdir / ".paper-orchestra" / "current_session.txt").exists())
+
+    def test_register_codex_mcp_script_updates_toml_idempotently(self) -> None:
+        path = Path("scripts/register-codex-mcp.sh")
+        self.assertTrue(path.exists())
+        self.assertTrue(path.stat().st_mode & 0o111)
+        subprocess.run(["bash", "-n", str(path)], check=True)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = root / "config.toml"
+            command = root / "paperorchestra-mcp"
+            command.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+            command.chmod(0o755)
+            config.write_text(
+                "[profiles.default]\n"
+                'model = "gpt-5.5"\n'
+                "\n"
+                "[mcp_servers.paperorchestra]\n"
+                'command = "stale-paperorchestra-mcp"\n'
+                "\n"
+                "[mcp_servers.paperorchestra.env]\n"
+                'PAPERO_ALLOWED_PROVIDER_BINARIES = "stale"\n',
+                encoding="utf-8",
+            )
+
+            for _ in range(2):
+                result = subprocess.run(
+                    [
+                        "bash",
+                        str(path),
+                        "--config",
+                        str(config),
+                        "--command",
+                        str(command),
+                        "--allowed-provider-binaries",
+                        "codex,omx",
+                        "--startup-timeout-sec",
+                        "12",
+                        "--no-backup",
+                    ],
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+            text = config.read_text(encoding="utf-8")
+            tomllib.loads(text)
+            self.assertIn("[profiles.default]", text)
+            self.assertEqual(text.count("[mcp_servers.paperorchestra]"), 1)
+            self.assertEqual(text.count("[mcp_servers.paperorchestra.env]"), 1)
+            self.assertIn(f'command = "{command}"', text)
+            self.assertIn("enabled = true", text)
+            self.assertIn("startup_timeout_sec = 12", text)
+            self.assertIn('PAPERO_ALLOWED_PROVIDER_BINARIES = "codex,omx"', text)
+            self.assertNotIn("stale-paperorchestra-mcp", text)
+
+    def test_register_codex_mcp_dry_run_does_not_write_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = root / "missing" / "config.toml"
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/register-codex-mcp.sh",
+                    "--config",
+                    str(config),
+                    "--command",
+                    str(root / "paperorchestra-mcp"),
+                    "--dry-run",
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(config.exists())
+            self.assertIn("[mcp_servers.paperorchestra]", result.stdout)
+            self.assertIn("[dry-run] would write Codex MCP config", result.stderr)
+
+    def test_register_codex_mcp_backs_up_existing_config_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = root / "config.toml"
+            config.write_text("[profiles.default]\n", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/register-codex-mcp.sh",
+                    "--config",
+                    str(config),
+                    "--command",
+                    str(root / "paperorchestra-mcp"),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            backups = list(root.glob("config.toml.bak.*"))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(backups[0].read_text(encoding="utf-8"), "[profiles.default]\n")
+            self.assertIn("Backed up existing config to:", result.stderr)
+
+    def test_setup_codex_mcp_delegates_codex_cli_registration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = root / "codex" / "config.toml"
+            command = root / "paperorchestra-mcp"
+            command.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+            command.chmod(0o755)
+
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/setup-codex-mcp.sh",
+                    "--codex-cli",
+                    "--config",
+                    str(config),
+                    "--command",
+                    str(command),
+                    "--no-backup",
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            text = config.read_text(encoding="utf-8")
+            self.assertIn("[mcp_servers.paperorchestra]", text)
+            self.assertIn(f'command = "{command}"', text)
 
     def test_strict_smoke_policy_script_exists_and_runs_full_claim_safe_stack(self) -> None:
         path = Path("scripts/live-smoke-claim-safe.sh")

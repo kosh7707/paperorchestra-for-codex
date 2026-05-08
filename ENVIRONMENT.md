@@ -132,6 +132,21 @@ paperorchestra audit-reproducibility
 - `omx`
 - `codex`
 
+### Needed for Codex CLI MCP registration
+- this repo installed in a venv (`python -m pip install -e .`)
+- `paperorchestra-mcp` available from that venv
+- Codex CLI config path, usually `~/.codex/config.toml`
+
+Recommended registration command:
+
+```bash
+./scripts/register-codex-mcp.sh --use-local-venv
+```
+
+Use `--dry-run` first if you want to inspect the exact TOML. The script backs up
+an existing config before writing and only manages the `paperorchestra` MCP
+server sections.
+
 ### Needed for compile
 Supported LaTeX engines:
 - `latexmk`

@@ -1075,6 +1075,33 @@ paperorchestra compare-partitioned-citation-coverage \
 automatically register that server with Codex, Claude, or any other MCP client.
 Register it in the client you use.
 
+For Codex CLI, the easiest path from a fresh clone is:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+
+# Preview the exact TOML that would be written:
+./scripts/register-codex-mcp.sh --use-local-venv --dry-run
+
+# Write/update ~/.codex/config.toml, with a timestamped backup by default:
+./scripts/register-codex-mcp.sh --use-local-venv
+```
+
+`--use-local-venv` registers the absolute path to this checkout's
+`.venv/bin/paperorchestra-mcp`, which avoids PATH/environment drift after Codex
+restarts. The registration is idempotent for the `paperorchestra` MCP server:
+it preserves unrelated TOML sections, replaces any existing
+`[mcp_servers.paperorchestra]` and `[mcp_servers.paperorchestra.env]` sections,
+and tells you where the backup was written.
+
+Compatibility shortcut:
+
+```bash
+./scripts/setup-codex-mcp.sh --codex-cli --use-local-venv
+```
+
 Start the stdio server directly:
 
 ```bash
@@ -1109,13 +1136,16 @@ Codex CLI TOML-style config shape, commonly in `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.paperorchestra]
-command = "paperorchestra-mcp"
+command = "/absolute/path/to/paperorchestra-for-codex/.venv/bin/paperorchestra-mcp"
+enabled = true
 startup_timeout_sec = 10
 
 [mcp_servers.paperorchestra.env]
-SEMANTIC_SCHOLAR_API_KEY = "<optional>"
 PAPERO_ALLOWED_PROVIDER_BINARIES = "codex,openai,ollama,llm,claude,gemini"
 ```
+
+Do not put secrets in a committed config. Keep `SEMANTIC_SCHOLAR_API_KEY` in
+your shell environment or a local `.env` that is never committed.
 
 After registration, restart the MCP client/session and verify that the
 `paperorchestra` tools are visible. If the server starts but tools cannot make live
