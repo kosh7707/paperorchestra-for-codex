@@ -10,7 +10,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from .compile_env import ensure_sandbox_wrapper
+from .compile_env import ensure_sandbox_wrapper, inspect_compile_environment
 
 
 class LatexBuildError(RuntimeError):
@@ -79,6 +79,57 @@ def _infer_run_root_from_source(source_path: Path) -> Path:
         if parent.name == "artifacts":
             return parent.parent
     return source_path.parent
+
+
+def _compile_opt_in_error_message() -> str:
+    return """LaTeX compilation is disabled by default.
+
+To inspect whether this machine can compile:
+  paperorchestra check-compile-env
+
+To install missing tools:
+  paperorchestra bootstrap-compile-env
+
+To intentionally compile:
+  PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile"""
+
+
+def _missing_compile_environment_message(project_root: Path) -> str:
+    try:
+        report = inspect_compile_environment(project_root, auto_configure_wrapper=False)
+    except Exception as exc:
+        return (
+            "compile environment is not ready.\n\n"
+            f"Could not inspect compile environment automatically: {type(exc).__name__}: {exc}\n\n"
+            "Run:\n"
+            "  paperorchestra check-compile-env\n"
+            "  paperorchestra bootstrap-compile-env\n"
+            "  PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile"
+        )
+
+    sandbox_state = report.sandbox_tool or "missing (bwrap/firejail/nsjail or PAPERO_TEX_SANDBOX_CMD)"
+    wrapper_state = report.sandbox_wrapper_path or "not configured"
+    engine_state = report.latex_engine or "missing (latexmk/pdflatex/tectonic)"
+    missing: list[str] = []
+    if not report.latex_engine:
+        missing.append("LaTeX engine: latexmk, pdflatex, or tectonic")
+    if not report.sandbox_wrapper_path:
+        missing.append("usable sandbox wrapper: bwrap, firejail, nsjail, or PAPERO_TEX_SANDBOX_CMD")
+    missing_lines = "\n".join(f"  - {item}" for item in missing) if missing else "  - compile readiness probe did not produce a sandbox wrapper"
+
+    return (
+        "compile environment is not ready.\n\n"
+        "Missing:\n"
+        f"{missing_lines}\n\n"
+        "Detected:\n"
+        f"  LaTeX engine: {engine_state}\n"
+        f"  Usable sandbox: {sandbox_state}\n"
+        f"  Sandbox wrapper: {wrapper_state}\n\n"
+        "Run:\n"
+        "  paperorchestra check-compile-env\n"
+        "  paperorchestra bootstrap-compile-env\n"
+        "  PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile"
+    )
 
 
 def _summarize_compile_warnings(log_text: str) -> list[str]:
@@ -221,7 +272,7 @@ def _force_latexmk_rerun_command(full_cmd: list[str]) -> list[str]:
 
 def compile_latex_with_report(source: str | Path, *, workdir: str | Path, output_log: str | Path) -> CompileResult:
     if os.environ.get("PAPERO_ALLOW_TEX_COMPILE") != "1":
-        raise LatexBuildError("LaTeX compilation is disabled by default. Set PAPERO_ALLOW_TEX_COMPILE=1 to opt in.")
+        raise LatexBuildError(_compile_opt_in_error_message())
     sandbox_command = os.environ.get("PAPERO_TEX_SANDBOX_CMD")
     source_path = Path(source).resolve()
     manuscript_bytes = source_path.read_bytes()
@@ -231,9 +282,7 @@ def compile_latex_with_report(source: str | Path, *, workdir: str | Path, output
         if wrapper:
             sandbox_command = f'["{wrapper}"]'
         else:
-            raise LatexBuildError(
-                "LaTeX compilation requires a sandbox wrapper. Set PAPERO_TEX_SANDBOX_CMD to an argv list for a sandbox runner."
-            )
+            raise LatexBuildError(_missing_compile_environment_message(_infer_project_root_from_source(source_path)))
     workdir_path = Path(workdir).resolve()
     workdir_path.mkdir(parents=True, exist_ok=True)
     log_path = Path(output_log).resolve()
@@ -277,7 +326,7 @@ def compile_latex_with_report(source: str | Path, *, workdir: str | Path, output
             source_arg,
         ]
     else:
-        raise LatexBuildError("No supported LaTeX engine is available on PATH (latexmk, pdflatex, or tectonic).")
+        raise LatexBuildError(_missing_compile_environment_message(_infer_project_root_from_source(source_path)))
 
     env = os.environ.copy()
     env["openin_any"] = "p"

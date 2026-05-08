@@ -3119,6 +3119,79 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             self.assertIn(".paper-orchestra/preflight/compile-environment.json", payload["path"])
             self.assertIn("ready_for_compile", payload["report"])
 
+    def test_compile_env_bootstrap_uses_root_commands_without_sudo(self) -> None:
+        def fake_which(name: str) -> str | None:
+            return "/usr/bin/apt-get" if name == "apt-get" else None
+
+        with tempfile.TemporaryDirectory() as tmp, patch("paperorchestra.compile_env.os.geteuid", return_value=0), patch(
+            "paperorchestra.compile_env.shutil.which", side_effect=fake_which
+        ):
+            report = compile_env_module.inspect_compile_environment(tmp, auto_configure_wrapper=False)
+            self.assertTrue(report.bootstrap_script_path)
+            script = Path(report.bootstrap_script_path).read_text(encoding="utf-8")
+
+        self.assertTrue(report.install_context["is_root"])
+        self.assertEqual(report.install_commands[0], "apt-get update")
+        self.assertTrue(all(not command.startswith("sudo ") for command in report.install_commands))
+        self.assertEqual(report.fallback_install_commands, ["apt-get install -y firejail"])
+        self.assertEqual(report.omx_optional_install_commands, ["apt-get install -y xz-utils"])
+        self.assertIn("apt-get update", script)
+        self.assertNotIn("sudo apt-get", script)
+
+    def test_compile_env_bootstrap_warns_when_non_root_without_sudo(self) -> None:
+        def fake_which(name: str) -> str | None:
+            return "/usr/bin/apt-get" if name == "apt-get" else None
+
+        with tempfile.TemporaryDirectory() as tmp, patch("paperorchestra.compile_env.os.geteuid", return_value=1000), patch(
+            "paperorchestra.compile_env.shutil.which", side_effect=fake_which
+        ):
+            report = compile_env_module.inspect_compile_environment(tmp, auto_configure_wrapper=False)
+            self.assertTrue(report.bootstrap_script_path)
+            script = Path(report.bootstrap_script_path).read_text(encoding="utf-8")
+
+        self.assertFalse(report.install_context["is_root"])
+        self.assertFalse(report.install_context["sudo_available"])
+        self.assertEqual(report.install_commands, [])
+        self.assertTrue(any("root privileges" in note and "sudo is not available" in note for note in report.notes))
+        self.assertIn("requires root privileges or sudo", script)
+
+    def test_compile_env_bootstrap_keeps_brew_user_space_commands_without_sudo(self) -> None:
+        def fake_which(name: str) -> str | None:
+            return "/opt/homebrew/bin/brew" if name == "brew" else None
+
+        with tempfile.TemporaryDirectory() as tmp, patch("paperorchestra.compile_env.os.geteuid", return_value=1000), patch(
+            "paperorchestra.compile_env.shutil.which", side_effect=fake_which
+        ):
+            report = compile_env_module.inspect_compile_environment(tmp, auto_configure_wrapper=False)
+
+        self.assertFalse(report.install_context["is_root"])
+        self.assertFalse(report.install_context["sudo_available"])
+        self.assertEqual(report.install_commands[0], "brew install --cask mactex-no-gui || brew install basictex")
+        self.assertTrue(all(not command.startswith("sudo ") for command in report.install_commands))
+
+    def test_compile_env_bootstrap_uses_sudo_when_available(self) -> None:
+        def fake_which(name: str) -> str | None:
+            return {
+                "apt-get": "/usr/bin/apt-get",
+                "sudo": "/usr/bin/sudo",
+            }.get(name)
+
+        def fake_run(command: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+            self.assertEqual(command, ["/usr/bin/sudo", "-n", "true"])
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp, patch("paperorchestra.compile_env.os.geteuid", return_value=1000), patch(
+            "paperorchestra.compile_env.shutil.which", side_effect=fake_which
+        ), patch("paperorchestra.compile_env.subprocess.run", side_effect=fake_run):
+            report = compile_env_module.inspect_compile_environment(tmp, auto_configure_wrapper=False)
+
+        self.assertTrue(report.install_context["sudo_available"])
+        self.assertTrue(report.install_context["sudo_usable"])
+        self.assertTrue(report.install_context["can_run_install_commands_directly"])
+        self.assertEqual(report.install_commands[0], "sudo apt-get update")
+        self.assertEqual(report.fallback_install_commands, ["sudo apt-get install -y firejail"])
+        self.assertEqual(report.omx_optional_install_commands, ["sudo apt-get install -y xz-utils"])
+
     def test_sandbox_detection_skips_installed_but_unusable_bwrap(self) -> None:
         def fake_which(name: str) -> str | None:
             return {
@@ -3196,6 +3269,100 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             self.assertTrue(report.clean)
             self.assertTrue(report.pdf_exists)
             self.assertTrue(any("tectonic" in command for command in calls[0]))
+        finally:
+            if old_allow is None:
+                os.environ.pop("PAPERO_ALLOW_TEX_COMPILE", None)
+            else:
+                os.environ["PAPERO_ALLOW_TEX_COMPILE"] = old_allow
+            if old_sandbox is None:
+                os.environ.pop("PAPERO_TEX_SANDBOX_CMD", None)
+            else:
+                os.environ["PAPERO_TEX_SANDBOX_CMD"] = old_sandbox
+
+    def test_compile_latex_opt_in_error_lists_next_commands(self) -> None:
+        old_allow = os.environ.get("PAPERO_ALLOW_TEX_COMPILE")
+        try:
+            os.environ.pop("PAPERO_ALLOW_TEX_COMPILE", None)
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source = root / "paper.tex"
+                source.write_text("\\documentclass{article}\\begin{document}ok\\end{document}\n", encoding="utf-8")
+                with self.assertRaises(LatexBuildError) as ctx:
+                    compile_latex_with_report(source, workdir=root / "out", output_log=root / "build.log")
+            message = str(ctx.exception)
+            self.assertIn("paperorchestra check-compile-env", message)
+            self.assertIn("paperorchestra bootstrap-compile-env", message)
+            self.assertIn("PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile", message)
+        finally:
+            if old_allow is None:
+                os.environ.pop("PAPERO_ALLOW_TEX_COMPILE", None)
+            else:
+                os.environ["PAPERO_ALLOW_TEX_COMPILE"] = old_allow
+
+    def test_compile_latex_missing_environment_error_summarizes_engine_and_sandbox(self) -> None:
+        class FakeCompileReport:
+            latex_engine = None
+            sandbox_tool = None
+            sandbox_wrapper_path = None
+
+        old_allow = os.environ.get("PAPERO_ALLOW_TEX_COMPILE")
+        old_sandbox = os.environ.get("PAPERO_TEX_SANDBOX_CMD")
+        try:
+            os.environ["PAPERO_ALLOW_TEX_COMPILE"] = "1"
+            os.environ.pop("PAPERO_TEX_SANDBOX_CMD", None)
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source = root / "paper.tex"
+                source.write_text("\\documentclass{article}\\begin{document}ok\\end{document}\n", encoding="utf-8")
+                with patch("paperorchestra.latex.ensure_sandbox_wrapper", return_value=None), patch(
+                    "paperorchestra.latex.inspect_compile_environment", return_value=FakeCompileReport()
+                ):
+                    with self.assertRaises(LatexBuildError) as ctx:
+                        compile_latex_with_report(source, workdir=root / "out", output_log=root / "build.log")
+            message = str(ctx.exception)
+            self.assertIn("compile environment is not ready", message)
+            self.assertIn("LaTeX engine", message)
+            self.assertIn("latexmk, pdflatex, or tectonic", message)
+            self.assertIn("Usable sandbox", message)
+            self.assertIn("PAPERO_TEX_SANDBOX_CMD", message)
+            self.assertIn("paperorchestra check-compile-env", message)
+        finally:
+            if old_allow is None:
+                os.environ.pop("PAPERO_ALLOW_TEX_COMPILE", None)
+            else:
+                os.environ["PAPERO_ALLOW_TEX_COMPILE"] = old_allow
+            if old_sandbox is None:
+                os.environ.pop("PAPERO_TEX_SANDBOX_CMD", None)
+            else:
+                os.environ["PAPERO_TEX_SANDBOX_CMD"] = old_sandbox
+
+    def test_compile_latex_missing_engine_error_lists_recovery_commands(self) -> None:
+        class FakeCompileReport:
+            latex_engine = None
+            sandbox_tool = "/usr/bin/firejail"
+            sandbox_wrapper_path = '["/tmp/tex-sandbox.sh"]'
+
+        old_allow = os.environ.get("PAPERO_ALLOW_TEX_COMPILE")
+        old_sandbox = os.environ.get("PAPERO_TEX_SANDBOX_CMD")
+        try:
+            os.environ["PAPERO_ALLOW_TEX_COMPILE"] = "1"
+            os.environ["PAPERO_TEX_SANDBOX_CMD"] = '["sandbox"]'
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source = root / "paper.tex"
+                source.write_text("\\documentclass{article}\\begin{document}ok\\end{document}\n", encoding="utf-8")
+                with patch("paperorchestra.latex.shutil.which", return_value=None), patch(
+                    "paperorchestra.latex.inspect_compile_environment", return_value=FakeCompileReport()
+                ):
+                    with self.assertRaises(LatexBuildError) as ctx:
+                        compile_latex_with_report(source, workdir=root / "out", output_log=root / "build.log")
+            message = str(ctx.exception)
+            self.assertIn("compile environment is not ready", message)
+            self.assertIn("LaTeX engine: latexmk, pdflatex, or tectonic", message)
+            self.assertIn("Usable sandbox: /usr/bin/firejail", message)
+            self.assertIn("paperorchestra check-compile-env", message)
+            self.assertIn("paperorchestra bootstrap-compile-env", message)
+            self.assertIn("PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile", message)
         finally:
             if old_allow is None:
                 os.environ.pop("PAPERO_ALLOW_TEX_COMPILE", None)
