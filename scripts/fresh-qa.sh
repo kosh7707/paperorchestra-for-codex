@@ -202,14 +202,17 @@ elif isinstance(raw_readiness, dict):
 else:
     readiness = {}
 report = compile_env.get("report", {})
+doctor_readiness = {
+    key: value.get("ready") if isinstance(value, dict) else value
+    for key, value in readiness.items()
+}
+compile_opt_in_enabled = os.environ.get("PAPERO_ALLOW_TEX_COMPILE") == "1"
 summary = {
     "status": "ok" if all(value.startswith(("ok", "skipped")) for value in statuses.values()) else "failed",
     "steps": dict(sorted(statuses.items())),
-    "readiness": {
-        key: value.get("ready") if isinstance(value, dict) else value
-        for key, value in readiness.items()
-    },
-    "compile_ready": report.get("ready_for_compile"),
+    "doctor_readiness": doctor_readiness,
+    "compile_environment_ready": report.get("ready_for_compile"),
+    "compile_opt_in_enabled": compile_opt_in_enabled,
     "selected_sandbox": report.get("sandbox_tool"),
     "remaining": [
         note for note in report.get("notes", [])
