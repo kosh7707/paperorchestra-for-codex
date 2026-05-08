@@ -40,6 +40,7 @@ from .models import InputBundle
 from .omx_bridge import cleanup_omx_tmp
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
 from .quality_loop import write_quality_eval, write_quality_loop_plan
+from .quality_gate import write_quality_gate
 from .ralph_bridge import (
     build_ralph_start_payload,
     launch_omx_ralph,
@@ -69,7 +70,7 @@ from .pipeline import (
 )
 from .providers import get_citation_support_provider, get_provider
 from .revisions import write_revision_suggestions
-from .session import create_session, get_current_session_id, load_session, run_dir
+from .session import artifact_path, create_session, get_current_session_id, load_session, run_dir
 from .source_obligations import write_source_obligations
 from .teach import prepare_teach_bundle
 
@@ -302,6 +303,20 @@ def build_parser() -> argparse.ArgumentParser:
     quality_eval_parser.add_argument("--max-iterations", type=int, default=10, help="Iteration budget recorded in cross-iteration metadata.")
     quality_eval_parser.add_argument("--require-live-verification", action="store_true", help="Pass through to reproducibility audit for claim-safe runs.")
     quality_eval_parser.add_argument("--record-history", action="store_true", help="Append this diagnostic-only quality evaluation to qa-loop-history.jsonl.")
+    quality_gate_parser = sub.add_parser("quality-gate", help="Run the strict draft-quality gate and write quality-gate.report.json")
+    quality_gate_parser.add_argument("--output")
+    quality_gate_parser.add_argument("--plan-output")
+    quality_gate_parser.add_argument("--profile", default="auto", choices=["auto", "mock", "ralph", "claim_safe"], help="Gate strictness profile; auto uses mock for mock provenance, claim_safe for claim-safe evals, otherwise ralph.")
+    quality_gate_parser.add_argument("--quality-mode", default="draft", choices=["draft", "ralph", "claim_safe"], help="Evaluation mode used to build the underlying quality-eval and repair plan.")
+    quality_gate_parser.add_argument("--max-iterations", type=int, default=10)
+    quality_gate_parser.add_argument("--require-live-verification", action="store_true")
+    quality_gate_parser.add_argument("--accept-mixed-provenance", action="store_true")
+    quality_gate_parser.add_argument("--auto-refine", action="store_true", help="Attempt one bounded refinement pass when the gate blocks or is repairable.")
+    quality_gate_parser.add_argument("--refine-iterations", type=int, default=1)
+    quality_gate_parser.add_argument("--require-compile-for-accept", action="store_true")
+    quality_gate_parser.add_argument("--no-fail-on-block", action="store_true", help="Always exit 0 after writing the report, even when the gate blocks.")
+    _runtime_mode_args(quality_gate_parser, strict_flag=True)
+    _common_provider_args(quality_gate_parser)
     qa_loop_parser = sub.add_parser("qa-loop-plan", help="Build a Ralph-friendly repair plan from tiered quality-eval and audit artifacts")
     qa_loop_parser.add_argument("--output")
     qa_loop_parser.add_argument("--quality-eval", help="Consume an existing quality-eval.json diagnostic snapshot instead of regenerating one.")
@@ -584,6 +599,7 @@ def _export_current_artifacts(cwd: Path, output: str | Path, *, include_all_arti
         ("latest_fidelity_json", artifacts.latest_fidelity_json, output_dir / "fidelity.audit.json"),
         ("latest_runtime_parity_json", artifacts.latest_runtime_parity_json, output_dir / "runtime-parity.json"),
         ("latest_compile_report_json", artifacts.latest_compile_report_json, output_dir / "compile-report.json"),
+        ("quality_gate_report", str(artifact_path(cwd, "quality-gate.report.json")), output_dir / "quality-gate.report.json"),
         ("session_json", str(run_dir(cwd, state.session_id) / "session.json"), output_dir / "session.json"),
     ]
     for label, source, destination in export_map:
@@ -1132,6 +1148,31 @@ def main(argv: list[str] | None = None) -> int:
                 append_history=args.record_history,
             )
             print(json.dumps({"path": str(path), "quality_eval": payload}, indent=2, ensure_ascii=False))
+            return 0
+
+        if args.command == "quality-gate":
+            output_path = Path(args.output).resolve() if args.output else None
+            plan_output_path = Path(args.plan_output).resolve() if args.plan_output else None
+            provider = _provider_from_args(args) if args.auto_refine else None
+            with _strict_omx_env(args.strict_omx_native):
+                path, payload = write_quality_gate(
+                    cwd,
+                    output_path,
+                    plan_output_path=plan_output_path,
+                    profile=args.profile,
+                    quality_mode=args.quality_mode,
+                    require_live_verification=args.require_live_verification,
+                    accept_mixed_provenance=args.accept_mixed_provenance,
+                    max_iterations=args.max_iterations,
+                    auto_refine=args.auto_refine,
+                    provider=provider,
+                    refine_iterations=args.refine_iterations,
+                    runtime_mode=args.runtime_mode,
+                    require_compile_for_accept=args.require_compile_for_accept,
+                )
+            print(json.dumps({"path": str(path), "quality_gate": payload}, indent=2, ensure_ascii=False))
+            if payload.get("decision", {}).get("blocked") and not args.no_fail_on_block:
+                return 10
             return 0
 
         if args.command in {"qa-loop-plan", "qa-loop"}:

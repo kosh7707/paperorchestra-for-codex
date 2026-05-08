@@ -58,6 +58,7 @@ from .omx_bridge import (
 )
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
 from .providers import get_citation_support_provider, get_provider
+from .quality_gate import write_quality_gate
 from .revisions import write_revision_suggestions
 from .session import create_session, load_session
 from .models import InputBundle
@@ -581,6 +582,29 @@ TOOLS: list[JSON] = [
                 "cwd": {"type": "string"},
                 "output_path": {"type": "string"},
                 "require_live_verification": {"type": "boolean"},
+            },
+        },
+    },
+    {
+        "name": "quality_gate",
+        "description": "Run the strict draft-quality gate and write quality-gate.report.json plus quality-eval/repair-plan artifacts.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "cwd": {"type": "string"},
+                "output_path": {"type": "string"},
+                "plan_output_path": {"type": "string"},
+                "profile": {"type": "string", "enum": ["auto", "mock", "ralph", "claim_safe"], "default": "auto"},
+                "quality_mode": {"type": "string", "enum": ["draft", "ralph", "claim_safe"], "default": "draft"},
+                "max_iterations": {"type": "integer"},
+                "require_live_verification": {"type": "boolean"},
+                "accept_mixed_provenance": {"type": "boolean"},
+                "auto_refine": {"type": "boolean"},
+                "refine_iterations": {"type": "integer"},
+                "runtime_mode": {"type": "string"},
+                "require_compile_for_accept": {"type": "boolean"},
+                "provider": {"type": "string"},
+                "provider_command": {"type": "string"},
             },
         },
     },
@@ -1213,6 +1237,28 @@ def tool_audit_reproducibility(arguments: JSON) -> JSON:
     return _ok({"path": str(path), "report": payload})
 
 
+def tool_quality_gate(arguments: JSON) -> JSON:
+    output_path = Path(arguments["output_path"]).resolve() if arguments.get("output_path") else None
+    plan_output_path = Path(arguments["plan_output_path"]).resolve() if arguments.get("plan_output_path") else None
+    provider = _provider_from_args(arguments) if arguments.get("auto_refine") else None
+    path, payload = write_quality_gate(
+        _default_cwd(arguments),
+        output_path,
+        plan_output_path=plan_output_path,
+        profile=arguments.get("profile", "auto"),
+        quality_mode=arguments.get("quality_mode", "draft"),
+        require_live_verification=bool(arguments.get("require_live_verification", False)),
+        accept_mixed_provenance=bool(arguments.get("accept_mixed_provenance", False)),
+        max_iterations=int(arguments.get("max_iterations", 10)),
+        auto_refine=bool(arguments.get("auto_refine", False)),
+        provider=provider,
+        refine_iterations=int(arguments.get("refine_iterations", 1)),
+        runtime_mode=arguments.get("runtime_mode", "compatibility"),
+        require_compile_for_accept=bool(arguments.get("require_compile_for_accept", False)),
+    )
+    return _ok({"path": str(path), "quality_gate": payload})
+
+
 def tool_build_reference_benchmark_case(arguments: JSON) -> JSON:
     cwd = _default_cwd(arguments)
     reference_dir = Path(arguments["reference_dir"]).resolve()
@@ -1388,6 +1434,7 @@ TOOL_HANDLERS: dict[str, Callable[[JSON], JSON]] = {
     "bootstrap_compile_environment": tool_bootstrap_compile_environment,
     "audit_fidelity": tool_audit_fidelity,
     "audit_reproducibility": tool_audit_reproducibility,
+    "quality_gate": tool_quality_gate,
     "build_reference_benchmark_case": tool_build_reference_benchmark_case,
     "build_session_eval_summary": tool_build_session_eval_summary,
     "build_review_gate_comparison": tool_build_review_gate_comparison,

@@ -469,6 +469,7 @@ export PAPERO_STRICT_CONTENT_GATES=1
 paperorchestra audit-reproducibility --require-live-verification
 paperorchestra quality-eval --quality-mode claim_safe --require-live-verification --output quality-eval.json
 paperorchestra qa-loop-plan --quality-mode claim_safe --require-live-verification --quality-eval quality-eval.json
+paperorchestra quality-gate --profile claim_safe --quality-mode claim_safe --require-live-verification
 paperorchestra qa-loop-brief --quality-mode claim_safe --max-iterations 5
 paperorchestra ralph-start --quality-mode claim_safe --max-iterations 5 --dry-run
 ```
