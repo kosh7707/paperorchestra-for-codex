@@ -78,6 +78,9 @@ Needed for `--runtime-mode omx_native`.
 Usually means:
 - `omx` is installed and on `PATH`
 - `codex` is installed and on `PATH`
+- the bounded OMX control-surface probe passes
+- in minimal containers, `xz-utils` is available for harness extraction
+- if `bwrap` exists, it can create the namespaces required by the harness
 
 ### `live_verification_ready`
 Needed when you want live literature verification and less Semantic Scholar rate-limit pain.
@@ -172,6 +175,14 @@ sudo apt-get update
 sudo apt-get install -y pkg-config libpng-dev texlive-latex-base texlive-latex-recommended texlive-fonts-recommended latexmk bubblewrap
 ```
 
+If you are inside a root container without `sudo`, the same command is printed
+without the `sudo` prefix:
+
+```bash
+apt-get update
+apt-get install -y pkg-config libpng-dev texlive-latex-base texlive-latex-recommended texlive-fonts-recommended latexmk bubblewrap
+```
+
 On other package managers, use `paperorchestra bootstrap-compile-env` instead of guessing.
 
 #### Container notes
@@ -195,14 +206,23 @@ export PAPERO_TEX_SANDBOX_CMD='["/absolute/path/to/tex-sandbox.sh"]'
 ```
 
 `firejail` can work well in locked-down containers, but it may install a larger
-dependency set on Debian/Ubuntu. `nsjail` is also supported when available.
+dependency set on Debian/Ubuntu and may print noisy systemd/resolv.conf package
+messages in small images. Re-run `paperorchestra check-compile-env` after
+installation and trust the runtime probe result more than package-install noise.
+`nsjail` is also supported when available.
 
 For OMX control surfaces in very small containers, `omx explore` may also need
 `xz-utils` to unpack its harness archive:
 
 ```bash
-sudo apt-get install -y xz-utils
+apt-get install -y xz-utils        # root container
+sudo apt-get install -y xz-utils   # normal sudo user
 ```
+
+If `doctor` reports an `omx_control_surface_probe` warning, the `detail` and
+`next_steps` fields distinguish common causes such as missing `xz-utils` and
+`bwrap` namespace denial. Use compatibility mode for the mock path when OMX
+native control surfaces are blocked by the container.
 
 ---
 
@@ -437,7 +457,14 @@ paperorchestra ralph-start --quality-mode claim_safe --max-iterations 5 --dry-ru
 Set `PAPERO_MODEL_CMD`.
 
 ### `paperorchestra doctor` says `omx_native_ready` is missing
-Install `omx` and `codex`, then re-run `paperorchestra doctor`.
+Install `omx` and `codex`, then re-run `paperorchestra doctor`. If both binaries
+exist but the bounded control-surface probe still fails, inspect the
+`omx_control_surface_probe` check:
+
+- missing `xz` / `xz-utils`: install `xz-utils`
+- `bwrap: No permissions to create new namespace`: this container blocks the
+  OMX harness sandbox; use `--runtime-mode compatibility` for local mock QA or
+  run OMX-native outside the restricted container
 
 ### `paperorchestra doctor` says `live_verification_ready` is missing
 Set `SEMANTIC_SCHOLAR_API_KEY` or accept that live verification may rate-limit.

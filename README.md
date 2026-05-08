@@ -21,6 +21,15 @@ python -m pip install -e .
 # Safe self-contained demo: no live search/model calls, no reference PDF required.
 ./scripts/demo-mock.sh
 
+# Keep demo outputs inside this checkout instead of /tmp:
+./scripts/demo-mock.sh --in-repo
+
+# Then enter the demo workdir before inspecting/exporting the current session:
+cd .paper-orchestra/manual-demo
+paperorchestra status --summary
+paperorchestra export-artifacts --output "$OLDPWD/paperorchestra-output"
+cd "$OLDPWD"
+
 # Paper-derived smoke: requires your own local legal copy of the PaperOrchestra reference PDF.
 PAPERO_REFERENCE_PDF=/absolute/path/to/PaperOrchestra-reference.pdf \
   ./scripts/smoke-paperorchestra-reference.sh
@@ -38,6 +47,59 @@ A good first prompt after opening Codex is:
 > Clone `https://github.com/kosh7707/paperorchestra-for-codex.git`, read `README.md` and `ENVIRONMENT.md`, run the safe mock demo first, and only then explain what I need to configure for shell/Codex, OMX, Semantic Scholar, MCP, and the local skill. Do not start a live model/search run until the mock path works.
 
 Codex CLI and oh-my-codex are external prerequisites for the advanced paths. This repo documents how to use them after they are installed; it does not install them for you.
+
+---
+
+## First 10 minutes: get one mock manuscript
+
+If you just cloned this repo and want to prove it works before configuring any
+live model/search/OMX path:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+
+paperorchestra doctor
+./scripts/demo-mock.sh
+```
+
+Expected result:
+
+- the demo ends with `[demo] SUCCESS`
+- the session reaches `draft_complete`
+- the generated manuscript is `paper.full.tex`
+- the final summary prints the workdir, artifact directory, review JSON, and
+  next commands
+
+For container QA, prefer a persistent workdir so the files are easy to copy from
+a bind mount:
+
+```bash
+./scripts/demo-mock.sh --in-repo
+# equivalent:
+PAPERO_DEMO_WORKDIR="$PWD/.paper-orchestra/manual-demo" ./scripts/demo-mock.sh
+```
+
+Useful follow-up commands:
+
+```bash
+# after the default demo:
+cd <Workdir printed by demo>
+
+# after ./scripts/demo-mock.sh --in-repo:
+cd .paper-orchestra/manual-demo
+
+paperorchestra status --summary
+paperorchestra check-compile-env
+PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile
+paperorchestra export-artifacts --output "$OLDPWD/paperorchestra-output"
+```
+
+`export-artifacts` copies the current session's main outputs (`paper.full.tex`,
+`paper.full.pdf` when present, `references.bib`, review/audit JSON, and
+`session.json`) to the directory you choose. This is the simplest way to pull a
+PDF/manuscript out of a Docker/WSL bind-mounted folder.
 
 ---
 
@@ -319,15 +381,21 @@ developers:
 
 ```bash
 # OMX explore harness extraction in very small images
-sudo apt-get install -y xz-utils
+apt-get install -y xz-utils        # root container
+sudo apt-get install -y xz-utils   # normal sudo user
 
 # PDF compile path
+apt-get install -y pkg-config libpng-dev texlive-latex-base texlive-latex-recommended texlive-fonts-recommended latexmk bubblewrap
+# or:
 sudo apt-get install -y pkg-config libpng-dev texlive-latex-base texlive-latex-recommended texlive-fonts-recommended latexmk bubblewrap
 ```
 
 If `bwrap` is installed but `paperorchestra check-compile-env` reports it as
 unusable because user namespaces are blocked, install a fallback sandbox such as
-`firejail` or set `PAPERO_TEX_SANDBOX_CMD`.
+`firejail` or set `PAPERO_TEX_SANDBOX_CMD`. `paperorchestra
+bootstrap-compile-env` now reports whether it thinks you are root, whether
+`sudo` is available/passwordless, and which install command form fits the
+current machine.
 
 ### Beast-proof live path: Codex discovers, S2 verifies
 
@@ -747,6 +815,16 @@ For a self-contained regression/demo using the bundled minimal fixture, run:
 
 ```bash
 scripts/demo-mock.sh
+```
+
+For manual container QA, keep the outputs in the checkout and export the main
+files to a single directory:
+
+```bash
+scripts/demo-mock.sh --in-repo
+cd .paper-orchestra/manual-demo
+paperorchestra status --summary
+paperorchestra export-artifacts --output "$OLDPWD/paperorchestra-output"
 ```
 
 By default this uses the mock provider and compatibility runtime so it can run without external model/search credentials. Set `PAPERO_TESTSET_SMOKE_PROVIDER=shell` and related timeout/model environment variables when you want to exercise live Codex/OMX surfaces.
