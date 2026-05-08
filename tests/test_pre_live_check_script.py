@@ -71,6 +71,9 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertIn("--allow-outside-workspace", text)
         self.assertIn("python3 -m paperorchestra.cli", text)
         self.assertIn("PAPERO_CMD_OVERRIDE", text)
+        self.assertIn("PAPERO_DEMO_VERBOSE", text)
+        self.assertIn("demo-mock.log", text)
+        self.assertIn("--verbose", text)
         self.assertNotIn("command -v paperorchestra", text)
         self.assertNotIn("rm -rf .paper-orchestra", text)
 

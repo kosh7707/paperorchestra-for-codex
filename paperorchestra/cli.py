@@ -8,6 +8,7 @@ import shutil
 import sys
 from pathlib import Path
 
+from . import __version__
 from .compile_env import inspect_compile_environment
 from .cost import estimate_run_cost
 from .critics import write_citation_support_review, write_section_review
@@ -91,6 +92,7 @@ def _runtime_mode_args(parser: argparse.ArgumentParser, *, strict_flag: bool = F
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="paperorchestra", description="PaperOrchestra operator/debug CLI for the PaperOrchestra-on-OMX core")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     init_parser = sub.add_parser("init", help="Initialize a PaperOrchestra session")
@@ -254,7 +256,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("compile", help="Compile the current paper.full.tex")
     sub.add_parser("check-compile-env", help="Inspect and record the compile environment readiness")
     sub.add_parser("bootstrap-compile-env", help="Print compile environment remediation commands and generated bootstrap script path")
-    sub.add_parser("environment", help="Show the canonical environment-variable inventory, docs, and readiness profiles")
+    environment_parser = sub.add_parser("environment", help="Show the canonical environment-variable inventory, docs, and readiness profiles")
+    environment_parser.add_argument("--json", action="store_true", help="Print the full machine-readable inventory (default for compatibility)")
+    environment_parser.add_argument("--summary", action="store_true", help="Print a compact human-readable readiness summary")
     sub.add_parser("doctor", help="Run a pre-flight environment check for live PaperOrchestra runs")
     cleanup_tmp_parser = sub.add_parser("cleanup-tmp", help="Remove temporary OMX execution artifacts")
     cleanup_tmp_parser.add_argument("--max-age-seconds", type=float, default=0.0)
@@ -602,6 +606,59 @@ def _export_current_artifacts(cwd: Path, output: str | Path, *, include_all_arti
     }
 
 
+def _ok_warn(value: bool) -> str:
+    return "OK" if value else "WARN"
+
+
+def _environment_summary_lines(payload: dict[str, object]) -> list[str]:
+    package_context = payload.get("package_context")
+    if not isinstance(package_context, dict):
+        package_context = {}
+    profiles = payload.get("readiness_profiles")
+    if not isinstance(profiles, list):
+        profiles = []
+    mcp_health = payload.get("paperorchestra_mcp_health")
+    if not isinstance(mcp_health, dict):
+        mcp_health = {}
+    mcp_config = mcp_health.get("config") if isinstance(mcp_health.get("config"), dict) else {}
+    mcp_server = mcp_health.get("server") if isinstance(mcp_health.get("server"), dict) else {}
+    mcp_attachment = mcp_health.get("active_session_attachment") if isinstance(mcp_health.get("active_session_attachment"), dict) else {}
+
+    lines = [
+        "PaperOrchestra environment summary",
+        "",
+        "Package:",
+        f"  Python: {package_context.get('python_executable', 'unknown')}",
+        f"  Package root: {package_context.get('package_root', 'unknown')}",
+        "",
+        "Readiness:",
+    ]
+    for profile in profiles:
+        if not isinstance(profile, dict):
+            continue
+        ready = bool(profile.get("ready"))
+        lines.append(f"  {_ok_warn(ready)} {profile.get('name')}: {profile.get('status')}")
+        missing = profile.get("missing")
+        if isinstance(missing, list) and missing:
+            lines.append(f"    missing: {'; '.join(str(item) for item in missing[:2])}")
+
+    lines.extend(
+        [
+            "",
+            "MCP:",
+            f"  {_ok_warn(bool(mcp_config.get('registered')))} config registered: {mcp_config.get('registered', False)}",
+            f"  {_ok_warn(bool(mcp_server.get('ok')))} stdio server health: {mcp_server.get('ok', False)}",
+            f"  active Codex session attachment: not checked ({mcp_attachment.get('detail', 'cannot be verified from CLI')})",
+            "",
+            "Next:",
+            "  ./scripts/demo-mock.sh --in-repo",
+            "  paperorchestra doctor",
+            "  scripts/smoke-paperorchestra-mcp.py",
+        ]
+    )
+    return lines
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -929,7 +986,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "check-compile-env":
             path, payload = record_compile_environment_report(cwd)
-            print(json.dumps({"path": str(path), "report": payload}, indent=2, ensure_ascii=False))
+            print(json.dumps({"path": str(path), "report": payload, **payload}, indent=2, ensure_ascii=False))
             return 0
 
         if args.command == "bootstrap-compile-env":
@@ -940,21 +997,20 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "environment":
             inventory = build_environment_inventory()
             doctor = build_doctor_report(cwd)
-            print(
-                json.dumps(
-                    {
-                        **inventory,
-                        "readiness_profiles": doctor["readiness_profiles"],
-                        "next_steps": [
-                            "paperorchestra doctor",
-                            "paperorchestra quickstart --scenario new-paper",
-                            "paperorchestra quickstart --scenario testset",
-                        ],
-                    },
-                    indent=2,
-                    ensure_ascii=False,
-                )
-            )
+            payload = {
+                **inventory,
+                "readiness_profiles": doctor["readiness_profiles"],
+                "paperorchestra_mcp_health": doctor.get("paperorchestra_mcp_health"),
+                "next_steps": [
+                    "paperorchestra doctor",
+                    "paperorchestra quickstart --scenario new-paper",
+                    "paperorchestra quickstart --scenario testset",
+                ],
+            }
+            if args.summary:
+                print("\n".join(_environment_summary_lines(payload)))
+            else:
+                print(json.dumps(payload, indent=2, ensure_ascii=False))
             return 0
 
         if args.command == "doctor":

@@ -4,15 +4,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORKDIR="${PAPERO_DEMO_WORKDIR:-}"
 KEEP_WORKDIR="${PAPERO_DEMO_KEEP_WORKDIR:-1}"
+VERBOSE="${PAPERO_DEMO_VERBOSE:-0}"
 IN_REPO=0
 
 usage() {
   cat >&2 <<'EOF'
-usage: scripts/demo-mock.sh [--in-repo] [--workdir DIR]
+usage: scripts/demo-mock.sh [--in-repo] [--workdir DIR] [--verbose]
 
 Runs the safe mock demo. By default outputs go to a temporary directory.
 Use --in-repo to keep outputs at .paper-orchestra/manual-demo in this checkout,
 or --workdir DIR / PAPERO_DEMO_WORKDIR=DIR to choose an explicit location.
+By default the noisy pipeline JSON is captured to demo-mock.log. Use --verbose
+or PAPERO_DEMO_VERBOSE=1 to stream the full pipeline output.
 EOF
 }
 
@@ -29,6 +32,10 @@ while [[ $# -gt 0 ]]; do
       fi
       WORKDIR="$2"
       shift 2
+      ;;
+    --verbose)
+      VERBOSE=1
+      shift
       ;;
     --help|-h)
       usage
@@ -58,6 +65,8 @@ trap cleanup EXIT
 
 mkdir -p "$WORKDIR"
 cd "$WORKDIR"
+LOG_PATH="$WORKDIR/demo-mock.log"
+: > "$LOG_PATH"
 
 # Prefer the freshly cloned repository over any stale globally installed
 # `paperorchestra` command. Operators may opt in to a custom command for
@@ -71,7 +80,29 @@ else
   PAPERO_CMD=(python3 -m paperorchestra.cli)
 fi
 
-"${PAPERO_CMD[@]}" init \
+run_step() {
+  local label="$1"
+  shift
+  if [[ "$VERBOSE" == "1" ]]; then
+    printf '[demo] %s...\n' "$label" >&2
+    "$@"
+    return
+  fi
+  printf '[demo] %s...\n' "$label" >&2
+  {
+    printf '\n### %s\n' "$label"
+    printf '$'
+    printf ' %q' "$@"
+    printf '\n'
+  } >> "$LOG_PATH"
+  if ! "$@" >> "$LOG_PATH" 2>&1; then
+    printf '[demo] %s failed; full log: %s\n' "$label" "$LOG_PATH" >&2
+    tail -80 "$LOG_PATH" >&2 || true
+    return 1
+  fi
+}
+
+run_step "initialize session" "${PAPERO_CMD[@]}" init \
   --idea "$ROOT/examples/minimal/idea.md" \
   --experimental-log "$ROOT/examples/minimal/experimental_log.md" \
   --template "$ROOT/examples/minimal/template.tex" \
@@ -80,9 +111,9 @@ fi
   --cutoff-date 2024-11-01 \
   --allow-outside-workspace
 
-"${PAPERO_CMD[@]}" run --provider mock --verify-mode mock --runtime-mode compatibility --refine-iterations 1
-"${PAPERO_CMD[@]}" audit-fidelity
-"${PAPERO_CMD[@]}" status --json
+run_step "run mock pipeline" "${PAPERO_CMD[@]}" run --provider mock --verify-mode mock --runtime-mode compatibility --refine-iterations 1
+run_step "audit fidelity" "${PAPERO_CMD[@]}" audit-fidelity
+run_step "record status" "${PAPERO_CMD[@]}" status --json
 
 SESSION_ID="$(cat "$WORKDIR/.paper-orchestra/current_session.txt")"
 RUN_DIR="$WORKDIR/.paper-orchestra/runs/$SESSION_ID"
@@ -95,6 +126,7 @@ PDF_PATH="$RUN_DIR/build/compiled/paper.full.pdf"
   printf '\n[demo] SUCCESS\n'
   printf '\nSession:\n  %s\n' "$SESSION_ID"
   printf '\nWorkdir:\n  %s\n' "$WORKDIR"
+  printf '\nLog:\n  %s\n' "$LOG_PATH"
   printf '\nMain outputs:\n'
   printf '  Manuscript TeX:\n    %s\n' "$TEX_PATH"
   printf '  Artifacts:\n    %s\n' "$ARTIFACT_DIR"

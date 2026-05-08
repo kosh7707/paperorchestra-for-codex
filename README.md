@@ -60,6 +60,8 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e .
 
+paperorchestra --version
+paperorchestra environment --summary
 paperorchestra doctor
 ./scripts/demo-mock.sh
 ```
@@ -71,6 +73,9 @@ Expected result:
 - the generated manuscript is `paper.full.tex`
 - the final summary prints the workdir, artifact directory, review JSON, and
   next commands
+- the full pipeline log is captured at `demo-mock.log`; use
+  `./scripts/demo-mock.sh --verbose` or `PAPERO_DEMO_VERBOSE=1` if you want the
+  old stream-everything output
 
 For container QA, prefer a persistent workdir so the files are easy to copy from
 a bind mount:
@@ -470,7 +475,7 @@ For a first real run, learn these commands and knobs before spending model/searc
 
 ```bash
 # 1. Is the environment usable, and what should I do next if a session is stuck?
-paperorchestra environment
+paperorchestra environment --summary
 paperorchestra doctor
 paperorchestra status
 
@@ -1190,7 +1195,8 @@ Quick binary check:
 
 ```bash
 which paperorchestra-mcp
-paperorchestra environment
+paperorchestra --version
+paperorchestra environment --summary
 ```
 
 MCP health smoke:
@@ -1243,8 +1249,14 @@ that the server is registered in config; it does **not** guarantee that the
 current conversation was started with `mcp__paperorchestra__...` tools attached.
 If the namespace is absent but `scripts/smoke-paperorchestra-mcp.py` passes, the
 server is healthy and the remaining issue is active session attachment/tool
-injection in the Codex runtime. Use the CLI fallback while restarting Codex or
-inspecting MCP attach logs.
+injection in the Codex runtime. Use this triage order:
+
+1. Restart Codex completely, not only the shell inside the old conversation.
+2. Confirm registration with `codex mcp list`.
+3. Run `scripts/smoke-paperorchestra-mcp.py`.
+4. If smoke still passes but `mcp__paperorchestra__...` tools are absent, use
+   the CLI fallback and report a Codex MCP attachment/tool-injection issue with
+   the smoke output.
 
 If the server starts but tools cannot make live model calls, check
 `PAPERO_MODEL_CMD`, `PAPERO_ALLOWED_PROVIDER_BINARIES`, and

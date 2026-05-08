@@ -10,11 +10,12 @@ This file is the canonical setup guide for people who just cloned the repo and w
 If you only remember two commands, remember these:
 
 ```bash
-paperorchestra environment
+paperorchestra environment --summary
 paperorchestra doctor
 ```
 
-- `paperorchestra environment` = the canonical inventory (docs, env vars, readiness profiles)
+- `paperorchestra environment --summary` = compact human-readable readiness and next steps
+- `paperorchestra environment --json` (or `paperorchestra environment`) = the canonical inventory (docs, env vars, readiness profiles)
 - `paperorchestra doctor` = what is missing on this machine right now
 
 ---
@@ -44,8 +45,9 @@ Sanity checks:
 
 ```bash
 paperorchestra --help
+paperorchestra --version
 paperorchestra quickstart --scenario environment
-paperorchestra environment
+paperorchestra environment --summary
 paperorchestra doctor
 ```
 
@@ -180,6 +182,12 @@ Fastest way to inspect compile readiness:
 paperorchestra check-compile-env
 paperorchestra bootstrap-compile-env
 ```
+
+Both commands expose the core readiness fields (`ready_for_compile`,
+`latex_engine`, `sandbox_tool`, install commands/notes) at the top level for
+simple scripting. `check-compile-env` also writes the report under
+`.paper-orchestra/preflight/compile-environment.json` and includes that saved
+copy as `report`.
 
 On apt-based systems, the generated bootstrap guidance typically resembles:
 

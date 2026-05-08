@@ -3118,6 +3118,8 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             self.assertTrue(Path(payload["path"]).exists())
             self.assertIn(".paper-orchestra/preflight/compile-environment.json", payload["path"])
             self.assertIn("ready_for_compile", payload["report"])
+            self.assertIn("ready_for_compile", payload)
+            self.assertEqual(payload["ready_for_compile"], payload["report"]["ready_for_compile"])
 
     def test_status_summary_highlights_main_outputs_and_next_steps(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -4962,6 +4964,14 @@ Related \\cite{alpha}.
         self.assertEqual(payload["scenario"], "environment")
         self.assertTrue(any("paperorchestra environment" in step for step in payload["steps"]))
 
+    def test_cli_version_flag_is_available_before_subcommands(self) -> None:
+        stdout = io.StringIO()
+        with self.assertRaises(SystemExit) as raised:
+            with contextlib.redirect_stdout(stdout):
+                cli_main(["--version"])
+        self.assertEqual(raised.exception.code, 0)
+        self.assertIn("paperorchestra ", stdout.getvalue())
+
     def test_environment_inventory_and_cli_surface(self) -> None:
         inventory = build_environment_inventory()
         self.assertIn("docs", inventory)
@@ -4981,6 +4991,17 @@ Related \\cite{alpha}.
         self.assertIn("package_context", payload)
         self.assertIn("package_root", payload["package_context"])
         self.assertTrue(any(profile["name"] == "compile_ready" for profile in payload["readiness_profiles"]))
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = cli_main(["environment", "--summary"])
+        self.assertEqual(code, 0)
+        summary = stdout.getvalue()
+        self.assertIn("PaperOrchestra environment summary", summary)
+        self.assertIn("Readiness:", summary)
+        self.assertIn("MCP:", summary)
+        self.assertIn("active Codex session attachment: not checked", summary)
+        self.assertIn("scripts/smoke-paperorchestra-mcp.py", summary)
 
     def test_environment_docs_and_example_cover_operator_vars(self) -> None:
         guide = environment_guide_path().read_text(encoding="utf-8")
