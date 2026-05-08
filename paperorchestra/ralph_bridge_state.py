@@ -180,7 +180,10 @@ def guarded_replace_manuscript_text(
 def recover_pending_manuscript_write(cwd: str | Path | None) -> dict[str, Any]:
     """Restore the original manuscript when a pending Ralph candidate marker exists."""
 
-    marker_path = _candidate_write_marker_path(cwd)
+    try:
+        marker_path = _candidate_write_marker_path(cwd)
+    except FileNotFoundError:
+        return {"status": "none", "reason": "no_current_session"}
     if not marker_path.exists():
         return {"status": "none"}
     try:
