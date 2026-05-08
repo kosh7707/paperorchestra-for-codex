@@ -1235,6 +1235,31 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             self.assertEqual(passed["status"], "pass")
             self.assertEqual(passed["predicates"]["P2"]["checked"], 3)
 
+    def test_fresh_smoke_lane_a_acceptance_counts_operator_snapshot_mirror_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifacts = root / "artifacts"
+            artifacts.mkdir()
+            payload = {
+                "manuscript_sha256_before": "sha256:paper-a",
+                "attempts": [
+                    {
+                        "attempt_index": 1,
+                        "candidate_sha256": "sha256:paper-a",
+                        "gate_reasons": ["no_textual_change", "executor_returned_identical_content"],
+                    }
+                ],
+            }
+            (artifacts / "operator_feedback.execution.json").write_text(json.dumps(payload), encoding="utf-8")
+            snapshot_artifacts = artifacts / "session-snapshot-final" / "artifacts"
+            snapshot_artifacts.mkdir(parents=True)
+            (snapshot_artifacts / "operator_feedback.execution.json").write_text(json.dumps(payload), encoding="utf-8")
+
+            passed = validate_fresh_smoke_lane_a_acceptance(root)
+
+            self.assertEqual(passed["status"], "pass")
+            self.assertEqual(passed["predicates"]["P2"]["checked"], 1)
+
     def test_live_smoke_export_declares_session_id_before_json_artifact(self) -> None:
         script = Path("scripts/live-smoke-claim-safe.sh").read_text(encoding="utf-8")
         declaration = 'session_id=""'

@@ -138,7 +138,59 @@ def _artifact_execution_files(root: Path) -> list[Path]:
     workdir_runtime = root / "workdir" / ".paper-orchestra"
     if workdir_runtime.exists():
         files.extend(sorted(workdir_runtime.glob("qa-loop-execution*.json")))
-    return sorted(dict.fromkeys(files))
+    return _dedupe_mirrored_execution_files(root, files)
+
+
+def _execution_file_identity(root: Path, path: Path) -> tuple[str, str]:
+    """Return an identity that collapses session-snapshot mirrors only.
+
+    Byte-identical execution payloads can be legitimate independent cycles, so
+    this must not deduplicate by content hash.  The only mirror shape currently
+    exported by the smoke harness is:
+
+    artifacts/session-snapshot-final/artifacts/<execution-file>
+
+    When the corresponding primary artifacts/<execution-file> exists, treat the
+    snapshot file as the same execution.  Otherwise keep the snapshot path as an
+    independent source of evidence.
+    """
+
+    try:
+        rel = path.relative_to(root)
+    except ValueError:
+        return ("path", str(path.resolve()))
+    mirror_prefix = Path("artifacts/session-snapshot-final/artifacts")
+    try:
+        mirror_rel = rel.relative_to(mirror_prefix)
+    except ValueError:
+        return ("path", rel.as_posix())
+    primary_rel = Path("artifacts") / mirror_rel
+    if (root / primary_rel).exists():
+        return ("path", primary_rel.as_posix())
+    payload = _read_json_file(path)
+    approval = payload.get("candidate_approval") if isinstance(payload, dict) else {}
+    for key in ("source_execution_sha256", "source_execution_path", "execution_id"):
+        value = approval.get(key) if isinstance(approval, dict) else payload.get(key)
+        if value:
+            return (key, str(value))
+    return ("path", rel.as_posix())
+
+
+def _dedupe_mirrored_execution_files(root: Path, files: list[Path]) -> list[Path]:
+    selected: dict[tuple[str, str], Path] = {}
+    for path in sorted(dict.fromkeys(files)):
+        identity = _execution_file_identity(root, path)
+        current = selected.get(identity)
+        if current is None:
+            selected[identity] = path
+            continue
+        # Prefer primary artifacts over session snapshot mirrors when both are
+        # present, because primary artifacts are the canonical evidence source.
+        current_is_mirror = "session-snapshot-final" in current.parts
+        path_is_primary = "session-snapshot-final" not in path.parts
+        if current_is_mirror and path_is_primary:
+            selected[identity] = path
+    return sorted(selected.values())
 
 
 def _citation_review_hash_from_quality_eval(payload: dict[str, Any]) -> str | None:
