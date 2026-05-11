@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .critics import citation_item_has_valid_supporting_evidence, extract_cited_sentences
-from .providers import ShellProvider, get_citation_support_provider
+from .providers import ShellProvider, exec_argv_prefix_proves_web_search, get_citation_support_provider
 from .quality_loop_policy import CITATION_SUPPORT_STATUSES
 from .quality_loop_utils import _file_sha256, _read_json_if_exists
 from .session import artifact_path
@@ -54,7 +54,7 @@ def _provider_proof_is_trusted(provenance: dict[str, Any], expected_direct_diges
         isinstance(mode, dict)
         and mode.get("trace_wrapped") is True
         and mode.get("web_search_capable") is True
-        and mode.get("exec_argv_prefix") == ["codex", "--search", "exec"]
+        and exec_argv_prefix_proves_web_search(mode.get("exec_argv_prefix"))
         and provenance.get("provider_wrapper_mode") == "web"
     )
 

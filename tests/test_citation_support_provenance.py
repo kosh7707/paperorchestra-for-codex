@@ -14,17 +14,18 @@ from paperorchestra.quality_loop_citation_support import _citation_support_check
 from paperorchestra.session import artifact_path, create_session, load_session, save_session
 
 
-def write_wrapper(root: Path) -> str:
+def write_wrapper(root: Path, *, exec_argv_prefix: list[str] | None = None) -> str:
     wrapper = root / "provider-wrap.sh"
     wrapper.write_text("#!/usr/bin/env bash\ncat >/dev/null\n", encoding="utf-8")
     wrapper.chmod(0o755)
+    web_prefix = exec_argv_prefix or ["codex", "--search", "exec"]
     contract = {
         "schema_version": "provider-wrapper-contract/1",
         "wrapper_path": str(wrapper.resolve()),
         "wrapper_sha256": hashlib.sha256(wrapper.read_bytes()).hexdigest(),
         "modes": {
             "gen": {"trace_wrapped": True, "web_search_capable": False, "exec_argv_prefix": ["codex", "exec"]},
-            "web": {"trace_wrapped": True, "web_search_capable": True, "exec_argv_prefix": ["codex", "--search", "exec"]},
+            "web": {"trace_wrapped": True, "web_search_capable": True, "exec_argv_prefix": web_prefix},
         },
     }
     (root / "provider-wrap.contract.json").write_text(json.dumps(contract), encoding="utf-8")
@@ -107,4 +108,22 @@ class CitationSupportProvenanceTests(unittest.TestCase):
             tampered["modes"]["web"]["web_search_capable"] = False
             contract_path.write_text(json.dumps(tampered), encoding="utf-8")
             failed = _citation_support_check(root, state, quality_mode="claim_safe")
+            self.assertIn("citation_support_untrusted_web_provenance", failed["failing_codes"])
+
+    def test_quality_gate_trusts_omx_prefixed_wrapper_proof_but_rejects_malformed_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._session(root)
+            omx_prefix = ["omx", "--madmax", "--high", "--dangerously-bypass-approvals-and-sandbox", "--search", "exec"]
+            provider = WrapperWebProvider(command=write_wrapper(root, exec_argv_prefix=omx_prefix))
+            write_citation_support_review(root, provider=provider, evidence_mode="web")
+
+            check = _citation_support_check(root, load_session(root), quality_mode="claim_safe")
+            self.assertNotIn("citation_support_untrusted_web_provenance", check["failing_codes"])
+
+            contract_path = Path(json.loads((artifact_path(root, "citation_support_review.json")).read_text(encoding="utf-8"))["evidence_provenance"]["provider_contract_path"])
+            tampered = json.loads(contract_path.read_text(encoding="utf-8"))
+            tampered["modes"]["web"]["exec_argv_prefix"] = ["omx", "exec"]
+            contract_path.write_text(json.dumps(tampered), encoding="utf-8")
+            failed = _citation_support_check(root, load_session(root), quality_mode="claim_safe")
             self.assertIn("citation_support_untrusted_web_provenance", failed["failing_codes"])

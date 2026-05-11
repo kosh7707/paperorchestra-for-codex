@@ -15,17 +15,18 @@ from paperorchestra.providers import (
 )
 
 
-def write_wrapper(root: Path, *, tamper: bool = False) -> str:
+def write_wrapper(root: Path, *, tamper: bool = False, exec_argv_prefix: list[str] | None = None) -> str:
     wrapper = root / "provider-wrap.sh"
     wrapper.write_text("#!/usr/bin/env bash\nif [[ ${1:-} == web ]]; then codex --search exec; else codex exec; fi\n", encoding="utf-8")
     wrapper.chmod(0o755)
+    web_prefix = exec_argv_prefix or ["codex", "--search", "exec"]
     contract = {
         "schema_version": "provider-wrapper-contract/1",
         "wrapper_path": str(wrapper.resolve()),
         "wrapper_sha256": hashlib.sha256(wrapper.read_bytes()).hexdigest(),
         "modes": {
             "gen": {"trace_wrapped": True, "web_search_capable": False, "exec_argv_prefix": ["codex", "exec"]},
-            "web": {"trace_wrapped": True, "web_search_capable": not tamper, "exec_argv_prefix": ["codex", "--search", "exec"]},
+            "web": {"trace_wrapped": True, "web_search_capable": not tamper, "exec_argv_prefix": web_prefix},
         },
     }
     (root / "provider-wrap.contract.json").write_text(json.dumps(contract), encoding="utf-8")
@@ -53,6 +54,16 @@ class ProviderWrapperContractTests(unittest.TestCase):
             self.assertIsNotNone(proof)
             self.assertEqual(proof["provider_capability_proof"], "provider-wrapper-contract/1")
             self.assertEqual(proof["provider_wrapper_mode"], "web")
+
+    def test_trace_wrapped_web_provider_accepts_omx_prefixed_codex_search_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = ["omx", "--madmax", "--high", "--dangerously-bypass-approvals-and-sandbox", "--search", "exec"]
+            command = write_wrapper(Path(tmp), exec_argv_prefix=prefix)
+            provider = get_citation_support_provider("shell", command=command, evidence_mode="web")
+
+            proof = provider_web_search_capability_proof(provider)
+            self.assertIsNotNone(proof)
+            self.assertEqual(proof["provider_wrapper_exec_argv_prefix"], prefix)
 
     def test_trace_wrapped_web_provider_fails_closed_on_tampered_sidecar(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

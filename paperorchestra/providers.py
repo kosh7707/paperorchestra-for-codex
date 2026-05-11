@@ -648,6 +648,15 @@ def _read_wrapper_contract(wrapper_path: Path) -> dict[str, object] | None:
     return payload
 
 
+def exec_argv_prefix_proves_web_search(prefix: object) -> bool:
+    return (
+        isinstance(prefix, list)
+        and len(prefix) >= 3
+        and [str(item) for item in prefix[-2:]] == ["--search", "exec"]
+        and all(isinstance(item, str) and item.strip() for item in prefix)
+    )
+
+
 def provider_web_search_capability_proof(provider: BaseProvider) -> dict[str, object] | None:
     """Return auditable web-search capability proof for trusted citation providers.
 
@@ -693,7 +702,7 @@ def provider_web_search_capability_proof(provider: BaseProvider) -> dict[str, ob
     if mode_payload.get("trace_wrapped") is not True or mode_payload.get("web_search_capable") is not True:
         return None
     prefix = mode_payload.get("exec_argv_prefix")
-    if prefix != ["codex", "--search", "exec"]:
+    if not exec_argv_prefix_proves_web_search(prefix):
         return None
     contract_path = wrapper_path.with_name("provider-wrap.contract.json")
     contract_sha = _hashlib.sha256(contract_path.read_bytes()).hexdigest()
