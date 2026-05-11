@@ -276,7 +276,11 @@ for name in ["README.md", "ENVIRONMENT.md"]:
     print(f"{name}: code fences balanced ({fences})")
 PY
 run_step secret_scan bash -lc "! grep -RInE --exclude='.env' --exclude-dir='.git' --exclude-dir='.omx' --exclude-dir='.paper-orchestra' --exclude-dir='__pycache__' 's2'\''k-[A-Za-z0-9]+|sk-(proj|live|test|svcacct)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|Bearer[[:space:]]+[A-Za-z0-9._-]{20,}|api[_-]?key[[:space:]]*[:=][[:space:]]*[A-Za-z0-9_-]{16,}' README.md ENVIRONMENT.md NOTICE.md docs paperorchestra tests scripts examples pyproject.toml review 2>/dev/null"
-run_step diff_check git diff --check
+if [[ "${PAPERO_PRE_LIVE_DIFF_CHECK_IGNORE_MATERIAL_ROOT:-0}" == "1" ]]; then
+  run_step diff_check git diff --check -- . ':(exclude,glob)examples/fresh-smoke-materials/**'
+else
+  run_step diff_check git diff --check
+fi
 
 if [[ "$RUN_FULL" -eq 1 ]]; then
   run_step full_unittest env PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -q

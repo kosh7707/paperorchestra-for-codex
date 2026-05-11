@@ -44,6 +44,8 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         ]:
             self.assertIn(f"run_unittest_group {group}", text)
         self.assertIn("strict_smoke_policy", text)
+        self.assertIn("PAPERO_PRE_LIVE_DIFF_CHECK_IGNORE_MATERIAL_ROOT", text)
+        self.assertIn(":(exclude,glob)examples/fresh-smoke-materials/**", text)
         self.assertIn("test_verify_papers_live_success_uses_s2_metadata_and_citation_map", text)
         self.assertIn("omx_runtime_probe", text)
         self.assertIn("omx ralph --help", text)
@@ -423,6 +425,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertIn("run_without_papero_env", wrapper_text)
         self.assertIn("run_step unittest bash -c 'run_without_papero_env", wrapper_text)
         self.assertIn("run_step pre_live_all bash -c 'run_without_papero_env", wrapper_text)
+        self.assertIn("env PAPERO_PRE_LIVE_DIFF_CHECK_IGNORE_MATERIAL_ROOT=1 bash scripts/pre-live-check.sh --all", wrapper_text)
         self.assertIn(r"((supplied|provided) (material|source|file|analysis|analyses|log|evidence|theorem statements?)|available (material|source|file|log))", wrapper_text)
         self.assertIn(r"(following|specified in|as specified in) the packet", wrapper_text)
         self.assertIn("SYSTEM_TEST_VERDICT: PASS", wrapper_text)
@@ -622,6 +625,36 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             result = subprocess.run(["bash", str(harness)], text=True, capture_output=True, check=True)
 
         self.assertIn("survived:20", result.stdout)
+
+
+    def test_run_without_papero_env_preserves_intentional_pre_live_diff_check_override(self) -> None:
+        wrapper = Path("scripts/fresh-full-live-smoke-loop.sh")
+        text = wrapper.read_text(encoding="utf-8")
+        start = text.index("run_without_papero_env() {")
+        end = text.index("\n}\nexport -f run_without_papero_env", start) + 3
+        function_text = text[start:end]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            harness = Path(tmp) / "harness.sh"
+            harness.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        function_text,
+                        "export PAPERO_SHOULD_BE_CLEARED=1",
+                        "run_without_papero_env \"$1\" env PAPERO_PRE_LIVE_DIFF_CHECK_IGNORE_MATERIAL_ROOT=1 bash -c '",
+                        "  test -z \"${PAPERO_SHOULD_BE_CLEARED:-}\"",
+                        "  test \"${PAPERO_PRE_LIVE_DIFF_CHECK_IGNORE_MATERIAL_ROOT:-}\" = 1",
+                        "'",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            subprocess.run(["bash", str(harness), str(repo)], check=True)
 
     def test_docs_safe_first_run_initializes_before_run(self) -> None:
         readme = Path("README.md").read_text(encoding="utf-8")
