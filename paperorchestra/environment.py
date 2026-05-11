@@ -191,7 +191,7 @@ ENVIRONMENT_VARIABLES: tuple[EnvironmentVariableSpec, ...] = (
         operator_settable=True,
         default="0",
         example="120",
-        description="Additional wait after OMX soft timeouts before killing the process; applies to retryable read-like control calls and grace-only OMX exec/full-auto calls.",
+        description="Additional wait after OMX soft timeouts before killing the process; applies to retryable read-like control calls and grace-only OMX exec calls.",
     ),
     EnvironmentVariableSpec(
         name="PAPERO_OMX_RETRY_ATTEMPTS",
@@ -199,7 +199,7 @@ ENVIRONMENT_VARIABLES: tuple[EnvironmentVariableSpec, ...] = (
         operator_settable=True,
         default="0",
         example="1",
-        description="Replay retryable read-only OMX control calls after reconnect-like transport failures; OMX exec/full-auto is grace-only and is never replayed.",
+        description="Replay retryable read-only OMX control calls after reconnect-like transport failures; OMX exec is grace-only and is never replayed.",
     ),
     EnvironmentVariableSpec(
         name="PAPERO_OMX_RETRY_BACKOFF_SECONDS",

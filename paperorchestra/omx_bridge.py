@@ -314,7 +314,7 @@ def _run_omx_exec_command(
     timeout_seconds: float,
     failure_args: list[str],
 ) -> subprocess.CompletedProcess:
-    # `omx exec --full-auto` is repo-scoped and not replay-safe. We provide a
+    # `omx exec --dangerously-bypass-approvals-and-sandbox` is repo-scoped and not replay-safe. We provide a
     # soft timeout grace window for in-place Codex reconnects, then fail fast.
     grace = _resolve_exec_timeout("PAPERO_OMX_TIMEOUT_GRACE_SECONDS", 0.0, minimum=0.0, maximum=3600.0)
     if output_path.exists():
@@ -331,7 +331,7 @@ def _run_omx_exec_command(
     if timed_out:
         raise OmxBridgeError(
             f"omx {shlex.join(failure_args)} timed out after {timeout_seconds:g}s + grace {grace:g}s; "
-            "full-auto exec replay is disabled because the command is not idempotent"
+            "omx exec replay is disabled because the command is not idempotent"
         )
     raise OmxBridgeError(_format_omx_failure(failure_args, proc.returncode, proc.stdout, proc.stderr))
 
@@ -354,7 +354,7 @@ def omx_exec_completion(
         [
             "omx",
             "exec",
-            "--full-auto",
+            "--dangerously-bypass-approvals-and-sandbox",
             "--skip-git-repo-check",
             "-m",
             model,
@@ -403,7 +403,7 @@ def omx_exec_json_completion(
         [
             "omx",
             "exec",
-            "--full-auto",
+            "--dangerously-bypass-approvals-and-sandbox",
             "--skip-git-repo-check",
             "-m",
             model,

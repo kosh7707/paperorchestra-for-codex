@@ -280,7 +280,7 @@ Below is the operator-facing inventory. Variables not listed here are either aut
 | `PAPERO_OMX_EXEC_TIMEOUT_SECONDS` | Optional | code-bounded | Give slow live runs more time |
 | `PAPERO_OMX_CONTROL_TIMEOUT_SECONDS` | Optional | `60` | Bound OMX control-plane calls like `omx status` / `omx state` |
 | `PAPERO_OMX_TIMEOUT_GRACE_SECONDS` | Optional | `0` | Extra wait for OMX/Codex reconnects before treating timeout as failed |
-| `PAPERO_OMX_RETRY_ATTEMPTS` | Optional | `0` | Retry read-only OMX control-plane transport failures (`status`, `team status`, `state read --json`); LLM-backed `explore` and OMX exec/full-auto remain grace-only and are not replayed |
+| `PAPERO_OMX_RETRY_ATTEMPTS` | Optional | `0` | Retry read-only OMX control-plane transport failures (`status`, `team status`, `state read --json`); LLM-backed `explore` and OMX exec remain grace-only and are not replayed |
 | `PAPERO_OMX_RETRY_BACKOFF_SECONDS` | Optional | `2` | Backoff between retryable OMX replays |
 | `PAPERO_OMX_RETRY_JITTER_SECONDS` | Optional | `0` | Optional random jitter added to OMX retry backoff |
 | `PAPERO_STRICT_OMX_NATIVE` | Claim-safe only | `0` | Refuse OMX-native fallback when fidelity matters |

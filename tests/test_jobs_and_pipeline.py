@@ -509,12 +509,16 @@ class OmxBridgeTests(unittest.TestCase):
             large_prompt = "x" * 200_000
             omx_exec_completion(large_prompt, cwd=tmp)
             args, kwargs = calls[-1]
+            self.assertIn("--dangerously-bypass-approvals-and-sandbox", args)
+            self.assertNotIn("--full-auto", args)
             self.assertEqual(args[-1], "-")
             self.assertNotIn(large_prompt, args)
             self.assertEqual(kwargs.get("input_text"), large_prompt)
 
             omx_exec_json_completion(large_prompt, {"type": "object", "properties": {}, "additionalProperties": False}, cwd=tmp)
             args, kwargs = calls[-1]
+            self.assertIn("--dangerously-bypass-approvals-and-sandbox", args)
+            self.assertNotIn("--full-auto", args)
             self.assertEqual(args[-1], "-")
             self.assertNotIn(large_prompt, args)
             self.assertEqual(kwargs.get("input_text"), large_prompt)
@@ -4273,7 +4277,8 @@ Related \\cite{alpha}.
 
         omx_retry = specs["PAPERO_OMX_RETRY_ATTEMPTS"]
         self.assertIn("read-only OMX control", omx_retry["description"])
-        self.assertIn("exec/full-auto", omx_retry["description"])
+        self.assertIn("exec", omx_retry["description"])
+        self.assertNotIn("full-auto", omx_retry["description"])
         self.assertIn("never replayed", omx_retry["description"])
 
         guide = environment_guide_path().read_text(encoding="utf-8")
@@ -4282,7 +4287,7 @@ Related \\cite{alpha}.
         for phrase in [
             "retry-safe declaration plus reconnect/disconnect-like transport evidence",
             "plain timeouts are grace-only",
-            "OMX exec/full-auto is grace-only and never replayed",
+            "OMX exec is grace-only and never replayed",
             "state read --json",
             "single retry owner",
             "forces provider/OMX retry layers off",

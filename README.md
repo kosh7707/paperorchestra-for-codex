@@ -430,7 +430,7 @@ PAPERO_PROVIDER_TIMEOUT_GRACE_SECONDS=180
 # PAPERO_PROVIDER_RETRY_JITTER_SECONDS=3
 PAPERO_OMX_EXEC_TIMEOUT_SECONDS=1800
 PAPERO_OMX_TIMEOUT_GRACE_SECONDS=180
-# OMX exec/full-auto is grace-only and never replayed.  Read-only control calls
+# OMX exec is grace-only and never replayed.  Read-only control calls
 # may be retried outside fresh smoke; fresh smoke disables this layer as well.
 # PAPERO_OMX_RETRY_ATTEMPTS=1
 # PAPERO_OMX_RETRY_BACKOFF_SECONDS=15
@@ -544,7 +544,7 @@ For most users, the minimum variables worth setting first are:
 # PAPERO_OMX_EXEC_TIMEOUT_SECONDS=900
 # PAPERO_OMX_CONTROL_TIMEOUT_SECONDS=120
 # PAPERO_OMX_TIMEOUT_GRACE_SECONDS=120
-# Read-only control-plane retry only; omx exec/full-auto is grace-only, not replayed.
+# Read-only control-plane retry only; omx exec is grace-only, not replayed.
 # Fresh full live smoke forces this retry layer off to avoid nested attempts.
 # PAPERO_OMX_RETRY_ATTEMPTS=1
 # PAPERO_OMX_RETRY_BACKOFF_SECONDS=15
