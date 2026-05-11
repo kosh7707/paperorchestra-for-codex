@@ -11,6 +11,59 @@ from paperorchestra.narrative import write_planning_artifacts
 class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
     """Quality-loop, operator-feedback, Ralph bridge, and critic-stack regression tests split out of the former PipelineTests monolith."""
 
+    def test_qa_loop_plan_surfaces_citation_integrity_density_failures(self) -> None:
+        quality_eval = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "status": "fail",
+                    "checks": {
+                        "citation_integrity_gate": {
+                            "status": "fail",
+                            "failing_codes": [
+                                "citation_bomb_detected",
+                                "citation_integrity_audit_fail",
+                                "citation_integrity_failed",
+                            ],
+                            "citation_integrity_audit": {"path": "/tmp/citation_integrity.audit.json"},
+                        }
+                    },
+                }
+            }
+        }
+
+        actions = _quality_eval_actions(quality_eval)
+
+        density_actions = [action for action in actions if action.get("code") == "citation_density_policy_failed"]
+        self.assertEqual(len(density_actions), 1)
+        self.assertEqual(density_actions[0]["automation"], "human_needed")
+        self.assertEqual(density_actions[0]["approval_required_from"], "citation_integrity_critic")
+        self.assertIn("citation-bomb", density_actions[0]["ralph_instruction"])
+
+    def test_qa_loop_plan_makes_stale_citation_integrity_refresh_executable(self) -> None:
+        quality_eval = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "status": "fail",
+                    "checks": {
+                        "citation_integrity_gate": {
+                            "status": "fail",
+                            "failing_codes": ["citation_integrity_stale"],
+                            "citation_integrity_audit": {"path": "/tmp/citation_integrity.audit.json"},
+                        }
+                    },
+                }
+            }
+        }
+
+        actions = _quality_eval_actions(quality_eval)
+
+        refresh_actions = [action for action in actions if action.get("code") == "citation_integrity_stale"]
+        self.assertEqual(len(refresh_actions), 1)
+        self.assertEqual(refresh_actions[0]["automation"], "automatic")
+        from paperorchestra.quality_loop_policy import QA_LOOP_SUPPORTED_HANDLER_CODES
+
+        self.assertIn("citation_integrity_stale", QA_LOOP_SUPPORTED_HANDLER_CODES)
+
     def test_qa_loop_plan_supervised_handoff_uses_canonical_packet_sha(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -2304,6 +2357,255 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertTrue(critic_block["sha256"])
             refreshed_critic = json.loads(citation_integrity_critic_path(root).read_text(encoding="utf-8"))
             self.assertEqual(refreshed_critic["manuscript_sha256"], candidate_hash)
+
+    def test_qa_loop_step_candidate_verification_refreshes_citation_integrity_for_staged_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            original = (
+                "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\n"
+                "Draft background~\\cite{Prior}.\n"
+                "\\bibliographystyle{plain}\n\\bibliography{references}\n\\end{document}\n"
+            )
+            candidate = original.replace("Draft background", "Candidate background")
+            paper.write_text(original, encoding="utf-8")
+            refs = artifact_path(root, "references.bib")
+            refs.write_text("@article{Prior, title={Prior Work}, author={Alice}, year={2024}}\n", encoding="utf-8")
+            artifact_path(root, "paper.full.bbl").write_text("\\bibitem{Prior} Prior Work.\n", encoding="utf-8")
+            support = artifact_path(root, "citation_support_review.json")
+            support.write_text(
+                json.dumps(
+                    {
+                        "evidence_mode": "web",
+                        "items": [
+                            {
+                                "id": "s1",
+                                "sentence": "Draft background~\\cite{Prior}.",
+                                "citation_keys": ["Prior"],
+                                "support_status": "weakly_supported",
+                                "evidence": [{"url": "https://example.test/prior"}],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.references_bib = str(refs)
+            save_session(root, state)
+            write_planning_artifacts(root)
+            record_current_validation_report(root, name="validation.current.json")
+            write_figure_placement_review(root)
+            pdf = root / "paper.full.pdf"
+            pdf.write_bytes(b"%PDF-1.5\n")
+            compile_report = artifact_path(root, "compile-report.json")
+            manuscript_sha = hashlib.sha256(paper.read_bytes()).hexdigest()
+            compile_report.write_text(
+                json.dumps({"clean": True, "manuscript_sha256": manuscript_sha, "pdf_path": str(pdf), "pdf_exists": True, "pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest()}),
+                encoding="utf-8",
+            )
+            state = load_session(root)
+            state.artifacts.latest_compile_report_json = str(compile_report)
+            state.artifacts.compiled_pdf = str(pdf)
+            save_session(root, state)
+            from paperorchestra.citation_integrity import (
+                citation_integrity_critic_path,
+                write_citation_integrity_audit,
+                write_citation_integrity_critic,
+                write_rendered_reference_audit,
+            )
+
+            write_rendered_reference_audit(root, quality_mode="claim_safe")
+            write_citation_integrity_audit(root, quality_mode="claim_safe")
+            write_citation_integrity_critic(root, quality_mode="claim_safe")
+            build_ralph_start_payload(root, quality_mode="claim_safe", max_iterations=5)
+            stale_critic = json.loads(citation_integrity_critic_path(root).read_text(encoding="utf-8"))
+            self.assertEqual(stale_critic["manuscript_sha256"], hashlib.sha256(original.encode("utf-8")).hexdigest())
+
+            candidate_path = artifact_path(root, "paper.qa-loop-test.candidate.tex")
+            candidate_path.write_text(candidate, encoding="utf-8")
+
+            def fake_citation_review(cwd, **kwargs):
+                refreshed = artifact_path(cwd, "citation_support_review.json")
+                refreshed.write_text(
+                    json.dumps(
+                        {
+                            "evidence_mode": "web",
+                            "items": [
+                                {
+                                    "id": "s1",
+                                    "sentence": "Candidate background~\\cite{Prior}.",
+                                    "citation_keys": ["Prior"],
+                                    "support_status": "supported",
+                                    "evidence": [{"url": "https://example.test/prior"}],
+                                }
+                            ],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                return refreshed
+
+            repair_payload = {
+                "accepted": True,
+                "committed": False,
+                "candidate_path": str(candidate_path),
+                "candidate_sha256": "sha256:" + hashlib.sha256(candidate_path.read_bytes()).hexdigest(),
+            }
+            forced_plan_path = artifact_path(root, "qa-loop.plan.forced.json")
+            forced_plan = {
+                "schema_version": "qa-loop-plan/2",
+                "session_id": state.session_id,
+                "verdict": "continue",
+                "repair_actions": [{"code": "citation_support_critic_failed", "automation": "semi_auto"}],
+            }
+            forced_plan_path.write_text(json.dumps(forced_plan), encoding="utf-8")
+            from paperorchestra import quality_loop as quality_loop_module
+
+            real_write_quality_loop_plan = quality_loop_module.write_quality_loop_plan
+            plan_call_count = 0
+
+            def forced_then_real_plan(cwd, *args, **kwargs):
+                nonlocal plan_call_count
+                plan_call_count += 1
+                if plan_call_count == 1:
+                    return forced_plan_path, forced_plan
+                return real_write_quality_loop_plan(cwd, *args, **kwargs)
+
+            reproducibility = {"citation_artifact_issues": [], "strict_content_gate_issues": [], "prompt_trace_file_count": 1, "verdict": "PASS"}
+            with patch("paperorchestra.quality_loop.build_reproducibility_audit", return_value=reproducibility):
+                with patch("paperorchestra.quality_loop._manuscript_prompt_leakage", return_value=[]):
+                    with patch("paperorchestra.ralph_bridge.repair_citation_claims", return_value=repair_payload):
+                        with patch("paperorchestra.ralph_bridge.write_citation_support_review", side_effect=fake_citation_review):
+                            with patch("paperorchestra.ralph_bridge.write_quality_loop_plan", side_effect=forced_then_real_plan):
+                                result = run_qa_loop_step(
+                                    root,
+                                    MockProvider(),
+                                    quality_mode="claim_safe",
+                                    max_iterations=5,
+                                    require_live_verification=False,
+                                    require_compile=False,
+                                    citation_evidence_mode="heuristic",
+                                    citation_provider_name="mock",
+                                )
+
+            execution = result.payload
+            candidate_state = execution.get("candidate_state") or {}
+            candidate_failures = set((candidate_state.get("after") or {}).get("failing_codes") or [])
+            self.assertNotIn("citation_critic_stale", candidate_failures)
+            self.assertNotIn("citation_integrity_stale", candidate_failures)
+            self.assertNotIn("rendered_reference_audit_stale", candidate_failures)
+            original_hash = hashlib.sha256(original.encode("utf-8")).hexdigest()
+            candidate_hash = hashlib.sha256(Path(candidate_state["manuscript_path"]).read_bytes()).hexdigest()
+            candidate_critic = ((candidate_state.get("verification") or {}).get("citation_integrity") or {}).get("citation_integrity_critic") or {}
+            self.assertEqual(candidate_critic.get("manuscript_sha256"), candidate_hash)
+            restored_verification = execution.get("restored_current_verification") or {}
+            top_level_verification = execution.get("verification") or {}
+            self.assertEqual(top_level_verification, restored_verification)
+            restored_critic = ((restored_verification.get("citation_integrity") or {}).get("citation_integrity_critic") or {})
+            self.assertEqual(restored_critic.get("manuscript_sha256"), original_hash)
+            top_level_critic = ((top_level_verification.get("citation_integrity") or {}).get("citation_integrity_critic") or {})
+            self.assertEqual(top_level_critic.get("manuscript_sha256"), original_hash)
+            refreshed_critic = json.loads(citation_integrity_critic_path(root).read_text(encoding="utf-8"))
+            self.assertEqual(refreshed_critic["manuscript_sha256"], original_hash)
+
+    def test_ralph_start_dry_run_satisfies_claim_safe_ralph_evidence_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            evidence_root = root / "evidence"
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\n"
+                "RFC 9001 describes how TLS secures QUIC~\\cite{RFC9001}.\n"
+                "\\bibliographystyle{plain}\n\\bibliography{references}\n\\end{document}\n",
+                encoding="utf-8",
+            )
+            refs = artifact_path(root, "references.bib")
+            refs.write_text(
+                "@techreport{RFC9001, title={Using TLS to Secure QUIC}, author={Martin Thomson and Sean Turner}, year={2021}, url={https://www.rfc-editor.org/rfc/rfc9001}}\n",
+                encoding="utf-8",
+            )
+            artifact_path(root, "paper.full.bbl").write_text("\\bibitem{RFC9001} Using TLS to Secure QUIC.\n", encoding="utf-8")
+            artifact_path(root, "citation_support_review.json").write_text(
+                json.dumps(
+                    {
+                        "evidence_mode": "web",
+                        "items": [
+                            {
+                                "id": "s1",
+                                "sentence": "RFC 9001 describes how TLS secures QUIC~\\cite{RFC9001}.",
+                                "citation_keys": ["RFC9001"],
+                                "support_status": "supported",
+                                "evidence": [{"url": "https://www.rfc-editor.org/rfc/rfc9001"}],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.references_bib = str(refs)
+            save_session(root, state)
+            write_planning_artifacts(root)
+            record_current_validation_report(root, name="validation.current.json")
+            write_figure_placement_review(root)
+            pdf = root / "paper.full.pdf"
+            pdf.write_bytes(b"%PDF-1.5\n")
+            compile_report = artifact_path(root, "compile-report.json")
+            manuscript_sha = hashlib.sha256(paper.read_bytes()).hexdigest()
+            compile_report.write_text(
+                json.dumps({"clean": True, "manuscript_sha256": manuscript_sha, "pdf_path": str(pdf), "pdf_exists": True, "pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest()}),
+                encoding="utf-8",
+            )
+            state = load_session(root)
+            state.artifacts.latest_compile_report_json = str(compile_report)
+            state.artifacts.compiled_pdf = str(pdf)
+            save_session(root, state)
+            from paperorchestra.citation_integrity import (
+                write_citation_integrity_audit,
+                write_citation_integrity_critic,
+                write_rendered_reference_audit,
+            )
+
+            write_rendered_reference_audit(root, quality_mode="claim_safe")
+            write_citation_integrity_audit(root, quality_mode="claim_safe")
+            write_citation_integrity_critic(root, quality_mode="claim_safe")
+            reproducibility = {"citation_artifact_issues": [], "strict_content_gate_issues": [], "prompt_trace_file_count": 1, "verdict": "PASS"}
+            with patch("paperorchestra.quality_loop.build_reproducibility_audit", return_value=reproducibility):
+                with patch("paperorchestra.quality_loop._manuscript_prompt_leakage", return_value=[]):
+                    _, before = write_quality_eval(root, quality_mode="claim_safe", max_iterations=5)
+                    self.assertIn("ralph_handoff_missing", before["tiers"]["tier_2_claim_safety"]["failing_codes"])
+                    old_cwd = os.getcwd()
+                    try:
+                        os.chdir(root)
+                        self.assertEqual(
+                            cli_main(
+                                [
+                                    "ralph-start",
+                                    "--dry-run",
+                                    "--quality-mode",
+                                    "claim_safe",
+                                    "--max-iterations",
+                                    "5",
+                                    "--require-live-verification",
+                                    "--evidence-root",
+                                    str(evidence_root),
+                                ]
+                            ),
+                            0,
+                        )
+                    finally:
+                        os.chdir(old_cwd)
+                    handoff = artifact_path(root, "ralph-handoff.json")
+                    self.assertTrue(handoff.exists())
+                    self.assertTrue((root / ".paper-orchestra" / "qa-loop-history.jsonl").exists())
+                    _, after = write_quality_eval(root, quality_mode="claim_safe", max_iterations=5)
+            tier2 = after["tiers"]["tier_2_claim_safety"]
+            self.assertNotIn("ralph_handoff_missing", tier2["failing_codes"])
+            self.assertTrue(after["source_artifacts"]["ralph_handoff_sha256"])
+            self.assertEqual(tier2["checks"]["ralph_evidence"]["status"], "pass")
 
     def test_operator_feedback_explicit_rejection_is_human_needed_not_execution_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

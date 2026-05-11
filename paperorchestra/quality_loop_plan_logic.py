@@ -122,6 +122,63 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     approval_required_from="citation_support_critic",
                 )
             )
+    citation_integrity_check = (tier2.get("checks") or {}).get("citation_integrity_gate") if isinstance(tier2, dict) else None
+    if isinstance(citation_integrity_check, dict):
+        integrity_codes = {str(code) for code in citation_integrity_check.get("failing_codes") or []}
+        stale_or_missing_codes = {
+            "rendered_reference_audit_missing",
+            "rendered_reference_audit_stale",
+            "citation_intent_plan_missing",
+            "citation_intent_plan_stale",
+            "citation_source_match_missing",
+            "citation_source_match_stale",
+            "citation_integrity_missing",
+            "citation_integrity_stale",
+            "citation_critic_missing",
+            "citation_critic_stale",
+        }
+        if integrity_codes & stale_or_missing_codes:
+            code = sorted(integrity_codes & stale_or_missing_codes)[0]
+            actions.append(
+                _action(
+                    action_id="quality-eval:citation-integrity-refresh",
+                    code=code,
+                    source=(citation_integrity_check.get("citation_integrity_audit") or {}).get("path")
+                    if isinstance(citation_integrity_check.get("citation_integrity_audit"), dict)
+                    else None,
+                    target="citation integrity evidence",
+                    automation="automatic",
+                    reason="Claim-safe mode requires citation-integrity artifacts bound to the current manuscript and citation-support review.",
+                    suggested_commands=[
+                        "paperorchestra audit-rendered-references --quality-mode claim_safe",
+                        "paperorchestra audit-citation-integrity --quality-mode claim_safe",
+                        "paperorchestra audit-citation-integrity-critic --quality-mode claim_safe",
+                        "paperorchestra qa-loop-plan --quality-mode claim_safe",
+                    ],
+                    ralph_instruction="Refresh rendered-reference and citation-integrity artifacts for the current manuscript before evaluating claim-safe readiness.",
+                )
+            )
+        density_codes = {"citation_bomb_detected", "citation_integrity_audit_fail", "citation_integrity_failed", "citation_critic_failed"}
+        if integrity_codes & density_codes:
+            actions.append(
+                _action(
+                    action_id="quality-eval:citation-density",
+                    code="citation_density_policy_failed",
+                    source=(citation_integrity_check.get("citation_integrity_audit") or {}).get("path")
+                    if isinstance(citation_integrity_check.get("citation_integrity_audit"), dict)
+                    else None,
+                    target="citation density and source-use discipline",
+                    automation="human_needed",
+                    reason="Citation-integrity critic found citation-density, duplicate-support, source-match, or context-policy failures that need claim-preserving source-use judgment.",
+                    suggested_commands=[
+                        "paperorchestra audit-citation-integrity --quality-mode claim_safe",
+                        "paperorchestra review-citations --evidence-mode web",
+                        "paperorchestra quality-eval --quality-mode claim_safe",
+                    ],
+                    ralph_instruction="Do not silence citation-integrity failures. Split citation-bomb sentences, remove redundant references, or scope claims while preserving citation-support critic approval.",
+                    approval_required_from="citation_integrity_critic",
+                )
+            )
     source_check = (tier2.get("checks") or {}).get("source_material_fidelity") if isinstance(tier2, dict) else None
     if isinstance(source_check, dict) and source_check.get("status") == "fail":
         actions.append(

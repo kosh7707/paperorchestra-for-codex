@@ -11,7 +11,17 @@ from .validator import check_citation_placement, check_claim_map_coverage, check
 
 HIGH_RISK_CLAIM_RE = get_domain().high_risk_claim_re
 LIMITATION_SCOPE_RE = re.compile(
-    r"\b(do not claim|does not claim|not claim|limited to|only|scope|limitation|we do not|we leave|future work)\b",
+    r"\b("
+    r"do not claim|does not claim|not claim|limited to|only|scope|limitation|we do not|we leave|future work|"
+    r"do not support claims?|does not support claims?|do not support (?:any )?claim|does not support (?:any )?claim|"
+    r"does not guarantee|do not guarantee|no guarantee|cannot guarantee|"
+    r"contains no (?:external )?(?:dataset|benchmark|evaluation|experiment)|"
+    r"includes no (?:external )?(?:dataset|benchmark|evaluation|experiment)|"
+    r"reports no (?:standard )?(?:benchmark|metric|runtime|comparison)|"
+    r"no standard benchmark|no optimizer setting|no model-architecture comparison|no reported runtime profile|"
+    r"outside (?:the )?(?:present )?scope|beyond (?:the )?(?:present )?scope|"
+    r"remain(?:s)? within the stated assumptions|bounded by the stated assumptions"
+    r")\b",
     re.IGNORECASE,
 )
 SECURITY_CLAIM_RE = get_domain().security_claim_re

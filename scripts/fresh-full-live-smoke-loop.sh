@@ -514,6 +514,7 @@ refresh_citation_integrity_artifacts() {
   run_step "audit_citation_integrity_critic_${label}" "${CLI[@]}" audit-citation-integrity-critic --quality-mode claim_safe || fail_now fail_execution_error "\"audit_citation_integrity_critic_${label}\"" "\"logs/audit_citation_integrity_critic_${label}.stderr.log\"" 1
   run_step "omx_review_handoff_${label}" "${CLI[@]}" omx-review-handoff || fail_now fail_execution_error "\"omx_review_handoff_${label}\"" "\"logs/omx_review_handoff_${label}.stderr.log\"" 1
   run_step "export_omx_evidence_${label}" "${CLI[@]}" export-omx-evidence --output "$EVIDENCE_ROOT/omx-evidence" || fail_now fail_execution_error "\"export_omx_evidence_${label}\"" "\"logs/export_omx_evidence_${label}.stderr.log\"" 1
+  run_step "ralph_start_dry_run_${label}" "${CLI[@]}" ralph-start --quality-mode claim_safe --max-iterations "$MAX_ITER" --require-live-verification --evidence-root "$EVIDENCE_ROOT" --dry-run --output "$ARTIFACTS/ralph-brief.${label}.md" || fail_now fail_execution_error "\"ralph_start_dry_run_${label}\"" "\"logs/ralph_start_dry_run_${label}.stderr.log\"" 1
   copy_session_artifacts
 }
 

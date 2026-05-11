@@ -562,6 +562,31 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
         self.assertEqual(sweep["status"], "fail")
         self.assertEqual(sweep["failing_codes"], ["high_risk_uncited_claim"])
 
+    def test_high_risk_claim_sweep_skips_negative_limitation_scope_statements(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Limitations}\n"
+                "It contains no external dataset, no standard benchmark metric, no optimizer setting, "
+                "no model-architecture comparison, and no reported runtime profile.\n\n"
+                "These results do not support claims about model accuracy, writing quality, latency, "
+                "throughput, or comparison with prior systems.\n\n"
+                "It does not guarantee scientific correctness, complete literature coverage, valid "
+                "experimental design, or acceptance by any venue.\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            obligations = artifact_path(root, "source-obligations.json")
+            obligations.write_text(json.dumps({"obligations": []}), encoding="utf-8")
+
+            sweep = _high_risk_claim_sweep(state, {"status": "pass", "path": str(obligations)})
+
+        self.assertEqual(sweep["status"], "pass")
+        self.assertEqual(sweep["items"], [])
+
     def test_citation_support_check_carries_review_hash_and_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

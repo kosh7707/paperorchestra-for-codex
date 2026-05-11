@@ -85,6 +85,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             "audit-citation-integrity-critic --quality-mode claim_safe",
             "omx-review-handoff",
             "export-omx-evidence --output \"$EVIDENCE_ROOT/omx-evidence\"",
+            "ralph-start --quality-mode claim_safe --max-iterations \"$MAX_ITER\" --require-live-verification --evidence-root \"$EVIDENCE_ROOT\" --dry-run",
         ]:
             self.assertIn(command, text)
         for artifact in [
@@ -95,9 +96,22 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             "citation_integrity.critic.json",
             "omx-review-handoff.json",
             "omx-evidence-summary.json",
+            "ralph-handoff.json",
         ]:
             self.assertIn(artifact, text)
+        helper_start = text.index("refresh_citation_integrity_artifacts() {")
+        helper_end = text.index("preserve_operator_feedback_execution_cycle() {")
+        helper = text[helper_start:helper_end]
+        self.assertLess(helper.index("audit_rendered_references_${label}"), helper.index("audit_citation_integrity_${label}"))
+        self.assertLess(helper.index("audit_citation_integrity_${label}"), helper.index("audit_citation_integrity_critic_${label}"))
+        self.assertLess(helper.index("audit_citation_integrity_critic_${label}"), helper.index("omx_review_handoff_${label}"))
+        self.assertLess(helper.index("omx_review_handoff_${label}"), helper.index("export_omx_evidence_${label}"))
+        self.assertLess(helper.index("export_omx_evidence_${label}"), helper.index("ralph_start_dry_run_${label}"))
+        self.assertLess(helper.index("ralph_start_dry_run_${label}"), helper.index("copy_session_artifacts"))
+        ralph_line = next(line for line in helper.splitlines() if "ralph_start_dry_run_${label}" in line)
+        self.assertNotIn("|| true", ralph_line)
         self.assertLess(text.index("refresh_citation_integrity_artifacts initial"), text.index("quality_eval_iter_${iter}"))
+        self.assertLess(text.index("qa_loop_step_iter_${iter}"), text.index("refresh_citation_integrity_artifacts \"post_iter_${iter}\""))
         self.assertLess(text.index("review_citations_web_final_session"), text.index("refresh_citation_integrity_artifacts final"))
         self.assertLess(text.index("refresh_citation_integrity_artifacts final"), text.index("quality_eval_final"))
 

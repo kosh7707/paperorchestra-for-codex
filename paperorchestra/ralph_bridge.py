@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from .critics import write_citation_support_review, write_section_review
+from .citation_integrity import (
+    write_citation_integrity_audit,
+    write_citation_integrity_critic,
+    write_rendered_reference_audit,
+)
 from .io_utils import extract_latex, write_json
 from .models import utc_now_iso
 from .pipeline import (
@@ -112,6 +117,10 @@ def _restore_current_after_uncommitted_candidate(
         except Exception as exc:
             restored_compile_payload = {"ok": False, "error": str(exc)}
     restored_figure_path, restored_figure_payload = write_figure_placement_review(cwd)
+    refreshed_citation_integrity = _refresh_citation_integrity_for_current_manuscript(
+        cwd,
+        quality_mode=quality_mode,
+    )
     final_eval_path, final_eval = write_quality_eval(
         cwd,
         require_live_verification=require_live_verification,
@@ -139,6 +148,7 @@ def _restore_current_after_uncommitted_candidate(
                 if isinstance(restored_figure_payload, dict)
                 else None,
             },
+            "citation_integrity": refreshed_citation_integrity,
             "quality_eval": {"path": str(final_eval_path)},
             "qa_loop_plan": {"path": str(final_plan_path)},
             "citation_support_review_restored": {"path": citation_review_snapshot.get("path"), "restored": True},
@@ -161,6 +171,45 @@ def _restore_current_after_uncommitted_candidate(
 
 
 
+
+
+def _refresh_citation_integrity_for_current_manuscript(
+    cwd: str | Path | None,
+    *,
+    quality_mode: str,
+) -> dict[str, Any]:
+    """Regenerate citation-integrity artifacts after manuscript/citation-review changes.
+
+    `write_quality_eval()` intentionally treats stale citation-integrity artifacts
+    as hard claim-safe failures.  Candidate verification therefore must refresh
+    the rendered-reference audit, source-match/intent/integrity audit, and the
+    deterministic citation critic after staging a candidate manuscript and after
+    restoring the original manuscript.
+    """
+
+    rendered_path, rendered_payload = write_rendered_reference_audit(cwd, quality_mode=quality_mode)
+    audit_path, audit_payload = write_citation_integrity_audit(cwd, quality_mode=quality_mode)
+    critic_path, critic_payload = write_citation_integrity_critic(cwd, quality_mode=quality_mode)
+    return {
+        "rendered_reference_audit": {
+            "path": str(rendered_path),
+            "status": rendered_payload.get("status") if isinstance(rendered_payload, dict) else None,
+            "manuscript_sha256": rendered_payload.get("manuscript_sha256") if isinstance(rendered_payload, dict) else None,
+            "failing_codes": rendered_payload.get("failing_codes") if isinstance(rendered_payload, dict) else None,
+        },
+        "citation_integrity_audit": {
+            "path": str(audit_path),
+            "status": audit_payload.get("status") if isinstance(audit_payload, dict) else None,
+            "manuscript_sha256": audit_payload.get("manuscript_sha256") if isinstance(audit_payload, dict) else None,
+            "failing_codes": audit_payload.get("failing_codes") if isinstance(audit_payload, dict) else None,
+        },
+        "citation_integrity_critic": {
+            "path": str(critic_path),
+            "status": critic_payload.get("status") if isinstance(critic_payload, dict) else None,
+            "manuscript_sha256": critic_payload.get("manuscript_sha256") if isinstance(critic_payload, dict) else None,
+            "failing_codes": critic_payload.get("failing_codes") if isinstance(critic_payload, dict) else None,
+        },
+    }
 
 
 def _write_execution_artifact(cwd: str | Path | None, payload: dict[str, Any]) -> Path:
@@ -332,6 +381,22 @@ def run_qa_loop_step(
         elif code in {"citation_support_review_missing", "citation_support_review_stale"}:
             review_path = write_citation_support_review(cwd, provider=citation_provider, evidence_mode=citation_evidence_mode)
             execution["actions_attempted"].append({"code": code, "handler": "review_citations", "path": str(review_path)})
+        elif code in {
+            "rendered_reference_audit_missing",
+            "rendered_reference_audit_stale",
+            "citation_intent_plan_missing",
+            "citation_intent_plan_stale",
+            "citation_source_match_missing",
+            "citation_source_match_stale",
+            "citation_integrity_missing",
+            "citation_integrity_stale",
+            "citation_critic_missing",
+            "citation_critic_stale",
+        }:
+            refreshed = _refresh_citation_integrity_for_current_manuscript(cwd, quality_mode=quality_mode)
+            execution["actions_attempted"].append(
+                {"code": code, "handler": "refresh_citation_integrity", "artifacts": refreshed}
+            )
         elif code in REVIEW_REFRESH_CODES:
             path = review_current_paper(cwd, provider, runtime_mode=runtime_mode)
             execution["actions_attempted"].append({"code": code, "handler": "review", "path": str(path)})
@@ -413,6 +478,10 @@ def run_qa_loop_step(
         section_review_path = write_section_review(cwd)
         figure_review_path, figure_review_payload = write_figure_placement_review(cwd)
         citation_review_path = write_citation_support_review(cwd, provider=citation_provider, evidence_mode=citation_evidence_mode)
+        refreshed_citation_integrity = _refresh_citation_integrity_for_current_manuscript(
+            cwd,
+            quality_mode=quality_mode,
+        )
         after_eval_path, after_eval = write_quality_eval(
             cwd,
             require_live_verification=require_live_verification,
@@ -446,6 +515,7 @@ def run_qa_loop_step(
                         else None,
                     },
                     "citation_support_review": {"path": str(citation_review_path)},
+                    "citation_integrity": refreshed_citation_integrity,
                     "quality_eval": {"path": str(after_eval_path)},
                     "qa_loop_plan": {"path": str(after_plan_path)},
                 },
@@ -461,6 +531,21 @@ def run_qa_loop_step(
         final_plan_path = after_plan_path
         final_summary = after_summary
         final_progress = progress
+        final_verification = {
+            "validate_current": {"path": str(validation_path), "ok": validation_payload.get("ok")},
+            "compile": compile_payload,
+            "section_review": {"path": str(section_review_path)},
+            "figure_placement_review": {
+                "path": str(figure_review_path),
+                "manuscript_sha256": figure_review_payload.get("manuscript_sha256")
+                if isinstance(figure_review_payload, dict)
+                else None,
+            },
+            "citation_support_review": {"path": str(citation_review_path)},
+            "citation_integrity": refreshed_citation_integrity,
+            "quality_eval": {"path": str(final_eval_path)},
+            "qa_loop_plan": {"path": str(final_plan_path)},
+        }
         after_codes = set(_failing_codes(after_eval))
         if citation_candidate_applied and any(code.startswith("citation_support_") for code in after_codes):
             restored = _restore_current_after_uncommitted_candidate(
@@ -487,6 +572,7 @@ def run_qa_loop_step(
                 final_plan = restored["qa_loop_plan"]
                 final_summary = restored["citation_summary"]
                 final_progress = restored["progress"]
+                final_verification = restored["verification"]
                 execution["restored_current_verification"] = restored["verification"]
                 execution["restored_current_state"] = {
                     "verification": restored["verification"],
@@ -557,6 +643,7 @@ def run_qa_loop_step(
                 final_plan = restored["qa_loop_plan"]
                 final_summary = restored["citation_summary"]
                 final_progress = restored["progress"]
+                final_verification = restored["verification"]
                 execution["restored_current_verification"] = restored["verification"]
                 execution["restored_current_state"] = {
                     "verification": restored["verification"],
@@ -616,14 +703,7 @@ def run_qa_loop_step(
     execution.update(
         {
             "completed_at": utc_now_iso(),
-            "verification": {
-                "validate_current": {"path": str(validation_path), "ok": validation_payload.get("ok")},
-                "compile": compile_payload,
-                "section_review": {"path": str(section_review_path)},
-                "citation_support_review": {"path": str(citation_review_path)},
-                "quality_eval": {"path": str(final_eval_path)},
-                "qa_loop_plan": {"path": str(final_plan_path)},
-            },
+            "verification": final_verification,
             "after": {"failing_codes": _failing_codes(final_eval), "citation_support_summary": final_summary},
             "progress": final_progress,
             "verdict": verdict,
