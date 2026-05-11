@@ -706,6 +706,86 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertIn("citation_integrity_critic", quality_eval["source_artifacts"])
             self.assertIn("ralph_handoff", quality_eval["source_artifacts"])
 
+    def test_claim_safe_quality_eval_accepts_bound_citation_integrity_critic_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\n"
+                "RFC 9001 describes how TLS secures QUIC~\\cite{RFC9001}.\n"
+                "\\bibliographystyle{plain}\n\\bibliography{references}\n\\end{document}\n",
+                encoding="utf-8",
+            )
+            refs = artifact_path(root, "references.bib")
+            refs.write_text(
+                "@techreport{RFC9001, title={Using TLS to Secure QUIC}, author={Martin Thomson and Sean Turner}, year={2021}, url={https://www.rfc-editor.org/rfc/rfc9001}}\n",
+                encoding="utf-8",
+            )
+            artifact_path(root, "paper.full.bbl").write_text("\\bibitem{RFC9001} Using TLS to Secure QUIC.\n", encoding="utf-8")
+            support = paper.parent / "citation_support_review.json"
+            support.write_text(
+                json.dumps(
+                    {
+                        "evidence_mode": "web",
+                        "items": [
+                            {
+                                "id": "s1",
+                                "sentence": "RFC 9001 describes how TLS secures QUIC~\\cite{RFC9001}.",
+                                "citation_keys": ["RFC9001"],
+                                "support_status": "supported",
+                                "evidence": [{"url": "https://www.rfc-editor.org/rfc/rfc9001"}],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.references_bib = str(refs)
+            save_session(root, state)
+            write_planning_artifacts(root)
+            record_current_validation_report(root, name="validation.current.json")
+            write_figure_placement_review(root)
+            state = load_session(root)
+            pdf = root / "paper.full.pdf"
+            pdf.write_bytes(b"%PDF-1.5\n")
+            manuscript_sha = hashlib.sha256(paper.read_bytes()).hexdigest()
+            compile_report = artifact_path(root, "compile-report.json")
+            compile_report.write_text(
+                json.dumps({"clean": True, "manuscript_sha256": manuscript_sha, "pdf_path": str(pdf), "pdf_exists": True, "pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest()}),
+                encoding="utf-8",
+            )
+            state.artifacts.latest_compile_report_json = str(compile_report)
+            state.artifacts.compiled_pdf = str(pdf)
+            save_session(root, state)
+
+            from paperorchestra.citation_integrity import (
+                write_citation_integrity_audit,
+                write_citation_integrity_critic,
+                write_rendered_reference_audit,
+            )
+
+            write_rendered_reference_audit(root, quality_mode="claim_safe")
+            write_citation_integrity_audit(root, quality_mode="claim_safe")
+            write_citation_integrity_critic(root, quality_mode="claim_safe")
+
+            reproducibility = {"citation_artifact_issues": [], "strict_content_gate_issues": [], "prompt_trace_file_count": 1, "verdict": "PASS"}
+            with patch("paperorchestra.quality_loop.build_reproducibility_audit", return_value=reproducibility), patch("paperorchestra.quality_loop._manuscript_prompt_leakage", return_value=[]):
+                _, quality_eval = write_quality_eval(root, quality_mode="claim_safe", max_iterations=5)
+
+            checks = quality_eval["tiers"]["tier_2_claim_safety"]["checks"]["citation_integrity_gate"]
+            self.assertEqual(checks["status"], "pass")
+            for key in [
+                "rendered_reference_audit",
+                "citation_intent_plan",
+                "citation_source_match",
+                "citation_integrity_audit",
+                "citation_integrity_critic",
+            ]:
+                self.assertIn(key, quality_eval["source_artifacts"])
+                self.assertTrue(quality_eval["source_artifacts"].get(f"{key}_sha256"))
+
     def test_claim_safe_citation_integrity_artifacts_must_be_bound_to_current_manuscript(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -485,6 +485,7 @@ copy_session_artifacts() {
       "$run_artifacts"/citation_intent_plan.json \
       "$run_artifacts"/citation_source_match.json \
       "$run_artifacts"/citation_integrity.audit.json \
+      "$run_artifacts"/citation_integrity.critic.json \
       "$run_artifacts"/section_review.json \
       "$run_artifacts"/figure_placement_review.json \
       "$run_artifacts"/review.latest.json \
@@ -510,6 +511,7 @@ refresh_citation_integrity_artifacts() {
   local label="$1"
   run_step "audit_rendered_references_${label}" "${CLI[@]}" audit-rendered-references --quality-mode claim_safe || fail_now fail_execution_error "\"audit_rendered_references_${label}\"" "\"logs/audit_rendered_references_${label}.stderr.log\"" 1
   run_step "audit_citation_integrity_${label}" "${CLI[@]}" audit-citation-integrity --quality-mode claim_safe || fail_now fail_execution_error "\"audit_citation_integrity_${label}\"" "\"logs/audit_citation_integrity_${label}.stderr.log\"" 1
+  run_step "audit_citation_integrity_critic_${label}" "${CLI[@]}" audit-citation-integrity-critic --quality-mode claim_safe || fail_now fail_execution_error "\"audit_citation_integrity_critic_${label}\"" "\"logs/audit_citation_integrity_critic_${label}.stderr.log\"" 1
   run_step "omx_review_handoff_${label}" "${CLI[@]}" omx-review-handoff || fail_now fail_execution_error "\"omx_review_handoff_${label}\"" "\"logs/omx_review_handoff_${label}.stderr.log\"" 1
   run_step "export_omx_evidence_${label}" "${CLI[@]}" export-omx-evidence --output "$EVIDENCE_ROOT/omx-evidence" || fail_now fail_execution_error "\"export_omx_evidence_${label}\"" "\"logs/export_omx_evidence_${label}.stderr.log\"" 1
   copy_session_artifacts

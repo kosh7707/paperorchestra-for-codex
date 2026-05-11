@@ -227,6 +227,133 @@ def _artifact_check(
     }
 
 
+def _critic_review_artifact(
+    name: str,
+    path: Path,
+    *,
+    expected_manuscript_sha256: str | None,
+    require_binding: bool,
+) -> dict[str, Any]:
+    payload = _read_json_if_exists(path)
+    if not isinstance(payload, dict):
+        return {
+            "name": name,
+            "path": str(path),
+            "sha256": None,
+            "artifact_status": None,
+            "manuscript_sha256": None,
+            "status": "fail",
+            "failing_codes": [f"{name}_missing"],
+            "reason": "missing_or_unreadable",
+        }
+
+    failing: list[str] = []
+    manuscript_sha = payload.get("manuscript_sha256") or payload.get("paper_full_tex_sha256")
+    if require_binding and expected_manuscript_sha256 and not manuscript_sha:
+        failing.append(f"{name}_unbound")
+    if expected_manuscript_sha256 and manuscript_sha and manuscript_sha != expected_manuscript_sha256:
+        failing.append(f"{name}_stale")
+
+    artifact_status = _payload_status(payload)
+    if artifact_status not in {"pass", "ok"}:
+        failing.append(f"{name}_{artifact_status or 'unknown'}")
+    for code in payload.get("failing_codes") or []:
+        if isinstance(code, str) and code:
+            failing.append(code)
+
+    return {
+        "name": name,
+        "path": str(path),
+        "sha256": _file_sha256(path),
+        "artifact_status": artifact_status,
+        "manuscript_sha256": manuscript_sha,
+        "expected_manuscript_sha256": expected_manuscript_sha256,
+        "status": "fail" if failing else "pass",
+        "failing_codes": sorted(dict.fromkeys(failing)),
+    }
+
+
+def build_citation_integrity_critic(cwd: str | Path | None, *, quality_mode: str = "ralph") -> dict[str, Any]:
+    """Build a deterministic critic packet over the citation integrity evidence.
+
+    The artifact is intentionally non-generative: it does not approve citations
+    by itself or invent missing reviewer judgment.  It only records that the
+    claim-safe citation evidence surface exists, is bound to the current
+    manuscript, and has already passed its concrete checks.
+    """
+
+    from .session import load_session
+
+    state = load_session(cwd)
+    manuscript_sha = _file_sha256(state.artifacts.paper_full_tex)
+    require_binding = quality_mode == "claim_safe"
+    reviewed = [
+        _critic_review_artifact(
+            "rendered_reference_audit",
+            rendered_reference_audit_path(cwd),
+            expected_manuscript_sha256=manuscript_sha,
+            require_binding=require_binding,
+        ),
+        _critic_review_artifact(
+            "citation_intent_plan",
+            citation_intent_plan_path(cwd),
+            expected_manuscript_sha256=manuscript_sha,
+            require_binding=require_binding,
+        ),
+        _critic_review_artifact(
+            "citation_source_match",
+            citation_source_match_path(cwd),
+            expected_manuscript_sha256=manuscript_sha,
+            require_binding=require_binding,
+        ),
+        _critic_review_artifact(
+            "citation_integrity_audit",
+            citation_integrity_audit_path(cwd),
+            expected_manuscript_sha256=manuscript_sha,
+            require_binding=require_binding,
+        ),
+    ]
+    failing: list[str] = []
+    for item in reviewed:
+        failing.extend(str(code) for code in item.get("failing_codes") or [] if str(code))
+    return {
+        "schema_version": "citation-integrity-critic/1",
+        "status": "fail" if failing else "pass",
+        "quality_mode": quality_mode,
+        "reviewer": "deterministic-citation-integrity-critic",
+        "review_scope": [
+            "rendered_reference_metadata_and_denominator",
+            "citation_intent_and_placement_surface",
+            "citation_source_match_support_status",
+            "citation_density_duplicate_and_context_policy",
+        ],
+        "manuscript_sha256": manuscript_sha,
+        "paper_full_tex_sha256": manuscript_sha,
+        "reviewed_artifacts": reviewed,
+        "failing_codes": sorted(dict.fromkeys(failing)),
+        "verdict_rationale": "all reviewed citation evidence artifacts passed"
+        if not failing
+        else "one or more reviewed citation evidence artifacts failed, were skipped, missing, stale, or unbound",
+    }
+
+
+def write_citation_integrity_critic(
+    cwd: str | Path | None,
+    *,
+    quality_mode: str = "ralph",
+    output_path: str | Path | None = None,
+) -> tuple[Path, dict[str, Any]]:
+    payload = build_citation_integrity_critic(cwd, quality_mode=quality_mode)
+    path = citation_integrity_critic_path(cwd)
+    write_json(path, payload)
+    if output_path:
+        extra_path = Path(output_path).resolve()
+        if extra_path != path:
+            write_json(extra_path, payload)
+            return extra_path, payload
+    return path, payload
+
+
 def citation_integrity_check(cwd: str | Path | None, state: Any, *, quality_mode: str = "ralph") -> dict[str, Any]:
     """Return the claim-safe Citation Integrity/Critic gate status."""
 

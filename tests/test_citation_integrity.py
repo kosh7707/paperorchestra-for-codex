@@ -8,15 +8,18 @@ from pathlib import Path
 from unittest.mock import patch
 
 from paperorchestra.citation_integrity import (
+    build_citation_integrity_critic,
     build_citation_source_match,
     build_rendered_reference_audit,
     citation_integrity_audit_path,
+    citation_integrity_critic_path,
     citation_integrity_check,
     citation_intent_plan_path,
     citation_source_match_path,
     rendered_reference_audit_path,
     write_rendered_reference_audit,
     write_citation_integrity_audit,
+    write_citation_integrity_critic,
 )
 from paperorchestra.cli import main as cli_main
 from paperorchestra.models import InputBundle
@@ -313,11 +316,13 @@ def test_cli_citation_audits_write_session_default_intent_source_match_and_integ
         with patch("os.getcwd", return_value=str(root)), redirect_stdout(StringIO()):
             assert cli_main(["audit-rendered-references", "--quality-mode", "claim_safe"]) == 0
             assert cli_main(["audit-citation-integrity", "--quality-mode", "claim_safe"]) == 0
+            assert cli_main(["audit-citation-integrity-critic", "--quality-mode", "claim_safe"]) == 0
 
         assert rendered_reference_audit_path(root).exists()
         assert citation_intent_plan_path(root).exists()
         assert citation_source_match_path(root).exists()
         assert citation_integrity_audit_path(root).exists()
+        assert citation_integrity_critic_path(root).exists()
         integrity = json.loads(citation_integrity_audit_path(root).read_text(encoding="utf-8"))
         assert integrity["source_artifacts"]["citation_intent_plan_sha256"]
         assert integrity["source_artifacts"]["citation_source_match_sha256"]
@@ -326,6 +331,62 @@ def test_cli_citation_audits_write_session_default_intent_source_match_and_integ
         source_match = json.loads(citation_source_match_path(root).read_text(encoding="utf-8"))
         assert source_match["status"] == "pass"
         assert source_match["support_status_counts"] == {"supported": 1}
+        critic = json.loads(citation_integrity_critic_path(root).read_text(encoding="utf-8"))
+        assert critic["status"] == "pass"
+        assert citation_integrity_check(root, load_session(root), quality_mode="claim_safe")["status"] == "pass"
+
+
+def test_citation_integrity_critic_fails_skipped_failed_stale_or_missing_artifacts() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        state = _init_session(root)
+        paper = artifact_path(root, "paper.full.tex")
+        paper.write_text("Background~\\cite{Prior}.\n", encoding="utf-8")
+        refs = artifact_path(root, "references.bib")
+        refs.write_text(_bib_entry("Prior", title="Prior Scheduler"), encoding="utf-8")
+        state.artifacts.paper_full_tex = str(paper)
+        state.artifacts.references_bib = str(refs)
+        save_session(root, state)
+
+        write_rendered_reference_audit(root, quality_mode="claim_safe")
+        _, integrity = write_citation_integrity_audit(root, quality_mode="claim_safe")
+        assert integrity["source_artifacts"]["citation_source_match_sha256"]
+
+        critic = build_citation_integrity_critic(root, quality_mode="claim_safe")
+
+        assert critic["status"] == "fail"
+        assert "rendered_reference_denominator_not_visible" in critic["failing_codes"]
+        assert "citation_source_match_skipped" in critic["failing_codes"]
+
+        artifact_path(root, "paper.full.bbl").write_text("\\bibitem{Prior} Prior Scheduler.\n", encoding="utf-8")
+        support = paper.parent / "citation_support_review.json"
+        support.write_text(
+            json.dumps(
+                {
+                    "evidence_mode": "web",
+                    "items": [
+                        {
+                            "id": "s1",
+                            "sentence": "Background~\\cite{Prior}.",
+                            "citation_keys": ["Prior"],
+                            "support_status": "supported",
+                            "evidence": [{"url": "https://example.test/prior"}],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        write_rendered_reference_audit(root, quality_mode="claim_safe")
+        write_citation_integrity_audit(root, quality_mode="claim_safe")
+        path, passing = write_citation_integrity_critic(root, quality_mode="claim_safe")
+        assert path == citation_integrity_critic_path(root)
+        assert passing["status"] == "pass"
+
+        paper.write_text("Changed body~\\cite{Prior}.\n", encoding="utf-8")
+        stale = build_citation_integrity_critic(root, quality_mode="claim_safe")
+        assert stale["status"] == "fail"
+        assert "citation_integrity_audit_stale" in stale["failing_codes"]
 
 
 def test_citation_source_match_degrades_when_support_review_missing() -> None:

@@ -671,6 +671,7 @@ def validate_evidence_completeness(evidence_root: str | Path) -> dict[str, Any]:
                 "artifacts/citation_intent_plan.json",
                 "artifacts/citation_source_match.json",
                 "artifacts/citation_integrity.audit.json",
+                "artifacts/citation_integrity.critic.json",
                 "artifacts/omx-review-handoff.json",
                 "artifacts/omx-evidence-summary.json",
             ]:

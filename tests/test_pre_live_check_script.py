@@ -82,6 +82,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         for command in [
             "audit-rendered-references --quality-mode claim_safe",
             "audit-citation-integrity --quality-mode claim_safe",
+            "audit-citation-integrity-critic --quality-mode claim_safe",
             "omx-review-handoff",
             "export-omx-evidence --output \"$EVIDENCE_ROOT/omx-evidence\"",
         ]:
@@ -91,6 +92,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             "citation_intent_plan.json",
             "citation_source_match.json",
             "citation_integrity.audit.json",
+            "citation_integrity.critic.json",
             "omx-review-handoff.json",
             "omx-evidence-summary.json",
         ]:
