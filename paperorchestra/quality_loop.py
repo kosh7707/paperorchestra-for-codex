@@ -13,6 +13,7 @@ from .fidelity import build_reproducibility_audit, run_fidelity_audit, write_rep
 from .io_utils import read_json, write_json
 from .models import utc_now_iso
 from .narrative import planning_artifact_status
+from .omx_diagnostics import OMX_EVIDENCE_SUMMARY_FILENAME, OMX_REVIEW_HANDOFF_FILENAME
 from .providers import ShellProvider, get_citation_support_provider
 from .session import artifact_path, load_session, runtime_root, save_session
 from .source_obligations import evaluate_source_obligations, source_obligations_path
@@ -628,6 +629,10 @@ def build_quality_eval(
             "ralph_handoff_sha256": ralph_evidence["ralph_handoff_sha256"],
             "qa_loop_history": ralph_evidence["qa_loop_history"],
             "qa_loop_history_sha256": ralph_evidence["qa_loop_history_sha256"],
+            "omx_evidence_summary": str(artifact_path(cwd, OMX_EVIDENCE_SUMMARY_FILENAME)),
+            "omx_evidence_summary_sha256": _file_sha256(artifact_path(cwd, OMX_EVIDENCE_SUMMARY_FILENAME)),
+            "omx_review_handoff": str(artifact_path(cwd, OMX_REVIEW_HANDOFF_FILENAME)),
+            "omx_review_handoff_sha256": _file_sha256(artifact_path(cwd, OMX_REVIEW_HANDOFF_FILENAME)),
         },
         "audit_snapshot_hashes": {
             "reproducibility": f"sha256:{_sha256_jsonable(reproducibility)}",

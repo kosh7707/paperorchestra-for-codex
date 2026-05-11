@@ -38,6 +38,7 @@ from .intake import (
 from .jobs import cancel_job, get_job_status, list_jobs, start_run_job, tail_job_log
 from .models import InputBundle
 from .omx_bridge import cleanup_omx_tmp
+from .omx_diagnostics import export_omx_evidence, write_omx_review_handoff
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
 from .quality_loop import write_quality_eval, write_quality_loop_plan
 from .quality_gate import write_quality_gate
@@ -260,7 +261,14 @@ def build_parser() -> argparse.ArgumentParser:
     environment_parser = sub.add_parser("environment", help="Show the canonical environment-variable inventory, docs, and readiness profiles")
     environment_parser.add_argument("--json", action="store_true", help="Print the full machine-readable inventory (default for compatibility)")
     environment_parser.add_argument("--summary", action="store_true", help="Print a compact human-readable readiness summary")
-    sub.add_parser("doctor", help="Run a pre-flight environment check for live PaperOrchestra runs")
+    doctor_parser = sub.add_parser("doctor", help="Run a pre-flight environment check for live PaperOrchestra runs")
+    doctor_parser.add_argument("--omx-deep", action="store_true", help="Include bounded OMX state/trace/Ralph/sparkshell/team probes")
+    doctor_parser.add_argument("--omx-timeout", type=float, default=10.0, help="Timeout seconds for each bounded --omx-deep probe")
+    omx_evidence_parser = sub.add_parser("export-omx-evidence", help="Export OMX trace/state/status summaries to an evidence directory")
+    omx_evidence_parser.add_argument("--output", required=True)
+    omx_evidence_parser.add_argument("--timeout", type=float, default=10.0)
+    omx_review_handoff_parser = sub.add_parser("omx-review-handoff", help="Write a safe manual handoff for OMX Critic/team/ultrawork review")
+    omx_review_handoff_parser.add_argument("--output")
     cleanup_tmp_parser = sub.add_parser("cleanup-tmp", help="Remove temporary OMX execution artifacts")
     cleanup_tmp_parser.add_argument("--max-age-seconds", type=float, default=0.0)
 
@@ -1030,7 +1038,17 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "doctor":
-            print(json.dumps(build_doctor_report(cwd), indent=2, ensure_ascii=False))
+            payload = build_doctor_report(cwd, omx_deep=args.omx_deep, omx_timeout=args.omx_timeout)
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            return 0
+
+        if args.command == "export-omx-evidence":
+            print(json.dumps(export_omx_evidence(cwd, args.output, timeout=args.timeout), indent=2, ensure_ascii=False))
+            return 0
+
+        if args.command == "omx-review-handoff":
+            path, payload = write_omx_review_handoff(cwd, output_path=args.output)
+            print(json.dumps({"path": str(path), **payload}, indent=2, ensure_ascii=False))
             return 0
 
         if args.command == "cleanup-tmp":

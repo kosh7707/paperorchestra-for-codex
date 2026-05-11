@@ -1310,6 +1310,33 @@ PaperOrchestra's OMX-facing commands and MCP tools assume those checks already p
 If they do not, use `--runtime-mode compatibility` or `--provider mock` until the
 external OMX/Codex runtime is healthy.
 
+Additional public-safe OMX diagnostics and handoff surfaces:
+
+```bash
+# Bounded probes for omx/codex/explore/ralph/state/trace/sparkshell/team.
+paperorchestra doctor --omx-deep
+
+# Export sanitized OMX state/trace summaries; raw trace timelines and prompt
+# previews are intentionally not copied.
+paperorchestra export-omx-evidence --output ./paperorchestra-omx-evidence
+
+# Write a manual Critic/team/ultrawork review handoff without auto-launching
+# long-running OMX workflows.
+paperorchestra omx-review-handoff
+```
+
+The integration contract is intentionally conservative:
+
+| OMX surface | PaperOrchestra behavior |
+| --- | --- |
+| Ralph | Claim-safe handoff artifacts require Ralph ownership. |
+| Critic | Citation integrity uses hash-bound `citation_integrity.critic.json`; native session tool attachment is not assumed. |
+| Trace | `export-omx-evidence` writes summary/count metadata only, not raw prompt previews. |
+| State | State/status export is non-secret summary data and degrades explicitly if unavailable. |
+| sparkshell | Long-smoke commands are emitted as handoff text, never auto-launched. |
+| `doctor --omx-deep` | Runs bounded local probes without private credentials/model calls. |
+| Team/Ultrawork | Multi-review is a manual handoff; PaperOrchestra does not auto-spawn unbounded workers. |
+
 ---
 
 ## Runtime artifacts

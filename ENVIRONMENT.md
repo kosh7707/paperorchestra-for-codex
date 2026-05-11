@@ -248,6 +248,32 @@ local prerequisite probe: actual `omx explore` may still work if OMX uses a
 different runtime fallback, so run the suggested `omx explore` smoke when you
 need to distinguish a local bwrap warning from an actual OMX runtime failure.
 
+For a deeper but still bounded OMX check, run:
+
+```bash
+paperorchestra doctor --omx-deep
+```
+
+This probes `omx`, `codex`, `omx explore --help`, `omx ralph --help`,
+`omx state list-active --json`, `omx trace summary --json`, `omx sparkshell
+--help`, and team/list surfaces without requiring private credentials or a live
+model run. After a QA session, preserve public-safe OMX evidence with:
+
+```bash
+paperorchestra export-omx-evidence --output ./paperorchestra-omx-evidence
+```
+
+The exporter writes state/status and sanitized trace summaries only. It does not
+copy raw OMX trace timelines, prompt previews, private material, or provider
+traces. For Critic/team/ultrawork review, use:
+
+```bash
+paperorchestra omx-review-handoff
+```
+
+That command writes a manual handoff artifact and intentionally does not
+auto-launch long-running workers.
+
 ---
 
 ## 4. Copyable env template

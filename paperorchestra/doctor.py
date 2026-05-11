@@ -14,6 +14,7 @@ from .environment import (
 )
 from .fidelity import build_reproducibility_audit
 from .mcp_smoke import build_mcp_smoke_report
+from .omx_diagnostics import build_omx_deep_report
 from .omx_bridge import _resolve_omx_model, _resolve_omx_reasoning_effort
 from .session import get_current_session_id, load_session
 
@@ -200,7 +201,7 @@ def build_session_recovery_hint(cwd: str | Path | None = None) -> dict[str, Any]
     }
 
 
-def build_doctor_report(cwd: str | Path | None = None) -> dict[str, Any]:
+def build_doctor_report(cwd: str | Path | None = None, *, omx_deep: bool = False, omx_timeout: float = 10.0) -> dict[str, Any]:
     root = Path(cwd or '.').resolve()
     omx_path = shutil.which('omx')
     codex_path = shutil.which('codex')
@@ -299,7 +300,7 @@ def build_doctor_report(cwd: str | Path | None = None) -> dict[str, Any]:
         for profile in profiles
         if not profile['ready']
     ]
-    return {
+    payload = {
         'overall_status': overall,
         'cwd': str(root),
         'omx_model': _resolve_omx_model(),
@@ -328,3 +329,6 @@ def build_doctor_report(cwd: str | Path | None = None) -> dict[str, Any]:
             '`codex mcp list` confirms registration, not that the active Codex conversation received mcp__paperorchestra__ tools; run scripts/smoke-paperorchestra-mcp.py to separate server health from session attachment.',
         ],
     }
+    if omx_deep:
+        payload["omx_deep"] = build_omx_deep_report(root, timeout=omx_timeout)
+    return payload
