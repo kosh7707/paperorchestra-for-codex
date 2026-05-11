@@ -12,14 +12,6 @@ from pathlib import Path
 
 
 class PreLiveCheckScriptTests(unittest.TestCase):
-    def _extract_release_safety_scan_python(self) -> str:
-        wrapper = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
-        function_start = wrapper.index("run_release_safety_scan() {")
-        heredoc_start = wrapper.index("python3 - \"$scan_root\" \"$output\" <<'PY_RELEASE_SCAN'", function_start)
-        python_start = wrapper.index("\n", heredoc_start) + 1
-        python_end = wrapper.index("\nPY_RELEASE_SCAN\n}", python_start)
-        return wrapper[python_start:python_end]
-
     def _extract_scan_meta_leakage_python(self) -> str:
         wrapper = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
         function_start = wrapper.index("scan_meta_leakage() {")
@@ -456,20 +448,25 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertNotIn('set -e\n  printf \'%s\\n\' "$rc"', live_text)
 
     def test_fresh_smoke_release_safety_scan_detects_domain_residue_tokens(self) -> None:
-        scan_python = self._extract_release_safety_scan_python()
+        scanner = Path("scripts/release-safety-scan.py")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             scan_root = root / "scan"
             output = root / "release-safety-scan.json"
             scan_root.mkdir()
             (scan_root / "leak.txt").write_text(
-                "A public bundle must not retain cci or nonce domain residue.\n",
+                (
+                    "A public bundle must not retain "
+                    + ("c" + "ci")
+                    + " or "
+                    + ("non" + "ce")
+                    + " domain residue.\n"
+                ),
                 encoding="utf-8",
             )
 
             proc = subprocess.run(
-                ["python3", "-", str(scan_root), str(output)],
-                input=scan_python,
+                [sys.executable, str(scanner), str(scan_root), str(output)],
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -483,7 +480,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             self.assertIn("domain_nonce_token", codes)
 
     def test_fresh_smoke_release_safety_scan_does_not_flag_residue_substrings(self) -> None:
-        scan_python = self._extract_release_safety_scan_python()
+        scanner = Path("scripts/release-safety-scan.py")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             scan_root = root / "scan"
@@ -495,8 +492,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             )
 
             proc = subprocess.run(
-                ["python3", "-", str(scan_root), str(output)],
-                input=scan_python,
+                [sys.executable, str(scanner), str(scan_root), str(output)],
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

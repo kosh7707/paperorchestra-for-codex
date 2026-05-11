@@ -135,69 +135,8 @@ redact() {
 run_release_safety_scan() {
   local scan_root="$1"
   local output="$2"
-  python3 - "$scan_root" "$output" <<'PY_RELEASE_SCAN'
-import json, re, sys
-from pathlib import Path
-root = Path(sys.argv[1])
-out = Path(sys.argv[2])
-secret_patterns = {
-    "s2_key": re.compile(r"s2k-[A-Za-z0-9]+"),
-    "openai_key": re.compile(r"sk-(proj|live|test|svcacct)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}"),
-    "bearer_token": re.compile(r"Bearer\s+[A-Za-z0-9._-]{20,}", re.I),
-    "assigned_api_key": re.compile(r"""(?i)\b(?:api[_-]?key|token|secret)\b\s*[:=]\s*["']?[A-Za-z0-9_-]{16,}"""),
+  python3 "$REPO_ROOT/scripts/release-safety-scan.py" "$scan_root" "$output"
 }
-private_marker = "paperorchestra-" + "private"
-domain_marker = "c" + "ci"
-n_marker = "non" + "ce"
-aead_pattern = "|".join([
-    "AES" + "-?GCM",
-    "SU" + "PERCOP",
-    "IND" + "-CPA",
-    "INT" + "-CTXT",
-    "secret-" + n_marker,
-    "hidden-" + n_marker,
-])
-residue_patterns = {
-    "private_artifact_path": re.compile(private_marker, re.I),
-    "domain_specific_token": re.compile(r"\b" + re.escape(domain_marker) + r"\b", re.I),
-    "domain_nonce_token": re.compile(r"\b" + re.escape(n_marker) + r"\b", re.I),
-    "aead_baseline": re.compile(aead_pattern, re.I),
-}
-findings = []
-for path in sorted(root.rglob("*")):
-    if not path.is_file():
-        continue
-    if path.name in {".counter"}:
-        continue
-    try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except Exception:
-        continue
-    rel = str(path.relative_to(root))
-    for family, patterns in (("secret", secret_patterns), ("private_or_cci_residue", residue_patterns)):
-        for code, pattern in patterns.items():
-            for match in pattern.finditer(text):
-                start = max(0, match.start() - 80)
-                end = min(len(text), match.end() + 80)
-                findings.append({
-                    "family": family,
-                    "code": code,
-                    "path": rel,
-                    "offset": match.start(),
-                    "excerpt": text[start:end].replace("\n", "\\n"),
-                })
-payload = {
-    "schema_version": "release-safety-scan/1",
-    "status": "pass" if not findings else "fail",
-    "finding_count": len(findings),
-    "findings": findings,
-}
-out.write_text(json.dumps(payload, indent=2, ensure_ascii=False)+"\n", encoding="utf-8")
-print(json.dumps({"status": payload["status"], "finding_count": len(findings)}, sort_keys=True))
-raise SystemExit(0 if not findings else 1)
-PY_RELEASE_SCAN
-}
-
 record_command_markdown() {
   {
     echo "# Command exit codes"
