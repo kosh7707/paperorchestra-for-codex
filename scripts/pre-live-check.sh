@@ -185,6 +185,8 @@ if missing:
 print("strict smoke policy surface present")
 PY
 
+run_step controlled_quality_gate_smoke python3 scripts/controlled-quality-gate-smoke.py
+
 run_step omx_runtime_probe bash -lc 'command -v omx >/dev/null && command -v codex >/dev/null && omx --help >/dev/null && omx state list-active --json >/dev/null && omx ralph --help >/dev/null'
 
 run_unittest_group environment_docs \
