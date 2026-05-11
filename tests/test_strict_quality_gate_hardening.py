@@ -1404,7 +1404,18 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
                 (root / "logs" / f"{name}.stdout.log").write_text("", encoding="utf-8")
                 (root / "logs" / f"{name}.stderr.log").write_text("", encoding="utf-8")
                 (root / "logs" / f"{name}.exitcode").write_text("0\n", encoding="utf-8")
-            for artifact in ["material-invariance.json", "fresh-smoke-lane-a-acceptance.json", "meta-leakage-scan.json", "quality-eval.json"]:
+            for artifact in [
+                "material-invariance.json",
+                "fresh-smoke-lane-a-acceptance.json",
+                "meta-leakage-scan.json",
+                "quality-eval.json",
+                "rendered_reference_audit.json",
+                "citation_intent_plan.json",
+                "citation_source_match.json",
+                "citation_integrity.audit.json",
+                "omx-review-handoff.json",
+                "omx-evidence-summary.json",
+            ]:
                 (root / "artifacts" / artifact).write_text('{"status":"pass"}\n', encoding="utf-8")
             (root / "artifacts" / "qa-loop.plan.json").write_text(
                 json.dumps(

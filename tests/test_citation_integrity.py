@@ -2,14 +2,23 @@ from __future__ import annotations
 
 import json
 import tempfile
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from paperorchestra.citation_integrity import (
+    build_citation_source_match,
     build_rendered_reference_audit,
+    citation_integrity_audit_path,
     citation_integrity_check,
+    citation_intent_plan_path,
+    citation_source_match_path,
+    rendered_reference_audit_path,
     write_rendered_reference_audit,
     write_citation_integrity_audit,
 )
+from paperorchestra.cli import main as cli_main
 from paperorchestra.models import InputBundle
 from paperorchestra.session import artifact_path, create_session, load_session, save_session
 
@@ -246,3 +255,89 @@ def test_citation_semantics_context_policy_catches_future_own_contribution_citat
         _, audit = write_citation_integrity_audit(root, quality_mode="claim_safe")
 
         assert "citation_context_policy_violation" in audit["failing_codes"]
+
+
+def test_cli_citation_audits_write_session_default_intent_source_match_and_integrity_artifacts() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        state = _init_session(root)
+        paper = artifact_path(root, "paper.full.tex")
+        paper.write_text(
+            "\\section{Intro}\n"
+            "Prior schedulers motivate this design~\\cite{Prior}.\n",
+            encoding="utf-8",
+        )
+        refs = artifact_path(root, "references.bib")
+        refs.write_text(_bib_entry("Prior", title="Prior Scheduler"), encoding="utf-8")
+        artifact_path(root, "paper.full.bbl").write_text("\\bibitem{Prior} Prior Scheduler.\n", encoding="utf-8")
+        claim_map = artifact_path(root, "claim_map.json")
+        claim_map.write_text(
+            json.dumps(
+                {
+                    "claims": [
+                        {
+                            "id": "c1",
+                            "claim_type": "background",
+                            "citation_keys": ["Prior"],
+                            "required_source_type": "prior_work",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        support = paper.parent / "citation_support_review.json"
+        support.write_text(
+            json.dumps(
+                {
+                    "evidence_mode": "web",
+                    "items": [
+                        {
+                            "id": "s1",
+                            "sentence": "Prior schedulers motivate this design~\\cite{Prior}.",
+                            "citation_keys": ["Prior"],
+                            "support_status": "supported",
+                            "claim_type": "background",
+                            "evidence": [{"url": "https://example.test/prior"}],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        state.artifacts.paper_full_tex = str(paper)
+        state.artifacts.references_bib = str(refs)
+        state.artifacts.claim_map_json = str(claim_map)
+        save_session(root, state)
+
+        with patch("os.getcwd", return_value=str(root)), redirect_stdout(StringIO()):
+            assert cli_main(["audit-rendered-references", "--quality-mode", "claim_safe"]) == 0
+            assert cli_main(["audit-citation-integrity", "--quality-mode", "claim_safe"]) == 0
+
+        assert rendered_reference_audit_path(root).exists()
+        assert citation_intent_plan_path(root).exists()
+        assert citation_source_match_path(root).exists()
+        assert citation_integrity_audit_path(root).exists()
+        integrity = json.loads(citation_integrity_audit_path(root).read_text(encoding="utf-8"))
+        assert integrity["source_artifacts"]["citation_intent_plan_sha256"]
+        assert integrity["source_artifacts"]["citation_source_match_sha256"]
+        intent = json.loads(citation_intent_plan_path(root).read_text(encoding="utf-8"))
+        assert intent["items"][0]["claim_ids"] == ["c1"]
+        source_match = json.loads(citation_source_match_path(root).read_text(encoding="utf-8"))
+        assert source_match["status"] == "pass"
+        assert source_match["support_status_counts"] == {"supported": 1}
+
+
+def test_citation_source_match_degrades_when_support_review_missing() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        state = _init_session(root)
+        paper = artifact_path(root, "paper.full.tex")
+        paper.write_text("Background~\\cite{Prior}.\n", encoding="utf-8")
+        state.artifacts.paper_full_tex = str(paper)
+        save_session(root, state)
+
+        source_match = build_citation_source_match(root, quality_mode="claim_safe")
+
+        assert source_match["status"] == "skipped"
+        assert source_match["reason"] == "citation_support_review_missing_or_unreadable"

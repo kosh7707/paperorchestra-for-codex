@@ -8,7 +8,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from paperorchestra.citation_integrity import write_citation_integrity_audit, write_rendered_reference_audit
+from paperorchestra.citation_integrity import (
+    citation_integrity_critic_path,
+    citation_intent_plan_path,
+    citation_source_match_path,
+    write_citation_integrity_audit,
+    write_rendered_reference_audit,
+)
 from paperorchestra.critics import write_citation_support_review, write_section_review
 from paperorchestra.fidelity import build_reproducibility_audit, run_fidelity_audit
 from paperorchestra.models import InputBundle, ScoreSnapshot
@@ -1641,6 +1647,33 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             encoding="utf-8",
         )
         return paper_path
+
+    def test_quality_eval_sources_include_citation_intent_and_source_match_but_still_require_critic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_session_with_minimal_inputs(root)
+            self._write_claim_safe_scaffolding(
+                root,
+                "\\documentclass{article}\\begin{document}"
+                "\\section{Introduction}Background context is documented~\\cite{TestRef}."
+                "\\section{Related Work}Prior work motivates the fixture."
+                "\\section{Method}The method is described."
+                "\\section{Experiments}The experiment is synthetic."
+                "\\section{Discussion}The discussion covers limits."
+                "\\end{document}",
+            )
+            citation_integrity_critic_path(root).unlink()
+
+            _, quality_eval = write_quality_eval(root, quality_mode="claim_safe")
+
+            source_artifacts = quality_eval["source_artifacts"]
+            self.assertEqual(source_artifacts["citation_intent_plan"], str(citation_intent_plan_path(root)))
+            self.assertTrue(source_artifacts["citation_intent_plan_sha256"])
+            self.assertEqual(source_artifacts["citation_source_match"], str(citation_source_match_path(root)))
+            self.assertTrue(source_artifacts["citation_source_match_sha256"])
+            tier2 = quality_eval["tiers"]["tier_2_claim_safety"]
+            self.assertEqual(tier2["status"], "fail")
+            self.assertIn("citation_critic_missing", tier2["failing_codes"])
 
     def _write_clean_compile_report_for_current(self, root: Path) -> None:
         state = load_session(root)

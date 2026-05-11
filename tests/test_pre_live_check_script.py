@@ -72,6 +72,31 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertNotIn("command -v paperorchestra", text)
         self.assertNotIn("rm -rf .paper-orchestra", text)
 
+    def test_fresh_full_live_smoke_refreshes_citation_and_omx_evidence_before_quality_gates(self) -> None:
+        text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+        subprocess.run(["bash", "-n", "scripts/fresh-full-live-smoke-loop.sh"], check=True)
+
+        self.assertIn("refresh_citation_integrity_artifacts() {", text)
+        for command in [
+            "audit-rendered-references --quality-mode claim_safe",
+            "audit-citation-integrity --quality-mode claim_safe",
+            "omx-review-handoff",
+            "export-omx-evidence --output \"$EVIDENCE_ROOT/omx-evidence\"",
+        ]:
+            self.assertIn(command, text)
+        for artifact in [
+            "rendered_reference_audit.json",
+            "citation_intent_plan.json",
+            "citation_source_match.json",
+            "citation_integrity.audit.json",
+            "omx-review-handoff.json",
+            "omx-evidence-summary.json",
+        ]:
+            self.assertIn(artifact, text)
+        self.assertLess(text.index("refresh_citation_integrity_artifacts initial"), text.index("quality_eval_iter_${iter}"))
+        self.assertLess(text.index("review_citations_web_final_session"), text.index("refresh_citation_integrity_artifacts final"))
+        self.assertLess(text.index("refresh_citation_integrity_artifacts final"), text.index("quality_eval_final"))
+
     def test_demo_mock_ignores_stale_global_paperorchestra_on_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

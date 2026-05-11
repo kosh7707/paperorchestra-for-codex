@@ -463,12 +463,18 @@ copy_session_artifacts() {
       "$run_artifacts"/qa-loop-execution*.json \
       "$run_artifacts"/citation_support_review.json \
       "$run_artifacts"/citation_support_review.trace.json \
+      "$run_artifacts"/rendered_reference_audit.json \
+      "$run_artifacts"/citation_intent_plan.json \
+      "$run_artifacts"/citation_source_match.json \
+      "$run_artifacts"/citation_integrity.audit.json \
       "$run_artifacts"/section_review.json \
       "$run_artifacts"/figure_placement_review.json \
       "$run_artifacts"/review.latest.json \
       "$run_artifacts"/source_obligations.json \
       "$run_artifacts"/ralph-brief.md \
-      "$run_artifacts"/ralph-handoff.json; do
+      "$run_artifacts"/ralph-handoff.json \
+      "$run_artifacts"/omx-review-handoff.json \
+      "$run_artifacts"/omx-evidence-summary.json; do
       [[ -f "$p" ]] && cp "$p" "$ARTIFACTS/$(basename "$p")" || true
     done
     shopt -s nullglob
@@ -480,6 +486,15 @@ copy_session_artifacts() {
   if [[ -f "$ARTIFACTS/paper.full.pdf" ]]; then
     pdftotext "$ARTIFACTS/paper.full.pdf" "$ARTIFACTS/paper.full.txt" 2>/dev/null || true
   fi
+}
+
+refresh_citation_integrity_artifacts() {
+  local label="$1"
+  run_step "audit_rendered_references_${label}" "${CLI[@]}" audit-rendered-references --quality-mode claim_safe || fail_now fail_execution_error "\"audit_rendered_references_${label}\"" "\"logs/audit_rendered_references_${label}.stderr.log\"" 1
+  run_step "audit_citation_integrity_${label}" "${CLI[@]}" audit-citation-integrity --quality-mode claim_safe || fail_now fail_execution_error "\"audit_citation_integrity_${label}\"" "\"logs/audit_citation_integrity_${label}.stderr.log\"" 1
+  run_step "omx_review_handoff_${label}" "${CLI[@]}" omx-review-handoff || fail_now fail_execution_error "\"omx_review_handoff_${label}\"" "\"logs/omx_review_handoff_${label}.stderr.log\"" 1
+  run_step "export_omx_evidence_${label}" "${CLI[@]}" export-omx-evidence --output "$EVIDENCE_ROOT/omx-evidence" || fail_now fail_execution_error "\"export_omx_evidence_${label}\"" "\"logs/export_omx_evidence_${label}.stderr.log\"" 1
+  copy_session_artifacts
 }
 
 preserve_operator_feedback_execution_cycle() {
@@ -909,6 +924,7 @@ copy_session_artifacts
 [[ -f "$ARTIFACTS/citation_support_review.trace.json" ]] && cp "$ARTIFACTS/citation_support_review.trace.json" "$ARTIFACTS/citation_support_review.initial.trace.json" || true
 run_step build_source_obligations "${CLI[@]}" build-source-obligations --output "$ARTIFACTS/source_obligations.json" || fail_now fail_execution_error '"build_source_obligations"' '"logs/build_source_obligations.stderr.log"' 1
 run_step validate_current "${CLI[@]}" validate-current --output "$ARTIFACTS/validation.current.json" || fail_now fail_execution_error '"validate_current"' '"logs/validate_current.stderr.log"' 1
+refresh_citation_integrity_artifacts initial
 
 FINAL="continue"; STEP_RC=10; LOOP_STOP_REASON="max_iterations_exhausted"
 for iter in $(seq 1 "$MAX_ITER"); do
@@ -946,6 +962,7 @@ for iter in $(seq 1 "$MAX_ITER"); do
     *) FINAL="unknown_exit_${STEP_RC}"; LOOP_STOP_REASON="unknown_exit"; QA_LOOP_TERMINAL_VERDICT="\"${FINAL}\""; QA_LOOP_TERMINAL_EXIT_CODE="$STEP_RC"; break ;;
   esac
   copy_session_artifacts
+  refresh_citation_integrity_artifacts "post_iter_${iter}"
   scan_meta_leakage || fail_now fail_meta_leakage '"meta_leakage"' '"artifacts/meta-leakage-scan.json"' 1
 done
 
@@ -977,7 +994,9 @@ esac
 
 run_step compile_final "${CLI[@]}" compile || true
 run_step review_sections_final "${CLI[@]}" review-sections --output "$ARTIFACTS/section_review.final.json" || true
+run_step review_citations_web_final_session "${CLI[@]}" review-citations --evidence-mode web "${WEB_PROVIDER[@]}" || true
 run_step review_citations_web_final "${CLI[@]}" review-citations --evidence-mode web "${WEB_PROVIDER[@]}" --output "$ARTIFACTS/citation_support_review.final.json" || true
+refresh_citation_integrity_artifacts final
 run_step review_figure_placement_final "${CLI[@]}" review-figure-placement --output "$ARTIFACTS/figure_placement_review.final.json" || true
 run_step quality_eval_final "${CLI[@]}" quality-eval --quality-mode claim_safe --max-iterations "$MAX_ITER" --require-live-verification --output "$ARTIFACTS/quality-eval.final.json" --record-history || true
 derive_final_quality_status

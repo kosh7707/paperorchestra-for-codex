@@ -8,7 +8,14 @@ from pathlib import Path
 from typing import Any
 
 from .critics import citation_item_has_valid_supporting_evidence, extract_cited_sentences
-from .citation_integrity import citation_integrity_audit_path, citation_integrity_check, citation_integrity_critic_path, rendered_reference_audit_path
+from .citation_integrity import (
+    citation_integrity_audit_path,
+    citation_integrity_check,
+    citation_integrity_critic_path,
+    citation_intent_plan_path,
+    citation_source_match_path,
+    rendered_reference_audit_path,
+)
 from .fidelity import build_reproducibility_audit, run_fidelity_audit, write_reproducibility_audit
 from .io_utils import read_json, write_json
 from .models import utc_now_iso
@@ -623,6 +630,10 @@ def build_quality_eval(
             "citation_integrity_audit_sha256": _file_sha256(citation_integrity_audit_path(cwd)),
             "citation_integrity_critic": str(citation_integrity_critic_path(cwd)),
             "citation_integrity_critic_sha256": _file_sha256(citation_integrity_critic_path(cwd)),
+            "citation_intent_plan": str(citation_intent_plan_path(cwd)),
+            "citation_intent_plan_sha256": _file_sha256(citation_intent_plan_path(cwd)),
+            "citation_source_match": str(citation_source_match_path(cwd)),
+            "citation_source_match_sha256": _file_sha256(citation_source_match_path(cwd)),
             "rendered_reference_audit": str(rendered_reference_audit_path(cwd)),
             "rendered_reference_audit_sha256": _file_sha256(rendered_reference_audit_path(cwd)),
             "ralph_handoff": ralph_evidence["ralph_handoff"],

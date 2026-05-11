@@ -11,10 +11,12 @@ from pathlib import Path
 from . import __version__
 from .compile_env import inspect_compile_environment
 from .cost import estimate_run_cost
+from .citation_integrity import write_citation_integrity_audit, write_rendered_reference_audit
 from .critics import write_citation_support_review, write_section_review
 from .doctor import build_doctor_report, build_session_recovery_hint
 from .environment import build_environment_inventory
 from .fidelity import write_reproducibility_audit
+from .io_utils import write_json
 from .eval import (
     write_review_gate_comparison,
     write_reference_case_partition_scaffold,
@@ -287,6 +289,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use heuristic metadata checks, a model critic, or a web-search-capable model critic for cited-sentence support.",
     )
     _common_provider_args(citation_review_parser)
+    rendered_reference_parser = sub.add_parser("audit-rendered-references", help="Audit the rendered bibliography denominator and visible BibTeX metadata")
+    rendered_reference_parser.add_argument("--output")
+    rendered_reference_parser.add_argument("--quality-mode", default="ralph", choices=["draft", "ralph", "claim_safe"])
+    citation_integrity_parser = sub.add_parser("audit-citation-integrity", help="Write citation intent/source-match/integrity artifacts for claim-safe quality gates")
+    citation_integrity_parser.add_argument("--output")
+    citation_integrity_parser.add_argument("--quality-mode", default="ralph", choices=["draft", "ralph", "claim_safe"])
     figure_review_parser = sub.add_parser("review-figure-placement", help="Build a figure-placement review packet for the current manuscript")
     figure_review_parser.add_argument("--output")
     validate_current_parser = sub.add_parser("validate-current", help="Record validation issues for the current manuscript without rewriting it")
@@ -1079,6 +1087,21 @@ def main(argv: list[str] | None = None) -> int:
                     evidence_mode=args.evidence_mode,
                 )
             )
+            return 0
+
+        if args.command == "audit-rendered-references":
+            path, payload = write_rendered_reference_audit(cwd, quality_mode=args.quality_mode)
+            if args.output:
+                extra_path = Path(args.output).resolve()
+                if extra_path != path:
+                    write_json(extra_path, payload)
+                    path = extra_path
+            print(json.dumps({"path": str(path), "report": payload}, indent=2, ensure_ascii=False))
+            return 0
+
+        if args.command == "audit-citation-integrity":
+            path, payload = write_citation_integrity_audit(cwd, quality_mode=args.quality_mode, output_path=args.output)
+            print(json.dumps({"path": str(path), "report": payload}, indent=2, ensure_ascii=False))
             return 0
 
         if args.command == "review-figure-placement":

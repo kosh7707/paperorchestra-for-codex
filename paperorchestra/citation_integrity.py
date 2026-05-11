@@ -11,6 +11,8 @@ from .validator import extract_citation_keys
 
 CITATION_INTEGRITY_AUDIT_FILENAME = "citation_integrity.audit.json"
 CITATION_INTEGRITY_CRITIC_FILENAME = "citation_integrity.critic.json"
+CITATION_INTENT_PLAN_FILENAME = "citation_intent_plan.json"
+CITATION_SOURCE_MATCH_FILENAME = "citation_source_match.json"
 RENDERED_REFERENCE_AUDIT_FILENAME = "rendered_reference_audit.json"
 
 
@@ -20,6 +22,14 @@ def citation_integrity_audit_path(cwd: str | Path | None) -> Path:
 
 def citation_integrity_critic_path(cwd: str | Path | None) -> Path:
     return artifact_path(cwd, CITATION_INTEGRITY_CRITIC_FILENAME)
+
+
+def citation_intent_plan_path(cwd: str | Path | None) -> Path:
+    return artifact_path(cwd, CITATION_INTENT_PLAN_FILENAME)
+
+
+def citation_source_match_path(cwd: str | Path | None) -> Path:
+    return artifact_path(cwd, CITATION_SOURCE_MATCH_FILENAME)
 
 
 def rendered_reference_audit_path(cwd: str | Path | None) -> Path:
@@ -364,6 +374,218 @@ def _claim_map_context_violations(state: Any) -> list[str]:
     return sorted(violations)
 
 
+def _claim_map_by_key(state: Any) -> dict[str, list[dict[str, Any]]]:
+    payload = _read_json_if_exists(state.artifacts.claim_map_json)
+    claims = payload.get("claims") if isinstance(payload, dict) else None
+    result: dict[str, list[dict[str, Any]]] = {}
+    if not isinstance(claims, list):
+        return result
+    for claim in claims:
+        if not isinstance(claim, dict):
+            continue
+        for key in claim.get("citation_keys") or []:
+            normalized = str(key).strip()
+            if normalized:
+                result.setdefault(normalized, []).append(claim)
+    return result
+
+
+def _section_for_sentence(latex: str, sentence: str) -> str | None:
+    needle = sentence[:80]
+    idx = latex.find(needle) if needle else -1
+    if idx < 0:
+        idx = latex.find(sentence[:30]) if sentence else -1
+    before = latex[:idx] if idx >= 0 else latex
+    sections = re.findall(r"\\(?:sub)*section\*?\{([^}]+)\}", before)
+    return sections[-1].strip() if sections else None
+
+
+def _support_items_by_sentence(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    result: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        sentence = str(item.get("sentence") or "").strip()
+        if sentence:
+            result.setdefault(sentence, []).append(item)
+    return result
+
+
+def _support_items_by_key(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    result: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        for key in item.get("citation_keys") or []:
+            normalized = str(key).strip()
+            if normalized:
+                result.setdefault(normalized, []).append(item)
+    return result
+
+
+def _status_counts(items: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in items:
+        status = str(item.get("support_status") or "unknown").strip().lower() or "unknown"
+        counts[status] = counts.get(status, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def build_citation_intent_plan(cwd: str | Path | None, *, quality_mode: str = "ralph") -> dict[str, Any]:
+    """Build a non-generative map of where citations are being used.
+
+    This is intentionally derived only from existing artifacts.  It does not
+    invent missing citation intent; when richer claim/placement artifacts are
+    absent it degrades to sentence-level records so a reviewer can still see
+    what must be checked.
+    """
+
+    from .session import load_session
+
+    state = load_session(cwd)
+    latex = _read_text(state.artifacts.paper_full_tex)
+    manuscript_sha = _file_sha256(state.artifacts.paper_full_tex)
+    sentence_records, _ = _cite_key_counts_from_text(latex)
+    claim_by_key = _claim_map_by_key(state)
+    support_by_sentence = _support_items_by_sentence(_support_items(cwd, state))
+    support_by_key = _support_items_by_key(_support_items(cwd, state))
+    placement_roles = _placement_roles(state)
+    intent_items: list[dict[str, Any]] = []
+    degraded = not state.artifacts.claim_map_json and not state.artifacts.citation_placement_plan_json
+    for record in sentence_records:
+        keys = [str(key) for key in record.get("citation_keys") or []]
+        sentence = str(record.get("sentence") or "")
+        matching_support = support_by_sentence.get(sentence, [])
+        claim_ids: list[str] = []
+        required_source_types: set[str] = set()
+        roles: set[str] = set()
+        for key in keys:
+            for claim in claim_by_key.get(key, []):
+                claim_id = claim.get("id") or claim.get("claim_id")
+                if claim_id:
+                    claim_ids.append(str(claim_id))
+                required = claim.get("required_source_type") or claim.get("source_type")
+                if required:
+                    required_source_types.add(str(required))
+            roles.update(placement_roles.get(key, set()))
+            for item in support_by_key.get(key, []):
+                for field in ["claim_type", "citation_role", "support_role"]:
+                    roles.update(_role_tokens(item.get(field)))
+        for item in matching_support:
+            for field in ["claim_id", "claim_ids", "claim_type", "citation_role", "support_role"]:
+                roles.update(_role_tokens(item.get(field)))
+        intent_items.append(
+            {
+                "id": record.get("id"),
+                "sentence": sentence,
+                "section": _section_for_sentence(latex, sentence),
+                "citation_keys": keys,
+                "citation_needed": True,
+                "claim_ids": sorted(dict.fromkeys(claim_ids)),
+                "citation_roles": sorted(role for role in roles if role),
+                "required_source_types": sorted(required_source_types),
+                "support_review_item_count": len(matching_support),
+                "rationale": "derived_from_existing_claim_and_support_artifacts"
+                if (claim_ids or roles or matching_support)
+                else "degraded_sentence_level_record_no_claim_intent_artifact",
+            }
+        )
+    return {
+        "schema_version": "citation-intent-plan/1",
+        "status": "pass" if intent_items else "skipped",
+        "quality_mode": quality_mode,
+        "manuscript_sha256": manuscript_sha,
+        "paper_full_tex_sha256": manuscript_sha,
+        "degraded": degraded,
+        "citation_sentence_count": len(intent_items),
+        "items": intent_items,
+        "failing_codes": [],
+    }
+
+
+def write_citation_intent_plan(
+    cwd: str | Path | None,
+    *,
+    quality_mode: str = "ralph",
+    output_path: str | Path | None = None,
+) -> tuple[Path, dict[str, Any]]:
+    payload = build_citation_intent_plan(cwd, quality_mode=quality_mode)
+    path = Path(output_path).resolve() if output_path else citation_intent_plan_path(cwd)
+    write_json(path, payload)
+    return path, payload
+
+
+def build_citation_source_match(cwd: str | Path | None, *, quality_mode: str = "ralph") -> dict[str, Any]:
+    """Bind the citation support review into an explicit source-match artifact."""
+
+    from .session import load_session
+
+    state = load_session(cwd)
+    support_path = _citation_support_review_path(cwd, state)
+    support = _read_json_if_exists(support_path)
+    manuscript_sha = _file_sha256(state.artifacts.paper_full_tex)
+    if not isinstance(support, dict):
+        return {
+            "schema_version": "citation-source-match/1",
+            "status": "skipped",
+            "quality_mode": quality_mode,
+            "manuscript_sha256": manuscript_sha,
+            "paper_full_tex_sha256": manuscript_sha,
+            "citation_support_review": str(support_path),
+            "citation_support_review_sha256": None,
+            "reason": "citation_support_review_missing_or_unreadable",
+            "items": [],
+            "support_status_counts": {},
+            "failing_codes": [],
+        }
+    items = _support_items(cwd, state)
+    match_items: list[dict[str, Any]] = []
+    failing_statuses = {"unsupported", "contradicted"}
+    if quality_mode == "claim_safe":
+        failing_statuses.update({"metadata_only", "insufficient_evidence"})
+    for index, item in enumerate(items, start=1):
+        status = str(item.get("support_status") or "unknown").strip().lower() or "unknown"
+        evidence = item.get("evidence") if isinstance(item.get("evidence"), list) else []
+        match_items.append(
+            {
+                "id": str(item.get("id") or f"citation-support-{index}"),
+                "sentence": item.get("sentence"),
+                "citation_keys": [str(key) for key in item.get("citation_keys") or []],
+                "support_status": status,
+                "claim_type": item.get("claim_type"),
+                "evidence_mode": support.get("evidence_mode"),
+                "source_match_status": "fail" if status in failing_statuses else "pass",
+                "evidence_count": len(evidence),
+                "rationale": item.get("rationale") or item.get("reason") or item.get("explanation"),
+            }
+        )
+    mismatch_ids = [str(item.get("id")) for item in match_items if item.get("source_match_status") == "fail"]
+    failing = ["claim_source_mismatch"] if mismatch_ids else []
+    return {
+        "schema_version": "citation-source-match/1",
+        "status": "fail" if mismatch_ids else "pass",
+        "quality_mode": quality_mode,
+        "manuscript_sha256": manuscript_sha,
+        "paper_full_tex_sha256": manuscript_sha,
+        "citation_support_review": str(support_path),
+        "citation_support_review_sha256": _file_sha256(support_path),
+        "evidence_mode": support.get("evidence_mode"),
+        "support_status_counts": _status_counts(items),
+        "failing_statuses": sorted(failing_statuses),
+        "mismatch_item_ids": mismatch_ids,
+        "items": match_items,
+        "failing_codes": failing,
+    }
+
+
+def write_citation_source_match(
+    cwd: str | Path | None,
+    *,
+    quality_mode: str = "ralph",
+    output_path: str | Path | None = None,
+) -> tuple[Path, dict[str, Any]]:
+    payload = build_citation_source_match(cwd, quality_mode=quality_mode)
+    path = Path(output_path).resolve() if output_path else citation_source_match_path(cwd)
+    write_json(path, payload)
+    return path, payload
+
+
 def build_citation_integrity_audit(cwd: str | Path | None, *, quality_mode: str = "ralph") -> dict[str, Any]:
     from .session import load_session
 
@@ -393,12 +615,26 @@ def build_citation_integrity_audit(cwd: str | Path | None, *, quality_mode: str 
         failing.append("claim_source_mismatch")
     if context_violations:
         failing.append("citation_context_policy_violation")
+    intent_path = citation_intent_plan_path(cwd)
+    source_match_path = citation_source_match_path(cwd)
+    rendered_path = rendered_reference_audit_path(cwd)
+    support_path = _citation_support_review_path(cwd, state)
     return {
         "schema_version": "citation-integrity-audit/1",
         "status": "fail" if failing else "pass",
         "manuscript_sha256": manuscript_sha,
         "paper_full_tex_sha256": manuscript_sha,
         "failing_codes": sorted(dict.fromkeys(failing)),
+        "source_artifacts": {
+            "citation_intent_plan": str(intent_path),
+            "citation_intent_plan_sha256": _file_sha256(intent_path),
+            "citation_source_match": str(source_match_path),
+            "citation_source_match_sha256": _file_sha256(source_match_path),
+            "citation_support_review": str(support_path),
+            "citation_support_review_sha256": _file_sha256(support_path),
+            "rendered_reference_audit": str(rendered_path),
+            "rendered_reference_audit_sha256": _file_sha256(rendered_path),
+        },
         "checks": {
             "citation_density": {
                 "status": "fail" if citation_bomb_sentences or citation_bomb_paragraphs else "pass",
@@ -432,7 +668,14 @@ def write_citation_integrity_audit(
     quality_mode: str = "ralph",
     output_path: str | Path | None = None,
 ) -> tuple[Path, dict[str, Any]]:
+    write_citation_intent_plan(cwd, quality_mode=quality_mode)
+    write_citation_source_match(cwd, quality_mode=quality_mode)
     payload = build_citation_integrity_audit(cwd, quality_mode=quality_mode)
-    path = Path(output_path).resolve() if output_path else citation_integrity_audit_path(cwd)
+    path = citation_integrity_audit_path(cwd)
     write_json(path, payload)
+    if output_path:
+        extra_path = Path(output_path).resolve()
+        if extra_path != path:
+            write_json(extra_path, payload)
+            return extra_path, payload
     return path, payload

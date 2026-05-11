@@ -664,7 +664,16 @@ def validate_evidence_completeness(evidence_root: str | Path) -> dict[str, Any]:
         if verdict_payload.get("qa_loop_terminal_verdict") is not None:
             _check_terminal_status_files(root, verdict_payload, checked, missing, inconsistent, failing_codes)
         if verdict_payload.get("smoke_verdict") == "pass_loop_verified":
-            for rel in ["artifacts/qa-loop.plan.json", "artifacts/quality-eval.json"]:
+            for rel in [
+                "artifacts/qa-loop.plan.json",
+                "artifacts/quality-eval.json",
+                "artifacts/rendered_reference_audit.json",
+                "artifacts/citation_intent_plan.json",
+                "artifacts/citation_source_match.json",
+                "artifacts/citation_integrity.audit.json",
+                "artifacts/omx-review-handoff.json",
+                "artifacts/omx-evidence-summary.json",
+            ]:
                 path = root / rel
                 if path.exists():
                     checked.append({"check": "final_pass_artifact", "path": rel})
