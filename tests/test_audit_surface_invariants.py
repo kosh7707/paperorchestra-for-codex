@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from paperorchestra.citation_integrity import write_citation_integrity_audit, write_rendered_reference_audit
 from paperorchestra.critics import write_citation_support_review, write_section_review
 from paperorchestra.fidelity import build_reproducibility_audit, run_fidelity_audit
 from paperorchestra.models import InputBundle, ScoreSnapshot
@@ -24,7 +25,7 @@ from paperorchestra.pipeline import (
 from paperorchestra.providers import MockProvider, ShellProvider, get_citation_support_provider
 from paperorchestra.quality_loop import write_quality_eval, write_quality_loop_plan
 from paperorchestra.runtime_parity import record_lane_manifest
-from paperorchestra.session import artifact_path, create_session, load_session, save_session
+from paperorchestra.session import artifact_path, create_session, load_session, runtime_root, save_session
 from paperorchestra.source_obligations import build_source_obligations, write_source_obligations
 
 
@@ -1420,6 +1421,12 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             )
         paper_path = artifact_path(root, "paper.full.tex")
         paper_path.write_text(paper_text, encoding="utf-8")
+        paper_path.with_suffix(".bbl").write_text(
+            "\\begin{thebibliography}{1}\n"
+            "\\bibitem{TestRef} Ada Lovelace. Test Reference Paper. 2020.\n"
+            "\\end{thebibliography}\n",
+            encoding="utf-8",
+        )
         state = load_session(root)
         state.artifacts.paper_full_tex = str(paper_path)
         state.latest_provider_name = "shell"
@@ -1574,6 +1581,65 @@ The regressed mock paper keeps enough method text to satisfy structural validati
         state.artifacts.latest_compile_report_json = str(compile_report)
         state.artifacts.latest_review_json = str(review)
         save_session(root, state)
+        _, rendered_reference_audit = write_rendered_reference_audit(root, quality_mode="claim_safe")
+        _, citation_integrity_audit = write_citation_integrity_audit(root, quality_mode="claim_safe")
+        critic_path = artifact_path(root, "citation_integrity.critic.json")
+        critic_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "citation-integrity-critic/1",
+                    "status": "pass",
+                    "manuscript_sha256": manuscript_sha,
+                    "paper_full_tex_sha256": manuscript_sha,
+                    "reviewed_artifacts": {
+                        "rendered_reference_audit": {
+                            "path": str(artifact_path(root, "rendered_reference_audit.json")),
+                            "sha256": hashlib.sha256(
+                                json.dumps(rendered_reference_audit, sort_keys=True, ensure_ascii=False).encode("utf-8")
+                            ).hexdigest(),
+                        },
+                        "citation_integrity_audit": {
+                            "path": str(artifact_path(root, "citation_integrity.audit.json")),
+                            "sha256": hashlib.sha256(
+                                json.dumps(citation_integrity_audit, sort_keys=True, ensure_ascii=False).encode("utf-8")
+                            ).hexdigest(),
+                        },
+                    },
+                    "failing_codes": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        handoff_path = artifact_path(root, "ralph-handoff.json")
+        handoff_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "paperorchestra-ralph-handoff/1",
+                    "session_id": state.session_id,
+                    "execution_contract": {
+                        "ralph_required": True,
+                        "critic_required": True,
+                        "citation_integrity_gate_required": True,
+                        "human_needed_cycle_policy": {"requested_cycles": 5, "observed_cycles": 5},
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        (runtime_root(root) / "qa-loop-history.jsonl").write_text(
+            json.dumps(
+                {
+                    "session_id": state.session_id,
+                    "event_type": "qa_loop_step",
+                    "consumes_budget": True,
+                    "human_needed_cycles": 5,
+                    "failing_codes": [],
+                    "manuscript_hash": f"sha256:{manuscript_sha}",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         return paper_path
 
     def _write_clean_compile_report_for_current(self, root: Path) -> None:
