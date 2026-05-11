@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipeline_test_support import *
+from paperorchestra.narrative import write_planning_artifacts
 
 
 class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
@@ -637,6 +638,10 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(payload["hook_contract"]["marker"], "[OMX_TMUX_INJECT]")
             self.assertEqual(payload["hook_contract"]["continuation_exit_code"], 10)
             self.assertTrue(payload["execution_contract"]["require_live_verification"])
+            self.assertTrue(payload["execution_contract"]["ralph_required"])
+            self.assertTrue(payload["execution_contract"]["critic_required"])
+            self.assertTrue(payload["execution_contract"]["citation_integrity_gate_required"])
+            self.assertEqual(payload["execution_contract"]["human_needed_cycle_policy"]["requested_cycles"], 5)
             self.assertIn("PAPERO_MODEL_CMD", payload["execution_contract"]["step_command"])
             self.assertTrue(Path(payload["handoff_path"]).exists())
             self.assertTrue(Path(payload["canonical_prd_path"]).exists())
@@ -644,6 +649,88 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertTrue(Path(payload["prd_path"]).exists())
             prd = json.loads(Path(payload["prd_path"]).read_text(encoding="utf-8"))
             self.assertEqual(prd["project"], "PaperOrchestra Ralph QA Loop")
+
+    def test_claim_safe_quality_eval_requires_citation_integrity_and_critic_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\n"
+                "RFC 9001 describes how TLS secures QUIC~\\cite{RFC9001}.\n"
+                "\\bibliographystyle{plain}\n\\bibliography{references}\n\\end{document}\n",
+                encoding="utf-8",
+            )
+            refs = artifact_path(root, "references.bib")
+            refs.write_text(
+                "@techreport{RFC9001, title={Using TLS to Secure QUIC}, author={Martin Thomson and Sean Turner}, year={2021}, url={https://www.rfc-editor.org/rfc/rfc9001}}\n",
+                encoding="utf-8",
+            )
+            registry = artifact_path(root, "citation_registry.json")
+            registry.write_text(json.dumps([{"paper_id": "rfc9001", "title": "Using TLS to Secure QUIC", "year": 2021, "venue": "RFC", "authors": ["Martin Thomson", "Sean Turner"], "bibtex_key": "RFC9001"}]), encoding="utf-8")
+            citation_map = artifact_path(root, "citation_map.json")
+            citation_map.write_text(json.dumps({"RFC9001": {"title": "Using TLS to Secure QUIC", "paper_id": "rfc9001", "year": 2021, "url": "https://www.rfc-editor.org/rfc/rfc9001"}}), encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.references_bib = str(refs)
+            state.artifacts.citation_registry_json = str(registry)
+            state.artifacts.citation_map_json = str(citation_map)
+            save_session(root, state)
+            write_planning_artifacts(root)
+            record_current_validation_report(root, name="validation.current.json")
+            write_figure_placement_review(root)
+            state = load_session(root)
+            pdf = root / "paper.full.pdf"
+            pdf.write_bytes(b"%PDF-1.5\n")
+            manuscript_sha = hashlib.sha256(paper.read_bytes()).hexdigest()
+            compile_report = artifact_path(root, "compile-report.json")
+            compile_report.write_text(
+                json.dumps({"clean": True, "manuscript_sha256": manuscript_sha, "pdf_path": str(pdf), "pdf_exists": True, "pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest()}),
+                encoding="utf-8",
+            )
+            state.artifacts.latest_compile_report_json = str(compile_report)
+            state.artifacts.compiled_pdf = str(pdf)
+            save_session(root, state)
+
+            reproducibility = {"citation_artifact_issues": [], "strict_content_gate_issues": [], "prompt_trace_file_count": 1, "verdict": "PASS"}
+            with patch("paperorchestra.quality_loop.build_reproducibility_audit", return_value=reproducibility), patch("paperorchestra.quality_loop._manuscript_prompt_leakage", return_value=[]):
+                _, quality_eval = write_quality_eval(root, quality_mode="claim_safe", max_iterations=5)
+
+            tier2 = quality_eval["tiers"].get("tier_2_claim_safety", {})
+            failing = set(tier2.get("failing_codes") or [])
+            self.assertIn("citation_integrity_missing", failing)
+            self.assertIn("citation_critic_missing", failing)
+            self.assertIn("ralph_handoff_missing", failing)
+            checks = tier2["checks"]["citation_integrity_gate"]
+            self.assertEqual(checks["status"], "fail")
+            self.assertIn("citation_integrity_audit", quality_eval["source_artifacts"])
+            self.assertIn("citation_integrity_critic", quality_eval["source_artifacts"])
+            self.assertIn("ralph_handoff", quality_eval["source_artifacts"])
+
+    def test_claim_safe_citation_integrity_artifacts_must_be_bound_to_current_manuscript(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\documentclass{article}\n\\begin{document}Body.\\end{document}\n", encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+
+            from paperorchestra.citation_integrity import citation_integrity_check, citation_integrity_audit_path, citation_integrity_critic_path, rendered_reference_audit_path
+
+            for path in [citation_integrity_audit_path(root), citation_integrity_critic_path(root), rendered_reference_audit_path(root)]:
+                path.write_text(json.dumps({"status": "pass"}), encoding="utf-8")
+            unbound = citation_integrity_check(root, load_session(root), quality_mode="claim_safe")
+            self.assertIn("citation_integrity_unbound", unbound["failing_codes"])
+            self.assertIn("citation_critic_unbound", unbound["failing_codes"])
+            self.assertIn("rendered_reference_audit_unbound", unbound["failing_codes"])
+
+            wrong = "sha256:not-current"
+            for path in [citation_integrity_audit_path(root), citation_integrity_critic_path(root), rendered_reference_audit_path(root)]:
+                path.write_text(json.dumps({"status": "pass", "manuscript_sha256": wrong}), encoding="utf-8")
+            stale = citation_integrity_check(root, load_session(root), quality_mode="claim_safe")
+            self.assertIn("citation_integrity_stale", stale["failing_codes"])
+            self.assertIn("citation_critic_stale", stale["failing_codes"])
+            self.assertIn("rendered_reference_audit_stale", stale["failing_codes"])
 
     def test_ralph_start_launch_calls_omx_ralph_explicitly(self) -> None:
         class FakeProc:
@@ -697,6 +784,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             state = load_session(root)
             state.artifacts.paper_full_tex = str(paper)
             save_session(root, state)
+            write_planning_artifacts(root)
             record_current_validation_report(root, name="validation.current.json")
             write_figure_placement_review(root)
 
@@ -860,6 +948,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             state = load_session(root)
             state.artifacts.paper_full_tex = str(paper)
             save_session(root, state)
+            write_planning_artifacts(root)
             record_current_validation_report(root, name="validation.current.json")
             write_figure_placement_review(root)
 
@@ -907,6 +996,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             state = load_session(root)
             state.artifacts.paper_full_tex = str(paper)
             save_session(root, state)
+            write_planning_artifacts(root)
             record_current_validation_report(root, name="validation.current.json")
             write_figure_placement_review(root)
 

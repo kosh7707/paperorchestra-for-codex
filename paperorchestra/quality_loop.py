@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .critics import citation_item_has_valid_supporting_evidence, extract_cited_sentences
+from .citation_integrity import citation_integrity_audit_path, citation_integrity_check, citation_integrity_critic_path, rendered_reference_audit_path
 from .fidelity import build_reproducibility_audit, run_fidelity_audit, write_reproducibility_audit
 from .io_utils import read_json, write_json
 from .models import utc_now_iso
@@ -61,6 +62,7 @@ from .quality_loop_leakage import (
 )
 
 from .quality_loop_utils import _file_sha256, _path_ref, _read_json_if_exists, _sha256_jsonable
+from .ralph_bridge_state import QA_LOOP_HANDOFF_FILENAME
 
 from .quality_loop_citation_support import _citation_support_check, _citation_support_path
 from .quality_loop_reviews import (
@@ -318,6 +320,34 @@ def _mixed_provenance_acceptance(cwd: str | Path | None, quality_eval: dict[str,
     }
 
 
+
+def _ralph_evidence_check(cwd: str | Path | None, *, quality_mode: str = "ralph") -> dict[str, Any]:
+    handoff_path = artifact_path(cwd, QA_LOOP_HANDOFF_FILENAME)
+    history_path = runtime_root(cwd) / HISTORY_FILENAME
+    handoff = _read_json_if_exists(handoff_path)
+    failing_codes: list[str] = []
+    if quality_mode == "claim_safe":
+        if not isinstance(handoff, dict):
+            failing_codes.append("ralph_handoff_missing")
+        else:
+            contract = handoff.get("execution_contract") if isinstance(handoff.get("execution_contract"), dict) else {}
+            if contract.get("ralph_required") is not True:
+                failing_codes.append("ralph_handoff_not_required")
+            if contract.get("critic_required") is not True:
+                failing_codes.append("ralph_handoff_critic_not_required")
+            if contract.get("citation_integrity_gate_required") is not True:
+                failing_codes.append("ralph_handoff_citation_integrity_not_required")
+        if not history_path.exists():
+            failing_codes.append("qa_loop_history_missing")
+    return {
+        "status": "fail" if failing_codes else "pass",
+        "failing_codes": sorted(dict.fromkeys(failing_codes)),
+        "ralph_handoff": str(handoff_path),
+        "ralph_handoff_sha256": _file_sha256(handoff_path),
+        "qa_loop_history": str(history_path),
+        "qa_loop_history_sha256": _file_sha256(history_path),
+    }
+
 def build_quality_eval(
     cwd: str | Path | None,
     *,
@@ -335,6 +365,7 @@ def build_quality_eval(
     manuscript_hash = _file_sha256(state.artifacts.paper_full_tex)
     citation_support_review_path = _citation_support_path(cwd, state)
     citation_support_review_sha256 = _file_sha256(citation_support_review_path)
+    ralph_evidence = _ralph_evidence_check(cwd, quality_mode=mode)
     provenance = _provenance_trust(reproducibility)
 
     # Tier 0 — Preconditions/freshness.  This is intentionally about whether
@@ -471,6 +502,7 @@ def build_quality_eval(
         else:
             claim_counts = _validation_issue_counts(reproducibility)
             citation_support = _citation_support_check(cwd, state, quality_mode=mode)
+            citation_integrity = citation_integrity_check(cwd, state, quality_mode=mode)
             source_material = _source_material_fidelity_check(state)
             source_obligations = evaluate_source_obligations(cwd)
             high_risk_claims = _high_risk_claim_sweep(state, source_obligations)
@@ -480,6 +512,8 @@ def build_quality_eval(
                 if claim_counts.get(code, 0) > 0:
                     tier2_failing.append(code)
             tier2_failing.extend(citation_support.get("failing_codes") or [])
+            tier2_failing.extend(citation_integrity.get("failing_codes") or [])
+            tier2_failing.extend(ralph_evidence.get("failing_codes") or [])
             tier2_failing.extend(source_material.get("failing_codes") or [])
             tier2_failing.extend(source_obligations.get("failing_codes") or [])
             tier2_failing.extend(high_risk_claims.get("failing_codes") or [])
@@ -501,6 +535,8 @@ def build_quality_eval(
                         "count": claim_counts.get("numeric_grounding_mismatch", 0),
                     },
                     "citation_support_critic": citation_support,
+                    "citation_integrity_gate": citation_integrity,
+                    "ralph_evidence": ralph_evidence,
                     "source_material_fidelity": source_material,
                     "source_obligations": source_obligations,
                     "high_risk_claim_sweep": high_risk_claims,
@@ -582,6 +618,16 @@ def build_quality_eval(
             "source_obligations": str(source_obligations_path(cwd)),
             "citation_support_review": str(citation_support_review_path),
             "citation_review_sha256": citation_support_review_sha256,
+            "citation_integrity_audit": str(citation_integrity_audit_path(cwd)),
+            "citation_integrity_audit_sha256": _file_sha256(citation_integrity_audit_path(cwd)),
+            "citation_integrity_critic": str(citation_integrity_critic_path(cwd)),
+            "citation_integrity_critic_sha256": _file_sha256(citation_integrity_critic_path(cwd)),
+            "rendered_reference_audit": str(rendered_reference_audit_path(cwd)),
+            "rendered_reference_audit_sha256": _file_sha256(rendered_reference_audit_path(cwd)),
+            "ralph_handoff": ralph_evidence["ralph_handoff"],
+            "ralph_handoff_sha256": ralph_evidence["ralph_handoff_sha256"],
+            "qa_loop_history": ralph_evidence["qa_loop_history"],
+            "qa_loop_history_sha256": ralph_evidence["qa_loop_history_sha256"],
         },
         "audit_snapshot_hashes": {
             "reproducibility": f"sha256:{_sha256_jsonable(reproducibility)}",
