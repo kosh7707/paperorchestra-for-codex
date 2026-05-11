@@ -29,6 +29,21 @@ def _readline(stream, timeout_sec: float) -> bytes:
     return stream.readline()
 
 
+def _read_exact(stream, length: int, timeout_sec: float) -> bytes:
+    chunks: list[bytes] = []
+    remaining = length
+    while remaining > 0:
+        ready, _, _ = select.select([stream], [], [], timeout_sec)
+        if not ready:
+            raise TimeoutError("Timed out waiting for MCP server response body.")
+        chunk = stream.read(remaining)
+        if not chunk:
+            raise RuntimeError("MCP server closed stdout while reading response body.")
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
 def _read_message(stream, *, timeout_sec: float) -> dict[str, Any]:
     headers: dict[str, str] = {}
     while True:
@@ -44,10 +59,7 @@ def _read_message(stream, *, timeout_sec: float) -> dict[str, Any]:
     length = int(headers.get("content-length", "0"))
     if length <= 0:
         raise RuntimeError("MCP server response did not include a positive Content-Length.")
-    ready, _, _ = select.select([stream], [], [], timeout_sec)
-    if not ready:
-        raise TimeoutError("Timed out waiting for MCP server response body.")
-    return json.loads(stream.read(length).decode("utf-8"))
+    return json.loads(_read_exact(stream, length, timeout_sec).decode("utf-8"))
 
 
 def _write_message(stream, payload: dict[str, Any]) -> None:

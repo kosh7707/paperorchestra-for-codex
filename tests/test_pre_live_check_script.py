@@ -420,7 +420,9 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertIn('provider-trace-meta/1', wrapper_text)
         self.assertIn('PAPERO_SMOKE_CODEX_HOME', wrapper_text)
         self.assertIn('rm -f "$SMOKE_CODEX_HOME/hooks.json"', wrapper_text)
-        self.assertIn('CODEX_HOME="$SMOKE_CODEX_HOME" codex exec', wrapper_text)
+        self.assertIn('PAPERO_CODEX_CLI_PREFIX', wrapper_text)
+        self.assertIn('codex_cli_prefix_words()', wrapper_text)
+        self.assertIn('CODEX_HOME="$SMOKE_CODEX_HOME" "${codex_prefix[@]}" exec', wrapper_text)
         self.assertIn('if [[ -f "$candidate_artifact" ]]; then', text)
         self.assertIn('printf \'%s\\n\' "$STEP_RC" >"$EVIDENCE_ROOT/final-exit-code.txt"', text)
         self.assertIn('cp "${current_artifacts}/${artifact}" "$EVIDENCE_ROOT/artifacts/${artifact}"', text)
@@ -612,6 +614,34 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertEqual(result.stderr, "")
         self.assertNotIn("command not found", result.stdout + result.stderr)
         self.assertNotIn("make_manifest", result.stdout + result.stderr)
+
+    def test_fresh_full_live_smoke_dry_run_contract_exposes_custom_codex_cli_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            env = os.environ.copy()
+            env["PAPERO_CODEX_CLI_PREFIX"] = "omx --madmax --high --dangerously-bypass-approvals-and-sandbox"
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/fresh-full-live-smoke-loop.sh",
+                    "--dry-run-contract",
+                    "--evidence-root",
+                    str(Path(tmp) / "evidence"),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                check=True,
+            )
+
+        payload = json.loads(result.stdout)
+        expected_prefix = ["omx", "--madmax", "--high", "--dangerously-bypass-approvals-and-sandbox"]
+        self.assertEqual(payload["codex_cli_prefix"], expected_prefix)
+        self.assertEqual(payload["critic_exec_argv_prefix"], [*expected_prefix, "exec"])
+        contract = payload["provider_wrapper_contract"]
+        self.assertEqual(contract["codex_cli_prefix"], expected_prefix)
+        self.assertEqual(contract["modes"]["gen"]["exec_argv_prefix"], [*expected_prefix, "exec"])
+        self.assertEqual(contract["modes"]["web"]["exec_argv_prefix"], [*expected_prefix, "--search", "exec"])
 
     def test_fresh_smoke_run_step_preserves_disabled_errexit_for_semantic_exit_codes(self) -> None:
         wrapper = Path("scripts/fresh-full-live-smoke-loop.sh")

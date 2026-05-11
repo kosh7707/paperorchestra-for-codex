@@ -340,6 +340,7 @@ closed instead of silently falling back to `generic`.
 | `PAPERO_CODEX_RETRY_ATTEMPTS` | Fresh smoke optional | `1` | Fresh full live smoke's single retry owner for direct Codex calls and provider-wrapper calls; the script forces provider/OMX retry layers off to avoid nesting |
 | `PAPERO_CODEX_RETRY_BACKOFF_SECONDS` | Fresh smoke optional | `15` | Backoff between retryable Codex transport attempts owned by the fresh full live smoke wrapper |
 | `PAPERO_CODEX_RETRY_JITTER_SECONDS` | Fresh smoke optional | `0` | Optional random jitter added to wrapper-owned Codex retry backoff |
+| `PAPERO_CODEX_CLI_PREFIX` | Fresh smoke optional | `codex` | Non-interactive replacement for shell aliases; set to `omx --madmax --high --dangerously-bypass-approvals-and-sandbox` when container QA should route Codex calls through OMX |
 | `PAPERO_PROVIDER_SEED` | Advanced optional | unset | Seed passthrough for shell-provider subprocesses; downstream command must honor it; not a byte-identical generation guarantee |
 | `PAPERO_PROVIDER_TEMPERATURE` | Advanced optional | unset | Temperature passthrough for shell-provider subprocesses |
 | `PAPERO_PROVIDER_MAX_OUTPUT_TOKENS` | Advanced optional | unset | Max-output-tokens passthrough for shell-provider subprocesses |

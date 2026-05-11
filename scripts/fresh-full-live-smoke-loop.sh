@@ -78,6 +78,7 @@ export PAPERO_OMX_RETRY_ATTEMPTS=0
 export PAPERO_OMX_RETRY_BACKOFF_SECONDS=0
 export PAPERO_CODEX_RETRY_ATTEMPTS="${PAPERO_CODEX_RETRY_ATTEMPTS:-1}"
 export PAPERO_CODEX_RETRY_BACKOFF_SECONDS="${PAPERO_CODEX_RETRY_BACKOFF_SECONDS:-15}"
+export PAPERO_CODEX_CLI_PREFIX="${PAPERO_CODEX_CLI_PREFIX:-codex}"
 SMOKE_CODEX_HOME="$(mktemp -d /tmp/paperorchestra-smoke-codex-home.XXXXXX)"
 SOURCE_CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 cleanup_sensitive_codex_home() {
@@ -130,6 +131,17 @@ LOOP_STOP_REASON="not_started"
 redact() {
   local private_artifact_marker="paperorchestra-""private"
   sed -E "s#(/home/kosh/temp/|\.\./)?${private_artifact_marker}[^[:space:]]*#[REDACTED_PRIVATE_ARTIFACT_PATH]#g; s/s2k-[A-Za-z0-9]+/[REDACTED_S2_KEY]/g; s/sk-(proj|live|test|svcacct)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}/[REDACTED_OPENAI_KEY]/g; s/Bearer[[:space:]]+[A-Za-z0-9._-]{20,}/Bearer [REDACTED_TOKEN]/g"
+}
+
+codex_cli_prefix_words() {
+  python3 - "${PAPERO_CODEX_CLI_PREFIX:-codex}" <<'PY_CODEX_PREFIX'
+import shlex, sys
+parts = shlex.split(sys.argv[1] or "codex")
+if not parts:
+    parts = ["codex"]
+for part in parts:
+    print(part)
+PY_CODEX_PREFIX
 }
 
 run_release_safety_scan() {
@@ -207,6 +219,8 @@ run_codex_last_message() {
   local attempts=$(( ${PAPERO_CODEX_RETRY_ATTEMPTS:-0} + 1 ))
   local backoff="${PAPERO_CODEX_RETRY_BACKOFF_SECONDS:-0}"
   local rc=1
+  local codex_prefix=()
+  mapfile -t codex_prefix < <(codex_cli_prefix_words)
   for attempt in $(seq 1 "$attempts"); do
     local attempt_response="${response}.attempt-${attempt}"
     local attempt_stdout="${stdout_log}.attempt-${attempt}"
@@ -215,7 +229,7 @@ run_codex_last_message() {
     local raw_attempt_stdout="${attempt_stdout}.raw"
     local raw_attempt_stderr="${attempt_stderr}.raw"
     set +e
-    CODEX_HOME="$SMOKE_CODEX_HOME" codex exec --skip-git-repo-check -C "$REPO_ROOT" -m "$model" -c "model_reasoning_effort=\"${effort}\"" --output-last-message "$raw_attempt_response" - < "$prompt" > "$raw_attempt_stdout" 2> "$raw_attempt_stderr"
+    CODEX_HOME="$SMOKE_CODEX_HOME" "${codex_prefix[@]}" exec --skip-git-repo-check -C "$REPO_ROOT" -m "$model" -c "model_reasoning_effort=\"${effort}\"" --output-last-message "$raw_attempt_response" - < "$prompt" > "$raw_attempt_stdout" 2> "$raw_attempt_stderr"
     rc=$?
     set -e
     printf '%s\n' "$rc" > "${exitcode_file}.attempt-${attempt}"
@@ -635,10 +649,22 @@ payload = {
 }
 meta_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False)+"\n", encoding="utf-8")
 PY_TRACE_META
+codex_cli_prefix_words() {
+  python3 - "${PAPERO_CODEX_CLI_PREFIX:-codex}" <<'PY_CODEX_PREFIX'
+import shlex, sys
+parts = shlex.split(sys.argv[1] or "codex")
+if not parts:
+    parts = ["codex"]
+for part in parts:
+    print(part)
+PY_CODEX_PREFIX
+}
+codex_prefix=()
+mapfile -t codex_prefix < <(codex_cli_prefix_words)
 if [[ "$mode" == "web" ]]; then
-  cmd=(codex --search exec --skip-git-repo-check -m "${PAPERO_WEB_MODEL:-gpt-5.5}" -c "model_reasoning_effort=\"${PAPERO_WEB_REASONING_EFFORT:-low}\"")
+  cmd=("${codex_prefix[@]}" --search exec --skip-git-repo-check -m "${PAPERO_WEB_MODEL:-gpt-5.5}" -c "model_reasoning_effort=\"${PAPERO_WEB_REASONING_EFFORT:-low}\"")
 else
-  cmd=(codex exec --skip-git-repo-check -m "${PAPERO_GEN_MODEL:-gpt-5.5}" -c "model_reasoning_effort=\"${PAPERO_GEN_REASONING_EFFORT:-medium}\"")
+  cmd=("${codex_prefix[@]}" exec --skip-git-repo-check -m "${PAPERO_GEN_MODEL:-gpt-5.5}" -c "model_reasoning_effort=\"${PAPERO_GEN_REASONING_EFFORT:-medium}\"")
 fi
 attempts=$(( ${PAPERO_CODEX_RETRY_ATTEMPTS:-0} + 1 ))
 backoff="${PAPERO_CODEX_RETRY_BACKOFF_SECONDS:-0}"
@@ -689,24 +715,26 @@ cat "${prefix}.response.md"
 exit "$rc"
 WRAP
   chmod +x "$WRAPPER_PATH"
-  python3 - "$WRAPPER_PATH" <<'PY_CONTRACT'
-import hashlib, json, sys
+  python3 - "$WRAPPER_PATH" "${PAPERO_CODEX_CLI_PREFIX:-codex}" <<'PY_CONTRACT'
+import hashlib, json, shlex, sys
 from pathlib import Path
 wrapper = Path(sys.argv[1]).resolve()
+codex_prefix = shlex.split(sys.argv[2] or "codex") or ["codex"]
 contract = {
     "schema_version": "provider-wrapper-contract/1",
     "wrapper_path": str(wrapper),
     "wrapper_sha256": hashlib.sha256(wrapper.read_bytes()).hexdigest(),
+    "codex_cli_prefix": codex_prefix,
     "modes": {
         "gen": {
             "trace_wrapped": True,
             "web_search_capable": False,
-            "exec_argv_prefix": ["codex", "exec"],
+            "exec_argv_prefix": [*codex_prefix, "exec"],
         },
         "web": {
             "trace_wrapped": True,
             "web_search_capable": True,
-            "exec_argv_prefix": ["codex", "--search", "exec"],
+            "exec_argv_prefix": [*codex_prefix, "--search", "exec"],
         },
     },
 }
@@ -716,14 +744,17 @@ PY_CONTRACT
 
 emit_dry_run_contract() {
   write_provider_wrapper
-  python3 - "$EVIDENCE_ROOT" "$WRAPPER_PATH" "$GEN_CMD" "$WEB_CMD" <<'PY_DRY'
-import json, sys
+  python3 - "$EVIDENCE_ROOT" "$WRAPPER_PATH" "$GEN_CMD" "$WEB_CMD" "${PAPERO_CODEX_CLI_PREFIX:-codex}" <<'PY_DRY'
+import json, shlex, sys
 from pathlib import Path
 root=Path(sys.argv[1]); wrapper=Path(sys.argv[2])
 sidecar=json.loads(wrapper.with_name("provider-wrap.contract.json").read_text(encoding="utf-8"))
+codex_prefix=shlex.split(sys.argv[5] or "codex") or ["codex"]
 print(json.dumps({
   "schema_version":"fresh-full-live-smoke-contract/1",
   "evidence_root":str(root),
+  "codex_cli_prefix":codex_prefix,
+  "critic_exec_argv_prefix":[*codex_prefix,"exec"],
   "provider_commands":{"gen":json.loads(sys.argv[3]),"web":json.loads(sys.argv[4])},
   "provider_wrapper_contract":sidecar,
   "stage_contracts":[
@@ -1077,7 +1108,9 @@ Operator feedback: $OPFB
 PROMPT
 echo "==> q1_loop_critic"
 write_timeline "- $(date -u +%Y-%m-%dT%H:%M:%SZ) start q1_loop_critic"
-printf '%q ' codex exec --skip-git-repo-check -C "$REPO_ROOT" -m gpt-5.5 -c 'model_reasoning_effort="high"' --output-last-message "$CRITIC/q1-loop-critic.response.md" - > "$LOGS/q1_loop_critic.command"
+Q1_CODEX_PREFIX=()
+mapfile -t Q1_CODEX_PREFIX < <(codex_cli_prefix_words)
+printf '%q ' "${Q1_CODEX_PREFIX[@]}" exec --skip-git-repo-check -C "$REPO_ROOT" -m gpt-5.5 -c 'model_reasoning_effort="high"' --output-last-message "$CRITIC/q1-loop-critic.response.md" - > "$LOGS/q1_loop_critic.command"
 printf '\n' >> "$LOGS/q1_loop_critic.command"
 set +e
 run_codex_last_message "q1_loop_critic" "$CRITIC/q1-loop-critic.prompt.md" "$CRITIC/q1-loop-critic.response.md" "$LOGS/q1_loop_critic.stdout.log" "$LOGS/q1_loop_critic.stderr.log" "$LOGS/q1_loop_critic.exitcode" "gpt-5.5" "high"

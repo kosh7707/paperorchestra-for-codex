@@ -439,6 +439,8 @@ PAPERO_OMX_TIMEOUT_GRACE_SECONDS=180
 PAPERO_CODEX_RETRY_ATTEMPTS=1
 PAPERO_CODEX_RETRY_BACKOFF_SECONDS=15
 PAPERO_CODEX_RETRY_JITTER_SECONDS=3
+# Optional for OMX/container QA where a shell alias would not be honored:
+# PAPERO_CODEX_CLI_PREFIX='omx --madmax --high --dangerously-bypass-approvals-and-sandbox'
 PAPERO_OMX_MODEL=gpt-5.5
 PAPERO_OMX_REASONING_EFFORT=high
 PAPERO_STRICT_CONTENT_GATES=1
@@ -573,6 +575,8 @@ For most users, the minimum variables worth setting first are:
 # PAPERO_CODEX_RETRY_ATTEMPTS=1
 # PAPERO_CODEX_RETRY_BACKOFF_SECONDS=15
 # PAPERO_CODEX_RETRY_JITTER_SECONDS=3
+# Optional non-interactive replacement for aliasing `codex` through OMX:
+# PAPERO_CODEX_CLI_PREFIX='omx --madmax --high --dangerously-bypass-approvals-and-sandbox'
 # PAPERO_PROVIDER_SEED=7
 # PAPERO_PROVIDER_TEMPERATURE=0.2
 # PAPERO_PROVIDER_MAX_OUTPUT_TOKENS=4096

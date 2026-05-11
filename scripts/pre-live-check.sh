@@ -135,6 +135,9 @@ web_cmd=json.dumps(payload["provider_commands"]["web"])
 provider=get_citation_support_provider("shell", command=web_cmd, evidence_mode="web")
 assert provider_supports_web_search(provider)
 contract=payload["provider_wrapper_contract"]
+assert payload["codex_cli_prefix"] == ["codex"]
+assert payload["critic_exec_argv_prefix"] == ["codex", "exec"]
+assert contract["codex_cli_prefix"] == ["codex"]
 assert contract["modes"]["web"]["trace_wrapped"] is True
 assert contract["modes"]["web"]["web_search_capable"] is True
 assert contract["modes"]["web"]["exec_argv_prefix"] == ["codex", "--search", "exec"]
