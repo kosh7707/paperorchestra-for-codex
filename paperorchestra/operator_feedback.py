@@ -4,6 +4,11 @@ import re
 from pathlib import Path
 from typing import Any
 
+from .citation_integrity import (
+    write_citation_integrity_audit,
+    write_citation_integrity_critic,
+    write_rendered_reference_audit,
+)
 from .critics import write_citation_support_review, write_section_review
 from .boundary import sanitize_author_facing_text
 from .io_utils import read_json, write_json
@@ -881,6 +886,9 @@ def _verification_snapshot(
     figure_path, figure_payload = write_figure_placement_review(cwd)
     citation_path = write_citation_support_review(cwd, provider=citation_provider, evidence_mode=citation_evidence_mode)
     review_path = review_current_paper(cwd, provider, runtime_mode=runtime_mode)
+    write_rendered_reference_audit(cwd, quality_mode=quality_mode)
+    write_citation_integrity_audit(cwd, quality_mode=quality_mode)
+    write_citation_integrity_critic(cwd, quality_mode=quality_mode)
     quality_path, quality_eval = write_quality_eval(
         cwd,
         quality_mode=quality_mode,
@@ -914,6 +922,15 @@ def _verification_block(verification: dict[str, Any]) -> dict[str, Any]:
     plan = verification.get("plan") or {}
     quality_eval = verification.get("quality_eval") if isinstance(verification.get("quality_eval"), dict) else {}
     source_artifacts = quality_eval.get("source_artifacts") if isinstance(quality_eval.get("source_artifacts"), dict) else {}
+    citation_integrity_critic_payload: dict[str, Any] = {}
+    citation_integrity_critic_path = source_artifacts.get("citation_integrity_critic")
+    if citation_integrity_critic_path:
+        try:
+            payload = read_json(citation_integrity_critic_path)
+            if isinstance(payload, dict):
+                citation_integrity_critic_payload = payload
+        except Exception:
+            citation_integrity_critic_payload = {}
     citation_check = {}
     tiers = quality_eval.get("tiers") if isinstance(quality_eval.get("tiers"), dict) else {}
     tier2 = tiers.get("tier_2_claim_safety") if isinstance(tiers.get("tier_2_claim_safety"), dict) else {}
@@ -935,6 +952,13 @@ def _verification_block(verification: dict[str, Any]) -> dict[str, Any]:
             "path": str(verification["citation_path"]),
             "sha256": source_artifacts.get("citation_review_sha256") or citation_check.get("citation_review_sha256"),
             "summary": citation_check.get("canonical_summary") or citation_check.get("summary"),
+        },
+        "citation_integrity_critic": {
+            "path": citation_integrity_critic_path,
+            "sha256": source_artifacts.get("citation_integrity_critic_sha256"),
+            "status": citation_integrity_critic_payload.get("status"),
+            "manuscript_sha256": citation_integrity_critic_payload.get("manuscript_sha256"),
+            "failing_codes": citation_integrity_critic_payload.get("failing_codes"),
         },
         "review": {"path": str(verification["review_path"])},
         "quality_eval": {

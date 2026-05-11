@@ -2217,6 +2217,94 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertFalse(history[-1]["consumes_budget"])
             self.assertEqual(history[-1]["supervised_max_iterations"], 1)
 
+    def test_operator_feedback_candidate_verification_refreshes_citation_integrity_for_staged_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            original = (
+                "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\n"
+                "Draft background~\\cite{Prior}.\n"
+                "\\bibliographystyle{plain}\n\\bibliography{references}\n\\end{document}\n"
+            )
+            candidate = original.replace("Draft background", "Candidate background")
+            paper.write_text(original, encoding="utf-8")
+            refs = artifact_path(root, "references.bib")
+            refs.write_text("@article{Prior, title={Prior Work}, author={Alice}, year={2024}}\n", encoding="utf-8")
+            artifact_path(root, "paper.full.bbl").write_text("\\bibitem{Prior} Prior Work.\n", encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.references_bib = str(refs)
+            save_session(root, state)
+            from paperorchestra.citation_integrity import (
+                citation_integrity_critic_path,
+                write_citation_integrity_audit,
+                write_citation_integrity_critic,
+                write_rendered_reference_audit,
+            )
+
+            write_rendered_reference_audit(root, quality_mode="claim_safe")
+            write_citation_integrity_audit(root, quality_mode="claim_safe")
+            write_citation_integrity_critic(root, quality_mode="claim_safe")
+            stale_critic = json.loads(citation_integrity_critic_path(root).read_text(encoding="utf-8"))
+            self.assertEqual(stale_critic["manuscript_sha256"], hashlib.sha256(original.encode("utf-8")).hexdigest())
+
+            candidate_path = artifact_path(root, "paper.operator-test.candidate.tex")
+            candidate_path.write_text(candidate, encoding="utf-8")
+            state = load_session(root)
+            state.artifacts.paper_full_tex = str(candidate_path)
+            save_session(root, state)
+            def fake_citation_review(cwd, **kwargs):
+                support = artifact_path(cwd, "citation_support_review.json")
+                support.write_text(
+                    json.dumps(
+                        {
+                            "evidence_mode": "web",
+                            "items": [
+                                {
+                                    "id": "s1",
+                                    "sentence": "Candidate background~\\cite{Prior}.",
+                                    "citation_keys": ["Prior"],
+                                    "support_status": "supported",
+                                    "evidence": [{"url": "https://example.test/prior"}],
+                                }
+                            ],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                return support
+
+            from paperorchestra.operator_feedback import _tier_failing_codes, _verification_block, _verification_snapshot
+
+            with patch("paperorchestra.operator_feedback.write_citation_support_review", side_effect=fake_citation_review):
+                with patch("paperorchestra.operator_feedback.review_current_paper", return_value=root / "review.json"):
+                    verification = _verification_snapshot(
+                        root,
+                        provider=MockProvider(),
+                        require_compile=False,
+                        quality_mode="claim_safe",
+                        max_iterations=5,
+                        require_live_verification=False,
+                        accept_mixed_provenance=False,
+                        runtime_mode="compatibility",
+                        citation_evidence_mode="heuristic",
+                        citation_provider_name="mock",
+                        citation_provider_command=None,
+                        validation_name="validation.operator-feedback.attempt-01.json",
+                    )
+
+            tier2_failures = set(_tier_failing_codes(verification["quality_eval"], "tier_2_claim_safety"))
+            self.assertNotIn("citation_critic_stale", tier2_failures)
+            self.assertNotIn("citation_integrity_stale", tier2_failures)
+            self.assertNotIn("rendered_reference_audit_stale", tier2_failures)
+            self.assertIn("Candidate background", candidate_path.read_text(encoding="utf-8"))
+            candidate_hash = hashlib.sha256(candidate_path.read_bytes()).hexdigest()
+            critic_block = _verification_block(verification)["citation_integrity_critic"]
+            self.assertEqual(critic_block["manuscript_sha256"], candidate_hash)
+            self.assertTrue(critic_block["sha256"])
+            refreshed_critic = json.loads(citation_integrity_critic_path(root).read_text(encoding="utf-8"))
+            self.assertEqual(refreshed_critic["manuscript_sha256"], candidate_hash)
+
     def test_operator_feedback_explicit_rejection_is_human_needed_not_execution_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
