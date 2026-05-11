@@ -39,6 +39,38 @@ def _read_text(path: str | Path | None) -> str:
     return candidate.read_text(encoding="utf-8", errors="replace")
 
 
+def _strip_latex_comments(text: str, *, preserve_numeric_percent: bool = False) -> str:
+    visible_lines: list[str] = []
+    for line in text.splitlines():
+        comment_start = None
+        backslash_run = 0
+        for idx, char in enumerate(line):
+            if char == "\\":
+                backslash_run += 1
+                continue
+            if char == "%" and backslash_run % 2 == 0:
+                if preserve_numeric_percent and idx > 0 and line[idx - 1].isdigit():
+                    backslash_run = 0
+                    continue
+                comment_start = idx
+                break
+            backslash_run = 0
+        candidate = line if comment_start is None else line[:comment_start]
+        visible_lines.append(candidate.rstrip())
+    return "\n".join(visible_lines)
+
+
+def _planning_source_text(text: str, *, preserve_numeric_percent: bool = False) -> str:
+    """Return source text suitable for claim planning and coverage terms.
+
+    Generated smoke inputs may contain useful source comments such as
+    ``% Fresh PaperOrchestra smoke input``.  Those comments are not manuscript
+    claims and must not become required coverage terms or evidence anchors.
+    """
+
+    return _strip_latex_comments(text, preserve_numeric_percent=preserve_numeric_percent)
+
+
 def planning_source_hashes(cwd: str | Path | None) -> dict[str, str | None]:
     state = load_session(cwd)
     return {
@@ -124,9 +156,10 @@ def _coverage_groups_for_method(source_text: str) -> list[list[str]]:
 
 
 def _coverage_groups_for_benchmark(source_text: str) -> list[list[str]]:
-    groups: list[list[str]] = [["benchmark"], ["measurement"]]
-    for term in _salient_terms(source_text, limit=3):
-        if term not in {"benchmark", "measurement"}:
+    groups: list[list[str]] = [["benchmark", "measurement"], ["implementation", "profile"], ["message", "size"]]
+    existing = {term for group in groups for term in group}
+    for term in _salient_terms(_planning_source_text(source_text), limit=2):
+        if term not in existing:
             groups.append([term])
     return groups
 
@@ -136,6 +169,8 @@ def _salient_terms(text: str, *, limit: int = 5) -> list[str]:
         "the", "and", "that", "with", "from", "this", "paper", "section", "method", "result", "results",
         "using", "used", "uses", "into", "for", "are", "was", "were", "our", "their", "stated",
         "evidence", "assumptions", "construction", "benchmark", "measurement",
+        "fresh", "smoke", "input", "paperorchestra", "deterministic", "derived", "registered",
+        "source", "material", "materials",
     }
     terms: list[str] = []
     for token in re.findall(r"[A-Za-z][A-Za-z0-9+_.-]{2,}|\d+(?:\.\d+)?\s*(?:x|×|%|ms|s|jobs/s|qps)", text):
@@ -192,8 +227,11 @@ def build_planning_payloads(cwd: str | Path | None) -> tuple[dict[str, Any], dic
     idea_text = _read_text(state.inputs.idea_path)
     log_text = _read_text(state.inputs.experimental_log_path)
     template_text = _read_text(state.inputs.template_path)
-    source_text = "\n".join([idea_text, log_text, template_text])
-    author_source_text = "\n".join([idea_text, log_text])
+    idea_planning_text = _planning_source_text(idea_text, preserve_numeric_percent=True)
+    log_planning_text = _planning_source_text(log_text, preserve_numeric_percent=True)
+    template_planning_text = _planning_source_text(template_text)
+    planning_text = "\n".join([idea_planning_text, log_planning_text, template_planning_text])
+    author_source_text = "\n".join([idea_planning_text, log_planning_text])
     hashes = planning_source_hashes(cwd)
     sections = _section_titles(outline, template_text) or [
         "Introduction",
@@ -209,11 +247,12 @@ def build_planning_payloads(cwd: str | Path | None) -> tuple[dict[str, Any], dic
     discussion_section = next((s for s in sections if re.search(r"discussion|limitation", s, re.I)), "Discussion")
     claims: list[dict[str, Any]] = []
     idx = 1
-    domain = detect_domain_for_text(source_text)
+    domain = detect_domain_for_text(planning_text)
     if domain.method_seed_re.search(author_source_text) or (
-        domain.method_seed_re.search(template_text) and len(re.findall(r"[A-Za-z][A-Za-z0-9_-]{2,}", re.sub(r"\\[A-Za-z]+\*?(?:\{[^}]*\})?", " ", template_text))) >= 12
+        domain.method_seed_re.search(template_planning_text)
+        and len(re.findall(r"[A-Za-z][A-Za-z0-9_-]{2,}", re.sub(r"\\[A-Za-z]+\*?(?:\{[^}]*\})?", " ", template_planning_text))) >= 12
     ):
-        excerpt = domain.method_excerpt_re.search(author_source_text) or domain.method_excerpt_re.search(template_text)
+        excerpt = domain.method_excerpt_re.search(author_source_text) or domain.method_excerpt_re.search(template_planning_text)
         claims.append(
             _claim(
                 idx=idx,
@@ -222,14 +261,14 @@ def build_planning_payloads(cwd: str | Path | None) -> tuple[dict[str, Any], dic
                 grounding="source_material",
                 target_section=method_section,
                 source_path=state.inputs.idea_path,
-                excerpt=(excerpt.group(0) if excerpt else source_text[:400]),
-                coverage_groups=_coverage_groups_for_method(source_text),
+                excerpt=(excerpt.group(0) if excerpt else planning_text[:400]),
+                coverage_groups=_coverage_groups_for_method(planning_text),
                 risk="high",
             )
         )
         idx += 1
-    if domain.proof_seed_re.search(source_text):
-        excerpt = domain.proof_excerpt_re.search(source_text)
+    if domain.proof_seed_re.search(planning_text):
+        excerpt = domain.proof_excerpt_re.search(planning_text)
         claims.append(
             _claim(
                 idx=idx,
@@ -238,14 +277,14 @@ def build_planning_payloads(cwd: str | Path | None) -> tuple[dict[str, Any], dic
                 grounding="source_material",
                 target_section=proof_section,
                 source_path=state.inputs.template_path,
-                excerpt=(excerpt.group(0) if excerpt else template_text[:400]),
+                excerpt=(excerpt.group(0) if excerpt else template_planning_text[:400]),
                 coverage_groups=[["analysis"], ["proof"], ["assumption"]],
                 risk="high",
             )
         )
         idx += 1
-    if domain.benchmark_seed_re.search(log_text) and _log_contains_result_claim(log_text):
-        excerpt = domain.benchmark_excerpt_re.search(log_text)
+    if domain.benchmark_seed_re.search(log_planning_text) and _log_contains_result_claim(log_planning_text):
+        excerpt = domain.benchmark_excerpt_re.search(log_planning_text)
         claims.append(
             _claim(
                 idx=idx,
@@ -254,14 +293,14 @@ def build_planning_payloads(cwd: str | Path | None) -> tuple[dict[str, Any], dic
                 grounding="experimental_log",
                 target_section=results_section,
                 source_path=state.inputs.experimental_log_path,
-                excerpt=(excerpt.group(0) if excerpt else log_text[:400]),
-                coverage_groups=_coverage_groups_for_benchmark(source_text),
+                excerpt=(excerpt.group(0) if excerpt else log_planning_text[:400]),
+                coverage_groups=_coverage_groups_for_benchmark(log_planning_text),
                 risk="high",
             )
         )
         idx += 1
-    if re.search(r"limitation|boundary|does not|not cover|assumption", source_text, re.I):
-        excerpt = re.search(r".{0,120}(?:limitation|boundary|does not|not cover|assumption).{0,220}", source_text, re.I | re.S)
+    if re.search(r"limitation|boundary|does not|not cover|assumption", planning_text, re.I):
+        excerpt = re.search(r".{0,120}(?:limitation|boundary|does not|not cover|assumption).{0,220}", planning_text, re.I | re.S)
         claims.append(
             _claim(
                 idx=idx,
@@ -271,7 +310,7 @@ def build_planning_payloads(cwd: str | Path | None) -> tuple[dict[str, Any], dic
                 grounding="human_boundary",
                 target_section=discussion_section,
                 source_path=state.inputs.idea_path,
-                excerpt=(excerpt.group(0) if excerpt else source_text[:400]),
+                excerpt=(excerpt.group(0) if excerpt else planning_text[:400]),
                 coverage_groups=[["limitation"], ["scope"], ["boundary"], ["assumption"]],
                 risk="medium",
             )

@@ -170,6 +170,78 @@ class NarrativePlanningTests(unittest.TestCase):
             self.assertNotIn("AES", coverage_terms)
             self.assertNotIn("GCM", coverage_terms)
 
+    def test_benchmark_claim_coverage_ignores_generated_source_comments(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            Path(state.inputs.idea_path).write_text("A benchmark paper about measured queue latency.\n", encoding="utf-8")
+            Path(state.inputs.experimental_log_path).write_text(
+                "% Fresh PaperOrchestra smoke input: deterministic benchmark brief.\n"
+                "% Derived only from registered source material.\n"
+                "Benchmark measurements report p95 latency of 12.7 ms using an implementation profile "
+                "that compares message-size settings for the scheduler.\n",
+                encoding="utf-8",
+            )
+
+            paths = plan_narrative_and_claims(root, MockProvider())
+            claim_map = json.loads(Path(paths["claim_map"]).read_text(encoding="utf-8"))
+            benchmark_claim = next(claim for claim in claim_map["claims"] if claim.get("claim_type") == "benchmark")
+
+            rendered = json.dumps(benchmark_claim, ensure_ascii=False).lower()
+            for generated_term in ("fresh", "paperorchestra", "smoke", "deterministic"):
+                self.assertNotIn(generated_term, rendered)
+            self.assertEqual(
+                benchmark_claim["coverage_groups"][:3],
+                [["benchmark", "measurement"], ["implementation", "profile"], ["message", "size"]],
+            )
+
+    def test_benchmark_planning_preserves_percentage_measurement_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            Path(state.inputs.idea_path).write_text("A benchmark paper about measured accuracy.\n", encoding="utf-8")
+            Path(state.inputs.experimental_log_path).write_text(
+                "% Fresh PaperOrchestra smoke input: deterministic benchmark brief.\n"
+                "Benchmark measurements show accuracy improved to 81.2% on DemoSet with "
+                "an implementation profile and message-size sweep from 50%–68% load.\n",
+                encoding="utf-8",
+            )
+
+            paths = plan_narrative_and_claims(root, MockProvider())
+            claim_map = json.loads(Path(paths["claim_map"]).read_text(encoding="utf-8"))
+            benchmark_claim = next(claim for claim in claim_map["claims"] if claim.get("claim_type") == "benchmark")
+            rendered = json.dumps(benchmark_claim, ensure_ascii=False)
+
+            self.assertIn("81.2% on DemoSet", rendered)
+            self.assertIn("50%–68% load", rendered)
+            self.assertNotIn("Fresh PaperOrchestra", rendered)
+
+    def test_benchmark_claim_coverage_requires_semantic_benchmark_boundaries(self) -> None:
+        claim_map = {
+            "claims": [
+                {
+                    "id": "claim-003",
+                    "required": True,
+                    "target_section": "Evaluation",
+                    "evidence_anchors": [{"source_ref": "experimental_log.md"}],
+                    "coverage_groups": [["benchmark", "measurement"], ["implementation", "profile"], ["message", "size"]],
+                }
+            ]
+        }
+        thin_latex = "\\section{Evaluation}\nThe benchmark measurements are reported conservatively.\n"
+        complete_latex = (
+            "\\section{Evaluation}\n"
+            "The benchmark measurements are limited to the reported implementation profiles "
+            "and message-size settings from the experimental log.\n"
+        )
+
+        thin_codes = [issue.code for issue in check_claim_map_coverage(thin_latex, claim_map)]
+        complete_codes = [issue.code for issue in check_claim_map_coverage(complete_latex, claim_map)]
+
+        self.assertIn("required_claim_missing", thin_codes)
+        self.assertNotIn("required_claim_missing", complete_codes)
+        self.assertNotIn("required_claim_keyword_stuffing", complete_codes)
+
     def test_mcp_plan_narrative_writes_three_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
