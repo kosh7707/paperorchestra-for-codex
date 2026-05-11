@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/fresh-full-live-smoke-loop.sh --evidence-root DIR --material-root DIR [--max-operator-cycles N] [--max-iterations N] [--dry-run-contract]
+Usage: scripts/fresh-full-live-smoke-loop.sh --evidence-root DIR --material-root DIR [--expected-material-root DIR] [--max-operator-cycles N] [--max-iterations N] [--dry-run-contract]
 
 Top-level fail-fast fresh full live smoke wrapper. This owns immutable material
 validation, fresh workdir/session setup, evidence bundle shape, bounded
@@ -15,6 +15,7 @@ EOF
 
 EVIDENCE_ROOT=""
 MATERIAL_ROOT="examples/fresh-smoke-materials"
+EXPECTED_MATERIAL_ROOT=""
 MAX_OPERATOR_CYCLES=3
 MAX_ITER=8
 DRY_RUN_CONTRACT=0
@@ -22,6 +23,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --evidence-root) EVIDENCE_ROOT="$2"; shift 2 ;;
     --material-root) MATERIAL_ROOT="$2"; shift 2 ;;
+    --expected-material-root) EXPECTED_MATERIAL_ROOT="$2"; shift 2 ;;
     --max-operator-cycles) MAX_OPERATOR_CYCLES="$2"; shift 2 ;;
     --max-iterations) MAX_ITER="$2"; shift 2 ;;
     --dry-run-contract) DRY_RUN_CONTRACT=1; shift ;;
@@ -32,6 +34,7 @@ done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+EXPECTED_MATERIAL_ROOT="${EXPECTED_MATERIAL_ROOT:-examples/fresh-smoke-materials}"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 EVIDENCE_ROOT="${EVIDENCE_ROOT:-review/fresh-full-live-smoke-loop-${TS}}"
 EVIDENCE_ROOT="$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "$EVIDENCE_ROOT")"
@@ -308,6 +311,7 @@ EOF
 - repo_root: ${REPO_ROOT}
 - head: $(git rev-parse HEAD 2>/dev/null || echo unknown)
 - material_root: ${MATERIAL_ROOT}
+- expected_material_root: ${EXPECTED_MATERIAL_ROOT}
 - smoke_verdict: ${FINAL_SMOKE_VERDICT}
 - qa_loop_terminal_verdict: ${QA_LOOP_TERMINAL_VERDICT}
 - operator_feedback_cycles: ${OPERATOR_FEEDBACK_CYCLES}
@@ -900,7 +904,7 @@ run_step release_safety_scan_preflight run_release_safety_scan "$EVIDENCE_ROOT" 
 # Material invariance.
 mkdir -p .omx/state
 printf '%s' "$MATERIAL_ROOT" > .omx/state/current-fresh-smoke-materials-root
-run_step material_invariance python3 scripts/validate-fresh-smoke-materials.py "$MATERIAL_ROOT" --output "$ARTIFACTS/material-invariance.json" || {
+run_step material_invariance python3 scripts/validate-fresh-smoke-materials.py "$MATERIAL_ROOT" --expected-material-root "$EXPECTED_MATERIAL_ROOT" --output "$ARTIFACTS/material-invariance.json" || {
   MATERIAL_INVARIANCE_STATUS="fail"
   fail_now fail_material_invariance '"material_invariance"' '"artifacts/material-invariance.json"' 1
 }

@@ -8,6 +8,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -32,11 +33,15 @@ def _readline(stream, timeout_sec: float) -> bytes:
 def _read_exact(stream, length: int, timeout_sec: float) -> bytes:
     chunks: list[bytes] = []
     remaining = length
+    deadline = time.monotonic() + timeout_sec
     while remaining > 0:
-        ready, _, _ = select.select([stream], [], [], timeout_sec)
+        timeout_remaining = deadline - time.monotonic()
+        if timeout_remaining <= 0:
+            raise TimeoutError("Timed out waiting for MCP server response body.")
+        ready, _, _ = select.select([stream], [], [], timeout_remaining)
         if not ready:
             raise TimeoutError("Timed out waiting for MCP server response body.")
-        chunk = stream.read(remaining)
+        chunk = os.read(stream.fileno(), remaining)
         if not chunk:
             raise RuntimeError("MCP server closed stdout while reading response body.")
         chunks.append(chunk)

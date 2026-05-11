@@ -838,6 +838,11 @@ paperorchestra export-artifacts --output "$OLDPWD/paperorchestra-output"
 
 By default this uses the mock provider and compatibility runtime so it can run without external model/search credentials. Set `PAPERO_TESTSET_SMOKE_PROVIDER=shell` and related timeout/model environment variables when you want to exercise live Codex/OMX surfaces.
 
+For private material QA without copying under the public checkout, pass both
+`--material-root /path/to/materials` and `--expected-material-root
+/path/to/materials` to `scripts/fresh-full-live-smoke-loop.sh`; the hash
+manifest is still validated, but the public repository stays clean.
+
 After a review is produced, convert review feedback into prioritized, section-targeted patch planning:
 
 ```bash

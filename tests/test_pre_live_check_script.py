@@ -6,6 +6,8 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import tomllib
 import unittest
 from pathlib import Path
@@ -316,6 +318,35 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertTrue(payload["server"]["status_call_reached_server"])
         self.assertFalse(payload["active_session_attachment"]["checked"])
 
+    def test_mcp_smoke_read_exact_times_out_on_partial_body_stall(self) -> None:
+        from paperorchestra.mcp_smoke import _read_exact
+
+        read_fd, write_fd = os.pipe()
+
+        def writer() -> None:
+            try:
+                os.write(write_fd, b"ab")
+                time.sleep(1.0)
+                os.write(write_fd, b"cd")
+            except OSError:
+                pass
+            finally:
+                try:
+                    os.close(write_fd)
+                except OSError:
+                    pass
+
+        thread = threading.Thread(target=writer, daemon=True)
+        thread.start()
+        reader = os.fdopen(read_fd, "rb", buffering=0)
+        started = time.monotonic()
+        try:
+            with self.assertRaises(TimeoutError):
+                _read_exact(reader, 4, 0.2)
+        finally:
+            reader.close()
+        self.assertLess(time.monotonic() - started, 0.8)
+
     def test_register_codex_mcp_script_explains_registration_vs_active_attachment(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -450,6 +481,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertIn('redact < "$raw_attempt_stderr" > "$attempt_stderr"', wrapper_text)
         self.assertIn('run_step release_safety_scan_final run_release_safety_scan', wrapper_text)
         self.assertIn("run_without_papero_env", wrapper_text)
+        self.assertIn('--expected-material-root "$EXPECTED_MATERIAL_ROOT"', wrapper_text)
         self.assertIn("run_step unittest bash -c 'run_without_papero_env", wrapper_text)
         self.assertIn("run_step pre_live_all bash -c 'run_without_papero_env", wrapper_text)
         self.assertIn("env PAPERO_PRE_LIVE_DIFF_CHECK_IGNORE_MATERIAL_ROOT=1 bash scripts/pre-live-check.sh --all", wrapper_text)
@@ -611,6 +643,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         )
 
         self.assertIn("Usage: scripts/fresh-full-live-smoke-loop.sh", result.stdout)
+        self.assertIn("--expected-material-root", result.stdout)
         self.assertEqual(result.stderr, "")
         self.assertNotIn("command not found", result.stdout + result.stderr)
         self.assertNotIn("make_manifest", result.stdout + result.stderr)
