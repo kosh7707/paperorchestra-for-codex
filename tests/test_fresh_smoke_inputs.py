@@ -16,7 +16,10 @@ class FreshSmokeInputDerivationTests(unittest.TestCase):
         files = {
             "00_core_macros.tex": r"""
                 % Generic test-only macro packet.
+                % PaperOrchestra authoring note must not reach generated TeX.
                 \newcommand{\SystemName}{\textsc{PaperFlow}}
+                \newcommand{\PercentLiteral}{100\%}
+                \newcommand{\InlineCommentPreserved}{value} % PaperOrchestra inline note is source-only.
             """,
             "01_methodology_core.tex": r"""
                 \section{Method Core}
@@ -60,7 +63,13 @@ class FreshSmokeInputDerivationTests(unittest.TestCase):
             template = root / "workdir" / "inputs" / "template.tex"
             template_text = template.read_text(encoding="utf-8")
             self.assertIn(r"\newcommand{\SystemName}", template_text)
+            self.assertIn(r"\newcommand{\PercentLiteral}{100\%}", template_text)
+            self.assertIn(r"\newcommand{\InlineCommentPreserved}{value}", template_text)
+            self.assertNotIn("Generic test-only macro packet", template_text)
+            self.assertNotIn("PaperOrchestra authoring note", template_text)
+            self.assertNotIn("PaperOrchestra inline note", template_text)
             self.assertIn("Artifact-Governed Drafting with Promotion-Time Validation", template_text)
+            self.assertNotIn("PaperOrchestra writes this", template_text)
             self.assertNotIn("Supplied Method", template_text)
 
             seed = root / "workdir" / "inputs" / "reference_metadata_seed.bib"

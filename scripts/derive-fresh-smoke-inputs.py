@@ -16,7 +16,38 @@ def read(name: str) -> str:
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
+def strip_latex_comments(text: str) -> str:
+    """Remove unescaped LaTeX comments while preserving command text.
+
+    Fresh-smoke macro packets are injected directly into the generated template.
+    Those comments are useful in source materials, but they become manuscript
+    surface area once copied into `paper.full.tex`.  Strip only unescaped `%`
+    comments for the macro injection path; do not rewrite the registered
+    method/proof/benchmark evidence.
+    """
+
+    stripped_lines: list[str] = []
+    for line in text.splitlines():
+        comment_start = None
+        backslash_run = 0
+        for idx, char in enumerate(line):
+            if char == "\\":
+                backslash_run += 1
+                continue
+            if char == "%" and backslash_run % 2 == 0:
+                comment_start = idx
+                break
+            backslash_run = 0
+        if comment_start is None:
+            candidate = line.rstrip()
+        else:
+            candidate = line[:comment_start].rstrip()
+        if candidate:
+            stripped_lines.append(candidate)
+    return "\n".join(stripped_lines)
+
 macros = read("00_core_macros.tex")
+template_macros = strip_latex_comments(macros)
 method = read("01_methodology_core.tex")
 proof = read("02_security_model_and_full_proof.tex")
 bench = read("03_benchmark_method_and_results_core.tex")
@@ -63,7 +94,6 @@ template = r"""\documentclass[11pt]{article}
 \begin{document}
 \maketitle
 \begin{abstract}
-% PaperOrchestra writes this.
 \end{abstract}
 \section{Introduction}
 \section{Background and Related Work}
@@ -75,7 +105,7 @@ template = r"""\documentclass[11pt]{article}
 \bibliographystyle{plain}
 \bibliography{references}
 \end{document}
-""".replace("% CORE_MACROS_PLACEHOLDER", macros)
+""".replace("% CORE_MACROS_PLACEHOLDER", template_macros)
 
 guidelines = f"""# PaperOrchestra Fresh Smoke Authoring Guidelines
 
