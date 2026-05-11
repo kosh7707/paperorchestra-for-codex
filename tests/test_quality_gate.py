@@ -105,6 +105,33 @@ class QualityGateTests(unittest.TestCase):
         self.assertEqual(report["dimensions"]["reviewer_acceptability"]["status"], "block")
         self.assertFalse(report["dimensions"]["human_finalization"]["blocking"])
 
+    def test_auto_profile_selects_mock_claim_safe_or_ralph_from_eval_context(self) -> None:
+        mock_report = build_quality_gate_report(
+            _quality_eval(mode="draft", provenance_level="mock", tier2="fail", tier2_codes=["unsupported_claim"]),
+            _plan(),
+            profile="auto",
+        )
+        self.assertEqual(mock_report["profile"], "mock")
+        self.assertFalse(mock_report["decision"]["blocked"])
+        self.assertEqual(mock_report["dimensions"]["citation_claim_safety"]["status"], "warn")
+
+        claim_safe_report = build_quality_gate_report(
+            _quality_eval(mode="claim_safe", provenance_level="live", tier3="warn", tier3_codes=["review_score_below_threshold"]),
+            _plan(reproducibility_verdict="PASS"),
+            profile="auto",
+        )
+        self.assertEqual(claim_safe_report["profile"], "claim_safe")
+        self.assertTrue(claim_safe_report["decision"]["blocked"])
+        self.assertIn("reviewer_acceptability", claim_safe_report["decision"]["blocked_dimensions"])
+
+        ralph_report = build_quality_gate_report(
+            _quality_eval(mode="ralph", provenance_level="live"),
+            _plan(reproducibility_verdict="PASS"),
+            profile="auto",
+        )
+        self.assertEqual(ralph_report["profile"], "ralph")
+        self.assertEqual(ralph_report["decision"]["verdict"], "pass")
+
     def test_mock_profile_warns_on_claim_and_review_failures_but_blocks_non_reviewable_structure(self) -> None:
         loose_report = build_quality_gate_report(
             _quality_eval(
@@ -195,6 +222,50 @@ class QualityGateTests(unittest.TestCase):
             with contextlib.redirect_stdout(stdout):
                 code = cli_main(["quality-gate", "--no-fail-on-block"])
             self.assertEqual(code, 0)
+
+    def test_quality_gate_mcp_handler_forwards_strict_options_and_auto_refine_provider(self) -> None:
+        from paperorchestra import mcp_server
+
+        payload = {"decision": {"blocked": False, "verdict": "pass"}}
+        with patch("paperorchestra.mcp_server._provider_from_args", return_value="provider-object") as provider_from_args, patch(
+            "paperorchestra.mcp_server.write_quality_gate", return_value=(Path("quality-gate.report.json"), payload)
+        ) as write_gate:
+            result = mcp_server.tool_quality_gate(
+                {
+                    "cwd": "/tmp/session",
+                    "output_path": "/tmp/session/out/gate.json",
+                    "plan_output_path": "/tmp/session/out/plan.json",
+                    "profile": "claim_safe",
+                    "quality_mode": "claim_safe",
+                    "require_live_verification": True,
+                    "accept_mixed_provenance": True,
+                    "max_iterations": 3,
+                    "auto_refine": True,
+                    "refine_iterations": 2,
+                    "runtime_mode": "strict",
+                    "require_compile_for_accept": True,
+                    "provider": "mock",
+                }
+            )
+
+        self.assertFalse(result["isError"])
+        provider_from_args.assert_called_once()
+        kwargs = write_gate.call_args.kwargs
+        self.assertEqual(write_gate.call_args.args[0], Path("/tmp/session"))
+        self.assertEqual(write_gate.call_args.args[1], Path("/tmp/session/out/gate.json"))
+        self.assertEqual(kwargs["plan_output_path"], Path("/tmp/session/out/plan.json"))
+        self.assertEqual(kwargs["profile"], "claim_safe")
+        self.assertEqual(kwargs["quality_mode"], "claim_safe")
+        self.assertTrue(kwargs["require_live_verification"])
+        self.assertTrue(kwargs["accept_mixed_provenance"])
+        self.assertEqual(kwargs["max_iterations"], 3)
+        self.assertTrue(kwargs["auto_refine"])
+        self.assertEqual(kwargs["provider"], "provider-object")
+        self.assertEqual(kwargs["refine_iterations"], 2)
+        self.assertEqual(kwargs["runtime_mode"], "strict")
+        self.assertTrue(kwargs["require_compile_for_accept"])
+        self.assertEqual(result["content"][0]["type"], "text")
+
 
 
 if __name__ == "__main__":

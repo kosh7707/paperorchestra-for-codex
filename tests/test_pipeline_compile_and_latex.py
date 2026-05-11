@@ -177,6 +177,8 @@ class PipelineCompileAndLatexTests(PipelineTestCase):
             refs.write_text("@article{x,title={X}}\n", encoding="utf-8")
             review = review_path(root, "review.latest.json")
             review.write_text('{"overall_score": 0.8}\n', encoding="utf-8")
+            quality_gate = artifact_path(root, "quality-gate.report.json")
+            quality_gate.write_text('{"schema_version":"quality-gate/1","decision":{"verdict":"pass"}}\n', encoding="utf-8")
             state.artifacts.paper_full_tex = str(paper)
             state.artifacts.compiled_pdf = str(pdf)
             state.artifacts.references_bib = str(refs)
@@ -198,6 +200,9 @@ class PipelineCompileAndLatexTests(PipelineTestCase):
             self.assertTrue((out_dir / "paper.full.pdf").exists())
             self.assertTrue((out_dir / "references.bib").exists())
             self.assertTrue((out_dir / "review.latest.json").exists())
+            self.assertTrue((out_dir / "quality-gate.report.json").exists())
+            copied_labels = {item["label"] for item in payload["copied"]}
+            self.assertIn("quality_gate_report", copied_labels)
             self.assertTrue((out_dir / "session.json").exists())
             self.assertTrue((out_dir / "artifacts" / "paper.full.tex").exists())
 

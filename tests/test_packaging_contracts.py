@@ -4,6 +4,9 @@ from pathlib import Path
 
 from setuptools import find_packages
 
+from paperorchestra import __version__
+from paperorchestra.cli import build_parser
+
 
 class PackagingContractTests(unittest.TestCase):
     def test_package_discovery_includes_domains_and_prompt_assets(self) -> None:
@@ -24,6 +27,16 @@ class PackagingContractTests(unittest.TestCase):
         self.assertEqual(project["authors"], [{"name": "kosh7707"}])
         self.assertIn("Independent Codex/OMX-native reconstruction", project["description"])
         self.assertNotIn("OpenAI Codex", project["authors"][0]["name"])
+
+    def test_runtime_version_matches_pyproject_and_cli_version_surface(self) -> None:
+        pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+        expected_version = pyproject["project"]["version"]
+
+        self.assertEqual(__version__, expected_version)
+        parser = build_parser()
+        with self.assertRaises(SystemExit) as raised:
+            parser.parse_args(["--version"])
+        self.assertEqual(raised.exception.code, 0)
 
 
 
