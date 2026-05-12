@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from paperorchestra.literature import load_prior_work_seed
+from paperorchestra.validator import check_prompt_meta_leakage
 
 
 class FreshSmokeInputDerivationTests(unittest.TestCase):
@@ -68,9 +69,11 @@ class FreshSmokeInputDerivationTests(unittest.TestCase):
             self.assertNotIn("Generic test-only macro packet", template_text)
             self.assertNotIn("PaperOrchestra authoring note", template_text)
             self.assertNotIn("PaperOrchestra inline note", template_text)
-            self.assertIn("Artifact-Governed Drafting with Promotion-Time Validation", template_text)
+            self.assertIn(r"\title{Technical Research Study}", template_text)
+            self.assertNotIn("Artifact-Governed Drafting with Promotion-Time Validation", template_text)
             self.assertNotIn("PaperOrchestra writes this", template_text)
             self.assertNotIn("Supplied Method", template_text)
+            self.assertFalse(check_prompt_meta_leakage(template_text), template_text)
 
             seed = root / "workdir" / "inputs" / "reference_metadata_seed.bib"
             text = seed.read_text(encoding="utf-8")
@@ -81,6 +84,35 @@ class FreshSmokeInputDerivationTests(unittest.TestCase):
             entries = load_prior_work_seed(seed, source="test_seed")
             self.assertGreaterEqual(len(entries), 3)
             self.assertTrue(all(entry.get("title") for entry in entries))
+
+    def test_material_heading_can_supply_non_meta_template_title(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            materials = self._write_citation_free_material_packet(root)
+            method = materials / "01_methodology_core.tex"
+            method.write_text(
+                r"""
+                \title{Latency-Aware Storage Indexing}
+                \section{Method Core}
+                Registered test evidence describes an indexing method and its evaluation boundaries.
+                """,
+                encoding="utf-8",
+            )
+
+            subprocess.run(
+                ["python3", "scripts/derive-fresh-smoke-inputs.py", str(root)],
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+
+            template_text = (root / "workdir" / "inputs" / "template.tex").read_text(encoding="utf-8")
+            self.assertIn(r"\title{Latency-Aware Storage Indexing}", template_text)
+            self.assertNotIn("Artifact-Governed Drafting with Promotion-Time Validation", template_text)
+            self.assertFalse(check_prompt_meta_leakage(template_text), template_text)
+
+            ledger = (root / "workdir" / "inputs" / "provenance-ledger.json").read_text(encoding="utf-8")
+            self.assertIn("01_methodology_core.tex", ledger)
 
 
 if __name__ == "__main__":

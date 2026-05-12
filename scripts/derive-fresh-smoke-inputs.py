@@ -46,6 +46,89 @@ def strip_latex_comments(text: str) -> str:
             stripped_lines.append(candidate)
     return "\n".join(stripped_lines)
 
+
+SAFE_TITLE_FALLBACK = "Technical Research Study"
+TITLE_COMMAND_RE = re.compile(r"\\title\*?\{([^{}]+)\}")
+HEADING_RE = re.compile(r"\\(?:sub)*section\*?\{([^{}]+)\}|^\s*#{1,3}\s+(.+?)\s*$", re.MULTILINE)
+TITLE_META_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"\bartifact[-\s]+governed\s+drafting\b",
+        r"\bpromotion[-\s]+time\s+validation\b",
+        r"\bpaperorchestra\b",
+        r"\bfresh\s+smoke\b",
+        r"\bauthor\s+(?:intent|notes|positioning)\b",
+        r"\bwriting\s+contract\b",
+        r"\bclaim\s+boundaries\b",
+        r"\bmethod(?:ology)?\s+core\b",
+        r"\bevaluation\s+core\b",
+        r"\bsecurity\s+(?:model|proof)\s+core\b",
+        r"\bbenchmark\s+(?:headline|method|results?)\b",
+        r"\bproposed\s+method\b",
+        r"\bvalidation\s+argument\b",
+        r"\bregistered\s+(?:evidence|material|input)\b",
+        r"\bsource\s+(?:material|instruction|packet)\b",
+    ]
+]
+
+
+def latex_heading_to_text(raw: str) -> str:
+    """Turn a simple LaTeX/Markdown heading into plain title text."""
+
+    text = re.sub(r"\\[A-Za-z]+\*?(?:\[[^\]]*\])?\{([^{}]*)\}", r"\1", raw)
+    text = re.sub(r"\\[A-Za-z]+\*?", " ", text)
+    text = re.sub(r"[$`*_{}]", " ", text)
+    text = text.replace("~", " ").replace("\\", " ")
+    text = re.sub(r"\s+", " ", text).strip(" .:-")
+    return text
+
+
+def latex_escape_title(text: str) -> str:
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+    }
+    return "".join(replacements.get(char, char) for char in text)
+
+
+def safe_material_title_candidate(raw: str) -> str | None:
+    text = latex_heading_to_text(raw)
+    if not text or len(text) < 8 or len(text) > 120:
+        return None
+    if any(pattern.search(text) for pattern in TITLE_META_PATTERNS):
+        return None
+    if len(re.findall(r"[A-Za-z0-9]", text)) < 6:
+        return None
+    return latex_escape_title(text)
+
+
+def derive_template_title(*texts: str) -> str:
+    """Derive a neutral manuscript title from registered source material.
+
+    The fallback must remain non-process-specific: this template is a public
+    fresh-smoke harness and must never inject a PaperOrchestra/OMX workflow
+    title into a reviewable draft.
+    """
+
+    for text in texts:
+        for match in TITLE_COMMAND_RE.finditer(text):
+            candidate = safe_material_title_candidate(match.group(1))
+            if candidate:
+                return candidate
+    for text in texts:
+        for match in HEADING_RE.finditer(text):
+            raw = next((group for group in match.groups() if group), "")
+            candidate = safe_material_title_candidate(raw)
+            if candidate:
+                return candidate
+    return SAFE_TITLE_FALLBACK
+
 macros = read("00_core_macros.tex")
 template_macros = strip_latex_comments(macros)
 method = read("01_methodology_core.tex")
@@ -54,6 +137,7 @@ bench = read("03_benchmark_method_and_results_core.tex")
 bounds = read("04_claim_boundaries.tex")
 notes = read("05_author_notes_for_positioning.tex")
 policy = read("material-boundary.md")
+template_title = derive_template_title(method, proof, bench, bounds, notes)
 
 idea = rf"""% Fresh PaperOrchestra smoke input: deterministic author brief.
 % Derived only from registered inputs-materials/*. No prior smoke output is included.
@@ -88,7 +172,7 @@ template = r"""\documentclass[11pt]{article}
 % CORE_MACROS_PLACEHOLDER
 \newtheorem{theorem}{Theorem}
 \newtheorem{lemma}{Lemma}
-\title{Artifact-Governed Drafting with Promotion-Time Validation}
+\title{TEMPLATE_TITLE_PLACEHOLDER}
 \author{Anonymous Author}
 \date{}
 \begin{document}
@@ -105,7 +189,7 @@ template = r"""\documentclass[11pt]{article}
 \bibliographystyle{plain}
 \bibliography{references}
 \end{document}
-""".replace("% CORE_MACROS_PLACEHOLDER", template_macros)
+""".replace("% CORE_MACROS_PLACEHOLDER", template_macros).replace("TEMPLATE_TITLE_PLACEHOLDER", template_title)
 
 guidelines = f"""# PaperOrchestra Fresh Smoke Authoring Guidelines
 
@@ -199,7 +283,7 @@ for name, content in outputs.items():
     source_materials = ["material-boundary.md"] if name == "guidelines.md" else []
     if name == "idea.tex": source_materials = ["01_methodology_core.tex","02_security_model_and_full_proof.tex","04_claim_boundaries.tex","05_author_notes_for_positioning.tex"]
     elif name == "experimental_log.tex": source_materials = ["03_benchmark_method_and_results_core.tex"]
-    elif name == "template.tex": source_materials = []
+    elif name == "template.tex": source_materials = ["00_core_macros.tex","01_methodology_core.tex","02_security_model_and_full_proof.tex","03_benchmark_method_and_results_core.tex","04_claim_boundaries.tex","05_author_notes_for_positioning.tex"]
     elif name == "reference_metadata_seed.bib": source_materials = ["01_methodology_core.tex","02_security_model_and_full_proof.tex","03_benchmark_method_and_results_core.tex"]
     ledger.append({"output": f"workdir/inputs/{name}", "generator": "scripts/derive-fresh-smoke-inputs.py", "source_materials": source_materials, "sha256": sha(path), "byte_size": path.stat().st_size, "derivation_policy": "deterministic registered-input extraction/paraphrase; no prior smoke artifacts"})
 ledger_path = inputs / "provenance-ledger.json"
