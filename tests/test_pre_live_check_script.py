@@ -114,6 +114,8 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertLess(text.index("qa_loop_step_iter_${iter}"), text.index("refresh_citation_integrity_artifacts \"post_iter_${iter}\""))
         self.assertLess(text.index("review_citations_web_final_session"), text.index("refresh_citation_integrity_artifacts final"))
         self.assertLess(text.index("refresh_citation_integrity_artifacts final"), text.index("quality_eval_final"))
+        self.assertIn("write-intro-related", text)
+        self.assertIn("--allow-recoverable-contract-issues", text)
 
     def test_demo_mock_ignores_stale_global_paperorchestra_on_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

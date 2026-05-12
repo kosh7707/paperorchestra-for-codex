@@ -252,6 +252,14 @@ def build_parser() -> argparse.ArgumentParser:
     intro_parser = sub.add_parser("write-intro-related", help="Draft Introduction and Related Work")
     _runtime_mode_args(intro_parser, strict_flag=True)
     intro_parser.add_argument("--claim-safe", action="store_true", help="Fail closed on claim-safe citation/source prompt contract violations.")
+    intro_parser.add_argument(
+        "--allow-recoverable-contract-issues",
+        action="store_true",
+        help=(
+            "Persist a draft when only recoverable citation-coverage blockers remain, "
+            "so supervised QA/operator loops can repair it instead of aborting early."
+        ),
+    )
     _common_provider_args(intro_parser)
 
     sections_parser = sub.add_parser("write-sections", help="Draft the full paper")
@@ -1004,7 +1012,15 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "write-intro-related":
             provider = _provider_from_args(args)
             with _strict_omx_env(args.strict_omx_native):
-                print(write_intro_related(cwd, provider, runtime_mode=args.runtime_mode, claim_safe=args.claim_safe))
+                print(
+                    write_intro_related(
+                        cwd,
+                        provider,
+                        runtime_mode=args.runtime_mode,
+                        claim_safe=args.claim_safe,
+                        allow_recoverable_contract_issues=args.allow_recoverable_contract_issues,
+                    )
+                )
             return 0
 
         if args.command == "write-sections":

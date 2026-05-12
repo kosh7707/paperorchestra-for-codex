@@ -949,7 +949,7 @@ run_step build_bib "${CLI[@]}" build-bib || fail_now fail_execution_error '"buil
 run_step outline "${CLI[@]}" outline "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"outline"' '"logs/outline.stderr.log"' 1
 run_step generate_plots "${CLI[@]}" generate-plots "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"generate_plots"' '"logs/generate_plots.stderr.log"' 1
 run_step plan_narrative "${CLI[@]}" plan-narrative "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"plan_narrative"' '"logs/plan_narrative.stderr.log"' 1
-run_step write_intro_related "${CLI[@]}" write-intro-related "${PROVIDER[@]}" "${RUNTIME[@]}" --claim-safe || fail_now fail_execution_error '"write_intro_related"' '"logs/write_intro_related.stderr.log"' 1
+run_step write_intro_related "${CLI[@]}" write-intro-related "${PROVIDER[@]}" "${RUNTIME[@]}" --claim-safe --allow-recoverable-contract-issues || fail_now fail_execution_error '"write_intro_related"' '"logs/write_intro_related.stderr.log"' 1
 run_step write_sections "${CLI[@]}" write-sections "${PROVIDER[@]}" "${RUNTIME[@]}" --claim-safe || fail_now fail_execution_error '"write_sections"' '"logs/write_sections.stderr.log"' 1
 run_step compile_initial "${CLI[@]}" compile || { scan_meta_leakage || true; fail_now fail_execution_error '"compile_initial"' '"logs/compile_initial.stderr.log"' 1; }
 scan_meta_leakage || fail_now fail_meta_leakage '"meta_leakage"' '"artifacts/meta-leakage-scan.json"' 1

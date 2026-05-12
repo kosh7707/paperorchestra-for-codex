@@ -2381,6 +2381,70 @@ class PipelineTests(unittest.TestCase):
                 lane_manifest.get("notes"),
             )
 
+    def test_intro_related_can_persist_recoverable_citation_shortfall_for_supervised_loop(self) -> None:
+        class PersistentCitationShortfallProvider(MockProvider):
+            def __init__(self, keys: list[str]):
+                self.keys = keys
+
+            def complete(self, request: CompletionRequest) -> str:
+                return (
+                    "```latex\n"
+                    "\\section{Introduction}\n"
+                    f"Grounded framing \\\\cite{{{self.keys[0]}}}.\n"
+                    "\\section{Related Work}\n"
+                    f"Prior work comparison \\\\cite{{{self.keys[0]}}}.\n"
+                    "```"
+                )
+
+        def prepare(root: Path) -> list[str]:
+            self._init_session_with_minimal_inputs(root)
+            generate_outline(root, MockProvider())
+            discover_papers(root, MockProvider(), mode="model")
+            verify_papers(root, mode="mock")
+            build_bib(root)
+            keys = [f"Ref{i}" for i in range(1, 21)]
+            state = load_session(root)
+            citation_map_path = Path(state.artifacts.citation_map_json or artifact_path(root, "citation_map.json"))
+            citation_map_path.write_text(
+                json.dumps({key: {"title": f"Verified reference {key}", "verified": True} for key in keys}),
+                encoding="utf-8",
+            )
+            state.artifacts.citation_map_json = str(citation_map_path)
+            save_session(root, state)
+            plan_narrative_and_claims(root, MockProvider())
+            return keys
+
+        with tempfile.TemporaryDirectory() as strict_tmp:
+            strict_root = Path(strict_tmp)
+            keys = prepare(strict_root)
+            with self.assertRaisesRegex(ContractError, "Insufficient citation coverage"):
+                write_intro_related(strict_root, PersistentCitationShortfallProvider(keys))
+
+        with tempfile.TemporaryDirectory() as tolerant_tmp:
+            tolerant_root = Path(tolerant_tmp)
+            keys = prepare(tolerant_root)
+            path = write_intro_related(
+                tolerant_root,
+                PersistentCitationShortfallProvider(keys),
+                allow_recoverable_contract_issues=True,
+            )
+            state = load_session(tolerant_root)
+            validation = json.loads(Path(state.artifacts.latest_validation_json).read_text(encoding="utf-8"))
+            lane_manifest = json.loads(
+                (artifact_path(tolerant_root, "placeholder").parent / "lane-manifest.intro_related.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+            self.assertTrue(Path(path).exists())
+            self.assertEqual(state.artifacts.intro_related_tex, str(path))
+            self.assertFalse(validation["ok"])
+            self.assertIn("citation_coverage_insufficient", [issue["code"] for issue in validation["issues"]])
+            self.assertTrue(
+                any("supervised QA/operator loop" in note for note in lane_manifest.get("notes") or []),
+                lane_manifest.get("notes"),
+            )
+
     def test_intro_related_retries_after_numeric_grounding_failure(self) -> None:
         class NumericRepairProvider(MockProvider):
             def __init__(self, keys: list[str]):

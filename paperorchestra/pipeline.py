@@ -2835,6 +2835,7 @@ def write_intro_related(
     *,
     runtime_mode: str = "compatibility",
     claim_safe: bool = False,
+    allow_recoverable_contract_issues: bool = False,
 ) -> Path:
     state = load_session(cwd)
     if not state.artifacts.outline_json or not state.artifacts.citation_map_json:
@@ -3067,12 +3068,27 @@ Repair Instructions:
     )
     state.artifacts.latest_validation_json = str(validation_path)
     blocking_issues = _blocking_issues(validation_issues)
+    tolerated_recoverable_issues = (
+        allow_recoverable_contract_issues
+        and bool(blocking_issues)
+        and {issue.code for issue in blocking_issues} <= {"citation_coverage_insufficient"}
+    )
     if blocking_issues:
-        raise ContractError(
-            "Introduction/Related Work output failed contract validation:\n- "
-            + "\n- ".join(_issue_messages(blocking_issues))
+        state.notes.append(
+            "Introduction/Related Work recoverable validation blockers: "
+            + " | ".join(_issue_messages(blocking_issues))
         )
-    if validation_issues:
+        if not tolerated_recoverable_issues:
+            save_session(cwd, state)
+            raise ContractError(
+                "Introduction/Related Work output failed contract validation:\n- "
+                + "\n- ".join(_issue_messages(blocking_issues))
+            )
+        lane_notes.append(
+            "Persisted a recoverable Introduction/Related Work candidate despite citation-coverage shortfall "
+            "so the supervised QA/operator loop can repair it instead of aborting the live smoke early."
+        )
+    elif validation_issues:
         state.notes.append(
             "Introduction/Related Work validation warnings: " + " | ".join(_issue_messages(validation_issues))
         )
