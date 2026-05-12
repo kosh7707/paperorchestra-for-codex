@@ -671,6 +671,7 @@ patterns=[
  r"((supplied|provided) (material|source|file|analysis|analyses|log|evidence|theorem statements?)|available (material|source|file|log))",
  r"((supplied|provided) )?(method|construction|proof|benchmark|empirical|review|source|material) packet",
  r"(following|specified in|as specified in) the packet", r"manuscript plan",
+ r"artifact[-\s]+governed\s+drafting", r"promotion[-\s]+time\s+validation",
  r"reviewable (material|source|file|analysis|log|figure)", r"no reviewable figure", r"no figures because",
 ]
 findings=[]

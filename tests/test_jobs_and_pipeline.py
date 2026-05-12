@@ -1255,6 +1255,34 @@ class PipelineTests(unittest.TestCase):
                 else:
                     os.environ["PAPERO_STRICT_CONTENT_GATES"] = old_strict
 
+    def test_quality_eval_rejects_process_residue_title_without_broad_word_ban(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n"
+                "\\title{Artifact-Governed Drafting with Promotion-Time Validation}\n"
+                "\\begin{document}\n"
+                "\\maketitle\n"
+                "\\section{Introduction}\n"
+                "This paper studies a concrete technical system.\n"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+
+            _, quality_eval = write_quality_eval(root, quality_mode="claim_safe")
+
+            self.assertIn("prompt_meta_leakage", quality_eval["non_reviewable"]["failing_codes"])
+            markers = quality_eval["non_reviewable"]["checks"]["prompt_meta_leakage"]["markers"]
+            self.assertTrue(any("artifact_governed_drafting" in marker for marker in markers))
+            self.assertTrue(any("promotion_time_validation" in marker for marker in markers))
+
+        benign = "Artifact validation is a normal term in reproducibility papers."
+        self.assertFalse(_leakage_markers_in_text(benign, source="unit"))
+
     def test_source_boundary_meta_leakage_plan_is_failed_not_human_needed(self) -> None:
         old_strict = os.environ.get("PAPERO_STRICT_CONTENT_GATES")
         os.environ["PAPERO_STRICT_CONTENT_GATES"] = "1"

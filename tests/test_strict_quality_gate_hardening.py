@@ -452,6 +452,30 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
         issues = check_prompt_meta_leakage(latex)
         self.assertTrue(any(issue.code == "prompt_meta_leakage" for issue in issues))
 
+    def test_validator_rejects_process_residue_title_without_broad_word_ban(self) -> None:
+        latex = (
+            "\\documentclass{article}\n"
+            "\\title{Artifact-Governed Drafting with Promotion-Time Validation}\n"
+            "\\begin{document}\n"
+            "\\maketitle\n"
+            "\\section{Introduction}\n"
+            "This paper studies a concrete technical system.\n"
+            "\\end{document}\n"
+        )
+        issues = check_prompt_meta_leakage(latex)
+        self.assertTrue(any(issue.code == "prompt_meta_leakage" for issue in issues))
+
+        benign = (
+            "\\documentclass{article}\n"
+            "\\title{Artifact Validation for Distributed Storage Systems}\n"
+            "\\begin{document}\n"
+            "\\maketitle\n"
+            "\\section{Introduction}\n"
+            "The validation artifact records reproducible measurements.\n"
+            "\\end{document}\n"
+        )
+        self.assertFalse(check_prompt_meta_leakage(benign), benign)
+
     def test_sanitizer_removes_operator_process_prose(self) -> None:
         samples = [
             "Use the supplied technical material and note that no reviewable figure files were available.",

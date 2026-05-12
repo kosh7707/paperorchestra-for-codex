@@ -168,6 +168,8 @@ LEAKAGE_PATTERNS_ALWAYS = (
     ("planning_artifact_name", re.compile(r"\bnarrative_plan(?:\\.json)?\b|\bclaim_map(?:\\.json)?\b|\bcitation_placement_plan(?:\\.json)?\b", re.IGNORECASE)),
     ("writer_brief_artifact_name", re.compile(r"\bauthor[_\s-]*facing[_\s-]*writer[_\s-]*brief\b|\bwriter[_\s-]*brief(?:\\.json)?\b", re.IGNORECASE)),
     ("visible_claim_id", re.compile(r"\bclaim_id\b|\bclaim-\d{3,}\b", re.IGNORECASE)),
+    ("artifact_governed_drafting", re.compile(r"\bartifact[-\s]+governed\s+drafting\b", re.IGNORECASE)),
+    ("promotion_time_validation", re.compile(r"\bpromotion[-\s]+time\s+validation\b", re.IGNORECASE)),
     ("process_manuscript_leakage", re.compile(r"\brevised\s+manuscript\b|\bsupplied\s+(?:library|material|technical\s+evidence)\b|\b(?:supplied|provided)\s+packet\b|\b(?:supplied|provided)\s+(?:proof|benchmark|empirical|measurement|review)\s+(?:source|logs?)\b|\bbenchmark\s+packet\b|\bempirical\s+packet\b|\bfigures\s+directory\s+is\s+empty\s+in\s+this\s+packet\b|\bquality\s+gate\b|\breview\s+packet\b", re.IGNORECASE)),
 ) + CONTROL_PROSE_PATTERNS
 LEAKAGE_PATTERNS_VISUAL = (

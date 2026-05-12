@@ -48,6 +48,8 @@ PROMPT_META_LEAKAGE_PATTERNS = [
         r"\bnarrative_plan(?:\.json)?\b|\bclaim_map(?:\.json)?\b|\bcitation_placement_plan(?:\.json)?\b",
         r"\bauthor[_\s-]*facing[_\s-]*writer[_\s-]*brief\b|\bwriter[_\s-]*brief(?:\.json)?\b",
         r"\bclaim_id\b|\bclaim-\d{3,}\b",
+        r"\bartifact[-\s]+governed\s+drafting\b",
+        r"\bpromotion[-\s]+time\s+validation\b",
         r"\b(?:supplied|provided)\s+packet\b|\b(?:supplied|provided)\s+(?:proof|benchmark|empirical|review|source|material)\s+packet\b",
         r"\brevised\s+manuscript\b|\bsupplied\s+(?:library|material|technical\s+evidence)\b|\b(?:supplied|provided)\s+(?:proof|benchmark|empirical|measurement|review)\s+(?:source|logs?)\b|\bbenchmark\s+packet\b|\bempirical\s+packet\b|\bfigures\s+directory\s+is\s+empty\s+in\s+this\s+packet\b|\bquality\s+gate\b|\breview\s+packet\b",
         # Catch leaked source-packet headings such as

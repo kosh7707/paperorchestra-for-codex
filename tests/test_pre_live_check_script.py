@@ -924,6 +924,50 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             ]:
                 self.assertIn(phrase, scan)
 
+    def test_fresh_smoke_meta_leakage_scanner_flags_process_residue_title(self) -> None:
+        scanner_python = self._extract_scan_meta_leakage_python()
+        with tempfile.TemporaryDirectory() as tmp:
+            artifact_root = Path(tmp)
+            (artifact_root / "paper.full.tex").write_text(
+                "\\documentclass{article}\n"
+                "\\title{Artifact-Governed Drafting with Promotion-Time Validation}\n"
+                "\\begin{document}\\maketitle\\section{Introduction}Clean technical text.\\end{document}\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                ["python3", "-", str(artifact_root)],
+                input=scanner_python,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            payload = json.loads((artifact_root / "meta-leakage-scan.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["status"], "fail")
+            self.assertGreaterEqual(payload["finding_count"], 2)
+            patterns = {finding["pattern"] for finding in payload["findings"]}
+            self.assertIn(r"artifact[-\s]+governed\s+drafting", patterns)
+            self.assertIn(r"promotion[-\s]+time\s+validation", patterns)
+
+    def test_fresh_smoke_meta_leakage_scanner_does_not_ban_artifact_or_validation_terms(self) -> None:
+        scanner_python = self._extract_scan_meta_leakage_python()
+        with tempfile.TemporaryDirectory() as tmp:
+            artifact_root = Path(tmp)
+            (artifact_root / "paper.full.tex").write_text(
+                "Artifact validation is a normal phrase in reproducibility and systems papers.",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                ["python3", "-", str(artifact_root)],
+                input=scanner_python,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            payload = json.loads((artifact_root / "meta-leakage-scan.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["finding_count"], 0)
+
     def test_fresh_smoke_meta_leakage_scanner_preserves_benign_available_analysis(self) -> None:
         scanner_python = self._extract_scan_meta_leakage_python()
         with tempfile.TemporaryDirectory() as tmp:
