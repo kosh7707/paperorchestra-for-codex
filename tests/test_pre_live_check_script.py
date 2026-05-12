@@ -113,6 +113,24 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertLess(text.index("refresh_citation_integrity_artifacts initial"), text.index("quality_eval_iter_${iter}"))
         self.assertLess(text.index("qa_loop_step_iter_${iter}"), text.index("refresh_citation_integrity_artifacts \"post_iter_${iter}\""))
         self.assertLess(text.index("review_citations_web_final_session"), text.index("refresh_citation_integrity_artifacts final"))
+
+    def test_fresh_full_live_smoke_checks_rendered_references_before_web_citation_review(self) -> None:
+        text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+        subprocess.run(["bash", "-n", "scripts/fresh-full-live-smoke-loop.sh"], check=True)
+
+        self.assertIn("require_report_status_pass() {", text)
+        self.assertIn("audit_rendered_references_pre_citation", text)
+        self.assertIn("rendered_reference_audit.pre_citation.json", text)
+        self.assertIn('QUALITY_GATE_STATUS="fail_rendered_references"', text)
+        self.assertIn('MANUSCRIPT_READINESS="blocked_rendered_references"', text)
+        self.assertLess(
+            text.index("run_step audit_rendered_references_pre_citation"),
+            text.index("run_retryable_step review_citations_web_initial"),
+        )
+        self.assertLess(
+            text.index("rendered_reference_pre_citation_gate"),
+            text.index("run_retryable_step review_citations_web_initial"),
+        )
         self.assertLess(text.index("refresh_citation_integrity_artifacts final"), text.index("quality_eval_final"))
         self.assertIn("write-intro-related", text)
         self.assertIn("--allow-recoverable-contract-issues", text)

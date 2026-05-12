@@ -326,6 +326,39 @@ retryable_step_failure_detected() {
   retryable_provider_trace_for_command "$label"
 }
 
+require_report_status_pass() {
+  local report_path="$1"
+  python3 - "$report_path" <<'PY_REQUIRE_REPORT_PASS'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+except Exception as exc:
+    print(f"Could not parse report {path}: {exc}", file=sys.stderr)
+    raise SystemExit(2)
+report = payload.get("report") if isinstance(payload, dict) and isinstance(payload.get("report"), dict) else payload
+status = str(report.get("status") or report.get("verdict") or "").strip().lower() if isinstance(report, dict) else ""
+if status == "pass":
+    raise SystemExit(0)
+print(
+    json.dumps(
+        {
+            "path": str(path),
+            "status": status or "missing",
+            "failing_codes": report.get("failing_codes", []) if isinstance(report, dict) else [],
+        },
+        indent=2,
+        ensure_ascii=False,
+    ),
+    file=sys.stderr,
+)
+raise SystemExit(1)
+PY_REQUIRE_REPORT_PASS
+}
+
 smoke_retry_sleep() {
   local base="${1:-0}"; local spread="${2:-0}"
   python3 - "$base" "$spread" <<'PY_SLEEP'
@@ -1140,6 +1173,12 @@ run_retryable_step write_intro_related "${CLI[@]}" write-intro-related "${PROVID
 run_retryable_step write_sections "${CLI[@]}" write-sections "${PROVIDER[@]}" "${RUNTIME[@]}" --claim-safe || fail_now fail_execution_error '"write_sections"' '"logs/write_sections.step-retry.jsonl"' 1
 run_step compile_initial "${CLI[@]}" compile || { scan_meta_leakage || true; fail_now fail_execution_error '"compile_initial"' '"logs/compile_initial.stderr.log"' 1; }
 scan_meta_leakage || fail_now fail_meta_leakage '"meta_leakage"' '"artifacts/meta-leakage-scan.json"' 1
+run_step audit_rendered_references_pre_citation "${CLI[@]}" audit-rendered-references --quality-mode claim_safe --output "$ARTIFACTS/rendered_reference_audit.pre_citation.json" || fail_now fail_execution_error '"audit_rendered_references_pre_citation"' '"logs/audit_rendered_references_pre_citation.stderr.log"' 1
+if ! require_report_status_pass "$ARTIFACTS/rendered_reference_audit.pre_citation.json" > "$LOGS/audit_rendered_references_pre_citation.status.stdout.log" 2> "$LOGS/audit_rendered_references_pre_citation.status.stderr.log"; then
+  QUALITY_GATE_STATUS="fail_rendered_references"
+  MANUSCRIPT_READINESS="blocked_rendered_references"
+  fail_now fail_execution_error '"rendered_reference_pre_citation_gate"' '"artifacts/rendered_reference_audit.pre_citation.json"' 1
+fi
 run_retryable_step review "${CLI[@]}" review "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"review"' '"logs/review.step-retry.jsonl"' 1
 run_step review_sections_initial "${CLI[@]}" review-sections --output "$ARTIFACTS/section_review.initial.json" || fail_now fail_execution_error '"review_sections_initial"' '"logs/review_sections_initial.stderr.log"' 1
 run_step review_figure_placement_initial "${CLI[@]}" review-figure-placement --output "$ARTIFACTS/figure_placement_review.initial.json" || fail_now fail_execution_error '"review_figure_placement_initial"' '"logs/review_figure_placement_initial.stderr.log"' 1
