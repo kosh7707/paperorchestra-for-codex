@@ -265,6 +265,68 @@ PY_SLEEP
   return "$rc"
 }
 
+write_operator_feedback_author_failure() {
+  local cycle="$1"; local rc="$2"; local stderr_log="$3"; local stdout_log="$4"; local exitcode_file="$5"; local response="$6"; local feedback="$7"
+  local failure="$OPFB/operator-feedback-author.cycle-${cycle}.failure.json"
+  local retryable="false"
+  if retryable_transport_file "$stderr_log"; then retryable="true"; fi
+  python3 - "$failure" "$cycle" "$rc" "$stderr_log" "$stdout_log" "$exitcode_file" "$response" "$feedback" "$retryable" "$EVIDENCE_ROOT" <<'PY_AUTHOR_FAIL'
+import json, sys
+from pathlib import Path
+
+(
+    failure_path,
+    cycle,
+    rc,
+    stderr_log,
+    stdout_log,
+    exitcode_file,
+    response,
+    feedback,
+    retryable,
+    evidence_root,
+) = sys.argv[1:11]
+root = Path(evidence_root).resolve()
+
+def as_evidence_path(value: str) -> str | None:
+    if not value:
+        return None
+    path = Path(value)
+    try:
+        return str(path.resolve().relative_to(root))
+    except Exception:
+        return str(path)
+
+is_retryable = retryable == "true"
+payload = {
+    "schema_version": "operator-feedback-author-failure/1",
+    "cycle": int(cycle),
+    "exit_code": int(rc),
+    "failure_category": (
+        "operator_feedback_author_retryable_transport_exhausted"
+        if is_retryable
+        else "operator_feedback_author_failed"
+    ),
+    "retryable_transport_detected": is_retryable,
+    "meaning": (
+        "Operator feedback authoring did not produce a feedback JSON; "
+        "this is an operator/tooling availability failure, not proof that "
+        "the manuscript incorporated or rejected feedback."
+    ),
+    "paths": {
+        "stderr_log": as_evidence_path(stderr_log),
+        "stdout_log": as_evidence_path(stdout_log),
+        "exitcode_file": as_evidence_path(exitcode_file),
+        "retry_ledger": as_evidence_path(exitcode_file + ".retry.jsonl"),
+        "response": as_evidence_path(response),
+        "expected_feedback_json": as_evidence_path(feedback),
+    },
+}
+Path(failure_path).write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+PY_AUTHOR_FAIL
+  write_timeline "- $(date -u +%Y-%m-%dT%H:%M:%SZ) operator feedback author failed cycle=$cycle rc=$rc retryable_transport=$retryable"
+}
+
 make_manifest() {
   python3 - "$EVIDENCE_ROOT" "$REPO_ROOT" <<'PY'
 import json, re, sys
@@ -859,7 +921,10 @@ If the packet contains an unpromoted qa_loop_execution/operator_feedback_executi
 PROMPT
   run_codex_last_message "operator_feedback_author_cycle_${cycle}" "$prompt" "$response" "$OPFB/operator-feedback-author.cycle-${cycle}.jsonl" "$OPFB/operator-feedback-author.cycle-${cycle}.stderr.log" "$OPFB/operator-feedback-author.cycle-${cycle}.exitcode" "gpt-5.5" "high"
   local rc=$?
-  [[ "$rc" == "0" ]] || return "$rc"
+  if [[ "$rc" != "0" ]]; then
+    write_operator_feedback_author_failure "$cycle" "$rc" "$OPFB/operator-feedback-author.cycle-${cycle}.stderr.log" "$OPFB/operator-feedback-author.cycle-${cycle}.jsonl" "$OPFB/operator-feedback-author.cycle-${cycle}.exitcode" "$response" "$feedback" || true
+    return "$rc"
+  fi
   python3 - "$packet" "$response" "$feedback" <<'PY'
 import json, re, sys
 from pathlib import Path
@@ -991,7 +1056,15 @@ for iter in $(seq 1 "$MAX_ITER"); do
         break
       fi
       OPERATOR_FEEDBACK_CYCLES=$((OPERATOR_FEEDBACK_CYCLES + 1))
-      write_operator_feedback "$OPERATOR_FEEDBACK_CYCLES" || fail_now fail_loop_feedback_not_reflected '"operator_feedback"' "\"operator-feedback/operator-feedback.cycle-${OPERATOR_FEEDBACK_CYCLES}.json\"" 1
+      if ! write_operator_feedback "$OPERATOR_FEEDBACK_CYCLES"; then
+        operator_failure_predicate='"operator_feedback_author"'
+        operator_failure_artifact="operator-feedback/operator-feedback-author.cycle-${OPERATOR_FEEDBACK_CYCLES}.failure.json"
+        if [[ ! -f "$OPFB/operator-feedback-author.cycle-${OPERATOR_FEEDBACK_CYCLES}.failure.json" ]]; then
+          operator_failure_predicate='"operator_feedback"'
+          operator_failure_artifact="operator-feedback/operator-feedback.cycle-${OPERATOR_FEEDBACK_CYCLES}.json"
+        fi
+        fail_now fail_loop_feedback_not_reflected "$operator_failure_predicate" "\"${operator_failure_artifact}\"" 1
+      fi
       copy_session_artifacts
       FINAL="continue"; STEP_RC=10; QA_LOOP_TERMINAL_VERDICT='"continue"'; QA_LOOP_TERMINAL_EXIT_CODE=10
       ;;

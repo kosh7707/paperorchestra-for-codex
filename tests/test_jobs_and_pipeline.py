@@ -734,16 +734,18 @@ class MockProviderTests(unittest.TestCase):
             "stream disconnected",
             "ETIMEDOUT",
             "upstream unavailable",
+            "ERROR: Selected model is at capacity. Please try a different model.",
+            "The requested model gpt-5.5 is at capacity right now.",
         ]
         negatives = [
             "model rejected request",
             "LaTeX compile failed",
-            "connection reset appears only in a manuscript quote but not stderr policy context",
+            "Please try a different model.",
         ]
         for text in positives:
             self.assertTrue(is_retryable_transport_text(text), text)
-        self.assertFalse(is_retryable_transport_text(negatives[0]))
-        self.assertFalse(is_retryable_transport_text(negatives[1]))
+        for text in negatives:
+            self.assertFalse(is_retryable_transport_text(text), text)
 
     def test_web_citation_provider_requires_global_codex_search_exec_shape(self) -> None:
         good = get_citation_support_provider(

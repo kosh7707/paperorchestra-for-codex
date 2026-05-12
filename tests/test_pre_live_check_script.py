@@ -732,6 +732,106 @@ class PreLiveCheckScriptTests(unittest.TestCase):
 
         self.assertIn("survived:20", result.stdout)
 
+    def test_fresh_smoke_codex_last_message_retries_model_capacity_once(self) -> None:
+        wrapper = Path("scripts/fresh-full-live-smoke-loop.sh")
+        text = wrapper.read_text(encoding="utf-8")
+        prefix_start = text.index("codex_cli_prefix_words() {")
+        prefix_end = text.index("\n}\n\nrun_release_safety_scan", prefix_start) + 3
+        retry_start = text.index("retryable_transport_file() {")
+        retry_end = text.index("\n}\n\nwrite_operator_feedback_author_failure", retry_start) + 3
+        function_text = text[prefix_start:prefix_end] + "\n\n" + text[retry_start:retry_end]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake = root / "fake-codex"
+            counter = root / "attempt-count.txt"
+            fake.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "count=0\n"
+                f"counter={str(counter)!r}\n"
+                "[[ -f \"$counter\" ]] && count=$(cat \"$counter\")\n"
+                "count=$((count + 1))\n"
+                "printf '%s\\n' \"$count\" > \"$counter\"\n"
+                "out=''\n"
+                "want_out=0\n"
+                "for arg in \"$@\"; do\n"
+                "  if [[ \"$want_out\" == 1 ]]; then out=\"$arg\"; want_out=0; continue; fi\n"
+                "  [[ \"$arg\" == '--output-last-message' ]] && want_out=1\n"
+                "done\n"
+                "if [[ \"$count\" == 1 ]]; then\n"
+                "  echo 'ERROR: Selected model is at capacity. Please try a different model.' >&2\n"
+                "  exit 1\n"
+                "fi\n"
+                "printf 'final response\\n' > \"$out\"\n"
+                "echo 'ok stdout'\n",
+                encoding="utf-8",
+            )
+            fake.chmod(0o755)
+            prompt = root / "prompt.md"
+            prompt.write_text("hello\n", encoding="utf-8")
+            harness = root / "harness.sh"
+            harness.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        f"PYTHONPATH={str(Path.cwd())!r}",
+                        "export PYTHONPATH",
+                        f"REPO_ROOT={str(Path.cwd())!r}",
+                        f"SMOKE_CODEX_HOME={str(root / 'codex-home')!r}",
+                        f"PAPERO_CODEX_CLI_PREFIX={str(fake)!r}",
+                        "PAPERO_CODEX_RETRY_ATTEMPTS=1",
+                        "PAPERO_CODEX_RETRY_BACKOFF_SECONDS=0",
+                        "export REPO_ROOT SMOKE_CODEX_HOME PAPERO_CODEX_CLI_PREFIX PAPERO_CODEX_RETRY_ATTEMPTS PAPERO_CODEX_RETRY_BACKOFF_SECONDS",
+                        "mkdir -p \"$SMOKE_CODEX_HOME\"",
+                        "redact() { cat; }",
+                        "write_timeline() { :; }",
+                        function_text,
+                        f"run_codex_last_message capacity {str(prompt)!r} {str(root / 'response.md')!r} {str(root / 'stdout.log')!r} {str(root / 'stderr.log')!r} {str(root / 'exitcode')!r} gpt-5.5 high",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(["bash", str(harness)], text=True, capture_output=True, check=False)
+
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertEqual(counter.read_text(encoding="utf-8").strip(), "2")
+            self.assertEqual((root / "response.md").read_text(encoding="utf-8"), "final response\n")
+            ledger = [
+                json.loads(line)
+                for line in (root / "exitcode.retry.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual([entry["exit_code"] for entry in ledger], [1, 0])
+            self.assertTrue(ledger[0]["retryable_transport"])
+            self.assertTrue(ledger[1]["replayed"])
+
+    def test_fresh_smoke_operator_feedback_author_failure_is_diagnosable(self) -> None:
+        wrapper_text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+
+        for token in [
+            "write_operator_feedback_author_failure()",
+            "operator-feedback-author-failure/1",
+            "operator_feedback_author_retryable_transport_exhausted",
+            "retryable_transport_detected",
+            "operator-feedback-author.cycle-${cycle}.failure.json",
+            "operator_feedback_author",
+            "expected_feedback_json",
+        ]:
+            self.assertIn(token, wrapper_text)
+        self.assertIn(
+            'write_operator_feedback_author_failure "$cycle" "$rc"',
+            wrapper_text,
+        )
+        self.assertIn(
+            'operator_failure_artifact="operator-feedback/operator-feedback-author.cycle-${OPERATOR_FEEDBACK_CYCLES}.failure.json"',
+            wrapper_text,
+        )
+        self.assertIn(
+            'fail_now fail_loop_feedback_not_reflected "$operator_failure_predicate" "\\"${operator_failure_artifact}\\"" 1',
+            wrapper_text,
+        )
 
     def test_run_without_papero_env_preserves_intentional_pre_live_diff_check_override(self) -> None:
         wrapper = Path("scripts/fresh-full-live-smoke-loop.sh")

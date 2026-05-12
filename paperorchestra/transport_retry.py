@@ -12,6 +12,8 @@ TRANSIENT_TRANSPORT_PATTERNS: tuple[str, ...] = (
     r"\b(?:ECONNRESET|ETIMEDOUT|ENETDOWN|ENETUNREACH|EAI_AGAIN)\b",
     r"temporarily unavailable",
     r"upstream (?:timeout|unavailable|disconnected)",
+    r"selected model is at capacity",
+    r"\bmodel\b[^\n\r]{0,160}\bat capacity\b",
 )
 
 _TRANSIENT_TRANSPORT_REGEXES = tuple(re.compile(pattern, re.IGNORECASE) for pattern in TRANSIENT_TRANSPORT_PATTERNS)
