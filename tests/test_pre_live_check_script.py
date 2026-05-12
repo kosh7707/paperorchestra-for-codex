@@ -871,6 +871,73 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             self.assertTrue(ledger[0]["retryable_transport"])
             self.assertTrue(ledger[1]["replayed"])
 
+    def test_fresh_smoke_step_retry_classifies_usage_limit_provider_stderr(self) -> None:
+        wrapper = Path("scripts/fresh-full-live-smoke-loop.sh")
+        text = wrapper.read_text(encoding="utf-8")
+        retry_start = text.index("retryable_transport_file() {")
+        retry_end = text.index("\n}\n\nwrite_operator_feedback_author_failure", retry_start) + 3
+        function_text = text[retry_start:retry_end]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            harness = root / "harness.sh"
+            harness.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        f"PYTHONPATH={str(Path.cwd())!r}",
+                        f"REPO_ROOT={str(Path.cwd())!r}",
+                        f"EVIDENCE_ROOT={str(root)!r}",
+                        f"LOGS={str(root / 'logs')!r}",
+                        "export PYTHONPATH REPO_ROOT EVIDENCE_ROOT LOGS",
+                        "mkdir -p \"$LOGS\" \"$EVIDENCE_ROOT/provider-traces\"",
+                        "PAPERO_SMOKE_STEP_RETRY_ATTEMPTS=1",
+                        "PAPERO_SMOKE_STEP_RETRY_BACKOFF_SECONDS=0",
+                        "PAPERO_SMOKE_STEP_RETRY_JITTER_SECONDS=0",
+                        "export PAPERO_SMOKE_STEP_RETRY_ATTEMPTS PAPERO_SMOKE_STEP_RETRY_BACKOFF_SECONDS PAPERO_SMOKE_STEP_RETRY_JITTER_SECONDS",
+                        "write_timeline() { :; }",
+                        "run_step() {",
+                        "  local label=\"$1\"; shift",
+                        f"  local counter={str(root / 'count.txt')!r}",
+                        "  local count=0",
+                        "  [[ -f \"$counter\" ]] && count=$(cat \"$counter\")",
+                        "  count=$((count + 1))",
+                        "  printf '%s\\n' \"$count\" > \"$counter\"",
+                        "  if [[ \"$count\" == 1 ]]; then",
+                        "    : > \"$LOGS/${label}.stderr.log\"",
+                        "    cat > \"$EVIDENCE_ROOT/provider-traces/0001-web.meta.json\" <<JSON",
+                        "{\"schema_version\":\"provider-trace-meta/1\",\"command_name\":\"$label\",\"stderr\":\"0001-web.stderr.log\",\"exitcode\":\"0001-web.exitcode\",\"retry_ledger\":\"0001-web.retry.jsonl\"}",
+                        "JSON",
+                        "    echo 1 > \"$EVIDENCE_ROOT/provider-traces/0001-web.exitcode\"",
+                        "    echo \"ERROR: You've hit your usage limit. Visit settings or try again at 10:17 AM.\" > \"$EVIDENCE_ROOT/provider-traces/0001-web.stderr.log\"",
+                        "    echo '{\"retryable_transport\": false, \"exit_code\": 1}' > \"$EVIDENCE_ROOT/provider-traces/0001-web.retry.jsonl\"",
+                        "    return 1",
+                        "  fi",
+                        "  : > \"$LOGS/${label}.stderr.log\"",
+                        "  return 0",
+                        "}",
+                        function_text,
+                        "run_retryable_step review_citations_web_initial bash -c 'true'",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(["bash", str(harness)], text=True, capture_output=True, check=False)
+
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertEqual((root / "count.txt").read_text(encoding="utf-8").strip(), "2")
+            ledger = [
+                json.loads(line)
+                for line in (root / "logs" / "review_citations_web_initial.step-retry.jsonl").read_text(
+                    encoding="utf-8"
+                ).splitlines()
+            ]
+            self.assertEqual([row["exit_code"] for row in ledger], [1, 0])
+            self.assertTrue(ledger[0]["retryable_transport"])
+            self.assertTrue(ledger[1]["replayed"])
+
     def test_fresh_smoke_step_retry_does_not_replay_non_retryable_failure(self) -> None:
         wrapper = Path("scripts/fresh-full-live-smoke-loop.sh")
         text = wrapper.read_text(encoding="utf-8")
