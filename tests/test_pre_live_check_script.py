@@ -135,6 +135,51 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertIn("write-intro-related", text)
         self.assertIn("--allow-recoverable-contract-issues", text)
 
+    def test_fresh_full_live_smoke_report_status_gate_fails_non_pass_reports(self) -> None:
+        wrapper = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+        start = wrapper.index("require_report_status_pass() {")
+        end = wrapper.index("\n}\n\nsmoke_retry_sleep", start) + 3
+        function_text = wrapper[start:end]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            passing = root / "passing.json"
+            failing = root / "failing.json"
+            passing.write_text(json.dumps({"report": {"status": "pass", "failing_codes": []}}), encoding="utf-8")
+            failing.write_text(
+                json.dumps(
+                    {
+                        "report": {
+                            "status": "fail",
+                            "failing_codes": ["rendered_reference_unknown_metadata"],
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            harness = root / "harness.sh"
+            harness.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        function_text,
+                        f"require_report_status_pass {str(passing)!r}",
+                        f"if require_report_status_pass {str(failing)!r} >{str(root / 'fail.out')!r} 2>{str(root / 'fail.err')!r}; then exit 44; fi",
+                        "exit 0",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(["bash", str(harness)], text=True, capture_output=True, check=False)
+
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertIn(
+                "rendered_reference_unknown_metadata",
+                (root / "fail.err").read_text(encoding="utf-8"),
+            )
+
     def test_demo_mock_ignores_stale_global_paperorchestra_on_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
