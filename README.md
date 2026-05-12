@@ -108,24 +108,32 @@ PDF/manuscript out of a Docker/WSL bind-mounted folder.
 
 ---
 
-## Can another person actually use this repo?
+## Choose your path: what to run first
 
-Yes — but **what you need to install depends on which path you want to run**.
+Yes, another person can use this repo — but only if they pick the path that
+matches their machine. Start with the smallest path that proves the next thing
+you need, then move upward.
 
-There are three practical usage levels:
+| Goal | Run first | Requires | What success means |
+| --- | --- | --- | --- |
+| See one safe manuscript draft | `./scripts/demo-mock.sh --in-repo` | Python 3.11+ | The pipeline is installed and can create mock artifacts. This is **not** citation-fidelity proof. |
+| Inspect/export artifacts from a container | `paperorchestra status --summary` then `paperorchestra export-artifacts --output ./paperorchestra-output` | A current session | You can find/copy the TeX, PDF if present, review JSON, audits, and session metadata. |
+| Build a PDF | `paperorchestra check-compile-env` then `PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile` | TeX engine + usable sandbox | `complete` means a PDF was built. It does **not** mean the paper is claim-safe. |
+| Draft with a real model | configure `PAPERO_MODEL_CMD`, check `paperorchestra run --help`, then use the live-run recipe below | Codex CLI or another supported shell model command | The model path works. You still need citation, review, and quality gates. |
+| Run claim-safe QA/Ralph evidence | `./scripts/fresh-full-live-smoke-loop.sh --help`, then run it with explicit `--evidence-root` and `--material-root` | live provider, verification keys, strict flags, enough time/tokens | The loop can prove progress, block, or reach `ready_for_human_finalization`; it never proves “publish automatically.” |
+| Use Codex MCP/skill integration | `./scripts/register-codex-mcp.sh --use-local-venv` then `./scripts/smoke-paperorchestra-mcp.py` | Codex CLI config + this venv | MCP registration/server health are OK. If `mcp__paperorchestra__...` tools are absent in the active chat, use the CLI fallback. |
 
-1. **Safe local demo / mock pipeline**
-   - needs: Python 3.11+
-   - does **not** need: `codex`, `omx`, Semantic Scholar key, LaTeX compile stack
-2. **Real shell-provider drafting**
-   - needs: Python 3.11+, Codex CLI (or another supported shell model command), `PAPERO_MODEL_CMD`
-   - optional: Semantic Scholar key, TeX compile stack
-3. **Full OMX-native / claim-oriented run**
-   - needs: Python 3.11+, Codex CLI, oh-my-codex / `omx`
-   - recommended: `SEMANTIC_SCHOLAR_API_KEY`
-   - optional but required for PDF compile: LaTeX engine + sandbox wrapper
+Keep these status meanings separate:
 
-If you are onboarding a new machine, **start with level 1**, then move upward only when that path works.
+- `draft_complete`: a draft manuscript exists.
+- `complete`: a compiled PDF exists.
+- `human_needed`: automation found a boundary that needs an operator/human decision.
+- `ready_for_human_finalization`: the best automated terminal state; humans still own final claims, figures, bibliography, and submission decisions.
+- `BLOCK`, `not_ready`, or non-zero quality-gate exits: the system refused to overclaim. Treat this as a useful safety result, not just a failure.
+
+The strict lifecycle is documented in
+[`docs/quality-gate-state-machine.md`](docs/quality-gate-state-machine.md).
+For setup knobs and missing-package fixes, use [`ENVIRONMENT.md`](ENVIRONMENT.md).
 
 ---
 
@@ -137,6 +145,12 @@ This project aims to reconstruct PaperOrchestra as closely as possible while mak
 
 - original model stack: Gemini-family models
 - this port: GPT/Codex via `codex` / `omx exec`
+
+Operationally, treat PaperOrchestra as a **general-purpose paper drafting
+engine**. The subject of the generated paper should come from the user's input
+material, not from this repository. If a run starts writing a paper *about
+PaperOrchestra itself* when the supplied material is about another topic, that
+is a target-fidelity/quality-gate problem to inspect and repair.
 
 ### Must stay faithful
 
@@ -1045,6 +1059,28 @@ paperorchestra job-start-run --provider mock --verify-mode mock --runtime-mode c
 ## Validation and review honesty
 
 The validator is intentionally useful but not magical. Treat these checks as **syntactic/contract checks** unless an explicit LLM-judge or human review artifact says otherwise.
+
+Plain-English quality model:
+
+- Generation statuses (`draft_complete`, `complete`) describe artifact
+  availability, not publication readiness.
+- Claim-safe mode is a conservative gate/posture. It can block, ask for
+  `human_needed`, or reach `ready_for_human_finalization`; none of those states
+  means “submit without human authorship.”
+- Citation gates now check more than “does this BibTeX key exist?”: the system
+  plans citation intent, reviews cited-sentence support when web evidence is
+  available, audits the references visible in the rendered manuscript/PDF, and
+  fails closed when citation evidence artifacts are missing, stale, skipped, or
+  unbound.
+- Mock, fallback, and full-fidelity workflow artifacts are audit evidence about
+  what the pipeline did. They are not automatic proof that every claim is true
+  or every citation is semantically appropriate.
+- Ralph/OMX handoff is the persistence owner for long claim-safe repair loops;
+  Critic artifacts are review packets/gates, not a replacement for final human
+  review.
+
+For the full state-machine contract, read
+[`docs/quality-gate-state-machine.md`](docs/quality-gate-state-machine.md).
 
 - Citation coverage checks ensure cited keys are known and enough discovered references are used; they do not prove that every citation semantically supports every sentence.
 - `verify-papers --mode live` proves at most citation metadata lookup; it does not prove cited-sentence support. For cited-sentence support, inspect `citation_support_review.json` from `paperorchestra review-citations`, preferably with `--evidence-mode web` for claim-safe review loops.

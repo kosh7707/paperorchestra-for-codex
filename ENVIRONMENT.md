@@ -7,6 +7,11 @@ This file is the canonical setup guide for people who just cloned the repo and w
 - which knobs are optional,
 - how to tell what is still missing on the current machine.
 
+For the operator flow, start with README’s “Choose your path” table; this file
+explains the packages, env vars, and readiness profiles behind those paths.
+For claim-safe state meanings such as `human_needed` and
+`ready_for_human_finalization`, see `docs/quality-gate-state-machine.md`.
+
 If you only remember two commands, remember these:
 
 ```bash
