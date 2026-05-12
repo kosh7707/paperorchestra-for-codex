@@ -14,6 +14,11 @@ TRANSIENT_TRANSPORT_PATTERNS: tuple[str, ...] = (
     r"upstream (?:timeout|unavailable|disconnected)",
     r"selected model is at capacity",
     r"\bmodel\b[^\n\r]{0,160}\bat capacity\b",
+    r"you(?:'|’)ve hit your usage limit",
+    r"\busage limit\b[^\n\r]{0,160}\btry again\b",
+    r"\brate limit(?:ed)?\b",
+    r"\btoo many requests\b",
+    r"\bquota exceeded\b",
 )
 
 _TRANSIENT_TRANSPORT_REGEXES = tuple(re.compile(pattern, re.IGNORECASE) for pattern in TRANSIENT_TRANSPORT_PATTERNS)

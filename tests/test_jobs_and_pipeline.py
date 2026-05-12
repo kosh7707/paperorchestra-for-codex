@@ -736,6 +736,10 @@ class MockProviderTests(unittest.TestCase):
             "upstream unavailable",
             "ERROR: Selected model is at capacity. Please try a different model.",
             "The requested model gpt-5.5 is at capacity right now.",
+            "ERROR: You've hit your usage limit. Visit settings or try again at 10:17 AM.",
+            "429 rate limited by upstream provider",
+            "Too many requests; retry later.",
+            "quota exceeded for this billing window",
         ]
         negatives = [
             "model rejected request",
