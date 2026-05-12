@@ -4387,6 +4387,8 @@ Related \\cite{alpha}.
             "forces provider/OMX retry layers off",
             "Requires BOTH PAPERO_PROVIDER_RETRY_SAFE=1 AND PAPERO_PROVIDER_RETRY_ATTEMPTS>0",
             "PAPERO_CODEX_RETRY_JITTER_SECONDS",
+            "PAPERO_SMOKE_STEP_RETRY_ATTEMPTS",
+            "matching provider trace",
         ]:
             self.assertIn(phrase, combined)
 

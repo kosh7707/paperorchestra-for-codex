@@ -453,6 +453,11 @@ PAPERO_OMX_TIMEOUT_GRACE_SECONDS=180
 PAPERO_CODEX_RETRY_ATTEMPTS=1
 PAPERO_CODEX_RETRY_BACKOFF_SECONDS=15
 PAPERO_CODEX_RETRY_JITTER_SECONDS=3
+# Optional smoke-level replay for provider-backed stages after retryable
+# transport evidence from the stage log or matching provider trace:
+PAPERO_SMOKE_STEP_RETRY_ATTEMPTS=1
+PAPERO_SMOKE_STEP_RETRY_BACKOFF_SECONDS=15
+PAPERO_SMOKE_STEP_RETRY_JITTER_SECONDS=3
 # Optional for OMX/container QA where a shell alias would not be honored:
 # PAPERO_CODEX_CLI_PREFIX='omx --madmax --high --dangerously-bypass-approvals-and-sandbox'
 PAPERO_OMX_MODEL=gpt-5.5

@@ -807,6 +807,220 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             self.assertTrue(ledger[0]["retryable_transport"])
             self.assertTrue(ledger[1]["replayed"])
 
+    def test_fresh_smoke_step_retry_uses_matching_provider_trace(self) -> None:
+        wrapper = Path("scripts/fresh-full-live-smoke-loop.sh")
+        text = wrapper.read_text(encoding="utf-8")
+        retry_start = text.index("retryable_transport_file() {")
+        retry_end = text.index("\n}\n\nwrite_operator_feedback_author_failure", retry_start) + 3
+        function_text = text[retry_start:retry_end]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            harness = root / "harness.sh"
+            harness.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        f"PYTHONPATH={str(Path.cwd())!r}",
+                        f"REPO_ROOT={str(Path.cwd())!r}",
+                        f"EVIDENCE_ROOT={str(root)!r}",
+                        f"LOGS={str(root / 'logs')!r}",
+                        "export PYTHONPATH REPO_ROOT EVIDENCE_ROOT LOGS",
+                        "mkdir -p \"$LOGS\" \"$EVIDENCE_ROOT/provider-traces\"",
+                        "PAPERO_SMOKE_STEP_RETRY_ATTEMPTS=1",
+                        "PAPERO_SMOKE_STEP_RETRY_BACKOFF_SECONDS=0",
+                        "PAPERO_SMOKE_STEP_RETRY_JITTER_SECONDS=0",
+                        "export PAPERO_SMOKE_STEP_RETRY_ATTEMPTS PAPERO_SMOKE_STEP_RETRY_BACKOFF_SECONDS PAPERO_SMOKE_STEP_RETRY_JITTER_SECONDS",
+                        "write_timeline() { :; }",
+                        "run_step() {",
+                        "  local label=\"$1\"; shift",
+                        f"  local counter={str(root / 'count.txt')!r}",
+                        "  local count=0",
+                        "  [[ -f \"$counter\" ]] && count=$(cat \"$counter\")",
+                        "  count=$((count + 1))",
+                        "  printf '%s\\n' \"$count\" > \"$counter\"",
+                        "  if [[ \"$count\" == 1 ]]; then",
+                        "    : > \"$LOGS/${label}.stderr.log\"",
+                        "    cat > \"$EVIDENCE_ROOT/provider-traces/0001-gen.meta.json\" <<JSON",
+                        "{\"schema_version\":\"provider-trace-meta/1\",\"command_name\":\"$label\",\"stderr\":\"0001-gen.stderr.log\",\"retry_ledger\":\"0001-gen.retry.jsonl\"}",
+                        "JSON",
+                        "    echo 'ERROR: selected model is at capacity' > \"$EVIDENCE_ROOT/provider-traces/0001-gen.stderr.log\"",
+                        "    echo '{\"retryable_transport\": true}' > \"$EVIDENCE_ROOT/provider-traces/0001-gen.retry.jsonl\"",
+                        "    return 1",
+                        "  fi",
+                        "  : > \"$LOGS/${label}.stderr.log\"",
+                        "  return 0",
+                        "}",
+                        function_text,
+                        "run_retryable_step outline bash -c 'true'",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(["bash", str(harness)], text=True, capture_output=True, check=False)
+
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertEqual((root / "count.txt").read_text(encoding="utf-8").strip(), "2")
+            ledger = [
+                json.loads(line)
+                for line in (root / "logs" / "outline.step-retry.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual([row["exit_code"] for row in ledger], [1, 0])
+            self.assertTrue(ledger[0]["retryable_transport"])
+            self.assertTrue(ledger[1]["replayed"])
+
+    def test_fresh_smoke_step_retry_does_not_replay_non_retryable_failure(self) -> None:
+        wrapper = Path("scripts/fresh-full-live-smoke-loop.sh")
+        text = wrapper.read_text(encoding="utf-8")
+        retry_start = text.index("retryable_transport_file() {")
+        retry_end = text.index("\n}\n\nwrite_operator_feedback_author_failure", retry_start) + 3
+        function_text = text[retry_start:retry_end]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            harness = root / "harness.sh"
+            harness.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        f"PYTHONPATH={str(Path.cwd())!r}",
+                        f"REPO_ROOT={str(Path.cwd())!r}",
+                        f"EVIDENCE_ROOT={str(root)!r}",
+                        f"LOGS={str(root / 'logs')!r}",
+                        "export PYTHONPATH REPO_ROOT EVIDENCE_ROOT LOGS",
+                        "mkdir -p \"$LOGS\" \"$EVIDENCE_ROOT/provider-traces\"",
+                        "PAPERO_SMOKE_STEP_RETRY_ATTEMPTS=1",
+                        "PAPERO_SMOKE_STEP_RETRY_BACKOFF_SECONDS=0",
+                        "PAPERO_SMOKE_STEP_RETRY_JITTER_SECONDS=0",
+                        "export PAPERO_SMOKE_STEP_RETRY_ATTEMPTS PAPERO_SMOKE_STEP_RETRY_BACKOFF_SECONDS PAPERO_SMOKE_STEP_RETRY_JITTER_SECONDS",
+                        "write_timeline() { :; }",
+                        "run_step() {",
+                        "  local label=\"$1\"; shift",
+                        f"  local counter={str(root / 'count.txt')!r}",
+                        "  local count=0",
+                        "  [[ -f \"$counter\" ]] && count=$(cat \"$counter\")",
+                        "  count=$((count + 1))",
+                        "  printf '%s\\n' \"$count\" > \"$counter\"",
+                        "  echo 'semantic validation failure' > \"$LOGS/${label}.stderr.log\"",
+                        "  return 1",
+                        "}",
+                        function_text,
+                        "set +e",
+                        "run_retryable_step outline bash -c 'true'",
+                        "rc=$?",
+                        "set -e",
+                        "echo rc:$rc",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(["bash", str(harness)], text=True, capture_output=True, check=False)
+
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertIn("rc:1", result.stdout)
+            self.assertEqual((root / "count.txt").read_text(encoding="utf-8").strip(), "1")
+            ledger = [
+                json.loads(line)
+                for line in (root / "logs" / "outline.step-retry.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual(len(ledger), 1)
+            self.assertFalse(ledger[0]["retryable_transport"])
+
+    def test_fresh_smoke_step_retry_ignores_successful_provider_internal_retry(self) -> None:
+        wrapper = Path("scripts/fresh-full-live-smoke-loop.sh")
+        text = wrapper.read_text(encoding="utf-8")
+        retry_start = text.index("retryable_transport_file() {")
+        retry_end = text.index("\n}\n\nwrite_operator_feedback_author_failure", retry_start) + 3
+        function_text = text[retry_start:retry_end]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            harness = root / "harness.sh"
+            harness.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        f"PYTHONPATH={str(Path.cwd())!r}",
+                        f"REPO_ROOT={str(Path.cwd())!r}",
+                        f"EVIDENCE_ROOT={str(root)!r}",
+                        f"LOGS={str(root / 'logs')!r}",
+                        "export PYTHONPATH REPO_ROOT EVIDENCE_ROOT LOGS",
+                        "mkdir -p \"$LOGS\" \"$EVIDENCE_ROOT/provider-traces\"",
+                        "PAPERO_SMOKE_STEP_RETRY_ATTEMPTS=1",
+                        "PAPERO_SMOKE_STEP_RETRY_BACKOFF_SECONDS=0",
+                        "PAPERO_SMOKE_STEP_RETRY_JITTER_SECONDS=0",
+                        "export PAPERO_SMOKE_STEP_RETRY_ATTEMPTS PAPERO_SMOKE_STEP_RETRY_BACKOFF_SECONDS PAPERO_SMOKE_STEP_RETRY_JITTER_SECONDS",
+                        "write_timeline() { :; }",
+                        "run_step() {",
+                        "  local label=\"$1\"; shift",
+                        f"  local counter={str(root / 'count.txt')!r}",
+                        "  local count=0",
+                        "  [[ -f \"$counter\" ]] && count=$(cat \"$counter\")",
+                        "  count=$((count + 1))",
+                        "  printf '%s\\n' \"$count\" > \"$counter\"",
+                        "  echo 'semantic validation failure after provider returned' > \"$LOGS/${label}.stderr.log\"",
+                        "  cat > \"$EVIDENCE_ROOT/provider-traces/0001-gen.meta.json\" <<JSON",
+                        "{\"schema_version\":\"provider-trace-meta/1\",\"command_name\":\"$label\",\"stderr\":\"0001-gen.stderr.log\",\"exitcode\":\"0001-gen.exitcode\",\"retry_ledger\":\"0001-gen.retry.jsonl\"}",
+                        "JSON",
+                        "  echo 'ERROR: selected model is at capacity' > \"$EVIDENCE_ROOT/provider-traces/0001-gen.stderr.log\"",
+                        "  echo '0' > \"$EVIDENCE_ROOT/provider-traces/0001-gen.exitcode\"",
+                        "  echo '{\"retryable_transport\": true, \"exit_code\": 1}' > \"$EVIDENCE_ROOT/provider-traces/0001-gen.retry.jsonl\"",
+                        "  echo '{\"retryable_transport\": false, \"exit_code\": 0}' >> \"$EVIDENCE_ROOT/provider-traces/0001-gen.retry.jsonl\"",
+                        "  return 1",
+                        "}",
+                        function_text,
+                        "set +e",
+                        "run_retryable_step outline bash -c 'true'",
+                        "rc=$?",
+                        "set -e",
+                        "echo rc:$rc",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(["bash", str(harness)], text=True, capture_output=True, check=False)
+
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            self.assertIn("rc:1", result.stdout)
+            self.assertEqual((root / "count.txt").read_text(encoding="utf-8").strip(), "1")
+            ledger = [
+                json.loads(line)
+                for line in (root / "logs" / "outline.step-retry.jsonl").read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual(len(ledger), 1)
+            self.assertFalse(ledger[0]["retryable_transport"])
+
+    def test_fresh_smoke_step_retry_only_wraps_provider_backed_stages(self) -> None:
+        wrapper_text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+
+        for name in [
+            "research_prior_work",
+            "outline",
+            "generate_plots",
+            "write_intro_related",
+            "write_sections",
+            "review",
+            "review_citations_web_initial",
+        ]:
+            self.assertIn(f"run_retryable_step {name}", wrapper_text)
+
+        for name in [
+            "plan_narrative",
+            "compile_initial",
+            "material_invariance",
+            "validate_current",
+            "quality_eval_iter_",
+            "qa_loop_plan_iter_",
+            "build_source_obligations",
+        ]:
+            self.assertNotIn(f"run_retryable_step {name}", wrapper_text)
+
     def test_fresh_smoke_operator_feedback_author_failure_is_diagnosable(self) -> None:
         wrapper_text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
 

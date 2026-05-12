@@ -81,6 +81,9 @@ export PAPERO_OMX_RETRY_ATTEMPTS=0
 export PAPERO_OMX_RETRY_BACKOFF_SECONDS=0
 export PAPERO_CODEX_RETRY_ATTEMPTS="${PAPERO_CODEX_RETRY_ATTEMPTS:-1}"
 export PAPERO_CODEX_RETRY_BACKOFF_SECONDS="${PAPERO_CODEX_RETRY_BACKOFF_SECONDS:-15}"
+export PAPERO_SMOKE_STEP_RETRY_ATTEMPTS="${PAPERO_SMOKE_STEP_RETRY_ATTEMPTS:-1}"
+export PAPERO_SMOKE_STEP_RETRY_BACKOFF_SECONDS="${PAPERO_SMOKE_STEP_RETRY_BACKOFF_SECONDS:-${PAPERO_CODEX_RETRY_BACKOFF_SECONDS:-15}}"
+export PAPERO_SMOKE_STEP_RETRY_JITTER_SECONDS="${PAPERO_SMOKE_STEP_RETRY_JITTER_SECONDS:-${PAPERO_CODEX_RETRY_JITTER_SECONDS:-0}}"
 export PAPERO_CODEX_CLI_PREFIX="${PAPERO_CODEX_CLI_PREFIX:-codex}"
 SMOKE_CODEX_HOME="$(mktemp -d /tmp/paperorchestra-smoke-codex-home.XXXXXX)"
 SOURCE_CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
@@ -262,6 +265,118 @@ PY_SLEEP
     fi
     return "$rc"
   done
+  return "$rc"
+}
+
+retryable_provider_trace_for_command() {
+  local label="$1"
+  python3 - "$EVIDENCE_ROOT" "$label" <<'PY_PROVIDER_TRACE_RETRYABLE'
+import json
+import sys
+from pathlib import Path
+
+from paperorchestra.transport_retry import is_retryable_transport_file
+
+root = Path(sys.argv[1])
+label = sys.argv[2]
+trace_dir = root / "provider-traces"
+if not trace_dir.is_dir():
+    raise SystemExit(1)
+
+for meta_path in sorted(trace_dir.glob("*.meta.json")):
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        continue
+    if meta.get("command_name") != label:
+        continue
+    exitcode_name = meta.get("exitcode")
+    if exitcode_name:
+        exitcode_path = trace_dir / exitcode_name
+        if exitcode_path.is_file():
+            try:
+                if int(exitcode_path.read_text(encoding="utf-8", errors="replace").strip().splitlines()[0]) == 0:
+                    continue
+            except Exception:
+                pass
+    stderr_name = meta.get("stderr")
+    if stderr_name and is_retryable_transport_file(trace_dir / stderr_name):
+        raise SystemExit(0)
+    retry_ledger_name = meta.get("retry_ledger")
+    retry_ledger = trace_dir / retry_ledger_name if retry_ledger_name else None
+    if retry_ledger and retry_ledger.is_file():
+        for line in retry_ledger.read_text(encoding="utf-8", errors="replace").splitlines():
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except Exception:
+                continue
+            if row.get("retryable_transport") is True:
+                raise SystemExit(0)
+raise SystemExit(1)
+PY_PROVIDER_TRACE_RETRYABLE
+}
+
+retryable_step_failure_detected() {
+  local label="$1"
+  if retryable_transport_file "$LOGS/${label}.stderr.log"; then
+    return 0
+  fi
+  retryable_provider_trace_for_command "$label"
+}
+
+smoke_retry_sleep() {
+  local base="${1:-0}"; local spread="${2:-0}"
+  python3 - "$base" "$spread" <<'PY_SLEEP'
+import random, sys, time
+base=float(sys.argv[1] or 0)
+spread=float(sys.argv[2] or 0)
+time.sleep(max(0.0, base) + (random.uniform(0.0, max(0.0, spread)) if spread > 0 else 0.0))
+PY_SLEEP
+}
+
+run_retryable_step() {
+  local caller_errexit=0
+  [[ $- == *e* ]] && caller_errexit=1
+  local name="$1"; shift
+  local attempts=$(( ${PAPERO_SMOKE_STEP_RETRY_ATTEMPTS:-1} + 1 ))
+  if [[ "$attempts" -lt 1 ]]; then attempts=1; fi
+  local backoff="${PAPERO_SMOKE_STEP_RETRY_BACKOFF_SECONDS:-0}"
+  local jitter="${PAPERO_SMOKE_STEP_RETRY_JITTER_SECONDS:-0}"
+  local step_ledger="$LOGS/${name}.step-retry.jsonl"
+  : > "$step_ledger"
+  local rc=1
+  local retryable=false
+  local attempt=1
+  for attempt in $(seq 1 "$attempts"); do
+    local attempt_label="$name"
+    if [[ "$attempt" -gt 1 ]]; then
+      attempt_label="${name}_retry_${attempt}"
+    fi
+    set +e
+    run_step "$attempt_label" "$@"
+    rc=$?
+    set -e
+    retryable=false
+    if [[ "$rc" != "0" ]] && retryable_step_failure_detected "$attempt_label"; then
+      retryable=true
+    fi
+    printf '{"name":"%s","attempt":%s,"attempt_label":"%s","exit_code":%s,"retryable_transport":%s,"replayed":%s}\n' \
+      "$name" "$attempt" "$attempt_label" "$rc" "$retryable" "$([[ "$attempt" -gt 1 ]] && echo true || echo false)" >> "$step_ledger"
+    if [[ "$rc" == "0" ]]; then
+      if [[ "$caller_errexit" == "1" ]]; then set -e; else set +e; fi
+      return 0
+    fi
+    if [[ "$attempt" -lt "$attempts" ]] && [[ "$retryable" == "true" ]]; then
+      write_timeline "- $(date -u +%Y-%m-%dT%H:%M:%SZ) retry $name attempt=$attempt rc=$rc reason=step_transport"
+      smoke_retry_sleep "$backoff" "$jitter"
+      continue
+    fi
+    if [[ "$caller_errexit" == "1" ]]; then set -e; else set +e; fi
+    return "$rc"
+  done
+  if [[ "$caller_errexit" == "1" ]]; then set -e; else set +e; fi
   return "$rc"
 }
 
@@ -828,8 +943,14 @@ print(json.dumps({
   "provider_commands":{"gen":json.loads(sys.argv[3]),"web":json.loads(sys.argv[4])},
   "provider_wrapper_contract":sidecar,
   "stage_contracts":[
+    {"name":"research_prior_work","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},
+    {"name":"outline","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},
+    {"name":"generate_plots","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},
+    {"name":"write_intro_related","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},
+    {"name":"write_sections","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},
     {"name":"compile_initial","class":"mandatory","fail_policy":"fail_now"},
-    {"name":"review_citations_web_initial","class":"mandatory","fail_policy":"fail_now"},
+    {"name":"review","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},
+    {"name":"review_citations_web_initial","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},
     {"name":"meta_leakage","class":"mandatory","fail_policy":"fail_now"},
   ],
   "evidence_contracts":{"provider_prompt_response_required":True,"meta_leakage_scan_after_write_sections":True,"live_verification_provenance_required":True},
@@ -1000,7 +1121,7 @@ PY
 cd "$WORKDIR"
 run_step init "${CLI[@]}" init --idea inputs/idea.tex --experimental-log inputs/experimental_log.tex --template inputs/template.tex --guidelines inputs/guidelines.md --figures-dir inputs/figures --venue "TDSC-style systems/security paper" --page-limit 12 --cutoff-date 2026-04-01 || fail_now fail_execution_error '"init"' '"logs/init.stderr.log"' 1
 run_step import_reference_metadata_seed "${CLI[@]}" import-prior-work --seed-file inputs/reference_metadata_seed.bib --source metadata_seed_for_live_verification || fail_now fail_execution_error '"import_reference_metadata_seed"' '"logs/import_reference_metadata_seed.stderr.log"' 1
-run_step research_prior_work "${CLI[@]}" research-prior-work --source "fresh material smoke" --import "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"research_prior_work"' '"logs/research_prior_work.stderr.log"' 1
+run_retryable_step research_prior_work "${CLI[@]}" research-prior-work --source "fresh material smoke" --import "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"research_prior_work"' '"logs/research_prior_work.step-retry.jsonl"' 1
 run_step verify_papers_live "${CLI[@]}" verify-papers --mode live --on-error skip || fail_now fail_execution_error '"verify_papers_live"' '"logs/verify_papers_live.stderr.log"' 1
 printf 'write_live_verification_summary\n' > "$LOGS/live_verification_provenance.command"
 set +e
@@ -1012,17 +1133,17 @@ COMMAND_ROWS+=("live_verification_provenance|${LIVE_PROVENANCE_RC}")
 record_command_markdown
 [[ "$LIVE_PROVENANCE_RC" == "0" ]] || fail_now fail_execution_error '"live_verification_provenance"' '"logs/live_verification_provenance.stderr.log"' 1
 run_step build_bib "${CLI[@]}" build-bib || fail_now fail_execution_error '"build_bib"' '"logs/build_bib.stderr.log"' 1
-run_step outline "${CLI[@]}" outline "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"outline"' '"logs/outline.stderr.log"' 1
-run_step generate_plots "${CLI[@]}" generate-plots "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"generate_plots"' '"logs/generate_plots.stderr.log"' 1
+run_retryable_step outline "${CLI[@]}" outline "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"outline"' '"logs/outline.step-retry.jsonl"' 1
+run_retryable_step generate_plots "${CLI[@]}" generate-plots "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"generate_plots"' '"logs/generate_plots.step-retry.jsonl"' 1
 run_step plan_narrative "${CLI[@]}" plan-narrative "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"plan_narrative"' '"logs/plan_narrative.stderr.log"' 1
-run_step write_intro_related "${CLI[@]}" write-intro-related "${PROVIDER[@]}" "${RUNTIME[@]}" --claim-safe --allow-recoverable-contract-issues || fail_now fail_execution_error '"write_intro_related"' '"logs/write_intro_related.stderr.log"' 1
-run_step write_sections "${CLI[@]}" write-sections "${PROVIDER[@]}" "${RUNTIME[@]}" --claim-safe || fail_now fail_execution_error '"write_sections"' '"logs/write_sections.stderr.log"' 1
+run_retryable_step write_intro_related "${CLI[@]}" write-intro-related "${PROVIDER[@]}" "${RUNTIME[@]}" --claim-safe --allow-recoverable-contract-issues || fail_now fail_execution_error '"write_intro_related"' '"logs/write_intro_related.step-retry.jsonl"' 1
+run_retryable_step write_sections "${CLI[@]}" write-sections "${PROVIDER[@]}" "${RUNTIME[@]}" --claim-safe || fail_now fail_execution_error '"write_sections"' '"logs/write_sections.step-retry.jsonl"' 1
 run_step compile_initial "${CLI[@]}" compile || { scan_meta_leakage || true; fail_now fail_execution_error '"compile_initial"' '"logs/compile_initial.stderr.log"' 1; }
 scan_meta_leakage || fail_now fail_meta_leakage '"meta_leakage"' '"artifacts/meta-leakage-scan.json"' 1
-run_step review "${CLI[@]}" review "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"review"' '"logs/review.stderr.log"' 1
+run_retryable_step review "${CLI[@]}" review "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"review"' '"logs/review.step-retry.jsonl"' 1
 run_step review_sections_initial "${CLI[@]}" review-sections --output "$ARTIFACTS/section_review.initial.json" || fail_now fail_execution_error '"review_sections_initial"' '"logs/review_sections_initial.stderr.log"' 1
 run_step review_figure_placement_initial "${CLI[@]}" review-figure-placement --output "$ARTIFACTS/figure_placement_review.initial.json" || fail_now fail_execution_error '"review_figure_placement_initial"' '"logs/review_figure_placement_initial.stderr.log"' 1
-run_step review_citations_web_initial "${CLI[@]}" review-citations --evidence-mode web "${WEB_PROVIDER[@]}" || fail_now fail_execution_error '"review_citations_web_initial"' '"logs/review_citations_web_initial.stderr.log"' 1
+run_retryable_step review_citations_web_initial "${CLI[@]}" review-citations --evidence-mode web "${WEB_PROVIDER[@]}" || fail_now fail_execution_error '"review_citations_web_initial"' '"logs/review_citations_web_initial.step-retry.jsonl"' 1
 copy_session_artifacts
 [[ -f "$ARTIFACTS/citation_support_review.json" ]] && cp "$ARTIFACTS/citation_support_review.json" "$ARTIFACTS/citation_support_review.initial.json" || true
 [[ -f "$ARTIFACTS/citation_support_review.trace.json" ]] && cp "$ARTIFACTS/citation_support_review.trace.json" "$ARTIFACTS/citation_support_review.initial.trace.json" || true
