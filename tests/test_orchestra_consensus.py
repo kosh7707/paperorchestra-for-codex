@@ -26,6 +26,7 @@ class OrchestraConsensusTests(unittest.TestCase):
         )
         self.assertEqual(consensus.status, "needs_adjudication")
         self.assertEqual(consensus.next_action.action_type, "run_third_critic_adjudication")
+        self.assertNotIn("omx exec", json.dumps(consensus.to_public_dict(), ensure_ascii=False))
 
     def test_consensus_public_export_omits_private_rationale(self) -> None:
         consensus = ConsensusPolicy().evaluate(

@@ -128,7 +128,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     orchestrate_parser = sub.add_parser("orchestrate", help="Run the v1 orchestrator until the next bounded action/block")
     orchestrate_parser.add_argument("--material", help="Optional material directory/file to inspect")
-    orchestrate_parser.add_argument("--execute-local", action="store_true", help="Execute exactly one deterministic local orchestrator step")
+    orchestrate_mode = orchestrate_parser.add_mutually_exclusive_group()
+    orchestrate_mode.add_argument("--execute-local", action="store_true", help="Execute exactly one deterministic local orchestrator step")
+    orchestrate_mode.add_argument("--plan-full-loop", action="store_true", help="Plan the next full-loop action without executing it")
     orchestrate_parser.add_argument("--write-evidence", action="store_true", help="Persist a public-safe orchestrator evidence bundle")
     orchestrate_parser.add_argument("--evidence-output", help="Workspace-contained evidence bundle directory")
     orchestrate_parser.add_argument("--json", action="store_true")
@@ -820,6 +822,8 @@ def main(argv: list[str] | None = None) -> int:
                     execute=True,
                     executor=LocalActionExecutor(material_path=args.material),
                 )
+            elif args.plan_full_loop:
+                result = orchestrator.plan_full_loop(material_path=args.material)
             else:
                 result = orchestrator.run_until_blocked(material_path=args.material)
             state = result.state

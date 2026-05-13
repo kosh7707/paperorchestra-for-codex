@@ -53,7 +53,7 @@ class FullLoopPlanner:
                 "run_critic_consensus",
                 "high_risk_readiness_requires_consensus",
                 requires_omx=True,
-                omx_surface="omx exec",
+                omx_surface="$critic-consensus",
                 risk="high",
                 evidence_required=True,
                 state_after=state,

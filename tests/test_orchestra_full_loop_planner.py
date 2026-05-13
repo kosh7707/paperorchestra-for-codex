@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+import json
 
 from paperorchestra.orchestra_consensus import ConsensusPolicy, CriticVerdict
 from paperorchestra.orchestra_loop import FullLoopPlanner, LoopFacts
@@ -43,6 +44,7 @@ class OrchestraFullLoopPlannerTests(unittest.TestCase):
         score = _complete_score(82.0, "near_ready")
         decision = FullLoopPlanner().plan(LoopFacts(state=state, score=score, high_risk_readiness=True))
         self.assertEqual(decision.actions[0].action_type, "run_critic_consensus")
+        self.assertNotIn("omx exec", json.dumps(decision.actions[0].to_dict(), ensure_ascii=False))
 
     def test_consensus_disagreement_plans_third_adjudication(self) -> None:
         consensus = ConsensusPolicy().evaluate(
@@ -53,6 +55,7 @@ class OrchestraFullLoopPlannerTests(unittest.TestCase):
         )
         decision = FullLoopPlanner().plan(LoopFacts(state=OrchestraState.new(cwd="/tmp/example"), consensus=consensus))
         self.assertEqual(decision.actions[0].action_type, "run_third_critic_adjudication")
+        self.assertNotIn("omx exec", json.dumps(decision.actions[0].to_dict(), ensure_ascii=False))
 
     def test_missing_scoring_bundle_plans_build_scoring_bundle(self) -> None:
         decision = FullLoopPlanner().plan(LoopFacts(state=OrchestraState.new(cwd="/tmp/example")))

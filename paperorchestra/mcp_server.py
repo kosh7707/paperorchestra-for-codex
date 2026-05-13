@@ -115,6 +115,7 @@ TOOLS: list[JSON] = [
                 "cwd": {"type": "string"},
                 "material": {"type": "string"},
                 "execute_local": {"type": "boolean"},
+                "plan_full_loop": {"type": "boolean"},
                 "write_evidence": {"type": "boolean"},
                 "evidence_output": {"type": "string"},
             },
@@ -1001,12 +1002,16 @@ def tool_orchestrate(arguments: JSON) -> JSON:
     cwd = _default_cwd(arguments)
     orchestrator = OrchestraOrchestrator(cwd)
     material = arguments.get("material")
+    if arguments.get("execute_local") and arguments.get("plan_full_loop"):
+        raise ValueError("execute_local and plan_full_loop are mutually exclusive.")
     if arguments.get("execute_local"):
         result = orchestrator.step(
             material_path=material,
             execute=True,
             executor=LocalActionExecutor(material_path=material),
         )
+    elif arguments.get("plan_full_loop"):
+        result = orchestrator.plan_full_loop(material_path=material)
     else:
         result = orchestrator.run_until_blocked(material_path=material)
     state = result.state

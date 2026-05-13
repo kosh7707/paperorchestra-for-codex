@@ -6,6 +6,8 @@ import unittest
 from pathlib import Path
 
 from paperorchestra.mcp_server import TOOL_HANDLERS, TOOLS, _handle_request
+from paperorchestra.models import InputBundle
+from paperorchestra.session import artifact_path, create_session, save_session
 
 
 def _tool_names() -> set[str]:
@@ -33,6 +35,34 @@ class OrchestratorMcpEntrypointTests(unittest.TestCase):
         )
         return material
 
+    def _write_draft_session(self, root: Path) -> None:
+        for name, text in {
+            "idea.md": "Synthetic idea.\n",
+            "experimental_log.md": "Synthetic experiment log.\n",
+            "template.tex": "\\documentclass{article}\\begin{document}\\end{document}\n",
+            "guidelines.md": "Synthetic guidelines.\n",
+        }.items():
+            (root / name).write_text(text, encoding="utf-8")
+        figures = root / "figures"
+        figures.mkdir()
+        state = create_session(
+            root,
+            InputBundle(
+                str(root / "idea.md"),
+                str(root / "experimental_log.md"),
+                str(root / "template.tex"),
+                str(root / "guidelines.md"),
+                str(figures),
+            ),
+            allow_outside_workspace=True,
+        )
+        paper = artifact_path(root, "paper.full.tex", state.session_id)
+        paper.write_text("Synthetic draft. PRIVATE_MCP_DRAFT_TEXT_SHOULD_NOT_LEAK\n", encoding="utf-8")
+        state.artifacts.paper_full_tex = str(paper)
+        state.current_phase = "draft_complete"
+        state.active_artifact = "paper.full.tex"
+        save_session(root, state)
+
     def test_mcp_tools_list_contains_high_level_orchestrator_tools(self) -> None:
         names = _tool_names()
         for expected in {"inspect_state", "orchestrate", "continue_project", "answer_human_needed", "export_results"}:
@@ -49,6 +79,8 @@ class OrchestratorMcpEntrypointTests(unittest.TestCase):
             self.assertEqual(props["evidence_output"]["type"], "string")
         self.assertIn("execute_local", tools["orchestrate"]["inputSchema"]["properties"])
         self.assertEqual(tools["orchestrate"]["inputSchema"]["properties"]["execute_local"]["type"], "boolean")
+        self.assertIn("plan_full_loop", tools["orchestrate"]["inputSchema"]["properties"])
+        self.assertEqual(tools["orchestrate"]["inputSchema"]["properties"]["plan_full_loop"]["type"], "boolean")
 
     def test_mcp_inspect_state_returns_v1_state_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -119,6 +151,38 @@ class OrchestratorMcpEntrypointTests(unittest.TestCase):
         self.assertEqual(payload["action_taken"], "provide_material")
         self.assertEqual(payload["execution_record"]["status"], "unsupported")
         self.assertEqual(payload["execution_record"]["reason"], "material_input_required")
+
+    def test_mcp_orchestrate_plan_full_loop_returns_plan_only_without_execution_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_draft_session(root)
+            payload = _decode_text_result(TOOL_HANDLERS["orchestrate"]({"cwd": tmp, "plan_full_loop": True}))
+            rendered = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(payload["execution"], "bounded_full_loop_plan")
+        self.assertEqual(payload["action_taken"], "none")
+        self.assertNotIn("execution_record", payload)
+        self.assertEqual(payload["next_actions"][0]["action_type"], "build_scoring_bundle")
+        self.assertNotIn("PRIVATE_MCP_DRAFT_TEXT_SHOULD_NOT_LEAK", rendered)
+        self.assertNotIn("omx exec", rendered)
+
+    def test_mcp_orchestrate_execute_local_and_plan_full_loop_conflict_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            response = _handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "orchestrate",
+                        "arguments": {"cwd": tmp, "execute_local": True, "plan_full_loop": True},
+                    },
+                }
+            )
+
+        self.assertIsNotNone(response)
+        self.assertTrue(response["result"]["isError"])
+        self.assertIn("mutually exclusive", response["result"]["content"][0]["text"])
 
     def test_mcp_orchestrate_execute_local_write_evidence_includes_execution_record(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

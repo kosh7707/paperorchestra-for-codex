@@ -244,6 +244,8 @@ class OrchestratorActionExecutorTests(unittest.TestCase):
             "start_ralph": "$ralph",
             "start_ultraqa": "$ultraqa",
             "record_trace_summary": "$trace",
+            "run_critic_consensus": "$critic-consensus",
+            "run_third_critic_adjudication": "$critic-adjudication",
         }
         policy = ActionExecutionPolicy()
 
@@ -264,6 +266,7 @@ class OrchestratorActionExecutorTests(unittest.TestCase):
             "provide_material",
             "compile_current",
             "export_results",
+            "match_supplied_figures",
         }:
             with self.subTest(action_type=action_type):
                 capability = policy.classify(NextAction(action_type, "contract_test"))
@@ -304,6 +307,25 @@ class OrchestratorActionExecutorTests(unittest.TestCase):
         )
 
         self.assertNotIn("omx autoresearch", rendered)
+        self.assertNotIn("omx exec", rendered)
+
+    def test_policy_classifies_full_loop_actions_public_safely(self) -> None:
+        policy = ActionExecutionPolicy()
+        consensus = policy.classify(NextAction("run_critic_consensus", "contract_test"))
+        adjudication = policy.classify(NextAction("run_third_critic_adjudication", "contract_test"))
+        figure_match = policy.classify(NextAction("match_supplied_figures", "contract_test"))
+
+        self.assertEqual(consensus.execution_kind, "omx_required")
+        self.assertEqual(consensus.omx_surface, "$critic-consensus")
+        self.assertEqual(adjudication.execution_kind, "omx_required")
+        self.assertEqual(adjudication.omx_surface, "$critic-adjudication")
+        self.assertEqual(figure_match.execution_kind, "adapter_required")
+        rendered = json.dumps(
+            [consensus.to_public_dict(), adjudication.to_public_dict(), figure_match.to_public_dict()],
+            ensure_ascii=False,
+        )
+        self.assertNotIn("omx exec", rendered)
+        self.assertNotIn('"omx ', rendered)
 
     def test_policy_redacts_deprecated_command_like_unknown_action(self) -> None:
         capability = ActionExecutionPolicy().classify(NextAction("omx autoresearch", "deprecated"))

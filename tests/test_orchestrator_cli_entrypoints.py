@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 
 from paperorchestra.cli import _orchestrator_summary_lines, build_parser, main
+from paperorchestra.models import InputBundle
+from paperorchestra.session import artifact_path, create_session, save_session
 
 
 @contextlib.contextmanager
@@ -37,11 +39,40 @@ class OrchestratorCliEntrypointTests(unittest.TestCase):
         )
         return material
 
+    def _write_draft_session(self, root: Path) -> None:
+        for name, text in {
+            "idea.md": "Synthetic idea.\n",
+            "experimental_log.md": "Synthetic experiment log.\n",
+            "template.tex": "\\documentclass{article}\\begin{document}\\end{document}\n",
+            "guidelines.md": "Synthetic guidelines.\n",
+        }.items():
+            (root / name).write_text(text, encoding="utf-8")
+        figures = root / "figures"
+        figures.mkdir()
+        state = create_session(
+            root,
+            InputBundle(
+                str(root / "idea.md"),
+                str(root / "experimental_log.md"),
+                str(root / "template.tex"),
+                str(root / "guidelines.md"),
+                str(figures),
+            ),
+            allow_outside_workspace=True,
+        )
+        paper = artifact_path(root, "paper.full.tex", state.session_id)
+        paper.write_text("Synthetic draft. PRIVATE_CLI_DRAFT_TEXT_SHOULD_NOT_LEAK\n", encoding="utf-8")
+        state.artifacts.paper_full_tex = str(paper)
+        state.current_phase = "draft_complete"
+        state.active_artifact = "paper.full.tex"
+        save_session(root, state)
+
     def test_cli_parser_exposes_high_level_orchestrator_commands(self) -> None:
         parser = build_parser()
         self.assertEqual(parser.parse_args(["inspect-state"]).command, "inspect-state")
         self.assertEqual(parser.parse_args(["orchestrate"]).command, "orchestrate")
         self.assertTrue(parser.parse_args(["orchestrate", "--execute-local"]).execute_local)
+        self.assertTrue(parser.parse_args(["orchestrate", "--plan-full-loop"]).plan_full_loop)
         self.assertEqual(parser.parse_args(["continue-project"]).command, "continue-project")
         self.assertEqual(
             parser.parse_args(["answer-human-needed", "--answer", "Use the supported weaker claim."]).command,
@@ -210,3 +241,26 @@ class OrchestratorCliEntrypointTests(unittest.TestCase):
         self.assertEqual(payload["execution"], "bounded_plan_only")
         self.assertIn("state", payload)
         self.assertTrue(manifest_exists)
+
+    def test_orchestrate_plan_full_loop_json_returns_plan_only_without_execution_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, _chdir(tmp):
+            root = Path(tmp)
+            self._write_draft_session(root)
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main(["orchestrate", "--plan-full-loop", "--json"])
+            payload = json.loads(stdout.getvalue())
+            rendered = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["execution"], "bounded_full_loop_plan")
+        self.assertEqual(payload["action_taken"], "none")
+        self.assertNotIn("execution_record", payload)
+        self.assertEqual(payload["next_actions"][0]["action_type"], "build_scoring_bundle")
+        self.assertNotIn("PRIVATE_CLI_DRAFT_TEXT_SHOULD_NOT_LEAK", rendered)
+        self.assertNotIn("omx exec", rendered)
+
+    def test_orchestrate_execute_local_and_plan_full_loop_are_mutually_exclusive(self) -> None:
+        parser = build_parser()
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["orchestrate", "--execute-local", "--plan-full-loop"])

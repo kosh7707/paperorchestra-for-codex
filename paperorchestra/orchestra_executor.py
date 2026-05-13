@@ -33,6 +33,8 @@ OMX_ACTION_SURFACES = {
     "start_ralph": "$ralph",
     "start_ultraqa": "$ultraqa",
     "record_trace_summary": "$trace",
+    "run_critic_consensus": "$critic-consensus",
+    "run_third_critic_adjudication": "$critic-adjudication",
 }
 ADAPTER_REQUIRED_ACTIONS = {
     "provide_material",
@@ -42,6 +44,7 @@ ADAPTER_REQUIRED_ACTIONS = {
     "auto_weaken_or_delete_claim",
     "compile_current",
     "export_results",
+    "match_supplied_figures",
 }
 TERMINAL_BLOCK_ACTIONS = {"block"}
 ALLOWED_RISKS = {"low", "medium", "high"}

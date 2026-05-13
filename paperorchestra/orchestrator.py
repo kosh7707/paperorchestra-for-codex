@@ -6,11 +6,14 @@ from typing import Any
 
 from .orchestra_claims import build_claim_graph_from_materials
 from .orchestra_executor import ActionExecutor, ExecutionRecord
+from .orchestra_consensus import CriticConsensus
+from .orchestra_loop import FullLoopPlanner, LoopFacts
 from .orchestra_materials import build_material_inventory, build_source_digest
 from .orchestra_omx import build_research_mission_invocation_evidence
 from .orchestra_planner import ActionPlanner
 from .orchestra_references import build_reference_metadata_audit
 from .orchestra_research import build_evidence_research_mission
+from .orchestra_scoring import ScholarlyScore, ScoringInputBundle
 from .orchestra_state import OrchestraFacets, OrchestraState, file_sha256
 from .session import load_session
 
@@ -46,6 +49,39 @@ class OrchestraOrchestrator:
 
     def run_until_blocked(self, *, material_path: str | Path | None = None) -> OrchestratorRunResult:
         return self._result_from_state(_run_until_blocked(self.cwd, material_path=material_path))
+
+    def plan_full_loop(
+        self,
+        *,
+        material_path: str | Path | None = None,
+        state: OrchestraState | None = None,
+        scoring_bundle: ScoringInputBundle | None = None,
+        score: ScholarlyScore | None = None,
+        consensus: CriticConsensus | None = None,
+        high_risk_readiness: bool = False,
+        compiled: bool = False,
+        exported: bool = False,
+    ) -> OrchestratorRunResult:
+        current = state.clone() if state is not None else self.inspect_state(material_path=material_path)
+        decision = FullLoopPlanner().plan(
+            LoopFacts(
+                state=current,
+                scoring_bundle=scoring_bundle,
+                score=score,
+                consensus=consensus,
+                high_risk_readiness=high_risk_readiness,
+                compiled=compiled,
+                exported=exported,
+            )
+        )
+        planned_state = decision.state
+        planned_state.next_actions = decision.actions
+        return OrchestratorRunResult(
+            state=planned_state,
+            execution="bounded_full_loop_plan",
+            action_taken="none",
+            execution_record=None,
+        )
 
     def step(
         self,

@@ -73,6 +73,16 @@ class OrchestraOmxInvocationTests(unittest.TestCase):
                 input_payload={"task": "synthetic"},
             )
 
+    def test_full_loop_critic_labels_are_not_invocation_evidence_surfaces_yet(self) -> None:
+        for surface in {"$critic-consensus", "$critic-adjudication"}:
+            with self.subTest(surface=surface):
+                with self.assertRaises(ValueError):
+                    build_planned_omx_invocation_evidence(
+                        surface=surface,
+                        purpose="critic_planning",
+                        input_payload={"task": "synthetic"},
+                    )
+
     def test_public_evidence_hashes_input_without_raw_private_marker(self) -> None:
         marker = "SYNTHETIC_PRIVATE_OMX_INPUT_SHOULD_NOT_LEAK"
         evidence = build_planned_omx_invocation_evidence(
