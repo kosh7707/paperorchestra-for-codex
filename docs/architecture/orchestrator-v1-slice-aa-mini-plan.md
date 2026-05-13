@@ -330,3 +330,14 @@ git diff --check
 
 Critic implementation validation returned `APPROVE`. Fresh container proof remains
 required after push.
+
+## 13. Fresh container proof after push (2026-05-13)
+
+After commit `b0d773f` was pushed, a fresh container cloned the public remote and
+checked out `orchestrator-v1-runtime` before running the AA proof suite:
+
+```bash
+docker run --rm paperorchestra-ubuntu-tools:24.04 bash -lc 'set -euo pipefail; git clone --quiet https://github.com/kosh7707/paperorchestra-for-codex.git repo; cd repo; git checkout --quiet orchestrator-v1-runtime; git log -1 --oneline; python3 -m venv .venv; . .venv/bin/activate; python -m pip install --quiet -e ".[dev]"; python -m pytest tests/test_orchestra_acceptance_ledger.py -q'
+# b0d773f Add a conservative v1 acceptance ledger
+# 14 passed, 15 subtests passed in 0.24s
+```
