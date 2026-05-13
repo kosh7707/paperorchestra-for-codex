@@ -176,7 +176,7 @@ This slice must not:
 - call real web/S2 search;
 - call real OMX;
 - add citation-intent placement templates;
-- add CCI/private-specific fixtures or logic;
+- add private-domain-specific fixtures or logic;
 - expose new MCP tools;
 - weaken hard gates or readiness semantics.
 

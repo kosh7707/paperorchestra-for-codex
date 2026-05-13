@@ -24,7 +24,7 @@ Out of scope for this branch:
 - B→C→D vertical-slice paper-writing work;
 - scholarly scoring / multi-Critic consensus overhaul;
 - broad MCP/Skill redesign beyond issue #5 compatibility;
-- CCI/private final-smoke material preparation;
+- private final-smoke material preparation;
 - team/ultrawork/autoresearch product runtime integration.
 
 ## Allowed file scope

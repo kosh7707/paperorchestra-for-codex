@@ -125,7 +125,7 @@ Slice H must not:
 - use Semantic Scholar/web search;
 - ask humans for source/citation gaps;
 - make drafting allowed merely because candidates exist;
-- introduce CCI/private/domain-specific rules;
+- introduce private/domain-specific rules;
 - emit raw private claim text in public state;
 - replace the later Critic/score/quality gates.
 
