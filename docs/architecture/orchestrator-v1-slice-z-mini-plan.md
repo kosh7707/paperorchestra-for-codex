@@ -206,5 +206,16 @@ git diff --check
 # ok
 ```
 
-Critic implementation validation is still required before commit/push. Fresh
-container proof remains required after the first Slice Z commit is pushed.
+Critic implementation validation returned `APPROVE`; commit/push completed in
+`be89425`. Fresh container proof is recorded below.
+
+## 9. Fresh container proof after push (2026-05-13)
+
+After commit `be89425` was pushed, a fresh container cloned the public remote and
+checked out `orchestrator-v1-runtime` before running the Slice Z proof suite:
+
+```bash
+docker run --rm paperorchestra-ubuntu-tools:24.04 bash -lc 'set -euo pipefail; git clone --quiet https://github.com/kosh7707/paperorchestra-for-codex.git repo; cd repo; git checkout --quiet orchestrator-v1-runtime; git log -1 --oneline; python3 -m venv .venv; . .venv/bin/activate; python -m pip install --quiet -e ".[dev]"; python -m pytest tests/test_orchestrator_omx_entrypoints.py tests/test_orchestrator_cli_entrypoints.py tests/test_orchestrator_mcp_entrypoints.py tests/test_orchestra_omx_executor.py -q'
+# be89425 Make bounded OMX execution explicitly opt-in
+# 46 passed, 14 subtests passed in 0.40s
+```
