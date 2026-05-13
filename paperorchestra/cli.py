@@ -50,6 +50,7 @@ from .operator_feedback import apply_operator_feedback, build_operator_review_pa
 from .orchestra_acceptance import build_acceptance_ledger, render_acceptance_ledger_summary
 from .orchestra_evidence import write_orchestrator_evidence_bundle
 from .orchestra_executor import LocalActionExecutor
+from .orchestra_figures import write_figure_gate_report
 from .orchestra_omx_executor import OmxActionExecutor
 from .orchestra_scorecard import render_scorecard_summary
 from .orchestrator import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state, run_until_blocked as orchestrator_run_until_blocked
@@ -362,6 +363,12 @@ def build_parser() -> argparse.ArgumentParser:
     citation_critic_parser.add_argument("--quality-mode", default="ralph", choices=["draft", "ralph", "claim_safe"])
     figure_review_parser = sub.add_parser("review-figure-placement", help="Build a figure-placement review packet for the current manuscript")
     figure_review_parser.add_argument("--output")
+    figure_gate_parser = sub.add_parser("audit-figure-gate", help="Inventory supplied figures and block unresolved generated-placeholder figure slots")
+    figure_gate_parser.add_argument("--figures-dir")
+    figure_gate_parser.add_argument("--plot-assets")
+    figure_gate_parser.add_argument("--plot-manifest")
+    figure_gate_parser.add_argument("--plot-captions")
+    figure_gate_parser.add_argument("--output")
     validate_current_parser = sub.add_parser("validate-current", help="Record validation issues for the current manuscript without rewriting it")
     validate_current_parser.add_argument("--output")
     validate_claim_safe_parser = sub.add_parser(
@@ -1302,6 +1309,18 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "review-figure-placement":
             path, payload = write_figure_placement_review(cwd, output_path=args.output)
+            print(json.dumps({"path": str(path), "report": payload}, indent=2, ensure_ascii=False))
+            return 0
+
+        if args.command == "audit-figure-gate":
+            path, payload = write_figure_gate_report(
+                cwd,
+                output_path=args.output,
+                figures_dir=args.figures_dir,
+                plot_assets_path=args.plot_assets,
+                plot_manifest_path=args.plot_manifest,
+                plot_captions_path=args.plot_captions,
+            )
             print(json.dumps({"path": str(path), "report": payload}, indent=2, ensure_ascii=False))
             return 0
 
