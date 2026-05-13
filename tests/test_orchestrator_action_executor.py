@@ -3,12 +3,15 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from pathlib import Path
 
 from paperorchestra.orchestra_executor import (
     FAKE_SUPPORTED_ACTIONS,
+    LOCAL_SUPPORTED_ACTIONS,
     ActionExecutionPolicy,
     ExecutionRecord,
     FakeActionExecutor,
+    LocalActionExecutor,
 )
 from paperorchestra.orchestra_planner import KNOWN_ACTIONS
 from paperorchestra.orchestra_state import NextAction, OrchestraFacets, OrchestraState
@@ -16,6 +19,19 @@ from paperorchestra.orchestrator import OrchestraOrchestrator
 
 
 class OrchestratorActionExecutorTests(unittest.TestCase):
+    def _write_materials(self, root: str) -> None:
+        material = Path(root)
+        (material / "idea.md").write_text(
+            "PaperOrchestra improves manuscript safety by separating claims from evidence. "
+            "The system reduces citation uncertainty compared with ad hoc drafting.",
+            encoding="utf-8",
+        )
+        (material / "experiment_log.md").write_text(
+            "Experiment results show 12 checklist violations were caught before drafting. "
+            "The workflow improves reviewability by preserving artifact evidence.",
+            encoding="utf-8",
+        )
+
     def test_default_step_has_no_execution_record(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             payload = OrchestraOrchestrator(tmp).step().to_public_dict()
@@ -108,21 +124,114 @@ class OrchestratorActionExecutorTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_DETAIL_SHOULD_NOT_LEAK", rendered)
         self.assertIn("<redacted>", rendered)
 
+    def test_local_executor_inspect_material_returns_public_inventory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_materials(tmp)
+            record = LocalActionExecutor(material_path=tmp).execute(
+                NextAction("inspect_material", "material_inventory_needed"),
+                OrchestraState.new(cwd=tmp),
+            )
+
+        rendered = json.dumps(record.to_public_dict(), ensure_ascii=False)
+        self.assertEqual(record.status, "executed_local")
+        self.assertTrue(record.succeeded)
+        self.assertIn("material_inventory", rendered)
+        self.assertIn("redacted-material:", rendered)
+        self.assertNotIn("idea.md", rendered)
+        self.assertNotIn("PaperOrchestra improves manuscript safety", rendered)
+
+    def test_local_executor_build_source_digest_returns_public_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_materials(tmp)
+            record = LocalActionExecutor(material_path=tmp).execute(
+                NextAction("build_source_digest", "source_digest_missing"),
+                OrchestraState.new(cwd=tmp),
+            )
+
+        rendered = json.dumps(record.to_public_dict(), ensure_ascii=False)
+        self.assertEqual(record.status, "executed_local")
+        self.assertIn("source_digest", rendered)
+        self.assertNotIn(tmp, rendered)
+        self.assertNotIn("experiment_log.md", rendered)
+
+    def test_local_executor_build_claim_graph_omits_raw_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_materials(tmp)
+            record = LocalActionExecutor(material_path=tmp).execute(
+                NextAction("build_claim_graph", "claim_graph_missing"),
+                OrchestraState.new(cwd=tmp),
+            )
+
+        rendered = json.dumps(record.to_public_dict(), ensure_ascii=False)
+        self.assertEqual(record.status, "executed_local")
+        self.assertIn("claim_graph", rendered)
+        self.assertIn("redacted-claim:", rendered)
+        self.assertNotIn("raw_text", rendered)
+        self.assertNotIn("reduces citation uncertainty", rendered)
+
+    def test_local_executor_build_claim_graph_blocks_on_insufficient_material(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "notes.md").write_text("too short", encoding="utf-8")
+            record = LocalActionExecutor(material_path=tmp).execute(
+                NextAction("build_claim_graph", "claim_graph_missing"),
+                OrchestraState.new(cwd=tmp),
+            )
+
+        rendered = json.dumps(record.to_public_dict(), ensure_ascii=False)
+        self.assertEqual(record.status, "blocked")
+        self.assertFalse(record.succeeded)
+        self.assertIn("source_digest", rendered)
+        self.assertIn("insufficient_material", rendered)
+
+    def test_local_executor_blocks_when_material_path_is_missing(self) -> None:
+        record = LocalActionExecutor().execute(
+            NextAction("inspect_material", "material_inventory_needed"),
+            OrchestraState.new(cwd="/tmp/example"),
+        )
+
+        self.assertEqual(record.status, "blocked")
+        self.assertFalse(record.succeeded)
+
+    def test_local_executor_omx_action_is_unsupported(self) -> None:
+        record = LocalActionExecutor(material_path="/tmp/example").execute(
+            NextAction("start_autoresearch", "research_needed", requires_omx=True),
+            OrchestraState.new(cwd="/tmp/example"),
+        )
+
+        self.assertEqual(record.status, "unsupported")
+        self.assertFalse(record.succeeded)
+
+    def test_local_executor_build_scoring_bundle_uses_current_state_summary(self) -> None:
+        record = LocalActionExecutor().execute(
+            NextAction("build_scoring_bundle", "scorecard_needed"),
+            OrchestraState.new(cwd="/tmp/example"),
+        )
+        rendered = json.dumps(record.to_public_dict(), ensure_ascii=False)
+
+        self.assertEqual(record.status, "executed_local")
+        self.assertIn("scorecard_summary", rendered)
+        self.assertIn("orchestra-scorecard-summary/1", rendered)
+
     def test_policy_classifies_every_known_action(self) -> None:
         policy = ActionExecutionPolicy()
         classifications = {name: policy.classify(NextAction(name, "contract_test")).execution_kind for name in KNOWN_ACTIONS}
 
         self.assertNotIn("unsupported", classifications.values())
 
-    def test_policy_fake_supported_matches_fake_executor_except_terminal_block(self) -> None:
+    def test_policy_local_supported_and_fake_executor_sets_are_explicit(self) -> None:
         policy = ActionExecutionPolicy()
-        policy_fake_supported = {
+        policy_local_supported = {
             name
             for name in KNOWN_ACTIONS
-            if policy.classify(NextAction(name, "contract_test")).execution_kind == "fake_supported"
+            if policy.classify(NextAction(name, "contract_test")).execution_kind == "local_supported"
         }
 
-        self.assertEqual(policy_fake_supported, FAKE_SUPPORTED_ACTIONS - {"block"})
+        self.assertEqual(policy_local_supported, LOCAL_SUPPORTED_ACTIONS)
+        self.assertEqual(
+            FAKE_SUPPORTED_ACTIONS,
+            {"provide_material", "inspect_material", "build_source_digest", "build_claim_graph", "build_scoring_bundle", "block"},
+        )
+        self.assertEqual(policy.classify(NextAction("provide_material", "user_input_needed")).execution_kind, "adapter_required")
         self.assertEqual(policy.classify(NextAction("block", "terminal")).execution_kind, "terminal_block")
 
     def test_policy_omx_actions_use_canonical_surfaces(self) -> None:
@@ -151,6 +260,7 @@ class OrchestratorActionExecutorTests(unittest.TestCase):
             "show_prewriting_notice",
             "re_adjudicate",
             "auto_weaken_or_delete_claim",
+            "provide_material",
             "compile_current",
             "export_results",
         }:
@@ -201,6 +311,26 @@ class OrchestratorActionExecutorTests(unittest.TestCase):
         self.assertEqual(capability.execution_kind, "unsupported")
         self.assertNotIn("omx autoresearch", rendered)
         self.assertIn("<unsupported-action>", rendered)
+
+    def test_step_with_local_executor_appends_evidence_without_state_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_materials(tmp)
+            orchestrator = OrchestraOrchestrator(tmp)
+            before = orchestrator.inspect_state(material_path=tmp)
+            result = orchestrator.step(material_path=tmp, execute=True, executor=LocalActionExecutor(material_path=tmp))
+            payload = result.to_public_dict()
+
+        self.assertEqual(payload["action_taken"], "build_claim_graph")
+        self.assertEqual(payload["execution_record"]["status"], "executed_local")
+        self.assertEqual(result.state.facets.to_dict(), before.facets.to_dict())
+        self.assertEqual(result.state.readiness.to_dict(), before.readiness.to_dict())
+        self.assertEqual(result.state.scores.to_dict(), before.scores.to_dict())
+        self.assertEqual(result.state.hard_gates.to_dict(), before.hard_gates.to_dict())
+        self.assertTrue(any(ref.get("kind") == "orchestrator_execution_record" for ref in result.state.evidence_refs))
+        rendered = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("paper_full_tex", rendered)
+        self.assertNotIn("omx ", rendered)
+        self.assertNotIn("codex ", rendered)
 
 
 if __name__ == "__main__":

@@ -1,12 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Protocol
 
+from .orchestra_claims import build_claim_graph_from_materials
+from .orchestra_materials import build_material_inventory, build_source_digest
+from .orchestra_scorecard import build_scorecard_summary
 from .orchestra_state import NextAction, OrchestraState
 
 EXECUTION_RECORD_SCHEMA_VERSION = "orchestrator-execution-record/1"
 ACTION_CAPABILITY_SCHEMA_VERSION = "orchestrator-action-capability/1"
+LOCAL_SUPPORTED_ACTIONS = {
+    "inspect_material",
+    "build_source_digest",
+    "build_claim_graph",
+    "build_scoring_bundle",
+}
 FAKE_SUPPORTED_ACTIONS = {
     "provide_material",
     "inspect_material",
@@ -15,7 +25,6 @@ FAKE_SUPPORTED_ACTIONS = {
     "build_scoring_bundle",
     "block",
 }
-POLICY_FAKE_SUPPORTED_ACTIONS = FAKE_SUPPORTED_ACTIONS - {"block"}
 OMX_ACTION_SURFACES = {
     "start_autoresearch": "$autoresearch",
     "start_autoresearch_goal": "$autoresearch-goal",
@@ -26,6 +35,7 @@ OMX_ACTION_SURFACES = {
     "record_trace_summary": "$trace",
 }
 ADAPTER_REQUIRED_ACTIONS = {
+    "provide_material",
     "build_evidence_obligations",
     "show_prewriting_notice",
     "re_adjudicate",
@@ -50,7 +60,7 @@ class ExecutionRecord:
 
     @property
     def succeeded(self) -> bool:
-        return self.status == "executed_fake"
+        return self.status in {"executed_fake", "executed_local"}
 
     def to_public_dict(self) -> dict[str, Any]:
         return {
@@ -96,11 +106,11 @@ class ActionExecutionPolicy:
     def classify(self, action: NextAction) -> ActionCapability:
         action_type = action.action_type
         risk = _normalize_risk(action.risk)
-        if action_type in POLICY_FAKE_SUPPORTED_ACTIONS:
+        if action_type in LOCAL_SUPPORTED_ACTIONS:
             return ActionCapability(
                 action_type=action_type,
-                execution_kind="fake_supported",
-                adapter_hint="fake",
+                execution_kind="local_supported",
+                adapter_hint="local",
                 risk=risk,
             )
         if action_type in OMX_ACTION_SURFACES:
@@ -164,6 +174,102 @@ class FakeActionExecutor:
                 }
             ],
             state_rebuild_required=True,
+        )
+
+
+class LocalActionExecutor:
+    adapter_name = "local"
+
+    def __init__(self, *, material_path: str | Path | None = None) -> None:
+        self.material_path = Path(material_path).resolve() if material_path is not None else None
+
+    def execute(self, action: NextAction, state: OrchestraState) -> ExecutionRecord:
+        if action.action_type not in LOCAL_SUPPORTED_ACTIONS:
+            return ExecutionRecord(
+                action_type=action.action_type,
+                reason=action.reason,
+                status="unsupported",
+                adapter=self.adapter_name,
+                evidence_refs=[],
+                state_rebuild_required=False,
+            )
+        if action.action_type == "build_scoring_bundle":
+            return self._executed(
+                action,
+                [
+                    {
+                        "kind": "scorecard_summary",
+                        "payload": build_scorecard_summary(state),
+                    }
+                ],
+            )
+
+        material = self._material_path()
+        if material is None:
+            return self._blocked(action, "material_path_missing")
+
+        inventory = build_material_inventory(material)
+        inventory_ref = {"kind": "material_inventory", "payload": inventory.to_public_dict()}
+        if action.action_type == "inspect_material":
+            return self._executed(action, [inventory_ref])
+
+        digest = build_source_digest(inventory)
+        digest_ref = {"kind": "source_digest", "payload": digest.to_public_dict()}
+        if action.action_type == "build_source_digest":
+            return self._executed(action, [inventory_ref, digest_ref])
+
+        if action.action_type == "build_claim_graph":
+            if not digest.sufficient:
+                return self._blocked(action, "source_digest_not_ready", [inventory_ref, digest_ref])
+            report = build_claim_graph_from_materials(material, inventory, digest)
+            report_ref = {"kind": "claim_graph", "payload": report.to_public_dict()}
+            status = "executed_local" if report.ready else "blocked"
+            return ExecutionRecord(
+                action_type=action.action_type,
+                reason=action.reason if report.ready else "claim_graph_not_ready",
+                status=status,
+                adapter=self.adapter_name,
+                evidence_refs=[inventory_ref, digest_ref, report_ref],
+                state_rebuild_required=True,
+            )
+
+        return ExecutionRecord(
+            action_type=action.action_type,
+            reason=action.reason,
+            status="unsupported",
+            adapter=self.adapter_name,
+            evidence_refs=[],
+            state_rebuild_required=False,
+        )
+
+    def _material_path(self) -> Path | None:
+        if self.material_path is None or not self.material_path.exists():
+            return None
+        return self.material_path
+
+    def _executed(self, action: NextAction, evidence_refs: list[dict[str, Any]]) -> ExecutionRecord:
+        return ExecutionRecord(
+            action_type=action.action_type,
+            reason=action.reason,
+            status="executed_local",
+            adapter=self.adapter_name,
+            evidence_refs=evidence_refs,
+            state_rebuild_required=True,
+        )
+
+    def _blocked(
+        self,
+        action: NextAction,
+        reason: str,
+        evidence_refs: list[dict[str, Any]] | None = None,
+    ) -> ExecutionRecord:
+        return ExecutionRecord(
+            action_type=action.action_type,
+            reason=reason,
+            status="blocked",
+            adapter=self.adapter_name,
+            evidence_refs=list(evidence_refs or []),
+            state_rebuild_required=False,
         )
 
 
