@@ -38,6 +38,8 @@ class OrchestratorMcpEntrypointTests(unittest.TestCase):
             payload = _decode_text_result(TOOL_HANDLERS["inspect_state"]({"cwd": tmp}))
 
         self.assertEqual(payload["schema_version"], "orchestra-state/1")
+        self.assertIn("scorecard_summary", payload)
+        self.assertEqual(payload["scorecard_summary"]["status"], "unscored")
         self.assertEqual(payload["next_actions"][0]["action_type"], "provide_material")
 
     def test_mcp_export_results_returns_bounded_plan_when_no_export_available(self) -> None:

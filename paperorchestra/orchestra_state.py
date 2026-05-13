@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .orchestra_scorecard import build_scorecard_summary
+
 SCHEMA_VERSION = "orchestra-state/1"
 
 
@@ -201,6 +203,7 @@ class OrchestraState:
             "facets": self.facets.to_dict(),
             "hard_gates": self.hard_gates.to_dict(),
             "scores": self.scores.to_dict(),
+            "scorecard_summary": build_scorecard_summary(self),
             "readiness": self.readiness.to_dict(),
             "five_axis_status": dict(self.five_axis_status),
             "blocking_reasons": list(self.blocking_reasons),

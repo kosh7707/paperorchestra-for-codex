@@ -47,6 +47,7 @@ from .omx_bridge import cleanup_omx_tmp
 from .omx_diagnostics import export_omx_evidence, write_omx_review_handoff
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
 from .orchestra_evidence import write_orchestrator_evidence_bundle
+from .orchestra_scorecard import render_scorecard_summary
 from .orchestrator import inspect_state as orchestrator_inspect_state, run_until_blocked as orchestrator_run_until_blocked
 from .quality_loop import write_quality_eval, write_quality_loop_plan
 from .quality_gate import write_quality_gate
@@ -744,12 +745,15 @@ def _orchestrator_summary_lines(payload: dict[str, object]) -> list[str]:
     if not isinstance(actions, list):
         actions = []
     readiness = payload.get("readiness") if isinstance(payload.get("readiness"), dict) else {}
+    scorecard = payload.get("scorecard_summary") if isinstance(payload.get("scorecard_summary"), dict) else {}
     first_action = actions[0].get("action_type") if actions and isinstance(actions[0], dict) else "none"
-    return [
+    lines = [
         "PaperOrchestra orchestrator state",
+        render_scorecard_summary(scorecard) if scorecard else "Score: unscored",
         f"Readiness: {readiness.get('label', 'unknown')}",
         f"Next action: {first_action}",
     ]
+    return lines
 
 
 def _print_orchestrator_payload(payload: dict[str, object], *, json_output: bool) -> None:
