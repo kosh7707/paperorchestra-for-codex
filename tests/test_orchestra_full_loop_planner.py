@@ -5,8 +5,25 @@ import unittest
 from paperorchestra.orchestra_consensus import ConsensusPolicy, CriticVerdict
 from paperorchestra.orchestra_loop import FullLoopPlanner, LoopFacts
 from paperorchestra.orchestra_planner import KNOWN_ACTIONS
-from paperorchestra.orchestra_scoring import ScholarlyScore, ScoringBundleBuilder
+from paperorchestra.orchestra_scoring import SCORE_DIMENSIONS, ScholarlyScore, ScoreDimensionAssessment, ScoringBundleBuilder
 from paperorchestra.orchestra_state import HardGateStatus, OrchestraFacets, OrchestraState, ScoreSummary
+
+
+def _complete_score(overall: float = 90.0, readiness_band: str = "near_ready") -> ScholarlyScore:
+    return ScholarlyScore(
+        overall=overall,
+        readiness_band=readiness_band,
+        evidence_links=["score.json"],
+        dimensions={
+            dimension: ScoreDimensionAssessment(
+                score=overall,
+                confidence="medium",
+                rationale=f"{dimension} rationale",
+                evidence_links=["score.json"],
+            )
+            for dimension in SCORE_DIMENSIONS
+        },
+    )
 
 
 class OrchestraFullLoopPlannerTests(unittest.TestCase):
@@ -23,7 +40,7 @@ class OrchestraFullLoopPlannerTests(unittest.TestCase):
 
     def test_high_risk_readiness_without_consensus_plans_critic_consensus(self) -> None:
         state = OrchestraState.new(cwd="/tmp/example", facets=OrchestraFacets(quality="near_ready"))
-        score = ScholarlyScore(overall=82.0, readiness_band="near_ready", evidence_links=["bundle.json"])
+        score = _complete_score(82.0, "near_ready")
         decision = FullLoopPlanner().plan(LoopFacts(state=state, score=score, high_risk_readiness=True))
         self.assertEqual(decision.actions[0].action_type, "run_critic_consensus")
 
@@ -53,7 +70,7 @@ class OrchestraFullLoopPlannerTests(unittest.TestCase):
             required_artifacts={"paper": "paper.full.tex"},
             compressed_evidence={"summary": "safe"},
         )
-        score = ScholarlyScore(overall=90.0, readiness_band="human_finalization_candidate", evidence_links=["bundle.json"])
+        score = _complete_score(90.0, "human_finalization_candidate")
         consensus = ConsensusPolicy().evaluate(
             [CriticVerdict("A", "near_ready", ["score.json"]), CriticVerdict("B", "near_ready", ["score.json"])]
         )
@@ -73,7 +90,7 @@ class OrchestraFullLoopPlannerTests(unittest.TestCase):
             required_artifacts={"paper": "paper.full.tex"},
             compressed_evidence={"summary": "safe"},
         )
-        score = ScholarlyScore(overall=90.0, readiness_band="human_finalization_candidate", evidence_links=["bundle.json"])
+        score = _complete_score(90.0, "human_finalization_candidate")
         consensus = ConsensusPolicy().evaluate(
             [CriticVerdict("A", "near_ready", ["score.json"]), CriticVerdict("B", "near_ready", ["score.json"])]
         )
@@ -93,7 +110,7 @@ class OrchestraFullLoopPlannerTests(unittest.TestCase):
             required_artifacts={"paper": "paper.full.tex"},
             compressed_evidence={"summary": "safe"},
         )
-        score = ScholarlyScore(overall=90.0, readiness_band="human_finalization_candidate", evidence_links=["bundle.json"])
+        score = _complete_score(90.0, "human_finalization_candidate")
         consensus = ConsensusPolicy().evaluate(
             [CriticVerdict("A", "near_ready", ["score.json"]), CriticVerdict("B", "near_ready", ["score.json"])]
         )
@@ -113,7 +130,7 @@ class OrchestraFullLoopPlannerTests(unittest.TestCase):
             required_artifacts={"paper": "paper.full.tex"},
             compressed_evidence={"summary": "safe"},
         )
-        score = ScholarlyScore(overall=50.0, readiness_band="rough_draft", evidence_links=["bundle.json"])
+        score = _complete_score(50.0, "rough_draft")
         consensus = ConsensusPolicy().evaluate(
             [CriticVerdict("A", "not_ready", ["score.json"]), CriticVerdict("B", "not_ready", ["score.json"])]
         )
@@ -123,3 +140,10 @@ class OrchestraFullLoopPlannerTests(unittest.TestCase):
 
     def test_deprecated_omx_autoresearch_action_not_known(self) -> None:
         self.assertNotIn("omx autoresearch", " ".join(KNOWN_ACTIONS))
+
+    def test_overall_only_legacy_score_routes_to_build_scoring_bundle(self) -> None:
+        state = OrchestraState.new(cwd="/tmp/example", facets=OrchestraFacets(quality="near_ready"))
+        score = ScholarlyScore(overall=90.0, readiness_band="near_ready", evidence_links=["score.json"])
+        self.assertFalse(score.valid)
+        decision = FullLoopPlanner().plan(LoopFacts(state=state, score=score, high_risk_readiness=True))
+        self.assertEqual(decision.actions[0].action_type, "build_scoring_bundle")
