@@ -46,6 +46,7 @@ ADAPTER_REQUIRED_ACTIONS = {
 TERMINAL_BLOCK_ACTIONS = {"block"}
 ALLOWED_RISKS = {"low", "medium", "high"}
 PRIVATE_KEYS = {"raw_text", "prompt", "argv", "executable_command"}
+PUBLIC_SAFE_KEYS = {"private_safe", "private_safe_summary"}
 
 
 @dataclass
@@ -279,7 +280,7 @@ def _redact_public(value: Any) -> Any:
         redacted: dict[str, Any] = {}
         for key, item in value.items():
             key_text = str(key)
-            if key_text.startswith("private_") or key_text in PRIVATE_KEYS:
+            if (key_text.startswith("private_") and key_text not in PUBLIC_SAFE_KEYS) or key_text in PRIVATE_KEYS:
                 redacted[key_text] = "<redacted>"
             else:
                 redacted[key_text] = _redact_public(item)

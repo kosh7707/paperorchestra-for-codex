@@ -15,7 +15,7 @@ from paperorchestra.orchestra_executor import (
 )
 from paperorchestra.orchestra_planner import KNOWN_ACTIONS
 from paperorchestra.orchestra_state import NextAction, OrchestraFacets, OrchestraState
-from paperorchestra.orchestrator import OrchestraOrchestrator
+from paperorchestra.orchestrator import OrchestraOrchestrator, _apply_local_execution_record
 
 
 class OrchestratorActionExecutorTests(unittest.TestCase):
@@ -313,26 +313,171 @@ class OrchestratorActionExecutorTests(unittest.TestCase):
         self.assertNotIn("omx autoresearch", rendered)
         self.assertIn("<unsupported-action>", rendered)
 
-    def test_step_with_local_executor_appends_evidence_without_state_mutation(self) -> None:
+    def test_step_with_local_executor_advances_claim_graph_state_after_execution(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             self._write_materials(tmp)
             orchestrator = OrchestraOrchestrator(tmp)
-            before = orchestrator.inspect_state(material_path=tmp)
             result = orchestrator.step(material_path=tmp, execute=True, executor=LocalActionExecutor(material_path=tmp))
             payload = result.to_public_dict()
 
         self.assertEqual(payload["action_taken"], "build_claim_graph")
         self.assertEqual(payload["execution"], "bounded_local_execution")
         self.assertEqual(payload["execution_record"]["status"], "executed_local")
-        self.assertEqual(result.state.facets.to_dict(), before.facets.to_dict())
-        self.assertEqual(result.state.readiness.to_dict(), before.readiness.to_dict())
-        self.assertEqual(result.state.scores.to_dict(), before.scores.to_dict())
-        self.assertEqual(result.state.hard_gates.to_dict(), before.hard_gates.to_dict())
+        self.assertEqual(result.state.facets.claims, "candidate")
+        self.assertEqual(result.state.facets.evidence, "research_needed")
+        self.assertEqual(result.state.facets.citations, "unknown_refs")
+        self.assertEqual(result.state.readiness.label, "research_needed")
+        self.assertNotEqual(result.state.facets.writing, "drafting_allowed")
+        self.assertEqual(result.state.next_actions[0].action_type, "start_autoresearch")
+        self.assertEqual(result.state.next_actions[0].omx_surface, "$autoresearch")
         self.assertTrue(any(ref.get("kind") == "orchestrator_execution_record" for ref in result.state.evidence_refs))
         rendered = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("paper_full_tex", rendered)
         self.assertNotIn("omx ", rendered)
         self.assertNotIn("codex ", rendered)
+
+    def test_fake_executor_does_not_advance_state_after_execution(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = OrchestraOrchestrator(tmp).step(execute=True, executor=FakeActionExecutor())
+
+        self.assertEqual(result.execution, "bounded_fake_execution")
+        self.assertEqual(result.state.facets.claims, "missing")
+        self.assertEqual(result.state.readiness.label, "needs_material")
+
+    def test_apply_local_source_digest_record_advances_to_claim_graph_action(self) -> None:
+        state = OrchestraState.new(
+            cwd="/tmp/example",
+            facets=OrchestraFacets(material="inventory_needed", source_digest="missing"),
+        )
+        state.next_actions = [NextAction("inspect_material", "material_inventory_needed")]
+        _apply_local_execution_record(
+            state,
+            {
+                "action_type": "build_source_digest",
+                "status": "executed_local",
+                "adapter": "local",
+                "evidence_refs": [
+                    {
+                        "kind": "source_digest",
+                        "payload": {
+                            "schema_version": "source-digest/1",
+                            "sufficient": True,
+                            "private_safe_summary": True,
+                        },
+                    }
+                ],
+            },
+        )
+
+        self.assertEqual(state.facets.material, "inventoried_sufficient")
+        self.assertEqual(state.facets.source_digest, "ready")
+        self.assertEqual(state.facets.artifacts, "fresh")
+        self.assertEqual(state.next_actions[0].action_type, "build_claim_graph")
+
+    def test_apply_local_inspect_material_record_does_not_claim_digest_readiness(self) -> None:
+        state = OrchestraState.new(
+            cwd="/tmp/example",
+            facets=OrchestraFacets(material="inventory_needed", source_digest="missing"),
+        )
+        state.next_actions = [NextAction("inspect_material", "material_inventory_needed")]
+        _apply_local_execution_record(
+            state,
+            {
+                "action_type": "inspect_material",
+                "status": "executed_local",
+                "adapter": "local",
+                "evidence_refs": [
+                    {
+                        "kind": "material_inventory",
+                        "payload": {
+                            "schema_version": "material-inventory/1",
+                            "file_count": 2,
+                            "private_safe_summary": True,
+                        },
+                    }
+                ],
+            },
+        )
+
+        self.assertNotEqual(state.facets.source_digest, "ready")
+        self.assertNotEqual(state.next_actions[0].action_type, "build_claim_graph")
+
+    def test_apply_local_malformed_claim_graph_record_does_not_advance(self) -> None:
+        state = OrchestraState.new(
+            cwd="/tmp/example",
+            facets=OrchestraFacets(material="inventoried_sufficient", source_digest="ready", claims="missing"),
+        )
+        state.next_actions = [NextAction("build_claim_graph", "claim_graph_missing")]
+        _apply_local_execution_record(
+            state,
+            {
+                "action_type": "build_claim_graph",
+                "status": "executed_local",
+                "adapter": "local",
+                "evidence_refs": [
+                    {
+                        "kind": "claim_graph",
+                        "payload": {
+                            "schema_version": "claim-graph/1",
+                            "ready": True,
+                            "evidence_obligations": [],
+                            "citation_obligations": [],
+                        },
+                    }
+                ],
+            },
+        )
+
+        self.assertEqual(state.facets.claims, "missing")
+        self.assertEqual(state.next_actions[0].action_type, "build_claim_graph")
+
+    def test_apply_local_malformed_source_digest_record_does_not_advance(self) -> None:
+        state = OrchestraState.new(
+            cwd="/tmp/example",
+            facets=OrchestraFacets(material="inventory_needed", source_digest="missing", artifacts="unknown"),
+        )
+        state.next_actions = [NextAction("build_source_digest", "source_digest_missing")]
+        _apply_local_execution_record(
+            state,
+            {
+                "action_type": "build_source_digest",
+                "status": "executed_local",
+                "adapter": "local",
+                "evidence_refs": [
+                    {
+                        "kind": "source_digest",
+                        "payload": {
+                            "schema_version": "source-digest/1",
+                            "sufficient": True,
+                        },
+                    }
+                ],
+            },
+        )
+
+        self.assertEqual(state.facets.material, "inventory_needed")
+        self.assertEqual(state.facets.source_digest, "missing")
+        self.assertEqual(state.facets.artifacts, "unknown")
+        self.assertEqual(state.next_actions[0].action_type, "build_source_digest")
+
+    def test_apply_local_no_evidence_record_does_not_advance(self) -> None:
+        state = OrchestraState.new(
+            cwd="/tmp/example",
+            facets=OrchestraFacets(material="inventoried_sufficient", source_digest="ready", claims="missing"),
+        )
+        state.next_actions = [NextAction("build_claim_graph", "claim_graph_missing")]
+        _apply_local_execution_record(
+            state,
+            {
+                "action_type": "build_claim_graph",
+                "status": "executed_local",
+                "adapter": "local",
+                "evidence_refs": [],
+            },
+        )
+
+        self.assertEqual(state.facets.claims, "missing")
+        self.assertEqual(state.next_actions[0].action_type, "build_claim_graph")
 
 
 if __name__ == "__main__":
