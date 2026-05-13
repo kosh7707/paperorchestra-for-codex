@@ -443,3 +443,60 @@ git diff --check: clean
 
 This evidence proves only the generic hotfix behavior. It does not claim that
 the long private final-smoke run has completed.
+
+## 9. Hotfix addendum — claim-coverage repair blocker found during live smoke
+
+Status: added after the first post-redaction private live attempt reached
+section writing and failed on a generic section-contract issue:
+
+```text
+first_failing_predicate: write_sections
+failure class: required claim not meaningfully covered in target section
+```
+
+This is not a provider/auth/search failure. The section writer produced a draft,
+but the validator correctly rejected it because a required claim and its
+narrative role terms were not meaningfully covered in the target section.
+
+### 9.1 Required test before implementation
+
+Add a generic unit test in `tests/test_jobs_and_pipeline.py` where:
+
+- the first section-writing response omits required benchmark coverage;
+- the claim text is machine/control-like enough that deterministic scope-note
+  insertion does not accidentally satisfy the claim;
+- the validator reports required-claim and narrative-role coverage issues;
+- the section writer performs one repair call;
+- the repair prompt includes the validation issues;
+- the second response covers the required claim and the final validation report
+  passes.
+
+### 9.2 Allowed implementation shape
+
+Extend the existing section-writing repair allowlist to include:
+
+- `required_claim_missing`;
+- `required_claim_keyword_stuffing`;
+- `narrative_section_role_missing`.
+
+Also add a repair instruction telling the writer to cover required claims and
+narrative role items with meaningful target-section prose instead of keyword
+stuffing.
+
+Forbidden:
+
+- weakening or removing the validator;
+- making required claims optional;
+- adding private-domain-specific terms or heuristics;
+- bypassing the quality gate by accepting an invalid section draft.
+
+### 9.3 Local evidence before Critic validation
+
+The new regression test failed before implementation because `write_sections`
+did not retry required-claim coverage failures. After implementation:
+
+```text
+pytest tests/test_jobs_and_pipeline.py::PipelineTests::test_section_writer_retries_after_required_claim_coverage_failure
+pytest tests/test_jobs_and_pipeline.py::PipelineTests::test_section_writer_retries_after_citation_contract_failure
+result: 2 passed
+```

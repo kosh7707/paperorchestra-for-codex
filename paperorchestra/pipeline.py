@@ -3421,6 +3421,9 @@ def write_sections(
         "plot_plan_not_reflected",
         "expected_section_missing",
         "expected_section_too_shallow",
+        "required_claim_missing",
+        "required_claim_keyword_stuffing",
+        "narrative_section_role_missing",
     }:
         repair_prompt = f"""
 {user_prompt}
@@ -3435,6 +3438,7 @@ Repair Instructions:
 - Increase citation coverage until the paper satisfies the citation coverage contract, using at least {min_citation_coverage} distinct verified citations when that many are available.
 - Every decimal or percent value in the manuscript must appear verbatim in the measurement log. If a number is not grounded there, remove it or rewrite the claim qualitatively without introducing a replacement number.
 - Ensure every required plot-plan figure is represented in the manuscript. Use available generated plot assets/snippets instead of inventing new figure files.
+- Cover every required claim and narrative role item in its target section with meaningful, section-local prose rather than keyword stuffing.
 - Expand every missing or shallow expected section with grounded, section-specific substance from the technical context, measurement log, section plan, and current template.
 - Do not leave Method, Security Analysis, Implementation/Results, Discussion, or Conclusion as heading-only placeholders.
 - Do not preserve input-note headings as manuscript sections; fold their constraints into Discussion and normal authorial prose.
@@ -3524,7 +3528,7 @@ Repair Instructions:
             latex = retry_latex
             validation_issues = retry_issues
             blocking_issues = retry_blocking
-            lane_notes = lane_notes + ["Section writer draft was retried after citation-contract validation failure."] + retry_lane_notes
+            lane_notes = lane_notes + ["Section writer draft was retried after section-contract validation failure."] + retry_lane_notes
             if citation_replacements:
                 lane_notes.append(
                     "Canonicalized citation-key aliases in section draft: "

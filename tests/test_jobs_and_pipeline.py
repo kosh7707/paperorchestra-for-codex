@@ -48,6 +48,7 @@ from paperorchestra.jobs import get_job_status, list_jobs, start_run_job, tail_j
 from paperorchestra.latex import LatexBuildError, _run_wrapped_command, compile_latex_with_report
 from paperorchestra.literature import mock_verified_paper
 from paperorchestra.mcp_server import TOOLS as MCP_TOOLS, TOOL_HANDLERS, tool_write_sections
+from paperorchestra.narrative import planning_source_hashes
 from paperorchestra.omx_bridge import (
     OmxBridgeError,
     _is_retryable_omx_failure,
@@ -2914,6 +2915,121 @@ Done \\cite{bogus_key}.
 
             self.assertTrue(Path(path).exists())
             self.assertEqual(provider.calls, 2)
+            self.assertTrue(validation["ok"])
+
+    def test_section_writer_retries_after_required_claim_coverage_failure(self) -> None:
+        class RequiredClaimRepairProvider(MockProvider):
+            def __init__(self) -> None:
+                self.calls = 0
+                self.repair_prompt = ""
+
+            def complete(self, request: CompletionRequest) -> str:
+                self.calls += 1
+                if self.calls == 1:
+                    return """```latex
+\\documentclass{article}
+\\begin{document}
+\\section{Evaluation}
+This section mentions evaluation but omits the benchmark substance.
+\\end{document}
+```"""
+                self.repair_prompt = request.user_prompt
+                return """```latex
+\\documentclass{article}
+\\begin{document}
+\\section{Evaluation}
+The throughput and latency evaluation compares the prototype against the baseline under the stated benchmark measurements. This benchmark comparison is limited to the experimental log's measurements, implementation profiles, and message-size settings.
+\\end{document}
+```"""
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            Path(state.inputs.template_path).write_text(
+                "\\documentclass{article}\n\\begin{document}\n\\section{Evaluation}\n\\end{document}\n",
+                encoding="utf-8",
+            )
+            outline_path = artifact_path(root, "outline.json")
+            outline_path.write_text(
+                json.dumps(
+                    {
+                        "plotting_plan": [],
+                        "intro_related_work_plan": {},
+                        "section_plan": [{"section_title": "Evaluation", "goal": "Report benchmark results."}],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            citation_map_path = artifact_path(root, "citation_map.json")
+            citation_map_path.write_text("{}", encoding="utf-8")
+            state.artifacts.outline_json = str(outline_path)
+            state.artifacts.citation_map_json = str(citation_map_path)
+            save_session(root, state)
+            hashes = planning_source_hashes(root)
+            narrative_path = artifact_path(root, "narrative_plan.json")
+            claim_map_path = artifact_path(root, "claim_map.json")
+            citation_plan_path = artifact_path(root, "citation_placement_plan.json")
+            narrative_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "narrative-plan/1",
+                        "source_hashes": hashes,
+                        "thesis": "Evaluate a benchmarked system.",
+                        "contribution_boundary": ["Stay within benchmark evidence."],
+                        "section_roles": [
+                            {
+                                "section_title": "Evaluation",
+                                "role": "Report benchmark evidence.",
+                                "must_cover": ["throughput", "latency", "baseline"],
+                                "must_not_claim": [],
+                            }
+                        ],
+                        "story_beats": [],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            claim_map_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "claim-map/1",
+                        "source_hashes": hashes,
+                        "claims": [
+                            {
+                                "id": "claim-003",
+                                "text": "The draft must preserve source-grounded benchmark narrative without broadening it.",
+                                "claim_type": "benchmark",
+                                "grounding": "experimental_log",
+                                "target_section": "Evaluation",
+                                "required": True,
+                                "evidence_anchors": [{"source_ref": "experimental_log.md", "evidence_excerpt": "throughput latency baseline"}],
+                                "coverage_groups": [["throughput", "latency"], ["baseline"]],
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            citation_plan_path.write_text(
+                json.dumps({"schema_version": "citation-placement-plan/1", "source_hashes": hashes, "placements": []}),
+                encoding="utf-8",
+            )
+            state = load_session(root)
+            state.artifacts.narrative_plan_json = str(narrative_path)
+            state.artifacts.claim_map_json = str(claim_map_path)
+            state.artifacts.citation_placement_plan_json = str(citation_plan_path)
+            save_session(root, state)
+            provider = RequiredClaimRepairProvider()
+
+            path = write_sections(root, provider)
+            validation = json.loads(Path(load_session(root).artifacts.latest_validation_json).read_text(encoding="utf-8"))
+
+            self.assertEqual(provider.calls, 2)
+            self.assertIn("required_claim", provider.repair_prompt)
+            self.assertTrue(Path(path).exists())
             self.assertTrue(validation["ok"])
 
     def test_refinement_rejects_score_regression(self) -> None:
