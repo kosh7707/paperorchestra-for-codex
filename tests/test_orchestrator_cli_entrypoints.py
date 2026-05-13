@@ -94,3 +94,16 @@ class OrchestratorCliEntrypointTests(unittest.TestCase):
         self.assertIn("Score: 58/100", text)
         self.assertIn("source_grounding: 48", text)
         self.assertNotIn("PRIVATE_DOMAIN_DIMENSION_SHOULD_NOT_LEAK", text)
+
+    def test_continue_project_write_evidence_json_writes_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, _chdir(tmp):
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main(["continue-project", "--write-evidence", "--json"])
+            payload = json.loads(stdout.getvalue())
+            manifest_exists = Path(payload["evidence_bundle"]["manifest_path"]).exists()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["execution"], "bounded_plan_only")
+        self.assertIn("state", payload)
+        self.assertTrue(manifest_exists)

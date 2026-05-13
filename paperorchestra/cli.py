@@ -48,7 +48,7 @@ from .omx_diagnostics import export_omx_evidence, write_omx_review_handoff
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
 from .orchestra_evidence import write_orchestrator_evidence_bundle
 from .orchestra_scorecard import render_scorecard_summary
-from .orchestrator import inspect_state as orchestrator_inspect_state, run_until_blocked as orchestrator_run_until_blocked
+from .orchestrator import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state, run_until_blocked as orchestrator_run_until_blocked
 from .quality_loop import write_quality_eval, write_quality_loop_plan
 from .quality_gate import write_quality_gate
 from .ralph_bridge import (
@@ -132,6 +132,8 @@ def build_parser() -> argparse.ArgumentParser:
     orchestrate_parser.add_argument("--json", action="store_true")
 
     continue_project_parser = sub.add_parser("continue-project", help="Continue the v1 orchestrator from current state without live work")
+    continue_project_parser.add_argument("--write-evidence", action="store_true", help="Persist a public-safe orchestrator evidence bundle")
+    continue_project_parser.add_argument("--evidence-output", help="Workspace-contained evidence bundle directory")
     continue_project_parser.add_argument("--json", action="store_true")
 
     answer_human_needed_parser = sub.add_parser("answer-human-needed", help="Record a bounded answer for a human_needed stop (skeleton)")
@@ -794,16 +796,19 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "orchestrate":
-            state = orchestrator_run_until_blocked(cwd, material_path=args.material)
-            payload = {"execution": "bounded_plan_only", "state": state.to_public_dict()}
+            result = OrchestraOrchestrator(cwd).run_until_blocked(material_path=args.material)
+            state = result.state
+            payload = result.to_public_dict()
             if args.write_evidence:
                 payload["evidence_bundle"] = write_orchestrator_evidence_bundle(cwd, state, output_dir=args.evidence_output)
             _print_orchestrator_payload(payload, json_output=args.json)
             return 0
 
         if args.command == "continue-project":
-            state = orchestrator_run_until_blocked(cwd)
-            payload = {"execution": "bounded_plan_only", "state": state.to_public_dict()}
+            result = OrchestraOrchestrator(cwd).run_until_blocked()
+            payload = result.to_public_dict()
+            if args.write_evidence:
+                payload["evidence_bundle"] = write_orchestrator_evidence_bundle(cwd, result.state, output_dir=args.evidence_output)
             _print_orchestrator_payload(payload, json_output=args.json)
             return 0
 

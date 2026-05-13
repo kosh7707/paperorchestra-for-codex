@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from .orchestra_claims import build_claim_graph_from_materials
 from .orchestra_materials import build_material_inventory, build_source_digest
@@ -12,7 +14,47 @@ from .orchestra_state import OrchestraFacets, OrchestraState, file_sha256
 from .session import load_session
 
 
+@dataclass
+class OrchestratorRunResult:
+    state: OrchestraState
+    execution: str = "bounded_plan_only"
+    action_taken: str = "none"
+
+    def to_public_dict(self) -> dict[str, Any]:
+        return {
+            "execution": self.execution,
+            "action_taken": self.action_taken,
+            "state": self.state.to_public_dict(),
+            "next_actions": [action.to_dict() for action in self.state.next_actions],
+            "blocking_reasons": list(self.state.blocking_reasons),
+            "private_safe": True,
+        }
+
+
+class OrchestraOrchestrator:
+    def __init__(self, cwd: str | Path | None = None) -> None:
+        self.cwd = Path(cwd or ".").resolve()
+
+    def inspect_state(self, *, material_path: str | Path | None = None, strict_omx: bool = False) -> OrchestraState:
+        return _inspect_state(self.cwd, material_path=material_path, strict_omx=strict_omx)
+
+    def run_until_blocked(self, *, material_path: str | Path | None = None) -> OrchestratorRunResult:
+        return self._result_from_state(_run_until_blocked(self.cwd, material_path=material_path))
+
+    def step(self, *, material_path: str | Path | None = None, objective: str | None = None) -> OrchestratorRunResult:
+        state = self.inspect_state(material_path=material_path)
+        state.next_actions = ActionPlanner().plan(state, objective=objective)
+        return self._result_from_state(state)
+
+    def _result_from_state(self, state: OrchestraState) -> OrchestratorRunResult:
+        return OrchestratorRunResult(state=state)
+
+
 def inspect_state(cwd: str | Path | None = None, *, material_path: str | Path | None = None, strict_omx: bool = False) -> OrchestraState:
+    return OrchestraOrchestrator(cwd).inspect_state(material_path=material_path, strict_omx=strict_omx)
+
+
+def _inspect_state(cwd: str | Path | None = None, *, material_path: str | Path | None = None, strict_omx: bool = False) -> OrchestraState:
     root = Path(cwd or ".").resolve()
     facets = OrchestraFacets()
     session_id = None
@@ -78,9 +120,13 @@ def inspect_state(cwd: str | Path | None = None, *, material_path: str | Path | 
 
 
 def run_until_blocked(cwd: str | Path | None = None, *, material_path: str | Path | None = None) -> OrchestraState:
+    return OrchestraOrchestrator(cwd).run_until_blocked(material_path=material_path).state
+
+
+def _run_until_blocked(cwd: str | Path | None = None, *, material_path: str | Path | None = None) -> OrchestraState:
     """Run deterministic local orchestration until the next live/external action is needed."""
 
-    state = inspect_state(cwd, material_path=material_path)
+    state = _inspect_state(cwd, material_path=material_path)
     if material_path is None or state.facets.material != "inventoried_sufficient" or state.facets.source_digest != "ready":
         return state
 
