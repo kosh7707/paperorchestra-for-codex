@@ -22,6 +22,7 @@ from .doctor import build_doctor_report, build_session_recovery_hint
 from .environment import build_environment_inventory
 from .fidelity import write_reproducibility_audit
 from .first_user_guide import build_first_user_guide, render_first_user_guide_summary
+from .fresh_smoke_acceptance import write_fresh_smoke_acceptance_summary
 from .io_utils import write_json
 from .eval import (
     write_review_gate_comparison,
@@ -149,6 +150,13 @@ def build_parser() -> argparse.ArgumentParser:
     verifier_parser = sub.add_parser("verify-evidence-checklist", help="Build the v1 verifier evidence checklist without running live critic/model work")
     verifier_parser.add_argument("--output")
     verifier_parser.add_argument("--json", action="store_true")
+
+    fresh_smoke_parser = sub.add_parser("summarize-fresh-smoke", help="Summarize an existing fresh-smoke evidence root without running live work")
+    fresh_smoke_parser.add_argument("--evidence-root", required=True)
+    fresh_smoke_parser.add_argument("--smoke-mode", default="synthetic_container", choices=["synthetic_container", "private_final"])
+    fresh_smoke_parser.add_argument("--material-manifest")
+    fresh_smoke_parser.add_argument("--output")
+    fresh_smoke_parser.add_argument("--json", action="store_true")
 
     continue_project_parser = sub.add_parser("continue-project", help="Continue the v1 orchestrator from current state without live work")
     continue_project_parser.add_argument("--write-evidence", action="store_true", help="Persist a public-safe orchestrator evidence bundle")
@@ -896,6 +904,23 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Verifier evidence checklist: {payload['overall_status']}")
                 for item in payload["items"]:
                     print(f"  - {item['id']}: {item['status']} ({item['reason']})")
+            return 0
+
+        if args.command == "summarize-fresh-smoke":
+            _path, payload = write_fresh_smoke_acceptance_summary(
+                args.evidence_root,
+                output_path=args.output,
+                smoke_mode=args.smoke_mode,
+                material_manifest=args.material_manifest,
+            )
+            if args.json:
+                print(json.dumps(payload, indent=2, ensure_ascii=False))
+            else:
+                print(f"Fresh-smoke acceptance summary: {payload['overall_status']}")
+                print(f"Mode: {payload['smoke_mode']}")
+                print(f"Evidence: {payload['evidence_root_label']}")
+                for check in payload["checks"]:
+                    print(f"  - {check['id']}: {check['status']} ({check['reason']})")
             return 0
 
         if args.command == "continue-project":

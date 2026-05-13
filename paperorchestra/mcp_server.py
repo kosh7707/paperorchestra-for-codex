@@ -71,6 +71,7 @@ from .doctor import build_session_recovery_hint
 from .teach import prepare_teach_bundle
 from .fidelity import write_reproducibility_audit
 from .first_user_guide import build_first_user_guide
+from .fresh_smoke_acceptance import write_fresh_smoke_acceptance_summary
 
 JSON = dict[str, Any]
 
@@ -164,6 +165,21 @@ TOOLS: list[JSON] = [
         "name": "verify_evidence_checklist",
         "description": "Build the v1 verifier evidence checklist without running live Critic/model/OMX work.",
         "inputSchema": {"type": "object", "properties": {"cwd": {"type": "string"}, "output": {"type": "string"}}},
+    },
+    {
+        "name": "summarize_fresh_smoke",
+        "description": "Summarize an existing fresh-smoke evidence root without running live work.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "cwd": {"type": "string"},
+                "evidence_root": {"type": "string"},
+                "smoke_mode": {"type": "string", "enum": ["synthetic_container", "private_final"]},
+                "material_manifest": {"type": "string"},
+                "output": {"type": "string"},
+            },
+            "required": ["evidence_root"],
+        },
     },
 
     {
@@ -1120,6 +1136,25 @@ def tool_verify_evidence_checklist(arguments: JSON) -> JSON:
     return _ok(checklist.to_public_dict())
 
 
+def tool_summarize_fresh_smoke(arguments: JSON) -> JSON:
+    cwd = _default_cwd(arguments)
+    evidence_root = _resolve_arg_path(cwd, arguments["evidence_root"])
+    material_manifest = _resolve_arg_path(cwd, arguments.get("material_manifest")) if arguments.get("material_manifest") else None
+    output = _resolve_arg_path(cwd, arguments.get("output")) if arguments.get("output") else None
+    _path, payload = write_fresh_smoke_acceptance_summary(
+        evidence_root,
+        output_path=output,
+        smoke_mode=arguments.get("smoke_mode", "synthetic_container"),
+        material_manifest=material_manifest,
+    )
+    return _ok(payload)
+
+
+def _resolve_arg_path(cwd: Path, value: Any) -> Path:
+    path = Path(str(value)).expanduser()
+    return path if path.is_absolute() else cwd / path
+
+
 def tool_status(arguments: JSON) -> JSON:
     cwd = _default_cwd(arguments)
     payload = load_session(cwd).to_dict()
@@ -1580,6 +1615,7 @@ TOOL_HANDLERS: dict[str, Callable[[JSON], JSON]] = {
     "answer_human_needed": tool_answer_human_needed,
     "export_results": tool_export_results,
     "verify_evidence_checklist": tool_verify_evidence_checklist,
+    "summarize_fresh_smoke": tool_summarize_fresh_smoke,
     "teach": tool_teach,
     "start_intake": tool_start_intake,
     "get_intake_status": tool_get_intake_status,
