@@ -21,12 +21,24 @@ No actionable open GitHub issue blocked Slice AH planning.
 ## 1. Target result
 
 Slice AG added a public-safe summarizer for existing fresh-smoke evidence roots.
-Slice AH uses that surface for the first real private final-smoke execution pass:
+Slice AH uses that surface for the first real private final-smoke execution pass.
+During preflight, two distinct private inputs were found:
+
+- a raw private zip packet, useful as an answer-key/provenance source and for a
+  redacted private manifest;
+- an already-normalized private fresh-smoke material packet with the required
+  `inputs/`, `materials/`, `policy/`, and `review/` structure, useful as the
+  actual smoke `--material-root`.
+
+The raw zip is **not** the direct `--material-root` for
+`fresh-full-live-smoke-loop.sh`; using it directly would fail material
+invariance because the loop expects the normalized material-packet structure.
+Slice AH therefore:
 
 1. verify the private material packet exists outside the public repo;
-2. prepare an isolated private material directory outside the repo;
+2. prepare/verify an isolated redacted manifest outside the repo;
 3. run a fresh full live smoke in a Docker container with host-mounted private
-   material and host-mounted evidence output;
+   normalized material packet and host-mounted evidence output;
 4. allow up to five bounded operator/human-needed cycles, with the operator role
    handled by Codex/OMX inside the smoke loop;
 5. summarize the resulting evidence with
@@ -53,6 +65,25 @@ Private zip candidate was verified outside the repo:
 
 The public repo must not store the private zip name, extracted filenames,
 claims, figure names, titles, captions, source text, or raw paths.
+
+Normalized private material packet was also verified outside the repo:
+
+```json
+{
+  "redacted_material_root": "redacted-material-root:bc4c709544af",
+  "file_count": 19,
+  "total_bytes": 145969,
+  "extensions": {
+    ".json": 3,
+    ".jsonl": 1,
+    ".md": 6,
+    ".sha256": 2,
+    ".tex": 6,
+    ".txt": 1
+  },
+  "material_invariance_preflight": "pass"
+}
+```
 
 ## 3. Execution boundary
 
@@ -100,10 +131,14 @@ scripts/prepare-private-smoke-materials.py \
 
 Expected:
 
-- extracted material exists outside the repo;
+- extracted/raw provenance material exists outside the repo;
 - `private-smoke-manifest.redacted.json` exists;
 - manifest contains only safe labels/counts/hashes;
 - no public tracked file changes.
+
+Actual live smoke `--material-root` should point to the normalized private
+fresh-smoke material packet, not the raw extracted zip directory, unless a future
+normalizer creates the required packet structure from the raw zip.
 
 ### 4.2 Container dry-run contract
 
@@ -112,7 +147,7 @@ mounts, and wrapper contract can run without touching live models:
 
 ```bash
 docker run --rm \
-  -v "$PRIVATE_PREP:$PRIVATE_PREP:ro" \
+  -v "$PRIVATE_MATERIAL_PACKET:$PRIVATE_MATERIAL_PACKET:ro" \
   -v "$EVIDENCE_ROOT:$EVIDENCE_ROOT:rw" \
   paperorchestra-ubuntu-tools:24.04 bash -lc '
     set -euo pipefail
@@ -124,8 +159,8 @@ docker run --rm \
     PAPERO_CODEX_CLI_PREFIX="<authenticated-codex-omx-provider-command>" \
       scripts/fresh-full-live-smoke-loop.sh \
         --evidence-root "$EVIDENCE_ROOT/dry-run" \
-        --material-root "$PRIVATE_PREP" \
-        --expected-material-root "$PRIVATE_PREP" \
+        --material-root "$PRIVATE_MATERIAL_PACKET" \
+        --expected-material-root "$PRIVATE_MATERIAL_PACKET" \
         --max-operator-cycles 5 \
         --dry-run-contract
   '
@@ -147,8 +182,8 @@ must stay outside tracked files, public evidence notes, and committed summaries:
 PAPERO_CODEX_CLI_PREFIX="<authenticated-codex-omx-provider-command>" \
 scripts/fresh-full-live-smoke-loop.sh \
   --evidence-root <outside-repo-evidence-root> \
-  --material-root <outside-repo-private-material-dir> \
-  --expected-material-root <outside-repo-private-material-dir> \
+  --material-root <outside-repo-normalized-private-material-packet> \
+  --expected-material-root <outside-repo-normalized-private-material-packet> \
   --max-operator-cycles 5
 ```
 
@@ -196,7 +231,7 @@ tracked files.
 .venv/bin/paperorchestra summarize-fresh-smoke \
   --evidence-root <outside-repo-evidence-root> \
   --smoke-mode private_final \
-  --material-manifest <outside-repo-material-dir>/private-smoke-manifest.redacted.json \
+  --material-manifest <outside-repo-redacted-manifest>/private-smoke-manifest.redacted.json \
   --output <outside-or-repo-redacted-summary.json> \
   --json
 ```
