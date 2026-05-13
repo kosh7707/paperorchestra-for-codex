@@ -2473,14 +2473,14 @@ class PipelineTests(unittest.TestCase):
         }
         latex = (
             "\\begin{figure}[t]\n"
-            "\\includegraphics[width=\\columnwidth]{inputs/figures/snm_record_protection_overview.pdf}\n"
+            "\\includegraphics[width=\\columnwidth]{inputs/figures/supplied_protocol_overview.pdf}\n"
             "\\caption{Relative speedup of MethodX over standardized protected-channel baselines for short messages.}\n"
             "\\label{fig:relative-speedup-short-messages}\n"
             "\\end{figure}\n"
         )
         normalized = _normalize_generated_plot_paths(latex, plot_assets_index)
         self.assertIn(r"\input{build/plot-assets/fig_relative_speedup_short_messages.tex}", normalized)
-        self.assertNotIn("inputs/figures/snm_record_protection_overview.pdf", normalized)
+        self.assertNotIn("inputs/figures/supplied_protocol_overview.pdf", normalized)
 
     def test_auto_inserted_plot_usage_skips_when_matching_caption_already_exists(self) -> None:
         latex = (

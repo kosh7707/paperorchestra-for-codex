@@ -59,7 +59,8 @@ class PrivateSmokeSafetyTests(unittest.TestCase):
     def test_leakage_scanner_defaults_to_tracked_file_mode(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             deny = Path(tmp) / "denylist.txt"
-            deny.write_text("TOKEN_THAT_SHOULD_NOT_EXIST_IN_REPO_12345\n", encoding="utf-8")
+            absent_token = "TOKEN_THAT_SHOULD_NOT_EXIST" + "_IN_REPO_12345"
+            deny.write_text(absent_token + "\n", encoding="utf-8")
             code, payload = self._run_json([sys.executable, str(LEAK_SCRIPT), "--denylist", str(deny), "--root", str(ROOT), "--json"])
 
         self.assertEqual(code, 0)
