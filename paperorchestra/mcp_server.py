@@ -415,7 +415,8 @@ TOOLS: list[JSON] = [
                 "artifact_repo": {"type": "string"},
                 "runtime_mode": {"type": "string"},
                 "source": {"type": "string"},
-                "import_seed": {"type": "boolean"}
+                "import_seed": {"type": "boolean"},
+                "require_complete_metadata": {"type": "boolean"}
             },
         },
     },
@@ -428,6 +429,7 @@ TOOLS: list[JSON] = [
                 "cwd": {"type": "string"},
                 "seed_file": {"type": "string"},
                 "source": {"type": "string"},
+                "require_complete_metadata": {"type": "boolean"},
             },
             "required": ["seed_file"],
         },
@@ -1000,6 +1002,7 @@ def tool_research_prior_work_seed(arguments: JSON) -> JSON:
             runtime_mode=arguments.get("runtime_mode", "compatibility"),
             source=arguments.get("source", "codex_web_seed"),
             import_seed=bool(arguments.get("import_seed", False)),
+            require_complete_metadata=bool(arguments.get("require_complete_metadata", False)),
         )
     )
 
@@ -1010,6 +1013,7 @@ def tool_import_prior_work(arguments: JSON) -> JSON:
             _default_cwd(arguments),
             seed_file=arguments["seed_file"],
             source=arguments.get("source", "manual_seed"),
+            require_complete_metadata=bool(arguments.get("require_complete_metadata", False)),
         )
     )
 

@@ -228,6 +228,11 @@ def build_parser() -> argparse.ArgumentParser:
     import_prior_parser = sub.add_parser("import-prior-work", help="Import curated prior-work seeds into citation artifacts")
     import_prior_parser.add_argument("--seed-file", required=True)
     import_prior_parser.add_argument("--source", default="manual_seed")
+    import_prior_parser.add_argument(
+        "--require-complete-metadata",
+        action="store_true",
+        help="Reject seed entries without title, author/organization, and concrete year before building claim-safe references.",
+    )
 
     narrative_parser = sub.add_parser("plan-narrative", help="Write narrative, claim-map, and citation-placement planning artifacts")
     _runtime_mode_args(narrative_parser, strict_flag=True)
@@ -240,6 +245,11 @@ def build_parser() -> argparse.ArgumentParser:
     _runtime_mode_args(research_prior_parser, strict_flag=True)
     research_prior_parser.add_argument("--source", default="codex_web_seed")
     research_prior_parser.add_argument("--import", dest="import_seed", action="store_true")
+    research_prior_parser.add_argument(
+        "--require-complete-metadata",
+        action="store_true",
+        help="When used with --import, reject seed entries without title, author/organization, and concrete year.",
+    )
     _common_provider_args(research_prior_parser)
 
     verify_parser = sub.add_parser("verify-papers", help="Verify candidate papers with Semantic Scholar")
@@ -976,7 +986,16 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "import-prior-work":
-            print(json.dumps(import_prior_work(cwd, seed_file=args.seed_file, source=args.source), indent=2, ensure_ascii=False))
+            print(json.dumps(
+                import_prior_work(
+                    cwd,
+                    seed_file=args.seed_file,
+                    source=args.source,
+                    require_complete_metadata=args.require_complete_metadata,
+                ),
+                indent=2,
+                ensure_ascii=False,
+            ))
             return 0
 
         if args.command == "plan-narrative":
@@ -998,6 +1017,7 @@ def main(argv: list[str] | None = None) -> int:
                     runtime_mode=args.runtime_mode,
                     source=args.source,
                     import_seed=args.import_seed,
+                    require_complete_metadata=args.require_complete_metadata,
                 ), indent=2, ensure_ascii=False))
             return 0
 

@@ -259,11 +259,27 @@ def _normalize_seed_entry(entry: dict[str, Any], *, default_source: str) -> dict
     if not title:
         return None
     source = str(entry.get("source") or entry.get("provenance") or default_source).strip() or default_source
+    authors = _split_authors(
+        entry.get("authors")
+        or entry.get("author")
+        or entry.get("editors")
+        or entry.get("editor")
+        or entry.get("organization")
+    )
     return {
         "title": title,
-        "authors": _split_authors(entry.get("authors") or entry.get("author")),
+        "authors": authors,
         "bibtex_key": str(entry.get("bibtex_key") or "").strip() or None,
         "year": _coerce_year(entry.get("year") or entry.get("publication_year") or entry.get("date")),
+        "year_source": (
+            "year"
+            if _coerce_year(entry.get("year")) is not None
+            else "publication_year"
+            if _coerce_year(entry.get("publication_year")) is not None
+            else "date"
+            if _coerce_year(entry.get("date")) is not None
+            else None
+        ),
         "publication_date": entry.get("publicationDate") or entry.get("publication_date"),
         "venue": str(entry.get("venue") or entry.get("journal") or entry.get("booktitle") or "").strip() or None,
         "abstract": str(entry.get("abstract") or entry.get("summary") or entry.get("notes") or f"Curated prior-work seed imported from {source}.").strip(),
@@ -347,7 +363,7 @@ def _parse_bibtex_seed(text: str, *, default_source: str) -> list[dict[str, Any]
         key = match.group(1).strip()
         body = match.group(2)
         fields: dict[str, str] = {"source": default_source, "provenance_note": f"Imported from BibTeX key {key}.", "bibtex_key": key}
-        for field in ["title", "author", "year", "journal", "booktitle", "venue", "url", "doi", "abstract"]:
+        for field in ["title", "author", "editor", "organization", "year", "journal", "booktitle", "venue", "url", "doi", "abstract"]:
             value = _extract_bibtex_field(body, field)
             if value:
                 fields[field] = value

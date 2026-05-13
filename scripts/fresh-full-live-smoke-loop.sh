@@ -1164,7 +1164,7 @@ else
   record_command_markdown
   write_timeline "- $(date -u +%Y-%m-%dT%H:%M:%SZ) skip import_reference_metadata_seed reason=no_explicit_seed_entries"
 fi
-run_retryable_step research_prior_work "${CLI[@]}" research-prior-work --source "fresh material smoke" --import "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"research_prior_work"' '"logs/research_prior_work.step-retry.jsonl"' 1
+run_retryable_step research_prior_work "${CLI[@]}" research-prior-work --source "fresh material smoke" --import --require-complete-metadata "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"research_prior_work"' '"logs/research_prior_work.step-retry.jsonl"' 1
 run_step verify_papers_live "${CLI[@]}" verify-papers --mode live --on-error skip || fail_now fail_execution_error '"verify_papers_live"' '"logs/verify_papers_live.stderr.log"' 1
 printf 'write_live_verification_summary\n' > "$LOGS/live_verification_provenance.command"
 set +e

@@ -187,10 +187,17 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertIn("grep -Eq '^[[:space:]]*@' inputs/reference_metadata_seed.bib", text)
         self.assertIn("skip import_reference_metadata_seed: no explicit bibliographic seed entries were generated", text)
         self.assertIn('COMMAND_ROWS+=("import_reference_metadata_seed|0")', text)
+        self.assertIn("research-prior-work --source \"fresh material smoke\" --import --require-complete-metadata", text)
         self.assertLess(
             text.index("grep -Eq '^[[:space:]]*@' inputs/reference_metadata_seed.bib"),
             text.index("run_retryable_step research_prior_work"),
         )
+
+    def test_pre_live_secret_scan_does_not_scan_generated_review_logs(self) -> None:
+        text = Path("scripts/pre-live-check.sh").read_text(encoding="utf-8")
+        line = next(line for line in text.splitlines() if line.startswith("run_step secret_scan "))
+        self.assertNotIn(" review ", f" {line} ")
+        self.assertIn("README.md ENVIRONMENT.md NOTICE.md docs paperorchestra tests scripts examples pyproject.toml", line)
 
     def test_demo_mock_ignores_stale_global_paperorchestra_on_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

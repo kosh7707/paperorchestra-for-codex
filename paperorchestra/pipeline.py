@@ -2637,6 +2637,7 @@ def research_prior_work(
     runtime_mode: str = "compatibility",
     source: str = "codex_web_seed",
     import_seed: bool = False,
+    require_complete_metadata: bool = False,
 ) -> dict[str, Any]:
     state = load_session(cwd)
     inputs = _read_inputs(state)
@@ -2706,15 +2707,128 @@ Rules:
     save_session(cwd, state)
     result: dict[str, Any] = {"path": str(output_path), "reference_count": len(payload.get("references", [])), "lane_manifest": str(lane_path)}
     if import_seed:
-        result["imported"] = import_prior_work(cwd, seed_file=output_path, source=source)
+        result["imported"] = import_prior_work(
+            cwd,
+            seed_file=output_path,
+            source=source,
+            require_complete_metadata=require_complete_metadata,
+        )
     return result
 
 
-def import_prior_work(cwd: str | Path | None, *, seed_file: str | Path, source: str = "manual_seed") -> dict[str, str]:
+def _prior_work_metadata_rejection_reasons(entry: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    unknown_values = {"", "unknown", "n/a", "na", "none", "null", "tbd", "todo", "anonymous"}
+
+    def is_unknown(value: Any) -> bool:
+        normalized = re.sub(r"\s+", " ", str(value or "").strip()).lower()
+        return normalized in unknown_values
+
+    if is_unknown(entry.get("title")):
+        reasons.append("missing_title")
+    authors = [author for author in entry.get("authors", []) if not is_unknown(author)]
+    if not authors:
+        reasons.append("missing_author_or_organization")
+    if not isinstance(entry.get("year"), int):
+        reasons.append("missing_year")
+    elif entry.get("year_source") not in {"year", "publication_year"}:
+        reasons.append("missing_explicit_year")
+    return reasons
+
+
+def _filter_prior_work_entries_for_complete_metadata(entries: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    kept: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
+    for index, entry in enumerate(entries, start=1):
+        reasons = _prior_work_metadata_rejection_reasons(entry)
+        if not reasons:
+            kept.append(entry)
+            continue
+        rejected.append(
+            {
+                "index": index,
+                "title": str(entry.get("title") or "").strip() or None,
+                "source": str(entry.get("source") or "").strip() or None,
+                "reasons": reasons,
+                "has_publication_date": bool(str(entry.get("publication_date") or "").strip()),
+            }
+        )
+    return kept, rejected
+
+
+def _write_prior_work_import_rejection_report(
+    cwd: str | Path | None,
+    *,
+    seed_file: str | Path,
+    source: str,
+    original_count: int,
+    kept_count: int,
+    rejected: list[dict[str, Any]],
+    require_complete_metadata: bool,
+) -> Path:
+    path = artifact_path(cwd, "prior_work_import_rejections.json")
+    reason_counts: dict[str, int] = {}
+    for item in rejected:
+        for reason in item.get("reasons", []):
+            if isinstance(reason, str):
+                reason_counts[reason] = reason_counts.get(reason, 0) + 1
+    write_json(
+        path,
+        {
+            "schema_version": "prior-work-import-rejections/1",
+            "seed_file": str(seed_file),
+            "source": source,
+            "require_complete_metadata": require_complete_metadata,
+            "policy": {
+                "required_fields": ["title", "author_or_organization", "year"],
+                "all_rejected_behavior": "fail_import_and_leave_existing_registry_unchanged",
+                "publication_date_without_year": "rejected_until_a_concrete_year_is_provided",
+            },
+            "input_entry_count": original_count,
+            "accepted_entry_count": kept_count,
+            "rejected_entry_count": len(rejected),
+            "reason_counts": reason_counts,
+            "rejected_entries": rejected,
+        },
+    )
+    return path
+
+
+def import_prior_work(
+    cwd: str | Path | None,
+    *,
+    seed_file: str | Path,
+    source: str = "manual_seed",
+    require_complete_metadata: bool = False,
+) -> dict[str, str]:
     state = load_session(cwd)
     entries = load_prior_work_seed(seed_file, source=source)
+    rejection_report_path: Path | None = None
+    if require_complete_metadata:
+        original_count = len(entries)
+        entries, rejected_entries = _filter_prior_work_entries_for_complete_metadata(entries)
+        rejection_report_path = _write_prior_work_import_rejection_report(
+            cwd,
+            seed_file=seed_file,
+            source=source,
+            original_count=original_count,
+            kept_count=len(entries),
+            rejected=rejected_entries,
+            require_complete_metadata=require_complete_metadata,
+        )
+        if rejected_entries:
+            state.notes.append(
+                f"Rejected {len(rejected_entries)} prior-work seed entr(y/ies) with incomplete rendered-reference metadata. "
+                f"Report: {rejection_report_path.name}."
+            )
     registry = prior_work_entries_to_verified_papers(entries, cutoff_date=state.inputs.cutoff_date)
     if not registry:
+        if require_complete_metadata and rejection_report_path is not None:
+            save_session(cwd, state)
+            raise ContractError(
+                f"No complete prior-work entries were imported from {seed_file}. "
+                f"Rejected entries are recorded in {rejection_report_path}."
+            )
         raise ContractError(f"No usable prior-work entries were imported from {seed_file}.")
     prior_registry: list[VerifiedPaper] = []
     if state.artifacts.citation_registry_json and Path(state.artifacts.citation_registry_json).exists():
@@ -2785,13 +2899,16 @@ def import_prior_work(cwd: str | Path | None, *, seed_file: str | Path, source: 
     state.notes.append(f"Imported curated prior work from {seed_file}.")
     state.notes.append(f"Lane manifest recorded: {lane_path.name}")
     save_session(cwd, state)
-    return {
+    result = {
         "candidate_papers_json": str(candidate_path),
         "citation_registry_json": str(registry_path),
         "citation_map_json": str(citation_map_path),
         "references_bib": str(references_path),
         "lane_manifest": str(lane_path),
     }
+    if rejection_report_path is not None:
+        result["rejection_report_json"] = str(rejection_report_path)
+    return result
 
 
 def _min_cite_count(citation_map: dict[str, Any]) -> int:

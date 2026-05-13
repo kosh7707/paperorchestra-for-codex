@@ -128,6 +128,7 @@ from paperorchestra.quality_loop_leakage import _leakage_markers_in_text
 from paperorchestra.quality_loop_plan_logic import _quality_eval_actions
 from paperorchestra.quality_loop_citation_support import ensure_final_citation_review_bound_to_quality_eval
 from paperorchestra.quality_loop_history import _build_cross_iteration
+from paperorchestra.citation_integrity import build_rendered_reference_audit
 from paperorchestra.quality_loop_reviews import _section_quality_check
 from paperorchestra.ralph_bridge import (
     build_qa_loop_brief,
@@ -1647,6 +1648,197 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(candidates["macro_candidates"][0]["discovery_source"], "codex_web_seed")
             self.assertEqual(state.artifacts.references_bib, result["references_bib"])
             self.assertEqual(state.latest_discovery_mode, "codex_web_seed")
+
+    def test_import_prior_work_require_complete_metadata_filters_rendered_reference_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_session_with_minimal_inputs(root)
+            seed_path = root / "prior_work.json"
+            seed_path.write_text(
+                json.dumps(
+                    {
+                        "references": [
+                            {
+                                "title": "Complete Metadata Reference",
+                                "authors": ["Alice Example"],
+                                "year": 2020,
+                                "venue": "Example Venue",
+                                "source": "codex_web_seed",
+                            },
+                            {
+                                "title": "Organization Metadata Reference",
+                                "organization": "Example Standards Group",
+                                "year": 2021,
+                                "venue": "Example Standard",
+                                "source": "codex_web_seed",
+                            },
+                            {
+                                "title": "Publication Date Without Year",
+                                "authors": ["Date Only"],
+                                "publication_date": "2022-01-01",
+                                "venue": "Example Venue",
+                                "source": "codex_web_seed",
+                            },
+                            {
+                                "title": "Date Field Without Explicit Year",
+                                "authors": ["Date Field"],
+                                "date": "2022-01-01",
+                                "venue": "Example Venue",
+                                "source": "codex_web_seed",
+                            },
+                            {
+                                "title": "Missing Year Reference",
+                                "authors": ["No Year"],
+                                "venue": "Example Venue",
+                                "source": "codex_web_seed",
+                            },
+                            {
+                                "title": "Unknown Author Reference",
+                                "authors": ["Unknown"],
+                                "year": 2022,
+                                "venue": "Example Venue",
+                                "source": "codex_web_seed",
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = import_prior_work(
+                root,
+                seed_file=seed_path,
+                source="codex_web_seed",
+                require_complete_metadata=True,
+            )
+            citation_map = json.loads(Path(result["citation_map_json"]).read_text(encoding="utf-8"))
+            references_bib = Path(result["references_bib"]).read_text(encoding="utf-8")
+            rejection_report = json.loads(Path(result["rejection_report_json"]).read_text(encoding="utf-8"))
+
+            self.assertEqual(rejection_report["accepted_entry_count"], 2)
+            self.assertEqual(rejection_report["rejected_entry_count"], 4)
+            self.assertEqual(
+                rejection_report["reason_counts"],
+                {"missing_year": 2, "missing_explicit_year": 1, "missing_author_or_organization": 1},
+            )
+            self.assertEqual(
+                rejection_report["policy"]["publication_date_without_year"],
+                "rejected_until_a_concrete_year_is_provided",
+            )
+            self.assertIn("Complete Metadata Reference", references_bib)
+            self.assertIn("Organization Metadata Reference", references_bib)
+            self.assertNotIn("Publication Date Without Year", references_bib)
+            self.assertNotIn("Date Field Without Explicit Year", references_bib)
+            self.assertNotIn("Unknown Author Reference", references_bib)
+            self.assertNotIn("year = {},", references_bib)
+
+            state = load_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            visible_keys = sorted(citation_map)
+            paper.write_text("\\cite{" + ",".join(visible_keys) + "}\n", encoding="utf-8")
+            bbl = artifact_path(root, "paper.full.bbl")
+            bbl.write_text("\n".join(f"\\bibitem{{{key}}} {key}." for key in visible_keys), encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+
+            audit = build_rendered_reference_audit(root, quality_mode="claim_safe")
+            self.assertEqual(audit["status"], "pass")
+            self.assertNotIn("rendered_reference_unknown_metadata", audit["failing_codes"])
+
+    def test_import_prior_work_require_complete_metadata_records_all_rejected_before_failing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_session_with_minimal_inputs(root)
+            seed_path = root / "prior_work.json"
+            seed_path.write_text(
+                json.dumps(
+                    {
+                        "references": [
+                            {
+                                "title": "Incomplete Reference",
+                                "authors": ["No Year"],
+                                "publication_date": "2023-01-01",
+                                "source": "codex_web_seed",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ContractError):
+                import_prior_work(
+                    root,
+                    seed_file=seed_path,
+                    source="codex_web_seed",
+                    require_complete_metadata=True,
+                )
+
+            report_path = artifact_path(root, "prior_work_import_rejections.json")
+            self.assertTrue(report_path.exists())
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(report["input_entry_count"], 1)
+            self.assertEqual(report["accepted_entry_count"], 0)
+            self.assertEqual(report["rejected_entry_count"], 1)
+            self.assertEqual(
+                report["policy"]["all_rejected_behavior"],
+                "fail_import_and_leave_existing_registry_unchanged",
+            )
+            state = load_session(root)
+            self.assertIsNone(state.artifacts.citation_registry_json)
+
+    def test_import_prior_work_require_complete_metadata_accepts_bibtex_editor_and_organization(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_session_with_minimal_inputs(root)
+            seed_path = root / "prior_work.bib"
+            seed_path.write_text(
+                "@techreport{OrgStandard,\n"
+                "  title = {Organization Authored Standard},\n"
+                "  organization = {Example Standards Group},\n"
+                "  year = {2020},\n"
+                "  url = {https://example.test/org-standard}\n"
+                "}\n"
+                "@proceedings{EditedVolume,\n"
+                "  title = {Edited Benchmark Proceedings},\n"
+                "  editor = {Edith Editor},\n"
+                "  year = {2021},\n"
+                "  url = {https://example.test/edited-volume}\n"
+                "}\n",
+                encoding="utf-8",
+            )
+
+            result = import_prior_work(
+                root,
+                seed_file=seed_path,
+                source="manual_bibtex",
+                require_complete_metadata=True,
+            )
+
+            report = json.loads(Path(result["rejection_report_json"]).read_text(encoding="utf-8"))
+            references_bib = Path(result["references_bib"]).read_text(encoding="utf-8")
+            self.assertEqual(report["accepted_entry_count"], 2)
+            self.assertEqual(report["rejected_entry_count"], 0)
+            self.assertIn("Example Standards Group", references_bib)
+            self.assertIn("Edith Editor", references_bib)
+
+    def test_research_prior_work_import_can_require_complete_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_session_with_minimal_inputs(root)
+
+            result = generate_prior_work_seed(
+                root,
+                MockProvider(),
+                import_seed=True,
+                require_complete_metadata=True,
+            )
+
+            imported = result["imported"]
+            self.assertIn("rejection_report_json", imported)
+            report = json.loads(Path(imported["rejection_report_json"]).read_text(encoding="utf-8"))
+            self.assertEqual(report["rejected_entry_count"], 0)
+            self.assertTrue(Path(imported["references_bib"]).exists())
 
     def test_import_prior_work_cli_surface(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -5703,6 +5895,15 @@ class ReproducibilityAndParityTests(unittest.TestCase):
         self.assertIn('import_prior_work', skill)
         self.assertIn('critique', skill)
         self.assertIn('paperorchestra environment', skill)
+        tools_by_name = {tool["name"]: tool for tool in MCP_TOOLS}
+        self.assertIn(
+            "require_complete_metadata",
+            tools_by_name["research_prior_work_seed"]["inputSchema"]["properties"],
+        )
+        self.assertIn(
+            "require_complete_metadata",
+            tools_by_name["import_prior_work"]["inputSchema"]["properties"],
+        )
 
 
 class RalphCandidateWriteAtomicityTests(unittest.TestCase):
