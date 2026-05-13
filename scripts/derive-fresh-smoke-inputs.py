@@ -240,13 +240,17 @@ known_seed_entries: dict[str, dict[str, str]] = {
         "url": "https://arxiv.org/abs/2210.03629",
     },
 }
-seed_keys = citation_keys(method, proof, bench, bounds, notes)
-if not seed_keys:
+source_seed_keys = citation_keys(method, proof, bench, bounds, notes)
+if source_seed_keys:
+    seed_keys = [key for key in source_seed_keys if key in known_seed_entries]
+else:
     seed_keys = sorted(known_seed_entries)
 seed_lines = [
     "% Fresh smoke seed bibliography.",
     "% Derived from registered citation keys when present; otherwise from domain-neutral positioning topics.",
     "% Entries seed background/positioning only and must be verified/enriched by research-prior-work and verify-papers.",
+    "% Citation keys without explicit metadata are not converted into BibTeX entries.",
+    f"% Source citation keys without seed metadata: {max(0, len(source_seed_keys) - len(seed_keys))}.",
     "",
 ]
 for key in seed_keys:

@@ -1153,7 +1153,17 @@ PY
 
 cd "$WORKDIR"
 run_step init "${CLI[@]}" init --idea inputs/idea.tex --experimental-log inputs/experimental_log.tex --template inputs/template.tex --guidelines inputs/guidelines.md --figures-dir inputs/figures --venue "TDSC-style systems/security paper" --page-limit 12 --cutoff-date 2026-04-01 || fail_now fail_execution_error '"init"' '"logs/init.stderr.log"' 1
-run_step import_reference_metadata_seed "${CLI[@]}" import-prior-work --seed-file inputs/reference_metadata_seed.bib --source metadata_seed_for_live_verification || fail_now fail_execution_error '"import_reference_metadata_seed"' '"logs/import_reference_metadata_seed.stderr.log"' 1
+if grep -Eq '^[[:space:]]*@' inputs/reference_metadata_seed.bib; then
+  run_step import_reference_metadata_seed "${CLI[@]}" import-prior-work --seed-file inputs/reference_metadata_seed.bib --source metadata_seed_for_live_verification || fail_now fail_execution_error '"import_reference_metadata_seed"' '"logs/import_reference_metadata_seed.stderr.log"' 1
+else
+  printf 'skip import_reference_metadata_seed: no explicit bibliographic seed entries were generated\n' > "$LOGS/import_reference_metadata_seed.stdout.log"
+  : > "$LOGS/import_reference_metadata_seed.stderr.log"
+  printf '0\n' > "$LOGS/import_reference_metadata_seed.exitcode"
+  printf 'skip: no explicit bibliographic seed entries in inputs/reference_metadata_seed.bib\n' > "$LOGS/import_reference_metadata_seed.command"
+  COMMAND_ROWS+=("import_reference_metadata_seed|0")
+  record_command_markdown
+  write_timeline "- $(date -u +%Y-%m-%dT%H:%M:%SZ) skip import_reference_metadata_seed reason=no_explicit_seed_entries"
+fi
 run_retryable_step research_prior_work "${CLI[@]}" research-prior-work --source "fresh material smoke" --import "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"research_prior_work"' '"logs/research_prior_work.step-retry.jsonl"' 1
 run_step verify_papers_live "${CLI[@]}" verify-papers --mode live --on-error skip || fail_now fail_execution_error '"verify_papers_live"' '"logs/verify_papers_live.stderr.log"' 1
 printf 'write_live_verification_summary\n' > "$LOGS/live_verification_provenance.command"
