@@ -57,6 +57,7 @@ from .omx_bridge import (
     shutdown_omx_team,
 )
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
+from .orchestra_evidence import write_orchestrator_evidence_bundle
 from .orchestrator import inspect_state as orchestrator_inspect_state, run_until_blocked as orchestrator_run_until_blocked
 from .providers import get_citation_support_provider, get_provider
 from .quality_gate import write_quality_gate
@@ -107,12 +108,27 @@ TOOLS: list[JSON] = [
     {
         "name": "orchestrate",
         "description": "Run the v1 orchestrator until the next bounded action/block without live generation.",
-        "inputSchema": {"type": "object", "properties": {"cwd": {"type": "string"}, "material": {"type": "string"}}},
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "cwd": {"type": "string"},
+                "material": {"type": "string"},
+                "write_evidence": {"type": "boolean"},
+                "evidence_output": {"type": "string"},
+            },
+        },
     },
     {
         "name": "continue_project",
         "description": "Continue the v1 orchestrator from current state without live generation.",
-        "inputSchema": {"type": "object", "properties": {"cwd": {"type": "string"}}},
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "cwd": {"type": "string"},
+                "write_evidence": {"type": "boolean"},
+                "evidence_output": {"type": "string"},
+            },
+        },
     },
     {
         "name": "answer_human_needed",
@@ -982,13 +998,27 @@ def tool_inspect_state(arguments: JSON) -> JSON:
 def tool_orchestrate(arguments: JSON) -> JSON:
     cwd = _default_cwd(arguments)
     state = orchestrator_run_until_blocked(cwd, material_path=arguments.get("material"))
-    return _ok({"execution": "bounded_plan_only", "state": state.to_public_dict()})
+    payload = {"execution": "bounded_plan_only", "state": state.to_public_dict()}
+    if arguments.get("write_evidence"):
+        payload["evidence_bundle"] = write_orchestrator_evidence_bundle(
+            cwd,
+            state,
+            output_dir=arguments.get("evidence_output"),
+        )
+    return _ok(payload)
 
 
 def tool_continue_project(arguments: JSON) -> JSON:
     cwd = _default_cwd(arguments)
     state = orchestrator_run_until_blocked(cwd)
-    return _ok({"execution": "bounded_plan_only", "state": state.to_public_dict()})
+    payload = {"execution": "bounded_plan_only", "state": state.to_public_dict()}
+    if arguments.get("write_evidence"):
+        payload["evidence_bundle"] = write_orchestrator_evidence_bundle(
+            cwd,
+            state,
+            output_dir=arguments.get("evidence_output"),
+        )
+    return _ok(payload)
 
 
 def tool_answer_human_needed(arguments: JSON) -> JSON:

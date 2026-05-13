@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from pathlib import Path
 
-from paperorchestra.mcp_server import TOOL_HANDLERS, TOOLS
+from paperorchestra.mcp_server import TOOL_HANDLERS, TOOLS, _handle_request
 
 
 def _tool_names() -> set[str]:
@@ -23,6 +24,15 @@ class OrchestratorMcpEntrypointTests(unittest.TestCase):
             self.assertIn(expected, names)
             self.assertIn(expected, TOOL_HANDLERS)
 
+    def test_mcp_orchestrator_evidence_options_are_schema_visible(self) -> None:
+        tools = {tool["name"]: tool for tool in TOOLS}
+        for tool_name in {"orchestrate", "continue_project"}:
+            props = tools[tool_name]["inputSchema"]["properties"]
+            self.assertIn("write_evidence", props)
+            self.assertEqual(props["write_evidence"]["type"], "boolean")
+            self.assertIn("evidence_output", props)
+            self.assertEqual(props["evidence_output"]["type"], "string")
+
     def test_mcp_inspect_state_returns_v1_state_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             payload = _decode_text_result(TOOL_HANDLERS["inspect_state"]({"cwd": tmp}))
@@ -36,3 +46,56 @@ class OrchestratorMcpEntrypointTests(unittest.TestCase):
 
         self.assertEqual(payload["execution"], "bounded_plan_only")
         self.assertEqual(payload["next_actions"][0]["action_type"], "provide_material")
+
+    def test_mcp_orchestrate_can_write_public_safe_evidence_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            material = root / "material"
+            material.mkdir()
+            (material / "main.tex").write_text("We propose a generic orchestration workflow.\n", encoding="utf-8")
+            (material / "references.bib").write_text(
+                "@article{example2026,title={Example Reference},author={Ada Example},year={2026}}\n",
+                encoding="utf-8",
+            )
+            payload = _decode_text_result(
+                TOOL_HANDLERS["orchestrate"]({"cwd": tmp, "material": str(material), "write_evidence": True})
+            )
+            output_dir = Path(payload["evidence_bundle"]["output_dir"])
+            manifest_exists = Path(payload["evidence_bundle"]["manifest_path"]).exists()
+            rendered = "\n".join(path.read_text(encoding="utf-8") for path in output_dir.rglob("*.json"))
+
+        self.assertEqual(payload["execution"], "bounded_plan_only")
+        self.assertIn("evidence_bundle", payload)
+        self.assertTrue(manifest_exists)
+        self.assertNotIn("paper_full_tex", json.dumps(payload))
+        self.assertNotIn(str(root), rendered)
+
+    def test_mcp_continue_project_can_write_public_safe_evidence_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = _decode_text_result(TOOL_HANDLERS["continue_project"]({"cwd": tmp, "write_evidence": True}))
+            manifest_path = Path(payload["evidence_bundle"]["manifest_path"])
+            manifest_exists = manifest_path.exists()
+
+        self.assertEqual(payload["execution"], "bounded_plan_only")
+        self.assertTrue(manifest_exists)
+
+    def test_mcp_tools_call_reports_outside_evidence_output_as_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "workspace"
+            root.mkdir()
+            outside = Path(tmp) / "outside"
+            response = _handle_request(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "orchestrate",
+                        "arguments": {"cwd": str(root), "write_evidence": True, "evidence_output": str(outside)},
+                    },
+                }
+            )
+
+        self.assertIsNotNone(response)
+        self.assertTrue(response["result"]["isError"])
+        self.assertIn("ValueError", response["result"]["content"][0]["text"])
