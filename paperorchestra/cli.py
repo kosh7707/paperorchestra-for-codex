@@ -46,6 +46,7 @@ from .models import InputBundle
 from .omx_bridge import cleanup_omx_tmp
 from .omx_diagnostics import export_omx_evidence, write_omx_review_handoff
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
+from .orchestrator import inspect_state as orchestrator_inspect_state, run_until_blocked as orchestrator_run_until_blocked
 from .quality_loop import write_quality_eval, write_quality_loop_plan
 from .quality_gate import write_quality_gate
 from .ralph_bridge import (
@@ -117,6 +118,21 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser = sub.add_parser("status", help="Show current session state")
     status_parser.add_argument("--json", action="store_true")
     status_parser.add_argument("--summary", action="store_true", help="Print a compact first-user session summary")
+
+    inspect_state_parser = sub.add_parser("inspect-state", help="Inspect the v1 OrchestraState without running live work")
+    inspect_state_parser.add_argument("--material", help="Optional material directory/file to inspect")
+    inspect_state_parser.add_argument("--json", action="store_true")
+
+    orchestrate_parser = sub.add_parser("orchestrate", help="Run the v1 orchestrator until the next bounded action/block")
+    orchestrate_parser.add_argument("--material", help="Optional material directory/file to inspect")
+    orchestrate_parser.add_argument("--json", action="store_true")
+
+    continue_project_parser = sub.add_parser("continue-project", help="Continue the v1 orchestrator from current state without live work")
+    continue_project_parser.add_argument("--json", action="store_true")
+
+    answer_human_needed_parser = sub.add_parser("answer-human-needed", help="Record a bounded answer for a human_needed stop (skeleton)")
+    answer_human_needed_parser.add_argument("--answer", required=True)
+    answer_human_needed_parser.add_argument("--json", action="store_true")
 
     export_parser = sub.add_parser("export-artifacts", help="Copy the current session's main outputs to an easy-to-share directory")
     export_parser.add_argument("--output", required=True, help="Destination directory for exported outputs")
@@ -719,6 +735,28 @@ def _environment_summary_lines(payload: dict[str, object]) -> list[str]:
     return lines
 
 
+
+def _orchestrator_summary_lines(payload: dict[str, object]) -> list[str]:
+    actions = payload.get("next_actions")
+    if not isinstance(actions, list):
+        actions = []
+    readiness = payload.get("readiness") if isinstance(payload.get("readiness"), dict) else {}
+    first_action = actions[0].get("action_type") if actions and isinstance(actions[0], dict) else "none"
+    return [
+        "PaperOrchestra orchestrator state",
+        f"Readiness: {readiness.get('label', 'unknown')}",
+        f"Next action: {first_action}",
+    ]
+
+
+def _print_orchestrator_payload(payload: dict[str, object], *, json_output: bool) -> None:
+    if json_output:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        state_payload = payload.get("state") if isinstance(payload.get("state"), dict) else payload
+        print("\n".join(_orchestrator_summary_lines(state_payload)))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -741,6 +779,34 @@ def main(argv: list[str] | None = None) -> int:
                 allow_outside_workspace=args.allow_outside_workspace,
             )
             print(state.session_id)
+            return 0
+
+        if args.command == "inspect-state":
+            state = orchestrator_inspect_state(cwd, material_path=args.material)
+            _print_orchestrator_payload(state.to_public_dict(), json_output=args.json)
+            return 0
+
+        if args.command == "orchestrate":
+            state = orchestrator_run_until_blocked(cwd, material_path=args.material)
+            payload = {"execution": "bounded_plan_only", "state": state.to_public_dict()}
+            _print_orchestrator_payload(payload, json_output=args.json)
+            return 0
+
+        if args.command == "continue-project":
+            state = orchestrator_run_until_blocked(cwd)
+            payload = {"execution": "bounded_plan_only", "state": state.to_public_dict()}
+            _print_orchestrator_payload(payload, json_output=args.json)
+            return 0
+
+        if args.command == "answer-human-needed":
+            state = orchestrator_inspect_state(cwd)
+            payload = {
+                "execution": "answer_recorded_for_re_adjudication",
+                "answer": "redacted" if args.answer else "missing",
+                "state": state.to_public_dict(),
+                "next_actions": [{"action_type": "re_adjudicate", "reason": "human_needed_answer_received"}],
+            }
+            _print_orchestrator_payload(payload, json_output=args.json)
             return 0
 
         if args.command == "status":

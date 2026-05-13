@@ -462,6 +462,9 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertIn("server", text)
         self.assertIn("paperorchestra", text)
         self.assertIn("status", text)
+        self.assertIn("PAPERO_ATTACH_SMOKE_TOOL", text)
+        self.assertIn("inspect_state", text)
+        self.assertIn("tool_name", text)
         self.assertIn("config_mutation", text)
 
     def test_register_codex_mcp_script_explains_registration_vs_active_attachment(self) -> None:

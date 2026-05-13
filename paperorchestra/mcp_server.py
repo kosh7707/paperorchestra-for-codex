@@ -57,6 +57,7 @@ from .omx_bridge import (
     shutdown_omx_team,
 )
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
+from .orchestrator import inspect_state as orchestrator_inspect_state, run_until_blocked as orchestrator_run_until_blocked
 from .providers import get_citation_support_provider, get_provider
 from .quality_gate import write_quality_gate
 from .revisions import write_revision_suggestions
@@ -97,6 +98,32 @@ def _err(message: str) -> JSON:
 
 
 TOOLS: list[JSON] = [
+
+    {
+        "name": "inspect_state",
+        "description": "Inspect the v1 OrchestraState and next actions without running live work.",
+        "inputSchema": {"type": "object", "properties": {"cwd": {"type": "string"}, "material": {"type": "string"}}},
+    },
+    {
+        "name": "orchestrate",
+        "description": "Run the v1 orchestrator until the next bounded action/block without live generation.",
+        "inputSchema": {"type": "object", "properties": {"cwd": {"type": "string"}, "material": {"type": "string"}}},
+    },
+    {
+        "name": "continue_project",
+        "description": "Continue the v1 orchestrator from current state without live generation.",
+        "inputSchema": {"type": "object", "properties": {"cwd": {"type": "string"}}},
+    },
+    {
+        "name": "answer_human_needed",
+        "description": "Provide a bounded answer for a human_needed stop and request re-adjudication.",
+        "inputSchema": {"type": "object", "properties": {"cwd": {"type": "string"}, "answer": {"type": "string"}}, "required": ["answer"]},
+    },
+    {
+        "name": "export_results",
+        "description": "Plan or report result export through the v1 orchestrator surface.",
+        "inputSchema": {"type": "object", "properties": {"cwd": {"type": "string"}, "output": {"type": "string"}}},
+    },
 
     {
         "name": "teach",
@@ -945,6 +972,48 @@ def tool_init_session(arguments: JSON) -> JSON:
     return _ok(state.to_dict())
 
 
+
+def tool_inspect_state(arguments: JSON) -> JSON:
+    cwd = _default_cwd(arguments)
+    state = orchestrator_inspect_state(cwd, material_path=arguments.get("material"))
+    return _ok(state.to_public_dict())
+
+
+def tool_orchestrate(arguments: JSON) -> JSON:
+    cwd = _default_cwd(arguments)
+    state = orchestrator_run_until_blocked(cwd, material_path=arguments.get("material"))
+    return _ok({"execution": "bounded_plan_only", "state": state.to_public_dict()})
+
+
+def tool_continue_project(arguments: JSON) -> JSON:
+    cwd = _default_cwd(arguments)
+    state = orchestrator_run_until_blocked(cwd)
+    return _ok({"execution": "bounded_plan_only", "state": state.to_public_dict()})
+
+
+def tool_answer_human_needed(arguments: JSON) -> JSON:
+    cwd = _default_cwd(arguments)
+    answer = arguments.get("answer")
+    state = orchestrator_inspect_state(cwd)
+    return _ok({
+        "execution": "answer_recorded_for_re_adjudication",
+        "answer": "redacted" if answer else "missing",
+        "state": state.to_public_dict(),
+        "next_actions": [{"action_type": "re_adjudicate", "reason": "human_needed_answer_received"}],
+    })
+
+
+def tool_export_results(arguments: JSON) -> JSON:
+    cwd = _default_cwd(arguments)
+    state = orchestrator_inspect_state(cwd)
+    return _ok({
+        "execution": "bounded_plan_only",
+        "state": state.to_public_dict(),
+        "next_actions": [action.to_dict() for action in state.next_actions],
+        "requested_output": arguments.get("output"),
+    })
+
+
 def tool_status(arguments: JSON) -> JSON:
     cwd = _default_cwd(arguments)
     payload = load_session(cwd).to_dict()
@@ -1398,6 +1467,11 @@ def tool_shutdown_omx_team(arguments: JSON) -> JSON:
 
 
 TOOL_HANDLERS: dict[str, Callable[[JSON], JSON]] = {
+    "inspect_state": tool_inspect_state,
+    "orchestrate": tool_orchestrate,
+    "continue_project": tool_continue_project,
+    "answer_human_needed": tool_answer_human_needed,
+    "export_results": tool_export_results,
     "teach": tool_teach,
     "start_intake": tool_start_intake,
     "get_intake_status": tool_get_intake_status,

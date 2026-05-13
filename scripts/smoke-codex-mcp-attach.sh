@@ -6,7 +6,9 @@ CWD="${PAPERO_ATTACH_SMOKE_CWD:-$ROOT}"
 CODEX_BIN="${CODEX_BIN:-codex}"
 MCP_COMMAND="${PAPERO_MCP_COMMAND:-$ROOT/.venv/bin/paperorchestra-mcp}"
 STARTUP_TIMEOUT_SEC="${PAPERO_MCP_STARTUP_TIMEOUT_SEC:-20}"
-EVIDENCE_DIR="${PAPERO_ATTACH_SMOKE_EVIDENCE_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/paperorchestra-codex-mcp-attach.XXXXXX")}" 
+# Set PAPERO_ATTACH_SMOKE_TOOL=inspect_state to verify a high-level orchestrator MCP tool.
+TOOL_NAME="${PAPERO_ATTACH_SMOKE_TOOL:-status}"
+EVIDENCE_DIR="${PAPERO_ATTACH_SMOKE_EVIDENCE_DIR:-$(mktemp -d "${TMPDIR:-/tmp}/paperorchestra-codex-mcp-attach.XXXXXX")}"
 mkdir -p "$EVIDENCE_DIR"
 JSONL="$EVIDENCE_DIR/codex-mcp-attach.jsonl"
 REPORT="$EVIDENCE_DIR/codex-mcp-attach-report.json"
@@ -18,6 +20,7 @@ json_string() {
 
 COMMAND_TOML="$(json_string "$MCP_COMMAND")"
 CWD_TOML="$(json_string "$CWD")"
+TOOL_TOML="$(json_string "$TOOL_NAME")"
 
 if [[ ! -x "$MCP_COMMAND" ]]; then
   python3 - <<PY
@@ -60,7 +63,7 @@ set +e
   -c 'mcp_servers.paperorchestra.enabled=true' \
   -c "mcp_servers.paperorchestra.startup_timeout_sec=$STARTUP_TIMEOUT_SEC" \
   -c 'mcp_servers.paperorchestra.env.PAPERO_ALLOWED_PROVIDER_BINARIES="codex,openai,ollama,llm,claude,gemini"' \
-  "You must call the PaperOrchestra MCP tool named status exactly once for cwd $CWD_TOML. If the tool returns an error because no session exists, stop after reporting that result." \
+  "You must call the PaperOrchestra MCP tool named $TOOL_TOML exactly once for cwd $CWD_TOML. If the tool returns a domain-level error because no session exists, stop after reporting that result." \
   >"$JSONL" 2>"$EVIDENCE_DIR/codex-mcp-attach.stderr"
 RC=$?
 set -e
@@ -85,7 +88,7 @@ if jsonl.exists():
         for item in candidates:
             if not isinstance(item, dict):
                 continue
-            if item.get("type") == "mcp_tool_call" and item.get("server") == "paperorchestra" and item.get("tool") == "status":
+            if item.get("type") == "mcp_tool_call" and item.get("server") == "paperorchestra" and item.get("tool") == "$TOOL_NAME":
                 found = True
                 matches.append(item)
 report = {
@@ -96,6 +99,7 @@ report = {
     "stderr": "$EVIDENCE_DIR/codex-mcp-attach.stderr",
     "mcp_command": "$MCP_COMMAND",
     "cwd": "$CWD",
+    "tool_name": "$TOOL_NAME",
     "mcp_tool_call_found": found,
     "matches": matches,
     "config_mutation": "none; this script uses codex exec -c overrides with --ignore-user-config",
