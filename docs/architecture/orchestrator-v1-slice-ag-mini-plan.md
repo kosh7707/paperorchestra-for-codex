@@ -385,3 +385,78 @@ Stop and replan if:
 - implementation tries to run the long smoke loop, Docker, OMX, Codex, web, or
   live models inside unit tests/product summarizer;
 - public tests require private material.
+
+## 11. Slice AG implementation evidence
+
+Plan validation:
+
+- Initial Critic verdict: `CHANGES_REQUIRED`.
+- Plan revisions added explicit `smoke_mode`, exact acceptance-ledger status
+  mapping, max-five operator-cycle semantics, top-level verdict/readiness wording
+  safety, and material-manifest content safety.
+- Final Critic plan verdict: `APPROVE`.
+- Plan commit: `e320d35 Define redacted final-smoke acceptance before implementation`.
+
+Implementation:
+
+- Added `paperorchestra/fresh_smoke_acceptance.py`.
+- Added CLI: `paperorchestra summarize-fresh-smoke`.
+- Added MCP tool: `summarize_fresh_smoke`.
+- Added public synthetic tests in `tests/test_fresh_smoke_acceptance.py`.
+- Implementation commit: `d0ca29d Summarize fresh smoke evidence without leaking private material`.
+
+Test-first evidence:
+
+```bash
+.venv/bin/python -m pytest tests/test_fresh_smoke_acceptance.py -q
+# before implementation: ModuleNotFoundError: paperorchestra.fresh_smoke_acceptance
+```
+
+Local verification after implementation:
+
+```bash
+.venv/bin/python -m pytest tests/test_fresh_smoke_acceptance.py -q
+# 10 passed
+
+.venv/bin/python -m pytest tests/test_fresh_smoke_acceptance.py \
+  tests/test_private_smoke_safety.py \
+  tests/test_fresh_smoke_inputs.py \
+  tests/test_orchestra_acceptance_ledger.py \
+  tests/test_orchestrator_cli_entrypoints.py \
+  tests/test_orchestrator_mcp_entrypoints.py -q
+# 68 passed, 20 subtests passed
+
+.venv/bin/python -m pytest -q
+# 977 passed, 182 subtests passed
+
+scripts/check-private-leakage.py --denylist /tmp/paperorchestra-private-denylist.txt --root "$PWD" --json
+# status ok, match_count 0
+
+grep -RIn "<private-domain literal>" $(git ls-files 'docs/**' 'paperorchestra/**' 'tests/**' 'skills/**' 'README.md' 'ENVIRONMENT.md') 2>/dev/null | head -50 || true
+# no output
+
+git diff --check
+# clean
+```
+
+Implementation Critic validation:
+
+- Initial implementation verdict: `CHANGES_REQUIRED`.
+- Required fixes:
+  - private-final leakage mapping must combine meta-leakage and manifest safety;
+  - MCP relative paths must resolve against client-supplied `cwd`;
+  - negative operator cycle counters should fail closed.
+- Added regressions for all three.
+- Final implementation verdict: `APPROVE`.
+
+Container proof after push:
+
+```bash
+docker run --rm \
+  -v /tmp/paperorchestra-private-denylist.txt:/tmp/paperorchestra-private-denylist.txt:ro \
+  paperorchestra-ubuntu-tools:24.04 bash -lc '...'
+# 68 passed, 20 subtests passed
+# leakage scan status ok, match_count 0
+# private-domain literal grep no output
+# HEAD=d0ca29d
+```
