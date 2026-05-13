@@ -1,6 +1,6 @@
 # Slice AF mini-plan — score, Critic consensus, and verifier evidence harness
 
-Status: draft mini-plan requiring Critic validation before tests or implementation
+Status: implemented and container-proven
 Date: 2026-05-14
 Branch: `orchestrator-v1-runtime`
 Scope: public, domain-general score/consensus/verifier evidence contracts. Do not include private smoke material, private-domain terms, or private material names.
@@ -258,6 +258,52 @@ printf "HEAD=%s\n" "$(git rev-parse --short HEAD)"
 ```
 
 Record proof in this plan or a follow-up evidence commit.
+
+### Container proof recorded
+
+Implementation commit:
+
+```text
+888efc4 Make verifier evidence explicit before trusting scores
+```
+
+Fresh-container command used:
+
+```bash
+docker run --rm \
+  -v /tmp/paperorchestra-private-denylist.txt:/tmp/paperorchestra-private-denylist.txt:ro \
+  paperorchestra-ubuntu-tools:24.04 bash -lc 'set -euo pipefail
+WORK=/tmp/paperorchestra-af-proof
+rm -rf "$WORK"
+git clone --branch orchestrator-v1-runtime https://github.com/kosh7707/paperorchestra-for-codex.git "$WORK" >/tmp/git-clone.log
+cd "$WORK"
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e ".[dev]" >/tmp/pip-install.log
+python -m pytest tests/test_orchestra_verifier.py tests/test_orchestra_scoring.py tests/test_orchestra_consensus.py tests/test_orchestra_full_loop_planner.py tests/test_orchestra_acceptance_ledger.py -q
+scripts/check-private-leakage.py --denylist /tmp/paperorchestra-private-denylist.txt --root "$PWD" --json
+printf "HEAD=%s\n" "$(git rev-parse --short HEAD)"
+'
+```
+
+Evidence:
+
+```text
+verifier/scoring/consensus/full-loop/acceptance container subset: 55 passed, 20 subtests
+private leakage scan: status ok, match_count 0
+HEAD=888efc4
+```
+
+Local verification before the implementation commit:
+
+```text
+tests/test_orchestra_verifier.py: 15 passed, 5 subtests
+verifier/scoring/consensus/full-loop/acceptance/CLI/MCP subset: 90 passed, 25 subtests
+full suite: 967 passed, 182 subtests
+private leakage scan: status ok, match_count 0
+private-domain literal grep: no output
+Critic implementation validation: CHANGES_REQUIRED then APPROVE
+```
 
 ## 9. Stop/replan triggers
 
