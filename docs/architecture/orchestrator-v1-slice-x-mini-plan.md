@@ -1,6 +1,6 @@
 # Slice X mini-plan — expose full-loop planning through the runtime facade
 
-Status: implemented locally after Critic-requested fix; awaiting final Critic approval and container proof
+Status: implemented with local, Critic, and container proof
 Date: 2026-05-13
 Branch: `orchestrator-v1-runtime`
 
@@ -320,4 +320,17 @@ scripts/check-private-leakage.py --denylist /tmp/paperorchestra-private-denylist
 
 git diff --check
 # ok
+```
+
+Critic implementation re-validation:
+
+- Result: `APPROVE`.
+- No remaining blockers before commit, push, and container proof.
+
+Fresh container proof after push:
+
+```bash
+docker run --rm paperorchestra-ubuntu-tools:24.04 bash -lc 'set -euo pipefail; git clone --quiet https://github.com/kosh7707/paperorchestra-for-codex.git repo; cd repo; git checkout --quiet orchestrator-v1-runtime; git log -1 --oneline; python3 -m venv .venv; . .venv/bin/activate; python -m pip install --quiet -e ".[dev]"; python -m pytest tests/test_orchestrator_runtime_facade.py tests/test_orchestrator_cli_entrypoints.py tests/test_orchestrator_mcp_entrypoints.py tests/test_orchestrator_action_executor.py tests/test_orchestra_full_loop_planner.py tests/test_orchestra_consensus.py tests/test_orchestra_omx_invocation.py -q'
+# 2c306b0 Expose full-loop decisions without executing them
+# 89 passed, 27 subtests passed
 ```
