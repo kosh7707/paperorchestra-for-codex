@@ -1,7 +1,7 @@
 # Slice C mini-plan — draft-control policy and evidence-obligation routing
 
-Status: slice implementation plan requiring Critic validation before code  
-Date: 2026-05-13  
+Status: slice implementation plan requiring Critic validation before code
+Date: 2026-05-13
 Branch: `orchestrator-v1-runtime`
 
 ## 1. Target result
