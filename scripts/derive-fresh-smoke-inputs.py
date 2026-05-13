@@ -4,6 +4,8 @@ import hashlib, json, re, sys
 from pathlib import Path
 from datetime import datetime, timezone
 
+from paperorchestra.validator import CITE_COMMAND_RE
+
 root = Path(sys.argv[1]).resolve()
 materials = root / "inputs-materials"
 inputs = root / "workdir" / "inputs"
@@ -129,6 +131,71 @@ def derive_template_title(*texts: str) -> str:
                 return candidate
     return SAFE_TITLE_FALLBACK
 
+
+def citation_keys(*texts: str) -> list[str]:
+    found: set[str] = set()
+    for text in texts:
+        for match in CITE_COMMAND_RE.finditer(text):
+            for key in match.group(2).split(','):
+                key = key.strip()
+                if key:
+                    found.add(key)
+    return sorted(found)
+
+
+def drop_unseeded_citation_commands(text: str, allowed_keys: set[str]) -> tuple[str, dict[str, int]]:
+    """Remove prompt-facing source citations that have no explicit metadata.
+
+    Registered source packets often contain author-local citation keys.  Those
+    keys are not bibliographic facts unless the packet also provides metadata
+    that can seed verification.  Keep only metadata-backed cite keys in the
+    writer-facing prompt inputs; provider-backed research can still discover
+    and cite external work using verified registry keys.
+    """
+
+    dropped: dict[str, int] = {}
+
+    def _replace(match: re.Match[str]) -> str:
+        command = match.group(1)
+        keys = [key.strip() for key in match.group(2).split(",") if key.strip()]
+        kept = [key for key in keys if key in allowed_keys]
+        for key in keys:
+            if key not in allowed_keys:
+                dropped[key] = dropped.get(key, 0) + 1
+        if not kept:
+            return ""
+        return f"{command}{{{','.join(kept)}}}"
+
+    sanitized = CITE_COMMAND_RE.sub(_replace, text)
+    sanitized = re.sub(r"~(?=[\s.,;:!?)]|$)", "", sanitized)
+    sanitized = re.sub(r"[ \t]+([.,;:!?])", r"\1", sanitized)
+    return sanitized, dropped
+
+
+known_seed_entries: dict[str, dict[str, str]] = {
+    "lewis2020retrievalaugmented": {
+        "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
+        "author": "Patrick Lewis and Ethan Perez and Aleksandra Piktus and Fabio Petroni and Vladimir Karpukhin and Naman Goyal and Heinrich Küttler and Mike Lewis and Wen-tau Yih and Tim Rocktäschel and Sebastian Riedel and Douwe Kiela",
+        "year": "2020",
+        "venue": "Advances in Neural Information Processing Systems",
+        "url": "https://arxiv.org/abs/2005.11401",
+    },
+    "madaan2023selfrefine": {
+        "title": "Self-Refine: Iterative Refinement with Self-Feedback",
+        "author": "Aman Madaan and Niket Tandon and Prakhar Gupta and Skyler Hallinan and Luyu Gao and Sarah Wiegreffe and Uri Alon and Nouha Dziri and Shrimai Prabhumoye and Yiming Yang and Sean Welleck and Bodhisattwa Prasad Majumder and Shashank Gupta and Amir Yazdanbakhsh and Peter Clark",
+        "year": "2023",
+        "venue": "Advances in Neural Information Processing Systems",
+        "url": "https://arxiv.org/abs/2303.17651",
+    },
+    "yao2023react": {
+        "title": "ReAct: Synergizing Reasoning and Acting in Language Models",
+        "author": "Shunyu Yao and Jeffrey Zhao and Dian Yu and Nan Du and Izhak Shafran and Karthik Narasimhan and Yuan Cao",
+        "year": "2023",
+        "venue": "International Conference on Learning Representations",
+        "url": "https://arxiv.org/abs/2210.03629",
+    },
+}
+
 macros = read("00_core_macros.tex")
 template_macros = strip_latex_comments(macros)
 method = read("01_methodology_core.tex")
@@ -138,6 +205,12 @@ bounds = read("04_claim_boundaries.tex")
 notes = read("05_author_notes_for_positioning.tex")
 policy = read("material-boundary.md")
 template_title = derive_template_title(method, proof, bench, bounds, notes)
+source_seed_keys = citation_keys(method, proof, bench, bounds, notes)
+if source_seed_keys:
+    seed_keys = [key for key in source_seed_keys if key in known_seed_entries]
+else:
+    seed_keys = sorted(known_seed_entries)
+allowed_prompt_citation_keys = set(seed_keys if source_seed_keys else [])
 
 idea = rf"""% Fresh PaperOrchestra smoke input: deterministic author brief.
 % Derived only from registered inputs-materials/*. No prior smoke output is included.
@@ -191,6 +264,17 @@ template = r"""\documentclass[11pt]{article}
 \end{document}
 """.replace("% CORE_MACROS_PLACEHOLDER", template_macros).replace("TEMPLATE_TITLE_PLACEHOLDER", template_title)
 
+idea, dropped_idea_citations = drop_unseeded_citation_commands(idea, allowed_prompt_citation_keys)
+experimental, dropped_experimental_citations = drop_unseeded_citation_commands(
+    experimental,
+    allowed_prompt_citation_keys,
+)
+template, dropped_template_citations = drop_unseeded_citation_commands(template, allowed_prompt_citation_keys)
+dropped_source_citations: dict[str, int] = {}
+for dropped in (dropped_idea_citations, dropped_experimental_citations, dropped_template_citations):
+    for key, count in dropped.items():
+        dropped_source_citations[key] = dropped_source_citations.get(key, 0) + count
+
 guidelines = f"""# PaperOrchestra Fresh Smoke Authoring Guidelines
 
 This is a claim-safe live smoke using a minimal author brief.
@@ -207,50 +291,15 @@ This is a claim-safe live smoke using a minimal author brief.
 - The desired output is a review-worthy working draft, not a final publication artifact.
 """
 
-def citation_keys(*texts: str) -> list[str]:
-    found: set[str] = set()
-    for text in texts:
-        for match in re.finditer(r"\\cite(?:[tp])?(?:\[[^\]]*\])?\{([^}]+)\}", text):
-            for key in match.group(1).split(','):
-                key = key.strip()
-                if key:
-                    found.add(key)
-    return sorted(found)
-
-known_seed_entries: dict[str, dict[str, str]] = {
-    "lewis2020retrievalaugmented": {
-        "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
-        "author": "Patrick Lewis and Ethan Perez and Aleksandra Piktus and Fabio Petroni and Vladimir Karpukhin and Naman Goyal and Heinrich Küttler and Mike Lewis and Wen-tau Yih and Tim Rocktäschel and Sebastian Riedel and Douwe Kiela",
-        "year": "2020",
-        "venue": "Advances in Neural Information Processing Systems",
-        "url": "https://arxiv.org/abs/2005.11401",
-    },
-    "madaan2023selfrefine": {
-        "title": "Self-Refine: Iterative Refinement with Self-Feedback",
-        "author": "Aman Madaan and Niket Tandon and Prakhar Gupta and Skyler Hallinan and Luyu Gao and Sarah Wiegreffe and Uri Alon and Nouha Dziri and Shrimai Prabhumoye and Yiming Yang and Sean Welleck and Bodhisattwa Prasad Majumder and Shashank Gupta and Amir Yazdanbakhsh and Peter Clark",
-        "year": "2023",
-        "venue": "Advances in Neural Information Processing Systems",
-        "url": "https://arxiv.org/abs/2303.17651",
-    },
-    "yao2023react": {
-        "title": "ReAct: Synergizing Reasoning and Acting in Language Models",
-        "author": "Shunyu Yao and Jeffrey Zhao and Dian Yu and Nan Du and Izhak Shafran and Karthik Narasimhan and Yuan Cao",
-        "year": "2023",
-        "venue": "International Conference on Learning Representations",
-        "url": "https://arxiv.org/abs/2210.03629",
-    },
-}
-source_seed_keys = citation_keys(method, proof, bench, bounds, notes)
-if source_seed_keys:
-    seed_keys = [key for key in source_seed_keys if key in known_seed_entries]
-else:
-    seed_keys = sorted(known_seed_entries)
 seed_lines = [
     "% Fresh smoke seed bibliography.",
     "% Derived from registered citation keys when present; otherwise from domain-neutral positioning topics.",
     "% Entries seed background/positioning only and must be verified/enriched by research-prior-work and verify-papers.",
     "% Citation keys without explicit metadata are not converted into BibTeX entries.",
-    f"% Source citation keys without seed metadata: {max(0, len(source_seed_keys) - len(seed_keys))}.",
+    f"% Source citation keys discovered: {len(source_seed_keys)}.",
+    f"% Source citation keys preserved with explicit seed metadata: {len(allowed_prompt_citation_keys)}.",
+    f"% Source citation keys without seed metadata: {len(set(dropped_source_citations))}.",
+    f"% Source citation command occurrences removed from prompt inputs: {sum(dropped_source_citations.values())}.",
     "",
 ]
 for key in seed_keys:
@@ -291,6 +340,16 @@ for name, content in outputs.items():
     elif name == "reference_metadata_seed.bib": source_materials = ["01_methodology_core.tex","02_security_model_and_full_proof.tex","03_benchmark_method_and_results_core.tex"]
     ledger.append({"output": f"workdir/inputs/{name}", "generator": "scripts/derive-fresh-smoke-inputs.py", "source_materials": source_materials, "sha256": sha(path), "byte_size": path.stat().st_size, "derivation_policy": "deterministic registered-input extraction/paraphrase; no prior smoke artifacts"})
 ledger_path = inputs / "provenance-ledger.json"
-ledger_payload = {"schema_version":"fresh-input-provenance/1", "generated_at": datetime.now(timezone.utc).isoformat().replace('+00:00','Z'), "items": ledger}
+ledger_payload = {
+    "schema_version": "fresh-input-provenance/1",
+    "generated_at": datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),
+    "source_citation_policy": {
+        "unique_source_citation_keys": len(source_seed_keys),
+        "metadata_backed_prompt_citation_keys": len(allowed_prompt_citation_keys),
+        "metadata_less_source_citation_keys_removed": len(set(dropped_source_citations)),
+        "metadata_less_source_citation_occurrences_removed": sum(dropped_source_citations.values()),
+    },
+    "items": ledger,
+}
 ledger_path.write_text(json.dumps(ledger_payload, indent=2, ensure_ascii=False)+"\n", encoding="utf-8")
 print(json.dumps(ledger_payload, indent=2, ensure_ascii=False))

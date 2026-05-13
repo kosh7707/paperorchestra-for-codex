@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import tempfile
 import textwrap
@@ -7,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from paperorchestra.literature import load_prior_work_seed
-from paperorchestra.validator import check_prompt_meta_leakage
+from paperorchestra.validator import check_prompt_meta_leakage, extract_citation_keys
 
 
 class FreshSmokeInputDerivationTests(unittest.TestCase):
@@ -138,9 +139,13 @@ class FreshSmokeInputDerivationTests(unittest.TestCase):
             self.assertNotIn("@misc{NotARealMetadataKey2024", seed_text)
             self.assertNotIn("Not A Real Metadata Key2024", seed_text)
             self.assertIn("Source citation keys without seed metadata: 1", seed_text)
+            self.assertIn("Source citation command occurrences removed from prompt inputs: 1", seed_text)
 
             entries = load_prior_work_seed(root / "workdir" / "inputs" / "reference_metadata_seed.bib", source="test_seed")
             self.assertEqual(entries, [])
+            idea = (root / "workdir" / "inputs" / "idea.tex").read_text(encoding="utf-8")
+            self.assertEqual(extract_citation_keys(idea), set())
+            self.assertNotIn("~.", idea)
 
     def test_mixed_known_and_unknown_citations_seed_only_known_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -151,7 +156,7 @@ class FreshSmokeInputDerivationTests(unittest.TestCase):
                 r"""
                 \section{Method Core}
                 Known background remains seedable~\cite{lewis2020retrievalaugmented},
-                but private or placeholder keys without metadata must stay out of BibTeX~\cite{NotARealMetadataKey2024}.
+                but private or placeholder keys without metadata must stay out of BibTeX~\citealp{NotARealMetadataKey2024}.
                 """,
                 encoding="utf-8",
             )
@@ -172,6 +177,13 @@ class FreshSmokeInputDerivationTests(unittest.TestCase):
 
             entries = load_prior_work_seed(seed, source="test_seed")
             self.assertEqual([entry["bibtex_key"] for entry in entries], ["lewis2020retrievalaugmented"])
+            idea = (root / "workdir" / "inputs" / "idea.tex").read_text(encoding="utf-8")
+            self.assertEqual(extract_citation_keys(idea), {"lewis2020retrievalaugmented"})
+            self.assertNotIn("NotARealMetadataKey2024", idea)
+            ledger = json.loads((root / "workdir" / "inputs" / "provenance-ledger.json").read_text(encoding="utf-8"))
+            self.assertEqual(ledger["source_citation_policy"]["unique_source_citation_keys"], 2)
+            self.assertEqual(ledger["source_citation_policy"]["metadata_backed_prompt_citation_keys"], 1)
+            self.assertEqual(ledger["source_citation_policy"]["metadata_less_source_citation_keys_removed"], 1)
 
 
 if __name__ == "__main__":
