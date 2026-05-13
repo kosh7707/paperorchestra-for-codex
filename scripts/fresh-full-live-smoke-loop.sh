@@ -136,7 +136,7 @@ LOOP_STOP_REASON="not_started"
 
 redact() {
   local private_artifact_marker="paperorchestra-""private"
-  sed -E "s#(/home/kosh/temp/|\.\./)?${private_artifact_marker}[^[:space:]]*#[REDACTED_PRIVATE_ARTIFACT_PATH]#g; s/s2k-[A-Za-z0-9]+/[REDACTED_S2_KEY]/g; s/sk-(proj|live|test|svcacct)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}/[REDACTED_OPENAI_KEY]/g; s/Bearer[[:space:]]+[A-Za-z0-9._-]{20,}/Bearer [REDACTED_TOKEN]/g"
+  sed -E "s#([^[:space:]]*${private_artifact_marker}[^[:space:]]*/)(provider-wrap\\.sh)#[REDACTED_PRIVATE_ARTIFACT_PATH]/\\2#g; s#(/home/kosh/temp/|\\.\\./)?${private_artifact_marker}[^[:space:]]*#[REDACTED_PRIVATE_ARTIFACT_PATH]#g; s/s2k-[A-Za-z0-9]+/[REDACTED_S2_KEY]/g; s/sk-(proj|live|test|svcacct)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}/[REDACTED_OPENAI_KEY]/g; s/Bearer[[:space:]]+[A-Za-z0-9._-]{20,}/Bearer [REDACTED_TOKEN]/g"
 }
 
 public_label() {

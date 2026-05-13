@@ -891,6 +891,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
                         'mkdir -p "$LOGS" "$READABLE"',
                         run_step_helpers,
                         f"run_step synthetic_private_path_command printf '%s\\n' {str(material)!r}",
+                        f"run_step synthetic_wrapped_provider_command printf '%s\\n' --provider shell --provider-command '[\"bash\",\"{str(evidence / 'provider-wrap.sh')}\",\"gen\"]'",
                     ]
                 ),
                 encoding="utf-8",
@@ -916,6 +917,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
                     (evidence / "provider-wrap.contract.json").read_text(encoding="utf-8"),
                     (evidence / "dry-run-contract.json").read_text(encoding="utf-8"),
                     (evidence / "logs" / "synthetic_private_path_command.command").read_text(encoding="utf-8"),
+                    (evidence / "logs" / "synthetic_wrapped_provider_command.command").read_text(encoding="utf-8"),
                 ]
             )
             self.assertNotIn(str(evidence), rendered)
@@ -923,6 +925,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             self.assertNotIn("paperorchestra-private", rendered)
             self.assertNotIn(raw_prefix, rendered)
             self.assertNotIn("custom-codex", rendered)
+            self.assertIn("provider-wrap.sh", (evidence / "logs" / "synthetic_wrapped_provider_command.command").read_text(encoding="utf-8"))
 
     def test_fresh_smoke_run_step_preserves_disabled_errexit_for_semantic_exit_codes(self) -> None:
         wrapper = Path("scripts/fresh-full-live-smoke-loop.sh")

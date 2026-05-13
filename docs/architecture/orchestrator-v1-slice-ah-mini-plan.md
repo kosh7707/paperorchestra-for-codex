@@ -500,3 +500,40 @@ pytest tests/test_jobs_and_pipeline.py::PipelineTests::test_section_writer_retri
 pytest tests/test_jobs_and_pipeline.py::PipelineTests::test_section_writer_retries_after_citation_contract_failure
 result: 2 passed
 ```
+
+## 10. Hotfix addendum — redacted command logs must preserve wrapper identity
+
+Status: added after the post-claim-repair live attempt completed five operator
+cycles and reached final evidence validation, then failed:
+
+```text
+first_failing_predicate: evidence_completeness
+failing code: provider_command_not_trace_wrapped
+```
+
+The failure was caused by over-redaction in `logs/*.command`: raw private paths
+were removed correctly, but the redaction also removed the `provider-wrap.sh`
+basename. Evidence completeness therefore could not distinguish trace-wrapped
+provider commands from direct provider commands.
+
+### 10.1 Required behavior
+
+- Raw private paths remain redacted.
+- The non-sensitive wrapper basename `provider-wrap.sh` remains visible in
+  command logs.
+- Release-safety scan still reports no private/path residue in wrapper-generated
+  public evidence.
+- Evidence completeness can use the preserved basename to verify provider
+  wrapping.
+
+### 10.2 Local evidence
+
+The existing runtime-generated release-safety regression now creates both a
+private-path command and a synthetic provider-command line containing a private
+`provider-wrap.sh` path. It asserts:
+
+```text
+release-safety-scan: finding_count=0
+raw private path marker: absent
+provider-wrap.sh basename: present in redacted command log
+```
