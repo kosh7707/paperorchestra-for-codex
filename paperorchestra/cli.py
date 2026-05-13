@@ -46,6 +46,7 @@ from .models import InputBundle
 from .omx_bridge import cleanup_omx_tmp
 from .omx_diagnostics import export_omx_evidence, write_omx_review_handoff
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
+from .orchestra_acceptance import build_acceptance_ledger, render_acceptance_ledger_summary
 from .orchestra_evidence import write_orchestrator_evidence_bundle
 from .orchestra_executor import LocalActionExecutor
 from .orchestra_omx_executor import OmxActionExecutor
@@ -136,6 +137,10 @@ def build_parser() -> argparse.ArgumentParser:
     orchestrate_parser.add_argument("--write-evidence", action="store_true", help="Persist a public-safe orchestrator evidence bundle")
     orchestrate_parser.add_argument("--evidence-output", help="Workspace-contained evidence bundle directory")
     orchestrate_parser.add_argument("--json", action="store_true")
+
+    acceptance_parser = sub.add_parser("acceptance-ledger", help="Render the v1 acceptance/completion-audit ledger")
+    acceptance_parser.add_argument("--evidence", help="JSON evidence object keyed by acceptance gate id")
+    acceptance_parser.add_argument("--json", action="store_true")
 
     continue_project_parser = sub.add_parser("continue-project", help="Continue the v1 orchestrator from current state without live work")
     continue_project_parser.add_argument("--write-evidence", action="store_true", help="Persist a public-safe orchestrator evidence bundle")
@@ -842,6 +847,17 @@ def main(argv: list[str] | None = None) -> int:
             if args.write_evidence:
                 payload["evidence_bundle"] = write_orchestrator_evidence_bundle(cwd, state, output_dir=args.evidence_output)
             _print_orchestrator_payload(payload, json_output=args.json)
+            return 0
+
+        if args.command == "acceptance-ledger":
+            evidence = None
+            if args.evidence:
+                evidence = json.loads(Path(args.evidence).read_text(encoding="utf-8"))
+            ledger = build_acceptance_ledger(evidence)
+            if args.json:
+                print(json.dumps(ledger.to_dict(), indent=2, ensure_ascii=False))
+            else:
+                print(render_acceptance_ledger_summary(ledger))
             return 0
 
         if args.command == "continue-project":

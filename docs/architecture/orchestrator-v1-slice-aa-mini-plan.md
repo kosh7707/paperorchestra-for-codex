@@ -294,3 +294,39 @@ Stop and replan if:
 - implementation requires changing generation/readiness behavior;
 - CLI scope is absent, grows beyond read-only audit/reporting, or performs auto-pass inference;
 - the exact 19 gate IDs conflict with the runtime plan.
+
+## 12. Local implementation evidence (2026-05-13)
+
+Tests were added before implementation and initially failed as expected with:
+
+```text
+ModuleNotFoundError: No module named 'paperorchestra.orchestra_acceptance'
+```
+
+Implementation added:
+
+- `paperorchestra/orchestra_acceptance.py`
+- `paperorchestra acceptance-ledger [--evidence <path>] [--json]`
+- `tests/test_orchestra_acceptance_ledger.py`
+
+Local verification after implementation:
+
+```bash
+.venv/bin/python -m pytest tests/test_orchestra_acceptance_ledger.py -q
+# 14 passed, 15 subtests passed in 0.12s
+
+.venv/bin/python -m pytest -q
+# 909 passed, 161 subtests passed in 67.39s
+
+scripts/check-private-leakage.py --denylist /tmp/paperorchestra-private-denylist.txt --root "$PWD" --json
+# {"status":"ok","match_count":0,"private_safe_summary":true}
+
+grep -RIn "<private-domain literal>" $(git ls-files 'docs/**' 'paperorchestra/**' 'tests/**' 'skills/**' 'README.md' 'ENVIRONMENT.md')
+# no matches
+
+git diff --check
+# ok
+```
+
+Critic implementation validation returned `APPROVE`. Fresh container proof remains
+required after push.
