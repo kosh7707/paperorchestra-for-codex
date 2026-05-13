@@ -121,7 +121,7 @@ you need, then move upward.
 | Build a PDF | `paperorchestra check-compile-env` then `PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile` | TeX engine + usable sandbox | `complete` means a PDF was built. It does **not** mean the paper is claim-safe. |
 | Draft with a real model | configure `PAPERO_MODEL_CMD`, check `paperorchestra run --help`, then use the live-run recipe below | Codex CLI or another supported shell model command | The model path works. You still need citation, review, and quality gates. |
 | Run claim-safe QA/Ralph evidence | `./scripts/fresh-full-live-smoke-loop.sh --help`, then run it with explicit `--evidence-root` and `--material-root` | live provider, verification keys, strict flags, enough time/tokens | The loop can prove progress, block, or reach `ready_for_human_finalization`; it never proves “publish automatically.” |
-| Use Codex MCP/skill integration | `./scripts/register-codex-mcp.sh --use-local-venv` then `./scripts/smoke-paperorchestra-mcp.py` | Codex CLI config + this venv | MCP registration/server health are OK. If `mcp__paperorchestra__...` tools are absent in the active chat, use the CLI fallback. |
+| Use Codex MCP/skill integration | `./scripts/register-codex-mcp.sh --use-local-venv` then `./scripts/smoke-paperorchestra-mcp.py --transport newline --json` | Codex CLI config + this venv | MCP server health is OK for Codex-style newline framing. Use `scripts/smoke-codex-mcp-attach.sh` when you need proof of active Codex tool attachment. |
 
 Keep these status meanings separate:
 
@@ -1255,13 +1255,22 @@ MCP health smoke:
 
 ```bash
 scripts/smoke-paperorchestra-mcp.py
-scripts/smoke-paperorchestra-mcp.py --json
+scripts/smoke-paperorchestra-mcp.py --transport content-length --json
+scripts/smoke-paperorchestra-mcp.py --transport newline --json
 ```
 
 This smoke test checks Codex config registration, executable availability,
 MCP `initialize`, `tools/list`, expected PaperOrchestra tool names, and a
-harmless `status` tool call. It intentionally does **not** prove that the
-current Codex conversation has received `mcp__paperorchestra__...` tools.
+harmless `status` tool call. Run both transports when debugging Codex attach:
+`content-length` preserves compatibility with MCP clients that use header
+framing, while `newline` matches Codex CLI stdio framing observed in issue #5.
+Raw transport smoke intentionally does **not** prove that the current Codex
+conversation has received `mcp__paperorchestra__...` tools. For active Codex
+attach evidence, run:
+
+```bash
+scripts/smoke-codex-mcp-attach.sh
+```
 
 Minimal Codex App / JSON-style MCP config shape:
 
@@ -1305,8 +1314,10 @@ injection in the Codex runtime. Use this triage order:
 
 1. Restart Codex completely, not only the shell inside the old conversation.
 2. Confirm registration with `codex mcp list`.
-3. Run `scripts/smoke-paperorchestra-mcp.py`.
-4. If smoke still passes but `mcp__paperorchestra__...` tools are absent, use
+3. Run `scripts/smoke-paperorchestra-mcp.py --transport content-length --json`
+   and `scripts/smoke-paperorchestra-mcp.py --transport newline --json`.
+4. If raw transport smoke passes, run `scripts/smoke-codex-mcp-attach.sh`.
+5. If smoke still passes but `mcp__paperorchestra__...` tools are absent, use
    the CLI fallback and report a Codex MCP attachment/tool-injection issue with
    the smoke output.
 

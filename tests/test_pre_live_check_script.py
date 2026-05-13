@@ -391,32 +391,36 @@ class PreLiveCheckScriptTests(unittest.TestCase):
                 f"PYTHONPATH = {json.dumps(str(Path.cwd()))}\n",
                 encoding="utf-8",
             )
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(path),
-                    "--config",
-                    str(config),
-                    "--cwd",
-                    str(root),
-                    "--json",
-                ],
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=False,
-            )
+            for transport in ("content-length", "newline"):
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(path),
+                        "--config",
+                        str(config),
+                        "--cwd",
+                        str(root),
+                        "--transport",
+                        transport,
+                        "--json",
+                    ],
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    check=False,
+                )
 
-        self.assertEqual(result.returncode, 0, result.stderr)
-        payload = json.loads(result.stdout)
-        self.assertEqual(payload["status"], "ok")
-        self.assertTrue(payload["config"]["registered"])
-        self.assertTrue(payload["server"]["initialize_ok"])
-        self.assertTrue(payload["server"]["tools_list_ok"])
-        self.assertGreaterEqual(payload["server"]["tool_count"], 50)
-        self.assertTrue(payload["server"]["expected_tools_present"])
-        self.assertTrue(payload["server"]["status_call_reached_server"])
-        self.assertFalse(payload["active_session_attachment"]["checked"])
+                self.assertEqual(result.returncode, 0, f"{transport}: {result.stderr}")
+                payload = json.loads(result.stdout)
+                self.assertEqual(payload["status"], "ok")
+                self.assertEqual(payload["transport"], transport)
+                self.assertTrue(payload["config"]["registered"])
+                self.assertTrue(payload["server"]["initialize_ok"])
+                self.assertTrue(payload["server"]["tools_list_ok"])
+                self.assertGreaterEqual(payload["server"]["tool_count"], 50)
+                self.assertTrue(payload["server"]["expected_tools_present"])
+                self.assertTrue(payload["server"]["status_call_reached_server"])
+                self.assertFalse(payload["active_session_attachment"]["checked"])
 
     def test_mcp_smoke_read_exact_times_out_on_partial_body_stall(self) -> None:
         from paperorchestra.mcp_smoke import _read_exact
@@ -446,6 +450,19 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         finally:
             reader.close()
         self.assertLess(time.monotonic() - started, 0.8)
+
+    def test_codex_mcp_attach_smoke_script_is_isolated_and_detects_tool_call(self) -> None:
+        path = Path("scripts/smoke-codex-mcp-attach.sh")
+        self.assertTrue(path.exists())
+        self.assertTrue(path.stat().st_mode & 0o111)
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("--ignore-user-config", text)
+        self.assertIn("mcp_servers.paperorchestra.command", text)
+        self.assertIn("mcp_tool_call", text)
+        self.assertIn("server", text)
+        self.assertIn("paperorchestra", text)
+        self.assertIn("status", text)
+        self.assertIn("config_mutation", text)
 
     def test_register_codex_mcp_script_explains_registration_vs_active_attachment(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

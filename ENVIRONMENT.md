@@ -161,10 +161,20 @@ After registration, use the smoke script to distinguish MCP server health from
 active Codex session attachment:
 
 ```bash
-scripts/smoke-paperorchestra-mcp.py
+scripts/smoke-paperorchestra-mcp.py --transport content-length --json
+scripts/smoke-paperorchestra-mcp.py --transport newline --json
 ```
 
-If this passes but the current Codex chat still has no
+The `content-length` transport preserves compatibility with MCP clients that use
+header framing. The `newline` transport checks Codex-style newline-delimited
+JSON framing observed in issue #5. These raw server smokes still do not prove
+active Codex session attachment. For Codex CLI attach evidence, run:
+
+```bash
+scripts/smoke-codex-mcp-attach.sh
+```
+
+If these pass but the current Codex chat still has no
 `mcp__paperorchestra__...` tools, the server is healthy and the remaining issue
 is Codex session tool injection/attachment. `codex mcp list` confirms
 registration only; it does not prove that the active conversation received the

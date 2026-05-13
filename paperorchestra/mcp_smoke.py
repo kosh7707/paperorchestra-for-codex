@@ -22,6 +22,10 @@ EXPECTED_TOOLS = [
     "audit_reproducibility",
 ]
 
+TRANSPORT_CONTENT_LENGTH = "content-length"
+TRANSPORT_NEWLINE = "newline"
+TRANSPORT_CHOICES = (TRANSPORT_CONTENT_LENGTH, TRANSPORT_NEWLINE)
+
 
 def _readline(stream, timeout_sec: float) -> bytes:
     ready, _, _ = select.select([stream], [], [], timeout_sec)
@@ -49,7 +53,12 @@ def _read_exact(stream, length: int, timeout_sec: float) -> bytes:
     return b"".join(chunks)
 
 
-def _read_message(stream, *, timeout_sec: float) -> dict[str, Any]:
+def _read_message(stream, *, timeout_sec: float, transport: str = TRANSPORT_CONTENT_LENGTH) -> dict[str, Any]:
+    if transport == TRANSPORT_NEWLINE:
+        line = _readline(stream, timeout_sec)
+        if not line:
+            raise RuntimeError("MCP server closed stdout while waiting for newline JSON response.")
+        return json.loads(line.decode("utf-8"))
     headers: dict[str, str] = {}
     while True:
         line = _readline(stream, timeout_sec)
@@ -67,10 +76,13 @@ def _read_message(stream, *, timeout_sec: float) -> dict[str, Any]:
     return json.loads(_read_exact(stream, length, timeout_sec).decode("utf-8"))
 
 
-def _write_message(stream, payload: dict[str, Any]) -> None:
+def _write_message(stream, payload: dict[str, Any], *, transport: str = TRANSPORT_CONTENT_LENGTH) -> None:
     raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    stream.write(f"Content-Length: {len(raw)}\r\n\r\n".encode("ascii"))
-    stream.write(raw)
+    if transport == TRANSPORT_NEWLINE:
+        stream.write(raw + b"\n")
+    else:
+        stream.write(f"Content-Length: {len(raw)}\r\n\r\n".encode("ascii"))
+        stream.write(raw)
     stream.flush()
 
 
@@ -140,7 +152,10 @@ def smoke_mcp_server(
     timeout_sec: float = 5.0,
     expected_tools: list[str] | None = None,
     call_status: bool = True,
+    transport: str = TRANSPORT_CONTENT_LENGTH,
 ) -> dict[str, Any]:
+    if transport not in TRANSPORT_CHOICES:
+        raise ValueError(f"Unsupported MCP smoke transport: {transport}")
     expected_tools = expected_tools or EXPECTED_TOOLS
     argv = [command, *(args or [])]
     merged_env = os.environ.copy()
@@ -165,16 +180,17 @@ def smoke_mcp_server(
                 "id": 1,
                 "method": "initialize",
                 "params": {
-                    "protocolVersion": "2024-11-05",
+                    "protocolVersion": "2025-06-18" if transport == TRANSPORT_NEWLINE else "2024-11-05",
                     "capabilities": {},
                     "clientInfo": {"name": "paperorchestra-mcp-smoke", "version": "0.1.0"},
                 },
             },
+            transport=transport,
         )
-        initialize = _read_message(proc.stdout, timeout_sec=timeout_sec)
-        _write_message(proc.stdin, {"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
-        _write_message(proc.stdin, {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
-        tools_list = _read_message(proc.stdout, timeout_sec=timeout_sec)
+        initialize = _read_message(proc.stdout, timeout_sec=timeout_sec, transport=transport)
+        _write_message(proc.stdin, {"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}}, transport=transport)
+        _write_message(proc.stdin, {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}, transport=transport)
+        tools_list = _read_message(proc.stdout, timeout_sec=timeout_sec, transport=transport)
         tools = tools_list.get("result", {}).get("tools", [])
         tool_names = [tool.get("name") for tool in tools if isinstance(tool, dict)]
         missing_tools = [name for name in expected_tools if name not in tool_names]
@@ -183,8 +199,9 @@ def smoke_mcp_server(
             _write_message(
                 proc.stdin,
                 {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "status", "arguments": {"cwd": str(Path(cwd or '.').resolve())}}},
+                transport=transport,
             )
-            status_call = _read_message(proc.stdout, timeout_sec=timeout_sec)
+            status_call = _read_message(proc.stdout, timeout_sec=timeout_sec, transport=transport)
         ok = (
             initialize.get("result", {}).get("serverInfo", {}).get("name") == "paperorchestra-mcp"
             and isinstance(tools, list)
@@ -192,7 +209,9 @@ def smoke_mcp_server(
         )
         return {
             "ok": ok,
+            "transport": transport,
             "initialize_ok": initialize.get("result", {}).get("serverInfo", {}).get("name") == "paperorchestra-mcp",
+            "protocol_version": initialize.get("result", {}).get("protocolVersion"),
             "server_info": initialize.get("result", {}).get("serverInfo"),
             "tools_list_ok": isinstance(tools, list),
             "tool_count": len(tools) if isinstance(tools, list) else 0,
@@ -228,6 +247,7 @@ def build_mcp_smoke_report(
     args: list[str] | None = None,
     cwd: str | Path | None = None,
     timeout_sec: float = 5.0,
+    transport: str = TRANSPORT_CONTENT_LENGTH,
 ) -> dict[str, Any]:
     registration = read_codex_mcp_registration(config_path, server_name=server_name)
     selected_command = command or registration.get("command") or shutil.which("paperorchestra-mcp")
@@ -241,9 +261,11 @@ def build_mcp_smoke_report(
             env=registration.get("env") if registration.get("registered") else None,
             cwd=cwd,
             timeout_sec=timeout_sec,
+            transport=transport,
         )
     return {
         "status": "ok" if registration.get("registered") and binary_exists and server and server.get("ok") else "warning",
+        "transport": transport,
         "config": registration,
         "binary": {
             "command": selected_command,
@@ -299,6 +321,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--args", default="", help="Extra command args as a shell-like string")
     parser.add_argument("--cwd", default=".", help="Working directory for the MCP server smoke")
     parser.add_argument("--timeout-sec", type=float, default=5.0)
+    parser.add_argument(
+        "--transport",
+        choices=TRANSPORT_CHOICES,
+        default=TRANSPORT_CONTENT_LENGTH,
+        help="MCP stdio framing to smoke-test.",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     command_args = shlex.split(args.args) if args.args else None
@@ -309,6 +337,7 @@ def main(argv: list[str] | None = None) -> int:
         args=command_args,
         cwd=args.cwd,
         timeout_sec=args.timeout_sec,
+        transport=args.transport,
     )
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))

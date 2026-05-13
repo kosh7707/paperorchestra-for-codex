@@ -1459,18 +1459,43 @@ TOOL_HANDLERS: dict[str, Callable[[JSON], JSON]] = {
 }
 
 
+MCP_PROTOCOL_DEFAULT = "2024-11-05"
+MCP_PROTOCOL_SUPPORTED = {"2024-11-05", "2025-06-18"}
+_CURRENT_STDIO_FRAMING = "content-length"
+
+
+def _negotiate_protocol_version(params: JSON) -> str:
+    requested = params.get("protocolVersion")
+    if isinstance(requested, str) and requested in MCP_PROTOCOL_SUPPORTED:
+        return requested
+    return MCP_PROTOCOL_DEFAULT
+
+
 def _read_message() -> JSON | None:
+    global _CURRENT_STDIO_FRAMING
     headers: dict[str, str] = {}
+    line = sys.stdin.buffer.readline()
     while True:
-        line = sys.stdin.buffer.readline()
         if not line:
             return None
+        if line in (b"\r\n", b"\n"):
+            line = sys.stdin.buffer.readline()
+            continue
+        if line.lstrip().startswith(b"{"):
+            _CURRENT_STDIO_FRAMING = "newline"
+            return json.loads(line.decode("utf-8"))
+        break
+    while True:
         if line in (b"\r\n", b"\n"):
             break
         decoded = line.decode("utf-8").strip()
         if ":" in decoded:
             key, value = decoded.split(":", 1)
             headers[key.strip().lower()] = value.strip()
+        line = sys.stdin.buffer.readline()
+        if not line:
+            return None
+    _CURRENT_STDIO_FRAMING = "content-length"
     length = int(headers.get("content-length", "0"))
     if length <= 0:
         return None
@@ -1480,8 +1505,11 @@ def _read_message() -> JSON | None:
 
 def _write_message(payload: JSON) -> None:
     raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    sys.stdout.buffer.write(f"Content-Length: {len(raw)}\r\n\r\n".encode("ascii"))
-    sys.stdout.buffer.write(raw)
+    if _CURRENT_STDIO_FRAMING == "newline":
+        sys.stdout.buffer.write(raw + b"\n")
+    else:
+        sys.stdout.buffer.write(f"Content-Length: {len(raw)}\r\n\r\n".encode("ascii"))
+        sys.stdout.buffer.write(raw)
     sys.stdout.buffer.flush()
 
 
@@ -1495,7 +1523,7 @@ def _handle_request(message: JSON) -> JSON | None:
             "jsonrpc": "2.0",
             "id": request_id,
             "result": {
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": _negotiate_protocol_version(params),
                 "serverInfo": SERVER_INFO,
                 "capabilities": {"tools": {}},
             },
