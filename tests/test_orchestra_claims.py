@@ -115,7 +115,7 @@ class OrchestraClaimsTests(unittest.TestCase):
         self.assertEqual(state.facets.material, "inventoried_sufficient")
         self.assertEqual(state.facets.source_digest, "ready")
         self.assertEqual(state.facets.claims, "candidate")
-        self.assertIn(state.facets.evidence, {"research_needed", "missing"})
+        self.assertIn(state.facets.evidence, {"research_needed", "durable_research_needed", "missing"})
         self.assertNotEqual(state.facets.writing, "drafting_allowed")
         self.assertIn("claim_graph", {ref["kind"] for ref in state.evidence_refs})
         self.assertNotIn("paper_full_tex", json.dumps(state.to_public_dict(), ensure_ascii=False))

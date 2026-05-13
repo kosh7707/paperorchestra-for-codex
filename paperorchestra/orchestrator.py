@@ -5,6 +5,7 @@ from pathlib import Path
 from .orchestra_claims import build_claim_graph_from_materials
 from .orchestra_materials import build_material_inventory, build_source_digest
 from .orchestra_planner import ActionPlanner
+from .orchestra_research import build_evidence_research_mission
 from .orchestra_state import OrchestraFacets, OrchestraState, file_sha256
 from .session import load_session
 
@@ -90,9 +91,11 @@ def run_until_blocked(cwd: str | Path | None = None, *, material_path: str | Pat
     report = build_claim_graph_from_materials(material, inventory, digest)
     state.evidence_refs.append({"kind": "claim_graph", "payload": report.to_public_dict()})
     if report.ready:
+        mission = build_evidence_research_mission(report)
+        state.evidence_refs.append({"kind": "evidence_research_mission", "payload": mission.to_public_dict()})
         state.facets.claims = "candidate"
-        if any(obligation.status == "research_needed" for obligation in report.evidence_obligations):
-            state.facets.evidence = "research_needed"
+        if mission.task_count:
+            state.facets.evidence = "durable_research_needed" if mission.durable_required else "research_needed"
         if any(citation.status == "unknown_reference" and citation.critical for citation in report.citation_obligations):
             state.facets.citations = "unknown_refs"
         state.blocking_reasons.extend(reason for reason in report.blocking_reasons if reason not in state.blocking_reasons)
