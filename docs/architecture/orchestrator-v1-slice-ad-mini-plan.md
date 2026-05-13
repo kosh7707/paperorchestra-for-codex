@@ -1,6 +1,6 @@
 # Slice AD mini-plan — figure gate and placeholder replacement evidence
 
-Status: revised mini-plan requiring Critic re-validation before tests or implementation
+Status: implemented and container-proven
 Date: 2026-05-13
 Branch: `orchestrator-v1-runtime`
 Scope: public, domain-general figure inventory, slot matching, and placeholder replacement evidence. Do not include private smoke material, private-domain terms, or private figure names.
@@ -320,6 +320,53 @@ docker run --rm paperorchestra-ubuntu-tools:24.04 bash -lc 'set -euo pipefail; \
 ```
 
 Record proof in this plan or a follow-up evidence commit.
+
+### Container proof recorded
+
+Implementation commit:
+
+```text
+a2696e0 Block unresolved figure placeholders without mutating manuscripts
+```
+
+Fresh-container command used:
+
+```bash
+docker run --rm \
+  -v /tmp/paperorchestra-private-denylist.txt:/tmp/paperorchestra-private-denylist.txt:ro \
+  paperorchestra-ubuntu-tools:24.04 bash -lc 'set -euo pipefail
+WORK=/tmp/paperorchestra-ad-proof
+rm -rf "$WORK"
+git clone --branch orchestrator-v1-runtime https://github.com/kosh7707/paperorchestra-for-codex.git "$WORK" >/tmp/git-clone.log
+cd "$WORK"
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e ".[dev]" >/tmp/pip-install.log
+python -m pytest tests/test_orchestra_figures.py -q
+python -m pytest tests/test_orchestra_figures.py tests/test_orchestra_full_loop_planner.py tests/test_orchestra_state_scenarios.py tests/test_orchestrator_cli_entrypoints.py -q
+scripts/check-private-leakage.py --denylist /tmp/paperorchestra-private-denylist.txt --root "$PWD" --json
+printf "HEAD=%s\n" "$(git rev-parse --short HEAD)"
+'
+```
+
+Evidence:
+
+```text
+tests/test_orchestra_figures.py: 16 passed
+figure/planner/state/CLI container subset: 50 passed, 2 subtests
+private leakage scan: status ok, match_count 0
+HEAD=a2696e0
+```
+
+Local verification before the implementation commit:
+
+```text
+tests/test_orchestra_figures.py: 16 passed
+figure/planner/state/action/CLI/MCP subset: 99 passed, 22 subtests
+full suite: 943 passed, 177 subtests
+private leakage scan: status ok, match_count 0
+Critic implementation validation: APPROVE
+```
 
 ## 10. Explicit non-goals
 
