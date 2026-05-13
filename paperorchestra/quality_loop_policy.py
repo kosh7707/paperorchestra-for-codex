@@ -31,6 +31,8 @@ SEMI_AUTO_REPAIR_CODES = {
     "unsupported_comparative_claim",
     "numeric_grounding_mismatch",
     "citation_coverage_insufficient",
+    "citation_density_policy_failed",
+    "high_risk_uncited_claim",
 }
 
 FIGURE_REPAIR_CODES = {
@@ -105,6 +107,8 @@ QA_LOOP_SUPPORTED_HANDLER_CODES = {
     "review_provenance_stage_mismatch",
     "review_score_below_threshold",
     "citation_support_critic_failed",
+    "citation_density_policy_failed",
+    "high_risk_uncited_claim",
     "compile_report_missing",
     "compile_report_stale",
     "compile_report_legacy_untrusted",

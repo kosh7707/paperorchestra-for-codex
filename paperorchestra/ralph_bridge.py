@@ -441,7 +441,7 @@ def run_qa_loop_step(
             )
             if any(not item.get("accepted", False) for item in refine_result):
                 break
-        elif code == "citation_support_critic_failed":
+        elif code in {"citation_support_critic_failed", "citation_density_policy_failed", "high_risk_uncited_claim"}:
             repair = repair_citation_claims(cwd, provider, runtime_mode=runtime_mode, require_compile=require_compile, commit=False)
             if not repair.get("accepted"):
                 execution["actions_attempted"].append({"code": code, "handler": "repair_citation_claims", "result": repair})

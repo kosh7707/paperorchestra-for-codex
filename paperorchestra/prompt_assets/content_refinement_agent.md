@@ -16,8 +16,10 @@ You will receive:
 - reviewer_feedback: A JSON object containing specific Strengths, Weaknesses,
   Questions, and Decisions from an LLM reviewer.
   It may also contain issue_context.problematic_citation_items and
-  issue_context.high_risk_uncited_claims. Treat those concrete sentences as
-  primary repair targets; do not satisfy them with generic global prose.
+  issue_context.high_risk_uncited_claims, plus
+  issue_context.citation_density_issues for citation-bomb sentences or
+  paragraphs. Treat those concrete sentences as primary repair targets; do not
+  satisfy them with generic global prose.
 
 Your Goal
 1. Analyze Feedback: Deconstruct the reviewer_feedback into actionable
@@ -66,6 +68,9 @@ Critical Execution Standards
   into a scoped author-material or limitation statement, or (c) remove it.
   Never add a precise numeric, comparative, novelty, or security claim just to
   make the prose sound stronger.
+- Citation density: For each issue_context.citation_density_issues item, split
+  citation-bomb sentences, remove redundant references, or move citations to
+  the exact sentence they support. Do not add new bibliography keys.
 
 Output Format (Strict)
 You MUST return your response in two distinct code blocks in this exact order:

@@ -217,14 +217,16 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     if isinstance(citation_integrity_check.get("citation_integrity_audit"), dict)
                     else None,
                     target="citation density and source-use discipline",
-                    automation="human_needed",
-                    reason="Citation-integrity critic found citation-density, duplicate-support, source-match, or context-policy failures that need claim-preserving source-use judgment.",
+                    automation="semi_auto",
+                    reason="Citation-integrity critic found citation-density, duplicate-support, source-match, or context-policy failures that should be repaired before asking the author for final judgment.",
                     suggested_commands=[
+                        "paperorchestra repair-citation-claims",
                         "paperorchestra audit-citation-integrity --quality-mode claim_safe",
                         "paperorchestra review-citations --evidence-mode web",
                         "paperorchestra quality-eval --quality-mode claim_safe",
                     ],
-                    ralph_instruction="Do not silence citation-integrity failures. Split citation-bomb sentences, remove redundant references, or scope claims while preserving citation-support critic approval.",
+                    ralph_instruction="Produce a bounded citation-density repair candidate: split citation-bomb sentences, remove redundant references, or scope claims while preserving citation-support critic approval.",
+                    why_not_automatic="Changing citation placement can alter claim support boundaries; the candidate must remain uncommitted until citation-integrity critic approval.",
                     approval_required_from="citation_integrity_critic",
                 )
             )
@@ -289,10 +291,16 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                 code="high_risk_uncited_claim",
                 source=None,
                 target="claim safety",
-                automation="human_needed",
+                automation="semi_auto",
                 reason="High-risk uncited factual, novelty, security, benchmark, or numeric claims remain without citation, source-obligation support, or limitation scoping.",
-                suggested_commands=["paperorchestra write-sections", "paperorchestra review-citations --evidence-mode web", "paperorchestra quality-eval --quality-mode claim_safe"],
-                ralph_instruction="Stop automatic readiness: high-risk uncited claims need source/citation grounding or explicit limitation scoping.",
+                suggested_commands=[
+                    "paperorchestra repair-citation-claims",
+                    "paperorchestra review-citations --evidence-mode web",
+                    "paperorchestra audit-citation-integrity --quality-mode claim_safe",
+                    "paperorchestra quality-eval --quality-mode claim_safe",
+                ],
+                ralph_instruction="Ground each high-risk uncited claim with existing verified evidence, scope it as a limitation/author-material claim, or delete it; do not add new claims or bibliography keys.",
+                why_not_automatic="Repairing high-risk claims can alter factual substance; the candidate must be checked by claim-safety/citation critics before promotion.",
                 approval_required_from="claim_safety_critic",
             )
         )

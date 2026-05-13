@@ -37,13 +37,100 @@ def _non_supported_citation_items(citation_review: dict[str, Any]) -> list[dict[
             result.append(item)
     return result
 
-def _repair_prompt(current_paper: str, citation_map: dict[str, Any], issues: list[dict[str, Any]]) -> tuple[str, str]:
+def _truncate_issue_text(value: Any, *, limit: int = 900) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    return text if len(text) <= limit else text[: limit - 3].rstrip() + "..."
+
+def _citation_density_repair_issues(cwd: str | Path | None, *, limit: int = 16) -> list[dict[str, Any]]:
+    audit_path = artifact_path(cwd, "citation_integrity.audit.json")
+    try:
+        audit = _read_json(audit_path)
+    except Exception:
+        return []
+    if not isinstance(audit, dict):
+        return []
+    checks = audit.get("checks") if isinstance(audit.get("checks"), dict) else {}
+    density = checks.get("citation_density") if isinstance(checks.get("citation_density"), dict) else {}
+    issues: list[dict[str, Any]] = []
+    for item in density.get("bomb_sentences") or []:
+        if not isinstance(item, dict):
+            continue
+        keys = [str(key) for key in item.get("citation_keys") or [] if str(key).strip()]
+        issues.append(
+            {
+                "issue_type": "citation_bomb_sentence",
+                "id": item.get("id"),
+                "sentence": _truncate_issue_text(item.get("sentence")),
+                "citation_keys": keys,
+                "citation_count": len(keys),
+                "required_action": "split the sentence, remove redundant references, or scope the claim without adding bibliography keys",
+            }
+        )
+        if len(issues) >= limit:
+            return issues
+    for index, keys in enumerate(density.get("bomb_paragraph_key_sets") or [], start=1):
+        if not isinstance(keys, list):
+            continue
+        normalized = [str(key) for key in keys if str(key).strip()]
+        issues.append(
+            {
+                "issue_type": "citation_bomb_paragraph",
+                "id": f"citation-bomb-paragraph-{index}",
+                "citation_keys": normalized,
+                "citation_count": len(normalized),
+                "required_action": "distribute citations across claim-specific sentences or remove redundant references",
+            }
+        )
+        if len(issues) >= limit:
+            break
+    return issues
+
+def _high_risk_repair_issues(cwd: str | Path | None, *, limit: int = 16) -> list[dict[str, Any]]:
+    quality_path = artifact_path(cwd, "quality-eval.json")
+    try:
+        quality_eval = _read_json(quality_path)
+    except Exception:
+        return []
+    if not isinstance(quality_eval, dict):
+        return []
+    tiers = quality_eval.get("tiers") if isinstance(quality_eval.get("tiers"), dict) else {}
+    tier2 = tiers.get("tier_2_claim_safety") if isinstance(tiers.get("tier_2_claim_safety"), dict) else {}
+    checks = tier2.get("checks") if isinstance(tier2.get("checks"), dict) else {}
+    sweep = checks.get("high_risk_claim_sweep") if isinstance(checks.get("high_risk_claim_sweep"), dict) else {}
+    issues: list[dict[str, Any]] = []
+    for item in sweep.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        issues.append(
+            {
+                "issue_type": "high_risk_uncited_claim",
+                "line": item.get("line"),
+                "sentence": _truncate_issue_text(item.get("sentence")),
+                "reason": _truncate_issue_text(item.get("reason"), limit=500),
+                "required_action": "ground with existing verified evidence, scope as a limitation/author-material claim, or delete",
+            }
+        )
+        if len(issues) >= limit:
+            break
+    return issues
+
+def _claim_safety_repair_issues(cwd: str | Path | None) -> list[dict[str, Any]]:
+    return _citation_density_repair_issues(cwd) + _high_risk_repair_issues(cwd)
+
+def _repair_prompt(
+    current_paper: str,
+    citation_map: dict[str, Any],
+    issues: list[dict[str, Any]],
+    claim_safety_issues: list[dict[str, Any]] | None = None,
+) -> tuple[str, str]:
     system_prompt = """
 You are a bounded PaperOrchestra citation-claim repair writer.
-Revise only cited sentences listed in the issue packet.
+Revise only sentences listed in the citation or claim-safety issue packet.
 Do not add new citations outside citation_map.json.
 Do not add new empirical results, proof claims, or external facts.
-Prefer softening, splitting, or removing unsupported cited claims.
+Prefer softening, splitting, or removing unsupported cited claims, citation-dense sentences, and high-risk uncited claims.
 Return the full revised LaTeX manuscript only.
 """.strip()
     user_prompt = f"""
@@ -59,11 +146,17 @@ Return the full revised LaTeX manuscript only.
 {json.dumps(issues, indent=2, ensure_ascii=False)}
 </DATA_BLOCK>
 
+<DATA_BLOCK name="claim_safety_repair_issues.json">
+{json.dumps(claim_safety_issues or [], indent=2, ensure_ascii=False)}
+</DATA_BLOCK>
+
 Rules:
 - Preserve unrelated sections.
 - Preserve existing labels, figure paths, and bibliography hook.
 - Use only citation keys already present in citation_map.json.
 - Do not include reviewer numeric scores.
+- For citation-density issues, split citation-bomb sentences, remove redundant references, or place citations on the exact supported sentence.
+- For high-risk uncited claims, ground with existing verified evidence, scope as a limitation/author-material claim, or delete the claim.
 """.strip()
     return system_prompt, user_prompt
 
@@ -86,23 +179,25 @@ def repair_citation_claims(
     if not isinstance(citation_review, dict):
         raise ContractError(f"Citation review is not available: {review_path}")
     issues = _non_supported_citation_items(citation_review)
+    claim_safety_issues = _claim_safety_repair_issues(cwd)
     result: dict[str, Any] = {
         "schema_version": "citation-claim-repair/1",
         "started_at": utc_now_iso(),
         "citation_review": str(review_path),
         "issue_count": len(issues),
+        "claim_safety_issue_count": len(claim_safety_issues),
         "accepted": False,
         "reason": None,
     }
-    if not issues:
-        result.update({"accepted": True, "reason": "no_non_supported_citation_claims", "completed_at": utc_now_iso()})
+    if not issues and not claim_safety_issues:
+        result.update({"accepted": True, "reason": "no_citation_claim_or_claim_safety_issues", "completed_at": utc_now_iso()})
         return result
     paper_path = Path(state.artifacts.paper_full_tex)
     original = paper_path.read_text(encoding="utf-8")
     citation_map = _read_json(state.artifacts.citation_map_json) if state.artifacts.citation_map_json else {}
     if not isinstance(citation_map, dict):
         citation_map = {}
-    system_prompt, user_prompt = _repair_prompt(original, citation_map, issues)
+    system_prompt, user_prompt = _repair_prompt(original, citation_map, issues, claim_safety_issues)
     response, lane_type, fallback_used, lane_notes = _complete_with_runtime_mode(
         _build_completion_request(system_prompt=system_prompt, user_prompt=user_prompt),
         provider=provider,

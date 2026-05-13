@@ -2123,7 +2123,7 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             self.assertIn("theorem_or_bound", types)
             self.assertIn("benchmark_result", types)
 
-    def test_quality_eval_claim_safe_blocks_uncited_numeric_security_claim(self) -> None:
+    def test_quality_eval_claim_safe_routes_uncited_numeric_security_claim_to_repair(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self._init_session_with_minimal_inputs(root)
@@ -2139,7 +2139,13 @@ The regressed mock paper keeps enough method text to satisfy structural validati
 
             tier2 = quality_eval["tiers"]["tier_2_claim_safety"]
             self.assertIn("high_risk_uncited_claim", tier2["failing_codes"])
-            self.assertEqual(plan["verdict"], "human_needed")
+            self.assertEqual(plan["verdict"], "continue")
+            high_risk_actions = [
+                action for action in plan["repair_actions"] if action.get("code") == "high_risk_uncited_claim"
+            ]
+            self.assertEqual(len(high_risk_actions), 1)
+            self.assertEqual(high_risk_actions[0]["automation"], "semi_auto")
+            self.assertNotEqual(plan["verdict"], "ready_for_human_finalization")
 
     def test_high_risk_claim_requires_specific_source_obligation_linkage(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

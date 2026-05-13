@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from .citation_integrity import (
+    citation_integrity_audit_path,
+    citation_integrity_critic_path,
     write_citation_integrity_audit,
     write_citation_integrity_critic,
     write_rendered_reference_audit,
@@ -146,6 +148,22 @@ def build_operator_review_packet(
                 "quality_eval",
                 manuscript_sha256,
                 artifact_path(cwd, "quality-eval.json"),
+            ),
+        ),
+        (
+            "citation_integrity_audit",
+            _first_current_bound_existing(
+                "citation_integrity_audit",
+                manuscript_sha256,
+                citation_integrity_audit_path(cwd),
+            ),
+        ),
+        (
+            "citation_integrity_critic",
+            _first_current_bound_existing(
+                "citation_integrity_critic",
+                manuscript_sha256,
+                citation_integrity_critic_path(cwd),
             ),
         ),
         ("qa_loop_plan", qa_plan_path),
@@ -487,6 +505,45 @@ def _high_risk_claim_context(payload: dict[str, Any] | None, *, limit: int = 16)
             break
     return result
 
+def _citation_density_context(payload: dict[str, Any] | None, *, limit: int = 16) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    checks = payload.get("checks") if isinstance(payload.get("checks"), dict) else {}
+    density = checks.get("citation_density") if isinstance(checks.get("citation_density"), dict) else {}
+    result: list[dict[str, Any]] = []
+    for item in density.get("bomb_sentences") or []:
+        if not isinstance(item, dict):
+            continue
+        keys = [str(key) for key in item.get("citation_keys") or [] if str(key).strip()]
+        result.append(
+            {
+                "issue_type": "citation_bomb_sentence",
+                "id": item.get("id"),
+                "sentence": _truncate_context_text(item.get("sentence"), limit=900),
+                "citation_keys": keys,
+                "citation_count": len(keys),
+                "suggested_fix": "Split the sentence, remove redundant references, or scope the claim while preserving directly supporting citations.",
+            }
+        )
+        if len(result) >= limit:
+            return result
+    for index, keys in enumerate(density.get("bomb_paragraph_key_sets") or [], start=1):
+        if not isinstance(keys, list):
+            continue
+        normalized = [str(key) for key in keys if str(key).strip()]
+        result.append(
+            {
+                "issue_type": "citation_bomb_paragraph",
+                "id": f"citation-bomb-paragraph-{index}",
+                "citation_keys": normalized,
+                "citation_count": len(normalized),
+                "suggested_fix": "Distribute citations across claim-specific sentences or remove redundant references.",
+            }
+        )
+        if len(result) >= limit:
+            break
+    return result
+
 def _operator_issue_context(imported: dict[str, Any]) -> dict[str, Any]:
     """Attach concrete failing claim context to operator feedback for the writer.
 
@@ -504,9 +561,11 @@ def _operator_issue_context(imported: dict[str, Any]) -> dict[str, Any]:
         return {}
     citation_review = _packet_payload_by_role(packet, "citation_support_review")
     quality_eval = _packet_payload_by_role(packet, "quality_eval")
+    citation_integrity_audit = _packet_payload_by_role(packet, "citation_integrity_audit")
     context = {
         "problematic_citation_items": _problematic_citation_context(citation_review),
         "high_risk_uncited_claims": _high_risk_claim_context(quality_eval),
+        "citation_density_issues": _citation_density_context(citation_integrity_audit),
         "writer_instruction": (
             "Use these concrete sentences as the primary repair targets. Do not add new bibliography keys; "
             "either ground each sentence with existing directly supporting evidence, soften it into scoped author-material prose, or remove it."

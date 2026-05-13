@@ -327,7 +327,7 @@ def _artifact_payload(record: dict[str, Any]) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 def _artifact_bound_manuscript_sha(role: str, payload: dict[str, Any]) -> str | None:
-    if role in {"citation_support_review", "section_review"}:
+    if role in {"citation_support_review", "section_review", "citation_integrity_audit", "citation_integrity_critic"}:
         return _normalized_sha(payload.get("manuscript_sha256"))
     if role == "quality_eval":
         return _normalized_sha(payload.get("manuscript_hash"))
@@ -433,6 +433,8 @@ def _validate_operator_packet_artifact_bindings(
         "qa_loop_execution",
         "operator_feedback_execution",
         "citation_support_review",
+        "citation_integrity_audit",
+        "citation_integrity_critic",
         "section_review",
     }:
         record = records_by_role.get(role)

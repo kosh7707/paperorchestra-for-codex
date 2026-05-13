@@ -35,9 +35,149 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
 
         density_actions = [action for action in actions if action.get("code") == "citation_density_policy_failed"]
         self.assertEqual(len(density_actions), 1)
-        self.assertEqual(density_actions[0]["automation"], "human_needed")
+        self.assertEqual(density_actions[0]["automation"], "semi_auto")
         self.assertEqual(density_actions[0]["approval_required_from"], "citation_integrity_critic")
         self.assertIn("citation-bomb", density_actions[0]["ralph_instruction"])
+
+    def test_qa_loop_plan_continues_for_supported_citation_density_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n\\begin{document}\n"
+                "Dense claim~\\cite{A,B,C,D}.\n"
+                "\\bibliographystyle{plain}\n\\bibliography{references}\n"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            citation_support = artifact_path(root, "citation_support_review.json")
+            citation_support.write_text(json.dumps({"items": []}), encoding="utf-8")
+            quality_eval_path = artifact_path(root, "quality-eval.synthetic.json")
+            quality_eval_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "quality-eval/1",
+                        "session_id": state.session_id,
+                        "mode": "claim_safe",
+                        "manuscript_hash": "sha256:" + hashlib.sha256(paper.read_bytes()).hexdigest(),
+                        "cross_iteration": {
+                            "budget": {"remaining": 5, "current_attempt_consumes_budget": False},
+                            "regression": {"forward_progress": True},
+                        },
+                        "source_artifacts": {"citation_review_sha256": hashlib.sha256(citation_support.read_bytes()).hexdigest()},
+                        "tiers": {
+                            "tier_0_preconditions": {"status": "pass", "failing_codes": []},
+                            "tier_1_structural": {"status": "pass", "failing_codes": []},
+                            "tier_2_claim_safety": {
+                                "status": "fail",
+                                "failing_codes": ["citation_bomb_detected"],
+                                "checks": {
+                                    "citation_integrity_gate": {
+                                        "status": "fail",
+                                        "failing_codes": ["citation_bomb_detected", "citation_integrity_failed"],
+                                        "citation_integrity_audit": {"path": str(artifact_path(root, "citation_integrity.audit.json"))},
+                                    }
+                                },
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch("paperorchestra.quality_loop.run_fidelity_audit", return_value={"overall_status": "pass"}):
+                with patch("paperorchestra.quality_loop.write_reproducibility_audit", return_value=artifact_path(root, "reproducibility.audit.json")):
+                    with patch("paperorchestra.quality_loop.build_reproducibility_audit", return_value={"verdict": "PASS", "citation_artifact_issues": [], "strict_content_gate_issues": [], "prompt_trace_file_count": 1}):
+                        _, plan = write_quality_loop_plan(
+                            root,
+                            quality_mode="claim_safe",
+                            quality_eval_input_path=quality_eval_path,
+                            append_history=False,
+                        )
+
+            self.assertEqual(plan["verdict"], "continue")
+            self.assertIn("executable action citation_density_policy_failed", plan["next_ralph_instruction"])
+            self.assertEqual(plan["quality_eval_summary"]["tier_statuses"]["tier_2_claim_safety"], "fail")
+            self.assertNotEqual(plan["verdict"], "ready_for_human_finalization")
+
+    def test_qa_loop_plan_continues_for_high_risk_uncited_claim_repair(self) -> None:
+        quality_eval = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "status": "fail",
+                    "checks": {
+                        "high_risk_claim_sweep": {
+                            "status": "fail",
+                            "failing_codes": ["high_risk_uncited_claim"],
+                            "items": [
+                                {
+                                    "line": 7,
+                                    "sentence": "The system eliminates all failures in realistic deployments.",
+                                    "reason": "high-risk claim lacks citation or scoped limitation",
+                                }
+                            ],
+                        }
+                    },
+                }
+            }
+        }
+
+        actions = _quality_eval_actions(quality_eval)
+
+        high_risk_actions = [action for action in actions if action.get("code") == "high_risk_uncited_claim"]
+        self.assertEqual(len(high_risk_actions), 1)
+        self.assertEqual(high_risk_actions[0]["automation"], "semi_auto")
+        self.assertIn("existing verified evidence", high_risk_actions[0]["ralph_instruction"])
+        self.assertEqual(high_risk_actions[0]["approval_required_from"], "claim_safety_critic")
+
+    def test_qa_loop_step_attempts_citation_integrity_repair_handler(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\documentclass{article}\n\\begin{document}\nDense~\\cite{A,B,C,D}.\\end{document}\n", encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            before_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "manuscript_hash": "sha256:" + hashlib.sha256(paper.read_bytes()).hexdigest(),
+                "tiers": {"tier_2_claim_safety": {"status": "fail", "failing_codes": ["citation_bomb_detected"]}},
+            }
+            after_eval = {
+                **before_eval,
+                "tiers": {"tier_2_claim_safety": {"status": "fail", "failing_codes": ["citation_bomb_detected"]}},
+            }
+            plan = {
+                "schema_version": "qa-loop-plan/2",
+                "session_id": state.session_id,
+                "verdict": "continue",
+                "repair_actions": [{"code": "citation_density_policy_failed", "automation": "semi_auto"}],
+            }
+            plan_after = {**plan, "verdict": "human_needed"}
+            repair_payload = {
+                "accepted": False,
+                "reason": "validation_failed",
+                "issue_count": 1,
+            }
+            with patch("paperorchestra.ralph_bridge.write_quality_eval", side_effect=[(root / "before.json", before_eval), (root / "after.json", after_eval)]):
+                with patch("paperorchestra.ralph_bridge.write_quality_loop_plan", side_effect=[(root / "plan-before.json", plan), (root / "plan-after.json", plan_after)]):
+                    with patch("paperorchestra.ralph_bridge._citation_summary", return_value={}):
+                        with patch("paperorchestra.ralph_bridge.repair_citation_claims", return_value=repair_payload) as repair:
+                            with patch("paperorchestra.ralph_bridge.record_current_validation_report", return_value=(root / "validation.json", {"ok": True})):
+                                with patch("paperorchestra.ralph_bridge.write_section_review", return_value=root / "section_review.json"):
+                                    with patch("paperorchestra.ralph_bridge.write_figure_placement_review", return_value=(root / "figure_review.json", {"manuscript_sha256": "x"})):
+                                        with patch("paperorchestra.ralph_bridge.write_citation_support_review", return_value=root / "citation_support_review.json"):
+                                            with patch("paperorchestra.ralph_bridge._refresh_citation_integrity_for_current_manuscript", return_value={"status": "fail", "failing_codes": ["citation_bomb_detected"]}):
+                                                result = run_qa_loop_step(root, MockProvider(), citation_evidence_mode="heuristic")
+
+            repair.assert_called_once()
+            attempted = result.payload.get("actions_attempted", [])
+            self.assertEqual(attempted[0]["code"], "citation_density_policy_failed")
+            self.assertEqual(attempted[0]["handler"], "repair_citation_claims")
+            self.assertNotEqual(result.payload["verdict"], "ready_for_human_finalization")
 
     def test_qa_loop_plan_makes_stale_citation_integrity_refresh_executable(self) -> None:
         quality_eval = {
@@ -63,6 +203,95 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
         from paperorchestra.quality_loop_policy import QA_LOOP_SUPPORTED_HANDLER_CODES
 
         self.assertIn("citation_integrity_stale", QA_LOOP_SUPPORTED_HANDLER_CODES)
+
+    def test_operator_issue_context_includes_citation_density_issues_from_packet(self) -> None:
+        from paperorchestra.operator_feedback import _operator_issue_context
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n\\begin{document}\n"
+                "Dense claim~\\cite{A,B,C,D}.\n\\end{document}\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            self._write_terminal_human_needed_plan(root)
+            audit_path = artifact_path(root, "citation_integrity.audit.json")
+            audit_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "citation-integrity-audit/1",
+                        "status": "fail",
+                        "manuscript_sha256": hashlib.sha256(paper.read_bytes()).hexdigest(),
+                        "failing_codes": ["citation_bomb_detected"],
+                        "checks": {
+                            "citation_density": {
+                                "status": "fail",
+                                "bomb_sentences": [
+                                    {
+                                        "id": "tex-sentence-1",
+                                        "sentence": "Dense claim~\\cite{A,B,C,D}.",
+                                        "citation_keys": ["A", "B", "C", "D"],
+                                    }
+                                ],
+                                "bomb_paragraph_key_sets": [["A", "B", "C", "D", "E", "F"]],
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            critic_path = artifact_path(root, "citation_integrity.critic.json")
+            critic_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "citation-integrity-critic/1",
+                        "status": "fail",
+                        "manuscript_sha256": hashlib.sha256(paper.read_bytes()).hexdigest(),
+                        "reviewed_artifacts": [],
+                        "failing_codes": ["citation_bomb_detected"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            packet_path, packet = build_operator_review_packet(root, review_scope="tex_only")
+            context = _operator_issue_context({"packet_path": str(packet_path)})
+
+            roles = {artifact["role"] for artifact in packet["artifacts"]}
+            self.assertIn("citation_integrity_audit", roles)
+            self.assertIn("citation_integrity_critic", roles)
+            density = context["citation_density_issues"]
+            self.assertEqual(density[0]["issue_type"], "citation_bomb_sentence")
+            self.assertEqual(density[0]["citation_count"], 4)
+            self.assertEqual(density[1]["issue_type"], "citation_bomb_paragraph")
+            self.assertEqual(density[1]["citation_count"], 6)
+
+    def test_operator_issue_context_ignores_missing_citation_density_artifact(self) -> None:
+        from paperorchestra.operator_feedback import _operator_issue_context
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\documentclass{article}\n\\begin{document}\nDraft.\\end{document}\n", encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            self._write_terminal_human_needed_plan(root)
+            packet_path, _ = build_operator_review_packet(root, review_scope="tex_only")
+
+            context = _operator_issue_context({"packet_path": str(packet_path)})
+
+            self.assertNotIn("citation_density_issues", context)
+
+    def test_content_refinement_prompt_names_citation_density_issue_context(self) -> None:
+        prompt = Path("paperorchestra/prompt_assets/content_refinement_agent.md").read_text(encoding="utf-8")
+
+        self.assertIn("issue_context.citation_density_issues", prompt)
+        self.assertIn("do not add new bibliography keys", prompt.lower())
 
     def test_qa_loop_plan_supervised_handoff_uses_canonical_packet_sha(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
