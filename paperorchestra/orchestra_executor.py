@@ -64,7 +64,7 @@ class ExecutionRecord:
 
     @property
     def succeeded(self) -> bool:
-        return self.status in {"executed_fake", "executed_local"}
+        return self.status in {"executed_fake", "executed_local", "executed_omx"}
 
     def to_public_dict(self) -> dict[str, Any]:
         return {
