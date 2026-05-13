@@ -464,3 +464,25 @@ Critic implementation validation:
 - Second pass: `APPROVE`; direct OrchestratorState evidence-ref consumption is
   not a blocker for AC because the public API is session-artifact based and
   remains conservative when persisted support/metadata evidence is missing.
+
+## 14. Fresh container proof
+
+After pushing implementation commit `f5c04eb`, a fresh container cloned the public
+repository, checked out `orchestrator-v1-runtime`, installed the dev extra, and
+ran the AC citation/entrypoint contract suite:
+
+```bash
+docker run --rm paperorchestra-ubuntu-tools:24.04 bash -lc 'set -euo pipefail; \
+  git clone --quiet https://github.com/kosh7707/paperorchestra-for-codex.git repo; \
+  cd repo; \
+  git checkout --quiet orchestrator-v1-runtime; \
+  python3 -m venv .venv; \
+  . .venv/bin/activate; \
+  python -m pip install --quiet -e ".[dev]"; \
+  python -m pytest tests/test_orchestra_citation_quality.py \
+    tests/test_citation_integrity.py \
+    tests/test_orchestra_references.py \
+    tests/test_orchestrator_cli_entrypoints.py \
+    tests/test_orchestrator_mcp_entrypoints.py -q'
+# 63 passed, 5 subtests passed in 0.57s
+```
