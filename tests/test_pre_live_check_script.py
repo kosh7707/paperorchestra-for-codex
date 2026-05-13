@@ -114,6 +114,18 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertLess(text.index("qa_loop_step_iter_${iter}"), text.index("refresh_citation_integrity_artifacts \"post_iter_${iter}\""))
         self.assertLess(text.index("review_citations_web_final_session"), text.index("refresh_citation_integrity_artifacts final"))
 
+    def test_fresh_full_live_smoke_uses_non_tmp_codex_home_parent(self) -> None:
+        text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+
+        self.assertNotIn("mktemp -d /tmp/paperorchestra-smoke-codex-home.XXXXXX", text)
+        self.assertIn('PAPERO_SMOKE_CODEX_HOME_PARENT', text)
+        self.assertIn('$HOME/.cache/paperorchestra/smoke-codex-home', text)
+        self.assertIn('mkdir -p "$SMOKE_CODEX_HOME_PARENT"', text)
+        self.assertIn('SMOKE_CODEX_HOME="$(mktemp -d "$SMOKE_CODEX_HOME_PARENT/codex-home.XXXXXX")"', text)
+        self.assertIn('rm -rf "$SMOKE_CODEX_HOME"', text)
+        self.assertIn('rm -f "$SMOKE_CODEX_HOME/hooks.json"', text)
+        self.assertIn('CODEX_HOME="$SMOKE_CODEX_HOME" "${codex_prefix[@]}" exec', text)
+
     def test_fresh_full_live_smoke_checks_rendered_references_before_web_citation_review(self) -> None:
         text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
         subprocess.run(["bash", "-n", "scripts/fresh-full-live-smoke-loop.sh"], check=True)
