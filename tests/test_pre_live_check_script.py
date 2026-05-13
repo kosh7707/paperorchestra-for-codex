@@ -126,6 +126,18 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertIn('rm -f "$SMOKE_CODEX_HOME/hooks.json"', text)
         self.assertIn('CODEX_HOME="$SMOKE_CODEX_HOME" "${codex_prefix[@]}" exec', text)
 
+    def test_fresh_full_live_smoke_exports_writable_codex_home_for_omx_bridge_children(self) -> None:
+        text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+
+        source_index = text.index('SOURCE_CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"')
+        prepare_index = text.index("\nprepare_smoke_codex_home\n")
+        smoke_export_index = text.index('export PAPERO_SMOKE_CODEX_HOME="$SMOKE_CODEX_HOME"')
+        codex_export_index = text.index('export CODEX_HOME="$SMOKE_CODEX_HOME"')
+
+        self.assertLess(source_index, smoke_export_index)
+        self.assertLess(prepare_index, smoke_export_index)
+        self.assertLess(smoke_export_index, codex_export_index)
+
     def test_fresh_full_live_smoke_checks_rendered_references_before_web_citation_review(self) -> None:
         text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
         subprocess.run(["bash", "-n", "scripts/fresh-full-live-smoke-loop.sh"], check=True)

@@ -107,6 +107,7 @@ prepare_smoke_codex_home() {
 }
 prepare_smoke_codex_home
 export PAPERO_SMOKE_CODEX_HOME="$SMOKE_CODEX_HOME"
+export CODEX_HOME="$SMOKE_CODEX_HOME"
 CLI=(python3 -m paperorchestra.cli)
 WRAPPER_PATH="$EVIDENCE_ROOT/provider-wrap.sh"
 GEN_CMD="$(python3 -c 'import json, sys; print(json.dumps(["bash", sys.argv[1], "gen"]))' "$WRAPPER_PATH")"
