@@ -4,6 +4,7 @@ from pathlib import Path
 
 from .orchestra_claims import build_claim_graph_from_materials
 from .orchestra_materials import build_material_inventory, build_source_digest
+from .orchestra_omx import build_research_mission_invocation_evidence
 from .orchestra_planner import ActionPlanner
 from .orchestra_research import build_evidence_research_mission
 from .orchestra_state import OrchestraFacets, OrchestraState, file_sha256
@@ -93,6 +94,9 @@ def run_until_blocked(cwd: str | Path | None = None, *, material_path: str | Pat
     if report.ready:
         mission = build_evidence_research_mission(report)
         state.evidence_refs.append({"kind": "evidence_research_mission", "payload": mission.to_public_dict()})
+        invocation = build_research_mission_invocation_evidence(mission)
+        if invocation is not None:
+            state.evidence_refs.append({"kind": "omx_invocation_evidence", "payload": invocation.to_public_dict()})
         state.facets.claims = "candidate"
         if mission.task_count:
             state.facets.evidence = "durable_research_needed" if mission.durable_required else "research_needed"
