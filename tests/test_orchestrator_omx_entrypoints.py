@@ -64,7 +64,7 @@ class OrchestratorOmxEntrypointTests(unittest.TestCase):
         self.assertNotIn("omx ", rendered)
         self.assertNotIn("introduce a new generic", rendered)
 
-    def test_execute_omx_once_standard_autoresearch_is_unsupported_without_runner_call(self) -> None:
+    def test_execute_omx_once_standard_autoresearch_returns_handoff_without_runner_call(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             material = _write_material(root, durable=False)
@@ -75,10 +75,18 @@ class OrchestratorOmxEntrypointTests(unittest.TestCase):
 
         self.assertEqual(payload["execution"], "bounded_omx_execution")
         self.assertEqual(payload["action_taken"], "start_autoresearch")
-        self.assertEqual(payload["execution_record"]["status"], "unsupported")
-        self.assertEqual(payload["execution_record"]["reason"], "autoresearch_skill_runtime_required")
+        self.assertEqual(payload["execution_record"]["status"], "handoff_required")
+        self.assertFalse(payload["execution_record"].get("state_rebuild_required"))
+        self.assertFalse(result.execution_record.succeeded)
         self.assertEqual(runner.calls, [])
+        self.assertTrue(any(ref.get("kind") == "orchestrator_execution_record" for ref in result.state.evidence_refs))
+        self.assertNotEqual(payload["state"]["readiness"]["status"], "ready")
+        self.assertEqual(payload["state"]["facets"]["evidence"], "research_needed")
+        self.assertNotEqual(payload["state"]["facets"]["writing"], "drafting_allowed")
+        self.assertIn("omx_action_handoff", rendered)
+        self.assertIn("$autoresearch", rendered)
         self.assertNotIn("omx autoresearch", rendered)
+        self.assertNotIn(str(material), rendered)
 
     def test_execute_omx_once_without_omx_action_returns_non_success_record(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

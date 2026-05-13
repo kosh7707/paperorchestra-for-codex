@@ -242,3 +242,41 @@ Stop and replan if:
 - deprecated `omx autoresearch` appears in planned or recorded command text;
 - tests require private material;
 - default `orchestrate`, `--execute-local`, or `--plan-full-loop` behavior changes.
+
+## 10. Local implementation evidence
+
+Implementation completed on 2026-05-13 after a failing-test-first pass.
+
+Failing test evidence before implementation/fix:
+
+- Initial AB tests failed during collection because
+  `OMX_ACTION_CAPABILITIES` did not exist yet.
+- Critic then found a public-safety gap for command-like unsupported actions and
+  private-looking executable reasons. Added regression tests for those cases;
+  they failed before the sanitizer fix.
+
+Passing evidence after implementation:
+
+```bash
+.venv/bin/python -m pytest tests/test_orchestra_omx_executor.py \
+  tests/test_orchestrator_omx_entrypoints.py \
+  tests/test_orchestrator_cli_entrypoints.py \
+  tests/test_orchestrator_mcp_entrypoints.py -q
+# 55 passed, 30 subtests passed
+
+.venv/bin/python -m pytest -q
+# 918 passed, 177 subtests passed
+
+git diff --check
+# ok
+
+scripts/check-private-leakage.py --denylist /tmp/paperorchestra-private-denylist.txt --root "$PWD" --json
+# match_count: 0
+```
+
+Critic implementation validation:
+
+- First pass: `CHANGES_REQUIRED`; sanitize public reasons and unsupported
+  command-like action types for all OMX executor records, not only handoffs.
+- Second pass: `APPROVE`; no remaining blockers before commit/push/container
+  proof.

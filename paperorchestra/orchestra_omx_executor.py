@@ -12,7 +12,9 @@ from .orchestra_executor import ExecutionRecord
 from .orchestra_state import NextAction, OrchestraState
 
 OMX_ACTION_EXECUTION_SCHEMA_VERSION = "omx-action-execution/1"
+OMX_ACTION_HANDOFF_SCHEMA_VERSION = "omx-action-handoff/1"
 _VALID_SLUG = re.compile(r"^po-[0-9a-f]{12}$")
+_VALID_PUBLIC_REASON = re.compile(r"^[a-z0-9_:-]{1,96}$")
 _PRIVATE_MARKERS = ("PRIVATE", "SECRET", "TOKEN")
 
 
@@ -26,6 +28,81 @@ class OmxCommandResult:
 class OmxCommandRunner(Protocol):
     def run(self, argv: list[str], *, cwd: Path, timeout_seconds: float) -> OmxCommandResult:
         ...
+
+
+@dataclass(frozen=True)
+class OmxActionCapability:
+    action_type: str
+    capability: str
+    surface: str | None
+    runner_required: bool = False
+    success_possible: bool = False
+
+
+OMX_ACTION_CAPABILITIES: dict[str, OmxActionCapability] = {
+    "record_trace_summary": OmxActionCapability(
+        "record_trace_summary",
+        "executable",
+        "trace_summary",
+        runner_required=True,
+        success_possible=True,
+    ),
+    "start_autoresearch_goal": OmxActionCapability(
+        "start_autoresearch_goal",
+        "executable",
+        "autoresearch_goal_create",
+        runner_required=True,
+        success_possible=True,
+    ),
+    "start_autoresearch": OmxActionCapability(
+        "start_autoresearch",
+        "handoff_required",
+        "$autoresearch",
+    ),
+    "start_deep_interview": OmxActionCapability(
+        "start_deep_interview",
+        "handoff_required",
+        "$deep-interview",
+    ),
+    "start_ralplan": OmxActionCapability(
+        "start_ralplan",
+        "handoff_required",
+        "$ralplan",
+    ),
+    "start_ralph": OmxActionCapability(
+        "start_ralph",
+        "handoff_required",
+        "$ralph",
+    ),
+    "start_ultraqa": OmxActionCapability(
+        "start_ultraqa",
+        "handoff_required",
+        "$ultraqa",
+    ),
+    "run_critic_consensus": OmxActionCapability(
+        "run_critic_consensus",
+        "handoff_required",
+        "$critic-consensus",
+    ),
+    "run_third_critic_adjudication": OmxActionCapability(
+        "run_third_critic_adjudication",
+        "handoff_required",
+        "$critic-adjudication",
+    ),
+}
+
+
+def get_omx_action_capability(action_type: str) -> OmxActionCapability:
+    capability = OMX_ACTION_CAPABILITIES.get(action_type)
+    if capability is not None:
+        return capability
+    return OmxActionCapability(
+        action_type=action_type,
+        capability="unsupported",
+        surface=None,
+        runner_required=False,
+        success_possible=False,
+    )
 
 
 @dataclass
@@ -88,7 +165,7 @@ class OmxActionExecutor:
                 state,
                 surface="trace_summary",
                 argv=["omx", "trace", "summary", "--json"],
-                input_payload={"action_type": action.action_type, "reason": action.reason},
+                input_payload={"action_type": action.action_type, "reason": _public_reason(action.reason)},
                 artifact_refs=[],
             )
         if action.action_type == "start_autoresearch_goal":
@@ -116,7 +193,7 @@ class OmxActionExecutor:
                 argv=argv,
                 input_payload={
                     "action_type": action.action_type,
-                    "reason": action.reason,
+                    "reason": _public_reason(action.reason),
                     "slug": slug,
                     "topic_hash": _sha256_text(topic),
                     "rubric_hash": _sha256_text(rubric),
@@ -124,21 +201,26 @@ class OmxActionExecutor:
                 artifact_refs=None,
                 expected_slug=slug,
             )
-        if action.action_type == "start_autoresearch":
-            return ExecutionRecord(
-                action_type=action.action_type,
-                reason="autoresearch_skill_runtime_required",
-                status="unsupported",
-                adapter=self.adapter_name,
-                evidence_refs=[],
-                state_rebuild_required=False,
-            )
+        capability = get_omx_action_capability(action.action_type)
+        if capability.capability == "handoff_required":
+            return self._handoff_required(action, capability)
         return ExecutionRecord(
-            action_type=action.action_type,
-            reason=action.reason,
+            action_type=_public_unsupported_action_type(action.action_type),
+            reason=_public_reason(action.reason),
             status="unsupported",
             adapter=self.adapter_name,
             evidence_refs=[],
+            state_rebuild_required=False,
+        )
+
+    def _handoff_required(self, action: NextAction, capability: OmxActionCapability) -> ExecutionRecord:
+        reason = _public_reason(action.reason)
+        return ExecutionRecord(
+            action_type=action.action_type,
+            reason=reason,
+            status="handoff_required",
+            adapter=self.adapter_name,
+            evidence_refs=[self._handoff_evidence(action.action_type, reason, capability)],
             state_rebuild_required=False,
         )
 
@@ -177,7 +259,7 @@ class OmxActionExecutor:
                 return self._blocked(action, "omx_artifact_refs_missing")
         return ExecutionRecord(
             action_type=action.action_type,
-            reason=action.reason,
+            reason=_public_reason(action.reason),
             status="executed_omx",
             adapter=self.adapter_name,
             evidence_refs=[self._evidence(surface, argv, input_payload, result, refs)],
@@ -216,6 +298,29 @@ class OmxActionExecutor:
             "private_safe": True,
         }
         return {"kind": "omx_action_execution", "payload": payload}
+
+    def _handoff_evidence(
+        self,
+        action_type: str,
+        reason: str,
+        capability: OmxActionCapability,
+    ) -> dict[str, Any]:
+        public_summary = {
+            "action_type": action_type,
+            "surface": capability.surface,
+            "capability": capability.capability,
+            "reason": reason,
+        }
+        payload = {
+            "schema_version": OMX_ACTION_HANDOFF_SCHEMA_VERSION,
+            "action_type": action_type,
+            "surface": capability.surface,
+            "capability": capability.capability,
+            "reason": reason,
+            "handoff_summary_hash": _sha256_json(public_summary),
+            "private_safe": True,
+        }
+        return {"kind": "omx_action_handoff", "payload": payload}
 
 
 def _default_slug(action: NextAction, state: OrchestraState) -> str:
@@ -283,6 +388,28 @@ def _public_input_payload(payload: dict[str, Any]) -> dict[str, Any]:
         else:
             result[key] = value
     return result
+
+
+def _public_reason(reason: str) -> str:
+    if not _VALID_PUBLIC_REASON.fullmatch(reason):
+        return "runtime_only_interactive_surface"
+    upper = reason.upper()
+    if any(marker in upper for marker in _PRIVATE_MARKERS):
+        return "runtime_only_interactive_surface"
+    if reason.startswith(("/", "~")) or ".." in Path(reason).parts or reason.startswith(("omx ", "$")):
+        return "runtime_only_interactive_surface"
+    return reason
+
+
+def _public_unsupported_action_type(action_type: str) -> str:
+    upper = action_type.upper()
+    if any(marker in upper for marker in _PRIVATE_MARKERS):
+        return "<unsupported-action>"
+    if action_type.startswith(("omx ", "$", "/", "~")) or any(character.isspace() for character in action_type):
+        return "<unsupported-action>"
+    if ".." in Path(action_type).parts:
+        return "<unsupported-action>"
+    return action_type
 
 
 def _sha256_json(value: Any) -> str:

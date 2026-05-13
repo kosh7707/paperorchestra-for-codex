@@ -325,6 +325,34 @@ class OrchestratorCliEntrypointTests(unittest.TestCase):
         self.assertNotIn("omx ", rendered)
         self.assertNotIn(str(material), rendered)
 
+    def test_orchestrate_execute_omx_json_returns_handoff_record(self) -> None:
+        private = "PRIVATE_CLI_MATERIAL_NOTE_SHOULD_NOT_LEAK"
+        with tempfile.TemporaryDirectory() as tmp, _chdir(tmp):
+            root = Path(tmp)
+            material = self._write_sufficient_material(root)
+            (material / "private_note.md").write_text(private, encoding="utf-8")
+            runner = FakeOmxRunner([])
+            with mock.patch("paperorchestra.cli._make_omx_executor") as factory:
+                factory.side_effect = lambda cwd, **_: OmxActionExecutor(cwd=Path(cwd), runner=runner)
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    exit_code = main(["orchestrate", "--material", str(material), "--execute-omx", "--json"])
+            payload = json.loads(stdout.getvalue())
+            rendered = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["execution"], "bounded_omx_execution")
+        self.assertEqual(payload["action_taken"], "start_autoresearch")
+        self.assertEqual(payload["execution_record"]["status"], "handoff_required")
+        self.assertFalse(payload["execution_record"]["state_rebuild_required"])
+        self.assertEqual(runner.calls, [])
+        self.assertIn("omx_action_handoff", rendered)
+        self.assertIn("$autoresearch", rendered)
+        self.assertNotIn("argv", rendered)
+        self.assertNotIn("omx ", rendered)
+        self.assertNotIn(private, rendered)
+        self.assertNotIn(str(material), rendered)
+
     def test_orchestrate_execute_omx_write_evidence_includes_execution_record(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, _chdir(tmp):
             root = Path(tmp)
@@ -347,4 +375,33 @@ class OrchestratorCliEntrypointTests(unittest.TestCase):
         self.assertIn("orchestrator_execution_record", rendered)
         self.assertNotIn("argv", rendered)
         self.assertNotIn("omx ", rendered)
+        self.assertNotIn(str(material), rendered)
+
+    def test_orchestrate_execute_omx_handoff_write_evidence_is_public_safe(self) -> None:
+        private = "PRIVATE_CLI_HANDOFF_EVIDENCE_SHOULD_NOT_LEAK"
+        with tempfile.TemporaryDirectory() as tmp, _chdir(tmp):
+            root = Path(tmp)
+            material = self._write_sufficient_material(root)
+            (material / "private_note.md").write_text(private, encoding="utf-8")
+            runner = FakeOmxRunner([])
+            with mock.patch("paperorchestra.cli._make_omx_executor") as factory:
+                factory.side_effect = lambda cwd, **_: OmxActionExecutor(cwd=Path(cwd), runner=runner)
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    exit_code = main(
+                        ["orchestrate", "--material", str(material), "--execute-omx", "--write-evidence", "--json"]
+                    )
+            payload = json.loads(stdout.getvalue())
+            output_dir = Path(payload["evidence_bundle"]["output_dir"])
+            rendered = "\n".join(path.read_text(encoding="utf-8") for path in output_dir.rglob("*.json"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["action_taken"], "start_autoresearch")
+        self.assertEqual(payload["execution_record"]["status"], "handoff_required")
+        self.assertEqual(runner.calls, [])
+        self.assertIn("orchestrator_execution_record", rendered)
+        self.assertIn("omx_action_handoff", rendered)
+        self.assertNotIn("argv", rendered)
+        self.assertNotIn("omx ", rendered)
+        self.assertNotIn(private, rendered)
         self.assertNotIn(str(material), rendered)
