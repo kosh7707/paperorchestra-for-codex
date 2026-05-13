@@ -46,6 +46,7 @@ from .models import InputBundle
 from .omx_bridge import cleanup_omx_tmp
 from .omx_diagnostics import export_omx_evidence, write_omx_review_handoff
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
+from .orchestra_evidence import write_orchestrator_evidence_bundle
 from .orchestrator import inspect_state as orchestrator_inspect_state, run_until_blocked as orchestrator_run_until_blocked
 from .quality_loop import write_quality_eval, write_quality_loop_plan
 from .quality_gate import write_quality_gate
@@ -125,6 +126,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     orchestrate_parser = sub.add_parser("orchestrate", help="Run the v1 orchestrator until the next bounded action/block")
     orchestrate_parser.add_argument("--material", help="Optional material directory/file to inspect")
+    orchestrate_parser.add_argument("--write-evidence", action="store_true", help="Persist a public-safe orchestrator evidence bundle")
+    orchestrate_parser.add_argument("--evidence-output", help="Workspace-contained evidence bundle directory")
     orchestrate_parser.add_argument("--json", action="store_true")
 
     continue_project_parser = sub.add_parser("continue-project", help="Continue the v1 orchestrator from current state without live work")
@@ -789,6 +792,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "orchestrate":
             state = orchestrator_run_until_blocked(cwd, material_path=args.material)
             payload = {"execution": "bounded_plan_only", "state": state.to_public_dict()}
+            if args.write_evidence:
+                payload["evidence_bundle"] = write_orchestrator_evidence_bundle(cwd, state, output_dir=args.evidence_output)
             _print_orchestrator_payload(payload, json_output=args.json)
             return 0
 
