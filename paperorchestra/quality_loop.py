@@ -20,6 +20,7 @@ from .fidelity import build_reproducibility_audit, run_fidelity_audit, write_rep
 from .io_utils import read_json, write_json
 from .models import utc_now_iso
 from .narrative import planning_artifact_status
+from .orchestra_citation_quality import build_citation_quality_gate, citation_quality_gate_path
 from .omx_diagnostics import OMX_EVIDENCE_SUMMARY_FILENAME, OMX_REVIEW_HANDOFF_FILENAME
 from .providers import ShellProvider, get_citation_support_provider
 from .session import artifact_path, load_session, runtime_root, save_session
@@ -511,6 +512,7 @@ def build_quality_eval(
             claim_counts = _validation_issue_counts(reproducibility)
             citation_support = _citation_support_check(cwd, state, quality_mode=mode)
             citation_integrity = citation_integrity_check(cwd, state, quality_mode=mode)
+            citation_quality = build_citation_quality_gate(cwd, quality_mode=mode)
             source_material = _source_material_fidelity_check(state)
             source_obligations = evaluate_source_obligations(cwd)
             high_risk_claims = _high_risk_claim_sweep(state, source_obligations)
@@ -521,6 +523,7 @@ def build_quality_eval(
                     tier2_failing.append(code)
             tier2_failing.extend(citation_support.get("failing_codes") or [])
             tier2_failing.extend(citation_integrity.get("failing_codes") or [])
+            tier2_failing.extend(citation_quality.get("hard_gate_failures") or [])
             tier2_failing.extend(ralph_evidence.get("failing_codes") or [])
             tier2_failing.extend(source_material.get("failing_codes") or [])
             tier2_failing.extend(source_obligations.get("failing_codes") or [])
@@ -544,6 +547,7 @@ def build_quality_eval(
                     },
                     "citation_support_critic": citation_support,
                     "citation_integrity_gate": citation_integrity,
+                    "citation_quality_gate": citation_quality,
                     "ralph_evidence": ralph_evidence,
                     "source_material_fidelity": source_material,
                     "source_obligations": source_obligations,
@@ -636,6 +640,7 @@ def build_quality_eval(
             "citation_source_match_sha256": _file_sha256(citation_source_match_path(cwd)),
             "rendered_reference_audit": str(rendered_reference_audit_path(cwd)),
             "rendered_reference_audit_sha256": _file_sha256(rendered_reference_audit_path(cwd)),
+            "citation_quality_gate_sha256": _file_sha256(citation_quality_gate_path(cwd)),
             "ralph_handoff": ralph_evidence["ralph_handoff"],
             "ralph_handoff_sha256": ralph_evidence["ralph_handoff_sha256"],
             "qa_loop_history": ralph_evidence["qa_loop_history"],

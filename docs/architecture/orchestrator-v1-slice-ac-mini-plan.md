@@ -410,3 +410,57 @@ Stop and replan if:
   citation blocker;
 - removing or renaming existing citation artifacts would break documented CLI
   commands without a migration plan.
+
+## 13. Local implementation evidence
+
+Implementation completed on 2026-05-13 after failing-test-first iteration.
+
+Failing evidence before implementation/fix:
+
+- Initial AC tests failed with `ModuleNotFoundError` for
+  `paperorchestra.orchestra_citation_quality`.
+- First implementation exposed missing contracts:
+  - public-safe scan was too broad and treated `private_safe_summary` keys as
+    private markers;
+  - CLI test used a non-existent global `--cwd`;
+  - quality-eval test did not satisfy upstream planning/citation preconditions;
+  - Critic found that a critical supported citation could pass claim-safe when
+    `rendered_reference_audit.json` was missing.
+
+Passing evidence after fixes:
+
+```bash
+.venv/bin/python -m pytest tests/test_orchestra_citation_quality.py -q
+# 13 passed
+
+.venv/bin/python -m pytest tests/test_citation_integrity.py \
+  tests/test_citation_support_provenance.py \
+  tests/test_orchestra_references.py \
+  tests/test_orchestra_claims.py \
+  tests/test_orchestra_citation_quality.py -q
+# 36 passed
+
+.venv/bin/python -m pytest tests/test_orchestrator_omx_entrypoints.py \
+  tests/test_orchestrator_cli_entrypoints.py \
+  tests/test_orchestrator_mcp_entrypoints.py \
+  tests/test_quality_gate.py -q
+# 46 passed, 5 subtests passed
+
+.venv/bin/python -m pytest -q
+# 931 passed, 177 subtests passed
+
+git diff --check
+# ok
+
+scripts/check-private-leakage.py --denylist /tmp/paperorchestra-private-denylist.txt --root "$PWD" --json
+# match_count: 0
+```
+
+Critic implementation validation:
+
+- First pass: `CHANGES_REQUIRED`; fail claim-safe when rendered metadata evidence
+  is missing for a critical citation, and avoid adding absolute citation-quality
+  paths to quality-eval.
+- Second pass: `APPROVE`; direct OrchestratorState evidence-ref consumption is
+  not a blocker for AC because the public API is session-artifact based and
+  remains conservative when persisted support/metadata evidence is missing.
