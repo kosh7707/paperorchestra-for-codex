@@ -99,6 +99,13 @@ scripts/check-private-leakage.py --denylist /tmp/paperorchestra-private-denylist
 
 git diff --check
 # clean
+
+docker run paperorchestra-ubuntu-tools:24.04 ... orchestrator-v1-runtime
+# refreshed Codex/OMX CLIs through ~/helper/update-ai-clis.sh
+# installed editable package in a fresh container clone
+# targeted pytest: 10 passed
+# scripts/smoke-paperorchestra-mcp.py --config /tmp/codex-config.toml --transport newline --probe-evidence-bundle --json
+# status ok, tool_count=63, probe_ok=true, manifest_exists=true
 ```
 
 Critic implementation validation: APPROVE.
