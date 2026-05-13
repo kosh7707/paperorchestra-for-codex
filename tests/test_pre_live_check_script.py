@@ -376,6 +376,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         path = Path("scripts/smoke-paperorchestra-mcp.py")
         self.assertTrue(path.exists())
         self.assertTrue(path.stat().st_mode & 0o111)
+        self.assertIn("--probe-evidence-bundle", Path("paperorchestra/mcp_smoke.py").read_text(encoding="utf-8"))
         subprocess.run([sys.executable, "-m", "py_compile", str(path), "paperorchestra/mcp_smoke.py"], check=True)
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -420,7 +421,44 @@ class PreLiveCheckScriptTests(unittest.TestCase):
                 self.assertGreaterEqual(payload["server"]["tool_count"], 50)
                 self.assertTrue(payload["server"]["expected_tools_present"])
                 self.assertTrue(payload["server"]["status_call_reached_server"])
+                self.assertFalse(payload["server"]["evidence_bundle_probe"]["checked"])
                 self.assertFalse(payload["active_session_attachment"]["checked"])
+
+    def test_paperorchestra_mcp_smoke_can_probe_evidence_bundle_explicitly(self) -> None:
+        from paperorchestra.mcp_smoke import build_mcp_smoke_report
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = root / "config.toml"
+            config.write_text(
+                "[mcp_servers.paperorchestra]\n"
+                f"command = {json.dumps(sys.executable)}\n"
+                f"args = {json.dumps(['-m', 'paperorchestra.mcp_server'])}\n"
+                "enabled = true\n"
+                "\n"
+                "[mcp_servers.paperorchestra.env]\n"
+                f"PYTHONPATH = {json.dumps(str(Path.cwd()))}\n",
+                encoding="utf-8",
+            )
+            report = build_mcp_smoke_report(
+                config_path=config,
+                cwd=root,
+                transport="newline",
+                probe_evidence_bundle=True,
+            )
+            probe = report["server"]["evidence_bundle_probe"]
+            output_dir = Path(probe["output_dir"])
+            manifest_exists = Path(probe["manifest_path"]).exists()
+            rendered = "\n".join(path.read_text(encoding="utf-8") for path in output_dir.rglob("*.json"))
+
+        self.assertEqual(report["status"], "ok")
+        self.assertTrue(probe["checked"])
+        self.assertTrue(probe["ok"])
+        self.assertEqual(probe["execution"], "bounded_plan_only")
+        self.assertTrue(manifest_exists)
+        self.assertFalse(probe["paper_full_tex_present"])
+        self.assertFalse(probe["bundle_contains_absolute_cwd"])
+        self.assertNotIn(str(root), rendered)
 
     def test_mcp_smoke_read_exact_times_out_on_partial_body_stall(self) -> None:
         from paperorchestra.mcp_smoke import _read_exact

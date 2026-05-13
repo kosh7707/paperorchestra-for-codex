@@ -10,6 +10,8 @@ class PaperOrchestraSkillGuidanceTests(unittest.TestCase):
         for phrase in ["inspect_state", "orchestrate", "continue_project", "answer_human_needed", "export_results"]:
             self.assertIn(phrase, text)
         self.assertIn("Do not dump README", text)
+        self.assertIn("write_evidence", text)
+        self.assertIn("evidence bundle", text)
 
     def test_skill_blocks_insufficient_material_and_preserves_mcp_attachment_distinction(self) -> None:
         text = Path("skills/paperorchestra/SKILL.md").read_text(encoding="utf-8")

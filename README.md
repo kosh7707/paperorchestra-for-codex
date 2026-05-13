@@ -1257,6 +1257,7 @@ MCP health smoke:
 scripts/smoke-paperorchestra-mcp.py
 scripts/smoke-paperorchestra-mcp.py --transport content-length --json
 scripts/smoke-paperorchestra-mcp.py --transport newline --json
+scripts/smoke-paperorchestra-mcp.py --transport newline --probe-evidence-bundle --json
 ```
 
 This smoke test checks Codex config registration, executable availability,
@@ -1264,6 +1265,10 @@ MCP `initialize`, `tools/list`, expected PaperOrchestra tool names, and a
 harmless `status` tool call. Run both transports when debugging Codex attach:
 `content-length` preserves compatibility with MCP clients that use header
 framing, while `newline` matches Codex CLI stdio framing observed in issue #5.
+The optional `--probe-evidence-bundle` flag also calls
+`orchestrate(write_evidence=true)` and verifies that the MCP server can persist
+a public-safe bounded evidence bundle. It is opt-in because it writes diagnostic
+files under the smoke `--cwd`.
 Raw transport smoke intentionally does **not** prove that the current Codex
 conversation has received `mcp__paperorchestra__...` tools. For active Codex
 attach evidence, run:

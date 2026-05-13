@@ -163,12 +163,15 @@ active Codex session attachment:
 ```bash
 scripts/smoke-paperorchestra-mcp.py --transport content-length --json
 scripts/smoke-paperorchestra-mcp.py --transport newline --json
+scripts/smoke-paperorchestra-mcp.py --transport newline --probe-evidence-bundle --json
 ```
 
 The `content-length` transport preserves compatibility with MCP clients that use
 header framing. The `newline` transport checks Codex-style newline-delimited
 JSON framing observed in issue #5. These raw server smokes still do not prove
-active Codex session attachment. For Codex CLI attach evidence, run:
+active Codex session attachment. Add `--probe-evidence-bundle` when you also
+want to verify high-level `orchestrate(write_evidence=true)` can persist a
+public-safe evidence bundle. For Codex CLI attach evidence, run:
 
 ```bash
 scripts/smoke-codex-mcp-attach.sh

@@ -152,6 +152,7 @@ def smoke_mcp_server(
     timeout_sec: float = 5.0,
     expected_tools: list[str] | None = None,
     call_status: bool = True,
+    probe_evidence_bundle: bool = False,
     transport: str = TRANSPORT_CONTENT_LENGTH,
 ) -> dict[str, Any]:
     if transport not in TRANSPORT_CHOICES:
@@ -195,17 +196,30 @@ def smoke_mcp_server(
         tool_names = [tool.get("name") for tool in tools if isinstance(tool, dict)]
         missing_tools = [name for name in expected_tools if name not in tool_names]
         status_call: dict[str, Any] | None = None
+        next_request_id = 3
         if call_status:
             _write_message(
                 proc.stdin,
-                {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "status", "arguments": {"cwd": str(Path(cwd or '.').resolve())}}},
+                {"jsonrpc": "2.0", "id": next_request_id, "method": "tools/call", "params": {"name": "status", "arguments": {"cwd": str(Path(cwd or '.').resolve())}}},
                 transport=transport,
             )
             status_call = _read_message(proc.stdout, timeout_sec=timeout_sec, transport=transport)
+            next_request_id += 1
+        evidence_bundle_probe = {"checked": False}
+        if probe_evidence_bundle:
+            evidence_bundle_probe = _probe_evidence_bundle(
+                proc.stdin,
+                proc.stdout,
+                request_id=next_request_id,
+                cwd=Path(cwd or ".").resolve(),
+                timeout_sec=timeout_sec,
+                transport=transport,
+            )
         ok = (
             initialize.get("result", {}).get("serverInfo", {}).get("name") == "paperorchestra-mcp"
             and isinstance(tools, list)
             and not missing_tools
+            and (not evidence_bundle_probe.get("checked") or bool(evidence_bundle_probe.get("ok")))
         )
         return {
             "ok": ok,
@@ -224,6 +238,7 @@ def smoke_mcp_server(
                 if status_call and isinstance(status_call.get("result", {}).get("content"), list)
                 else None
             ),
+            "evidence_bundle_probe": evidence_bundle_probe,
         }
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
@@ -239,6 +254,70 @@ def smoke_mcp_server(
             proc.wait(timeout=1)
 
 
+def _probe_evidence_bundle(
+    stdin,
+    stdout,
+    *,
+    request_id: int,
+    cwd: Path,
+    timeout_sec: float,
+    transport: str,
+) -> dict[str, Any]:
+    _write_message(
+        stdin,
+        {
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "tools/call",
+            "params": {"name": "orchestrate", "arguments": {"cwd": str(cwd), "write_evidence": True}},
+        },
+        transport=transport,
+    )
+    response = _read_message(stdout, timeout_sec=timeout_sec, transport=transport)
+    result = response.get("result", {})
+    is_error = bool(result.get("isError"))
+    text = result.get("content", [{}])[0].get("text") if isinstance(result.get("content"), list) else None
+    payload: dict[str, Any] = {}
+    if isinstance(text, str) and text.strip():
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            payload = {}
+    bundle = payload.get("evidence_bundle") if isinstance(payload.get("evidence_bundle"), dict) else {}
+    manifest_path = Path(str(bundle.get("manifest_path", ""))) if bundle.get("manifest_path") else None
+    output_dir = Path(str(bundle.get("output_dir", ""))) if bundle.get("output_dir") else None
+    manifest_exists = bool(manifest_path and manifest_path.exists())
+    bundle_contains_cwd = _bundle_contains_text(output_dir, str(cwd)) if output_dir and output_dir.exists() else None
+    paper_full_tex_present = "paper_full_tex" in json.dumps(payload, ensure_ascii=False)
+    ok = (
+        not is_error
+        and payload.get("execution") == "bounded_plan_only"
+        and manifest_exists
+        and paper_full_tex_present is False
+        and bundle_contains_cwd is False
+    )
+    return {
+        "checked": True,
+        "ok": ok,
+        "is_error": is_error,
+        "execution": payload.get("execution"),
+        "manifest_path": str(manifest_path) if manifest_path else None,
+        "output_dir": str(output_dir) if output_dir else None,
+        "manifest_exists": manifest_exists,
+        "paper_full_tex_present": paper_full_tex_present,
+        "bundle_contains_absolute_cwd": bundle_contains_cwd,
+    }
+
+
+def _bundle_contains_text(output_dir: Path | None, needle: str) -> bool | None:
+    if output_dir is None or not output_dir.exists():
+        return None
+    for path in output_dir.rglob("*.json"):
+        if needle in path.read_text(encoding="utf-8"):
+            return True
+    return False
+
+
 def build_mcp_smoke_report(
     *,
     config_path: str | Path | None = None,
@@ -248,6 +327,7 @@ def build_mcp_smoke_report(
     cwd: str | Path | None = None,
     timeout_sec: float = 5.0,
     transport: str = TRANSPORT_CONTENT_LENGTH,
+    probe_evidence_bundle: bool = False,
 ) -> dict[str, Any]:
     registration = read_codex_mcp_registration(config_path, server_name=server_name)
     selected_command = command or registration.get("command") or shutil.which("paperorchestra-mcp")
@@ -262,6 +342,7 @@ def build_mcp_smoke_report(
             cwd=cwd,
             timeout_sec=timeout_sec,
             transport=transport,
+            probe_evidence_bundle=probe_evidence_bundle,
         )
     return {
         "status": "ok" if registration.get("registered") and binary_exists and server and server.get("ok") else "warning",
@@ -303,6 +384,9 @@ def _print_human(report: dict[str, Any]) -> None:
     print(f"  {'OK' if server.get('expected_tools_present') else 'WARN'} expected tools: {', '.join(EXPECTED_TOOLS)}")
     if server.get("status_call_reached_server"):
         print("  OK harmless status tool call reached server")
+    evidence_probe = server.get("evidence_bundle_probe") if isinstance(server.get("evidence_bundle_probe"), dict) else {}
+    if evidence_probe.get("checked"):
+        print(f"  {'OK' if evidence_probe.get('ok') else 'WARN'} evidence bundle probe")
     if server.get("missing_expected_tools"):
         print(f"  missing: {', '.join(server['missing_expected_tools'])}")
     if server.get("error"):
@@ -328,6 +412,11 @@ def main(argv: list[str] | None = None) -> int:
         help="MCP stdio framing to smoke-test.",
     )
     parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--probe-evidence-bundle",
+        action="store_true",
+        help="Also call orchestrate(write_evidence=true) and verify a public-safe evidence bundle is written.",
+    )
     args = parser.parse_args(argv)
     command_args = shlex.split(args.args) if args.args else None
     report = build_mcp_smoke_report(
@@ -338,6 +427,7 @@ def main(argv: list[str] | None = None) -> int:
         cwd=args.cwd,
         timeout_sec=args.timeout_sec,
         transport=args.transport,
+        probe_evidence_bundle=args.probe_evidence_bundle,
     )
     if args.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
