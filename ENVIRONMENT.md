@@ -183,6 +183,19 @@ is Codex session tool injection/attachment. `codex mcp list` confirms
 registration only; it does not prove that the active conversation received the
 tool schema.
 
+No-live local-step check after install/MCP setup:
+
+```bash
+paperorchestra inspect-state --material ./my-material --json
+paperorchestra orchestrate --material ./my-material --execute-local --write-evidence --json
+```
+
+This `--execute-local` / MCP `execute_local=true` path performs one
+deterministic local step only. It can produce public-safe material/source/claim
+evidence and a next action such as `start_autoresearch`, but it does not run a
+live model/search call, invoke OMX, compile/export, or draft manuscript text.
+Use it as a no-live local-step check before live or OMX-native runs.
+
 ### Needed for compile
 Supported LaTeX engines:
 - `latexmk`

@@ -106,6 +106,45 @@ paperorchestra export-artifacts --output "$OLDPWD/paperorchestra-output"
 `session.json`) to the directory you choose. This is the simplest way to pull a
 PDF/manuscript out of a Docker/WSL bind-mounted folder.
 
+### Orchestrated first-use check: one local step, no live calls
+
+If you already have a material folder and want Codex/PaperOrchestra to inspect
+it without starting a full paper run, use the bounded v1 orchestrator surface:
+
+```bash
+paperorchestra inspect-state --material ./my-material --json
+paperorchestra orchestrate --material ./my-material --execute-local --write-evidence --json
+```
+
+`--execute-local` performs **one deterministic local step**. It is **not a full paper run** and it does not draft, revise, compile, export, invoke OMX, call a
+live model, or search the web. No live model/search, OMX, compile/export, or drafting happens in this check.
+
+Expected useful output:
+
+- top-level `execution=bounded_local_execution`
+- an `execution_record` with the local action and status
+- a public-safe evidence bundle when `--write-evidence` is set
+- a next action such as `start_autoresearch` / `$autoresearch` when the local
+  claim graph finds machine-solvable evidence or citation gaps
+
+If no material is supplied, the local step does not fabricate inputs. It returns
+`action_taken=provide_material`, `execution_record.status=unsupported`, and
+`reason=material_input_required`.
+
+When the MCP server is actively attached, the equivalent high-level call is:
+
+```json
+{"name": "orchestrate", "arguments": {"material": "./my-material", "execute_local": true, "write_evidence": true}}
+```
+
+If `codex mcp list` shows registration but the current chat has no
+`mcp__paperorchestra__...` tools, use the CLI fallback above. Registration is
+not the same as active session attachment.
+
+The evidence bundle is a diagnostic artifact, not a readiness pass. It records
+state, blockers, local execution evidence, and next actions; it does not approve
+drafting, citations, final quality, or submission.
+
 ---
 
 ## Choose your path: what to run first

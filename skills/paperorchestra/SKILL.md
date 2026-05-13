@@ -38,12 +38,27 @@ The system also records:
 For first-use natural-language requests such as "paperorchestra 어떻게 쓰는거야?", "이거 쓰고 싶어", or "바로 써줘", prefer the high-level orchestrator tools before low-level pipeline commands:
 
 - `inspect_state` — inspect current session/material state and next valid actions.
-- `orchestrate` — run the bounded v1 orchestrator until the next block/action; this is plan-only until later live execution slices. Prefer `write_evidence=true` when the MCP surface supports it so the agent leaves a public-safe evidence bundle for review.
+- `orchestrate` — run the bounded v1 orchestrator until the next block/action. By default it is bounded planning/run-until-blocked. With MCP `execute_local=true` it performs **one deterministic local step** only; this is not a full pipeline and must not be described as a full paper run. Prefer `write_evidence=true` when the MCP surface supports it so the agent leaves a public-safe evidence bundle for review.
 - `continue_project` — continue from current state without dumping a command catalog. Prefer `write_evidence=true` for long-running QA handoffs.
 - `answer_human_needed` — accept author judgment only when the engine explicitly needs author intent.
 - `export_results` — plan/report export through the v1 lifecycle surface.
 
 Do not dump README as the default answer. Give a compact status card, inspect material if available, and ask only the minimum author-intent questions that cannot be discovered by the system.
+
+When a material path is available and a one-step local action is appropriate,
+prefer:
+
+```json
+{"name": "orchestrate", "arguments": {"material": "<material-path>", "execute_local": true, "write_evidence": true}}
+```
+
+Report the execution block back to the user: `Execution status`, action taken,
+adapter, reason, and the resulting next action. If the next action is
+`start_autoresearch` / `$autoresearch`, explain that the remaining
+machine-solvable citation/search work should be handled by the engine/research
+surface; do not ask the user to do that machine-solvable citation/search work
+manually. Ask the user only for author judgment, missing private material, or
+strategy choices that cannot be discovered by the system.
 
 If there is insufficient material, that blocks drafting. Explain what is missing and propose the next valid step (`inspect_state`, guided intake, material upload/path, or safe mock demo) instead of fabricating claims, citations, or results.
 
