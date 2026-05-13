@@ -537,3 +537,25 @@ release-safety-scan: finding_count=0
 raw private path marker: absent
 provider-wrap.sh basename: present in redacted command log
 ```
+
+## 11. Final AH execution evidence
+
+After the Section 8–10 generic fixes, the private final-smoke run completed at
+head `aebf96e` with a public-safe acceptance summary:
+
+```text
+smoke_verdict: pass_loop_verified
+private_final_live_smoke_redacted: pass
+private_leakage_scan: pass
+compile_export: pass
+exported_pdf_tex_evidence_bundle: pass
+operator_feedback_cycles: 5
+qa_loop_final_verdict: human_needed
+manuscript_readiness: not_ready
+quality_gate_status: fail_tier2
+```
+
+The result is intentionally a system-loop proof, not a submission-readiness
+claim. Full public-safe details are recorded in:
+
+- `docs/reports/orchestrator-v1-slice-ah-private-final-smoke-summary.md`
