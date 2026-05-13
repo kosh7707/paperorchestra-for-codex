@@ -60,6 +60,7 @@ from .operator_feedback import apply_operator_feedback, build_operator_review_pa
 from .orchestra_evidence import write_orchestrator_evidence_bundle
 from .orchestra_executor import LocalActionExecutor
 from .orchestra_omx_executor import OmxActionExecutor
+from .orchestra_verifier import build_verifier_evidence_checklist, write_verifier_evidence_checklist
 from .orchestrator import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state
 from .providers import get_citation_support_provider, get_provider
 from .quality_gate import write_quality_gate
@@ -157,6 +158,11 @@ TOOLS: list[JSON] = [
     {
         "name": "export_results",
         "description": "Plan or report result export through the v1 orchestrator surface.",
+        "inputSchema": {"type": "object", "properties": {"cwd": {"type": "string"}, "output": {"type": "string"}}},
+    },
+    {
+        "name": "verify_evidence_checklist",
+        "description": "Build the v1 verifier evidence checklist without running live Critic/model/OMX work.",
         "inputSchema": {"type": "object", "properties": {"cwd": {"type": "string"}, "output": {"type": "string"}}},
     },
 
@@ -1104,6 +1110,16 @@ def tool_export_results(arguments: JSON) -> JSON:
     })
 
 
+def tool_verify_evidence_checklist(arguments: JSON) -> JSON:
+    cwd = _default_cwd(arguments)
+    if arguments.get("output"):
+        _path, payload = write_verifier_evidence_checklist(cwd, output_path=arguments.get("output"))
+        return _ok(payload)
+    state = orchestrator_inspect_state(cwd)
+    checklist = build_verifier_evidence_checklist(state, None, None, None)
+    return _ok(checklist.to_public_dict())
+
+
 def tool_status(arguments: JSON) -> JSON:
     cwd = _default_cwd(arguments)
     payload = load_session(cwd).to_dict()
@@ -1563,6 +1579,7 @@ TOOL_HANDLERS: dict[str, Callable[[JSON], JSON]] = {
     "continue_project": tool_continue_project,
     "answer_human_needed": tool_answer_human_needed,
     "export_results": tool_export_results,
+    "verify_evidence_checklist": tool_verify_evidence_checklist,
     "teach": tool_teach,
     "start_intake": tool_start_intake,
     "get_intake_status": tool_get_intake_status,

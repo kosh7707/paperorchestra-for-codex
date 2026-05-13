@@ -54,6 +54,7 @@ from .orchestra_executor import LocalActionExecutor
 from .orchestra_figures import write_figure_gate_report
 from .orchestra_omx_executor import OmxActionExecutor
 from .orchestra_scorecard import render_scorecard_summary
+from .orchestra_verifier import build_verifier_evidence_checklist, write_verifier_evidence_checklist
 from .orchestrator import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state, run_until_blocked as orchestrator_run_until_blocked
 from .quality_loop import write_quality_eval, write_quality_loop_plan
 from .quality_gate import write_quality_gate
@@ -144,6 +145,10 @@ def build_parser() -> argparse.ArgumentParser:
     acceptance_parser = sub.add_parser("acceptance-ledger", help="Render the v1 acceptance/completion-audit ledger")
     acceptance_parser.add_argument("--evidence", help="JSON evidence object keyed by acceptance gate id")
     acceptance_parser.add_argument("--json", action="store_true")
+
+    verifier_parser = sub.add_parser("verify-evidence-checklist", help="Build the v1 verifier evidence checklist without running live critic/model work")
+    verifier_parser.add_argument("--output")
+    verifier_parser.add_argument("--json", action="store_true")
 
     continue_project_parser = sub.add_parser("continue-project", help="Continue the v1 orchestrator from current state without live work")
     continue_project_parser.add_argument("--write-evidence", action="store_true", help="Persist a public-safe orchestrator evidence bundle")
@@ -876,6 +881,21 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(ledger.to_dict(), indent=2, ensure_ascii=False))
             else:
                 print(render_acceptance_ledger_summary(ledger))
+            return 0
+
+        if args.command == "verify-evidence-checklist":
+            if args.output:
+                _path, payload = write_verifier_evidence_checklist(cwd, output_path=args.output)
+            else:
+                state = orchestrator_inspect_state(cwd)
+                checklist = build_verifier_evidence_checklist(state, None, None, None)
+                payload = checklist.to_public_dict()
+            if args.json:
+                print(json.dumps(payload, indent=2, ensure_ascii=False))
+            else:
+                print(f"Verifier evidence checklist: {payload['overall_status']}")
+                for item in payload["items"]:
+                    print(f"  - {item['id']}: {item['status']} ({item['reason']})")
             return 0
 
         if args.command == "continue-project":
