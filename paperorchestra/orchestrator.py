@@ -6,6 +6,7 @@ from .orchestra_claims import build_claim_graph_from_materials
 from .orchestra_materials import build_material_inventory, build_source_digest
 from .orchestra_omx import build_research_mission_invocation_evidence
 from .orchestra_planner import ActionPlanner
+from .orchestra_references import build_reference_metadata_audit
 from .orchestra_research import build_evidence_research_mission
 from .orchestra_state import OrchestraFacets, OrchestraState, file_sha256
 from .session import load_session
@@ -89,6 +90,12 @@ def run_until_blocked(cwd: str | Path | None = None, *, material_path: str | Pat
 
     inventory = build_material_inventory(material)
     digest = build_source_digest(inventory)
+    reference_audit = build_reference_metadata_audit(material)
+    state.evidence_refs.append({"kind": "reference_metadata_audit", "payload": reference_audit.to_public_dict()})
+    if reference_audit.status == "fail":
+        state.facets.citations = "unknown_refs"
+        if "reference_metadata_incomplete" not in state.blocking_reasons:
+            state.blocking_reasons.append("reference_metadata_incomplete")
     report = build_claim_graph_from_materials(material, inventory, digest)
     state.evidence_refs.append({"kind": "claim_graph", "payload": report.to_public_dict()})
     if report.ready:
