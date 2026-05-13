@@ -18,6 +18,21 @@ def _decode_text_result(result: dict) -> dict:
 
 
 class OrchestratorMcpEntrypointTests(unittest.TestCase):
+    def _write_sufficient_material(self, root: Path) -> Path:
+        material = root / "material"
+        material.mkdir()
+        (material / "idea.md").write_text(
+            "PaperOrchestra improves manuscript safety by separating claims from evidence. "
+            "The workflow reduces citation uncertainty before drafting.",
+            encoding="utf-8",
+        )
+        (material / "experiment_log.md").write_text(
+            "Experiment results show 12 checklist violations were caught before drafting. "
+            "Artifact-first review improves reviewability.",
+            encoding="utf-8",
+        )
+        return material
+
     def test_mcp_tools_list_contains_high_level_orchestrator_tools(self) -> None:
         names = _tool_names()
         for expected in {"inspect_state", "orchestrate", "continue_project", "answer_human_needed", "export_results"}:
@@ -32,6 +47,8 @@ class OrchestratorMcpEntrypointTests(unittest.TestCase):
             self.assertEqual(props["write_evidence"]["type"], "boolean")
             self.assertIn("evidence_output", props)
             self.assertEqual(props["evidence_output"]["type"], "string")
+        self.assertIn("execute_local", tools["orchestrate"]["inputSchema"]["properties"])
+        self.assertEqual(tools["orchestrate"]["inputSchema"]["properties"]["execute_local"]["type"], "boolean")
 
     def test_mcp_inspect_state_returns_v1_state_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -72,6 +89,49 @@ class OrchestratorMcpEntrypointTests(unittest.TestCase):
         self.assertNotIn("execution_record", payload)
         self.assertNotIn("paper_full_tex", json.dumps(payload))
         self.assertNotIn(str(root), rendered)
+
+    def test_mcp_orchestrate_execute_local_returns_one_step_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            material = self._write_sufficient_material(root)
+            payload = _decode_text_result(
+                TOOL_HANDLERS["orchestrate"]({"cwd": tmp, "material": str(material), "execute_local": True})
+            )
+            rendered = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(payload["execution"], "bounded_local_execution")
+        self.assertEqual(payload["action_taken"], "build_claim_graph")
+        self.assertEqual(payload["execution_record"]["status"], "executed_local")
+        self.assertNotIn(str(material), rendered)
+        self.assertNotIn("citation uncertainty before drafting", rendered)
+        self.assertNotIn("paper_full_tex", rendered)
+        self.assertNotIn("omx ", rendered)
+        self.assertNotIn("codex ", rendered)
+
+    def test_mcp_orchestrate_execute_local_without_material_is_unsupported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = _decode_text_result(TOOL_HANDLERS["orchestrate"]({"cwd": tmp, "execute_local": True}))
+
+        self.assertEqual(payload["execution"], "bounded_local_execution")
+        self.assertEqual(payload["action_taken"], "provide_material")
+        self.assertEqual(payload["execution_record"]["status"], "unsupported")
+        self.assertEqual(payload["execution_record"]["reason"], "material_input_required")
+
+    def test_mcp_orchestrate_execute_local_write_evidence_includes_execution_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            material = self._write_sufficient_material(root)
+            payload = _decode_text_result(
+                TOOL_HANDLERS["orchestrate"](
+                    {"cwd": tmp, "material": str(material), "execute_local": True, "write_evidence": True}
+                )
+            )
+            output_dir = Path(payload["evidence_bundle"]["output_dir"])
+            rendered = "\n".join(path.read_text(encoding="utf-8") for path in output_dir.rglob("*.json"))
+
+        self.assertIn("orchestrator_execution_record", rendered)
+        self.assertNotIn(str(root), rendered)
+        self.assertNotIn("Artifact-first review improves", rendered)
 
     def test_mcp_continue_project_can_write_public_safe_evidence_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

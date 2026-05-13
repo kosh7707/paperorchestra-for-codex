@@ -47,6 +47,7 @@ from .omx_bridge import cleanup_omx_tmp
 from .omx_diagnostics import export_omx_evidence, write_omx_review_handoff
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
 from .orchestra_evidence import write_orchestrator_evidence_bundle
+from .orchestra_executor import LocalActionExecutor
 from .orchestra_scorecard import render_scorecard_summary
 from .orchestrator import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state, run_until_blocked as orchestrator_run_until_blocked
 from .quality_loop import write_quality_eval, write_quality_loop_plan
@@ -127,6 +128,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     orchestrate_parser = sub.add_parser("orchestrate", help="Run the v1 orchestrator until the next bounded action/block")
     orchestrate_parser.add_argument("--material", help="Optional material directory/file to inspect")
+    orchestrate_parser.add_argument("--execute-local", action="store_true", help="Execute exactly one deterministic local orchestrator step")
     orchestrate_parser.add_argument("--write-evidence", action="store_true", help="Persist a public-safe orchestrator evidence bundle")
     orchestrate_parser.add_argument("--evidence-output", help="Workspace-contained evidence bundle directory")
     orchestrate_parser.add_argument("--json", action="store_true")
@@ -763,7 +765,22 @@ def _print_orchestrator_payload(payload: dict[str, object], *, json_output: bool
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     else:
         state_payload = payload.get("state") if isinstance(payload.get("state"), dict) else payload
-        print("\n".join(_orchestrator_summary_lines(state_payload)))
+        lines: list[str] = []
+        if isinstance(payload.get("execution_record"), dict):
+            execution_record = payload["execution_record"]
+            lines.extend(
+                [
+                    f"Execution: {payload.get('execution', 'unknown')}",
+                    f"Action taken: {payload.get('action_taken', 'none')}",
+                    f"Execution status: {execution_record.get('status', 'unknown')}",
+                    f"Adapter: {execution_record.get('adapter', 'unknown')}",
+                    f"Reason: {execution_record.get('reason', 'unknown')}",
+                    f"State rebuild required: {execution_record.get('state_rebuild_required', 'unknown')}",
+                    "",
+                ]
+            )
+        lines.extend(_orchestrator_summary_lines(state_payload))
+        print("\n".join(lines))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -796,7 +813,15 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "orchestrate":
-            result = OrchestraOrchestrator(cwd).run_until_blocked(material_path=args.material)
+            orchestrator = OrchestraOrchestrator(cwd)
+            if args.execute_local:
+                result = orchestrator.step(
+                    material_path=args.material,
+                    execute=True,
+                    executor=LocalActionExecutor(material_path=args.material),
+                )
+            else:
+                result = orchestrator.run_until_blocked(material_path=args.material)
             state = result.state
             payload = result.to_public_dict()
             if args.write_evidence:

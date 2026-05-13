@@ -22,10 +22,26 @@ def _chdir(path: str):
 
 
 class OrchestratorCliEntrypointTests(unittest.TestCase):
+    def _write_sufficient_material(self, root: Path) -> Path:
+        material = root / "synthetic_material"
+        material.mkdir()
+        (material / "idea.md").write_text(
+            "PaperOrchestra improves manuscript safety by separating claims from evidence. "
+            "The workflow reduces citation uncertainty before drafting.",
+            encoding="utf-8",
+        )
+        (material / "experiment_log.md").write_text(
+            "Experiment results show 12 checklist violations were caught before drafting. "
+            "Artifact-first review improves reviewability.",
+            encoding="utf-8",
+        )
+        return material
+
     def test_cli_parser_exposes_high_level_orchestrator_commands(self) -> None:
         parser = build_parser()
         self.assertEqual(parser.parse_args(["inspect-state"]).command, "inspect-state")
         self.assertEqual(parser.parse_args(["orchestrate"]).command, "orchestrate")
+        self.assertTrue(parser.parse_args(["orchestrate", "--execute-local"]).execute_local)
         self.assertEqual(parser.parse_args(["continue-project"]).command, "continue-project")
         self.assertEqual(
             parser.parse_args(["answer-human-needed", "--answer", "Use the supported weaker claim."]).command,
@@ -75,6 +91,89 @@ class OrchestratorCliEntrypointTests(unittest.TestCase):
         self.assertEqual(payload["state"]["next_actions"][0]["reason"], "insufficient_material")
         self.assertNotIn("execution_record", payload)
         self.assertNotIn("paper_full_tex", json.dumps(payload))
+
+    def test_orchestrate_execute_local_json_returns_one_step_execution_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, _chdir(tmp):
+            root = Path(tmp)
+            material = self._write_sufficient_material(root)
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main(["orchestrate", "--material", str(material), "--execute-local", "--json"])
+            payload = json.loads(stdout.getvalue())
+            rendered = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["execution"], "bounded_local_execution")
+        self.assertEqual(payload["execution_record"]["status"], "executed_local")
+        self.assertEqual(payload["action_taken"], "build_claim_graph")
+        self.assertNotIn(str(material), rendered)
+        self.assertNotIn("citation uncertainty before drafting", rendered)
+        self.assertNotIn("paper_full_tex", rendered)
+        self.assertNotIn("omx ", rendered)
+        self.assertNotIn("codex ", rendered)
+
+    def test_orchestrate_execute_local_without_material_is_deterministic_unsupported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, _chdir(tmp):
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main(["orchestrate", "--execute-local", "--json"])
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["execution"], "bounded_local_execution")
+        self.assertEqual(payload["action_taken"], "provide_material")
+        self.assertEqual(payload["execution_record"]["status"], "unsupported")
+        self.assertEqual(payload["execution_record"]["reason"], "material_input_required")
+
+    def test_orchestrate_execute_local_write_evidence_includes_execution_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, _chdir(tmp):
+            root = Path(tmp)
+            material = self._write_sufficient_material(root)
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main(
+                    ["orchestrate", "--material", str(material), "--execute-local", "--write-evidence", "--json"]
+                )
+            payload = json.loads(stdout.getvalue())
+            output_dir = Path(payload["evidence_bundle"]["output_dir"])
+            rendered = "\n".join(path.read_text(encoding="utf-8") for path in output_dir.rglob("*.json"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("orchestrator_execution_record", rendered)
+        self.assertNotIn(str(root), rendered)
+        self.assertNotIn("Artifact-first review improves", rendered)
+
+    def test_orchestrate_execute_local_human_summary_shows_execution_block(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, _chdir(tmp):
+            root = Path(tmp)
+            material = self._write_sufficient_material(root)
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main(["orchestrate", "--material", str(material), "--execute-local"])
+            text = stdout.getvalue()
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Execution: bounded_local_execution", text)
+        self.assertIn("Action taken: build_claim_graph", text)
+        self.assertIn("Execution status: executed_local", text)
+        self.assertIn("Adapter: local", text)
+        self.assertNotIn(str(material), text)
+        self.assertNotIn("citation uncertainty before drafting", text)
+        self.assertNotIn("omx ", text)
+        self.assertNotIn("codex ", text)
+
+    def test_orchestrate_execute_local_without_material_human_summary_shows_blocker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, _chdir(tmp):
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main(["orchestrate", "--execute-local"])
+            text = stdout.getvalue()
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Execution: bounded_local_execution", text)
+        self.assertIn("Action taken: provide_material", text)
+        self.assertIn("Execution status: unsupported", text)
+        self.assertIn("Reason: material_input_required", text)
 
     def test_orchestrator_summary_omits_unknown_private_dimension_label(self) -> None:
         lines = _orchestrator_summary_lines(

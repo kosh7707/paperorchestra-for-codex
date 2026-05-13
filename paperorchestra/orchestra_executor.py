@@ -185,9 +185,10 @@ class LocalActionExecutor:
 
     def execute(self, action: NextAction, state: OrchestraState) -> ExecutionRecord:
         if action.action_type not in LOCAL_SUPPORTED_ACTIONS:
+            reason = "material_input_required" if action.action_type == "provide_material" else action.reason
             return ExecutionRecord(
                 action_type=action.action_type,
-                reason=action.reason,
+                reason=reason,
                 status="unsupported",
                 adapter=self.adapter_name,
                 evidence_refs=[],

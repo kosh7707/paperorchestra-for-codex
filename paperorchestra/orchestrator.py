@@ -82,7 +82,7 @@ class OrchestraOrchestrator:
             )
         return OrchestratorRunResult(
             state=state,
-            execution="bounded_fake_execution",
+            execution=_execution_label(record),
             action_taken=action.action_type,
             execution_record=record,
         )
@@ -162,6 +162,14 @@ def _inspect_state(cwd: str | Path | None = None, *, material_path: str | Path |
 
 def run_until_blocked(cwd: str | Path | None = None, *, material_path: str | Path | None = None) -> OrchestraState:
     return OrchestraOrchestrator(cwd).run_until_blocked(material_path=material_path).state
+
+
+def _execution_label(record: ExecutionRecord) -> str:
+    if record.adapter == "local":
+        return "bounded_local_execution"
+    if record.adapter == "fake":
+        return "bounded_fake_execution"
+    return "bounded_step_execution"
 
 
 def _run_until_blocked(cwd: str | Path | None = None, *, material_path: str | Path | None = None) -> OrchestraState:

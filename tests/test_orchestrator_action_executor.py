@@ -79,6 +79,7 @@ class OrchestratorActionExecutorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             result = OrchestraOrchestrator(tmp).step(execute=True, executor=FakeActionExecutor())
 
+        self.assertEqual(result.execution, "bounded_fake_execution")
         self.assertNotEqual(result.state.facets.writing, "drafting_allowed")
         self.assertNotEqual(result.state.readiness.status, "ready")
 
@@ -321,6 +322,7 @@ class OrchestratorActionExecutorTests(unittest.TestCase):
             payload = result.to_public_dict()
 
         self.assertEqual(payload["action_taken"], "build_claim_graph")
+        self.assertEqual(payload["execution"], "bounded_local_execution")
         self.assertEqual(payload["execution_record"]["status"], "executed_local")
         self.assertEqual(result.state.facets.to_dict(), before.facets.to_dict())
         self.assertEqual(result.state.readiness.to_dict(), before.readiness.to_dict())

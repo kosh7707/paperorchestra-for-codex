@@ -58,6 +58,7 @@ from .omx_bridge import (
 )
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
 from .orchestra_evidence import write_orchestrator_evidence_bundle
+from .orchestra_executor import LocalActionExecutor
 from .orchestrator import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state
 from .providers import get_citation_support_provider, get_provider
 from .quality_gate import write_quality_gate
@@ -113,6 +114,7 @@ TOOLS: list[JSON] = [
             "properties": {
                 "cwd": {"type": "string"},
                 "material": {"type": "string"},
+                "execute_local": {"type": "boolean"},
                 "write_evidence": {"type": "boolean"},
                 "evidence_output": {"type": "string"},
             },
@@ -997,7 +999,16 @@ def tool_inspect_state(arguments: JSON) -> JSON:
 
 def tool_orchestrate(arguments: JSON) -> JSON:
     cwd = _default_cwd(arguments)
-    result = OrchestraOrchestrator(cwd).run_until_blocked(material_path=arguments.get("material"))
+    orchestrator = OrchestraOrchestrator(cwd)
+    material = arguments.get("material")
+    if arguments.get("execute_local"):
+        result = orchestrator.step(
+            material_path=material,
+            execute=True,
+            executor=LocalActionExecutor(material_path=material),
+        )
+    else:
+        result = orchestrator.run_until_blocked(material_path=material)
     state = result.state
     payload = result.to_public_dict()
     if arguments.get("write_evidence"):
