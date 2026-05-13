@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .orchestra_claims import build_claim_graph_from_materials
+from .orchestra_executor import ActionExecutor, ExecutionRecord
 from .orchestra_materials import build_material_inventory, build_source_digest
 from .orchestra_omx import build_research_mission_invocation_evidence
 from .orchestra_planner import ActionPlanner
@@ -19,9 +20,10 @@ class OrchestratorRunResult:
     state: OrchestraState
     execution: str = "bounded_plan_only"
     action_taken: str = "none"
+    execution_record: ExecutionRecord | None = None
 
     def to_public_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "execution": self.execution,
             "action_taken": self.action_taken,
             "state": self.state.to_public_dict(),
@@ -29,6 +31,10 @@ class OrchestratorRunResult:
             "blocking_reasons": list(self.state.blocking_reasons),
             "private_safe": True,
         }
+        if self.execution_record is not None:
+            payload["execution_record"] = self.execution_record.to_public_dict()
+            payload["evidence_refs"] = list(payload["execution_record"]["evidence_refs"])
+        return payload
 
 
 class OrchestraOrchestrator:
@@ -41,10 +47,45 @@ class OrchestraOrchestrator:
     def run_until_blocked(self, *, material_path: str | Path | None = None) -> OrchestratorRunResult:
         return self._result_from_state(_run_until_blocked(self.cwd, material_path=material_path))
 
-    def step(self, *, material_path: str | Path | None = None, objective: str | None = None) -> OrchestratorRunResult:
+    def step(
+        self,
+        *,
+        material_path: str | Path | None = None,
+        objective: str | None = None,
+        execute: bool = False,
+        executor: ActionExecutor | None = None,
+    ) -> OrchestratorRunResult:
         state = self.inspect_state(material_path=material_path)
         state.next_actions = ActionPlanner().plan(state, objective=objective)
-        return self._result_from_state(state)
+        if not execute:
+            return self._result_from_state(state)
+        if executor is None:
+            raise ValueError("Explicit ActionExecutor is required when execute=True.")
+        if not state.next_actions:
+            return OrchestratorRunResult(
+                state=state,
+                execution="bounded_fake_execution",
+                action_taken="none",
+                execution_record=None,
+            )
+        action = state.next_actions[0]
+        protected_snapshot = state.to_dict(include_private=True)
+        record = executor.execute(action, state)
+        if state.to_dict(include_private=True) != protected_snapshot:
+            raise ValueError("ActionExecutor must not mutate OrchestraState during bounded execution.")
+        if record.evidence_refs:
+            state.evidence_refs.append(
+                {
+                    "kind": "orchestrator_execution_record",
+                    "payload": record.to_public_dict(),
+                }
+            )
+        return OrchestratorRunResult(
+            state=state,
+            execution="bounded_fake_execution",
+            action_taken=action.action_type,
+            execution_record=record,
+        )
 
     def _result_from_state(self, state: OrchestraState) -> OrchestratorRunResult:
         return OrchestratorRunResult(state=state)

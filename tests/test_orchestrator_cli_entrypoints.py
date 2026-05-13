@@ -73,6 +73,7 @@ class OrchestratorCliEntrypointTests(unittest.TestCase):
         self.assertEqual(payload["state"]["facets"]["material"], "inventoried_insufficient")
         self.assertEqual(payload["state"]["next_actions"][0]["action_type"], "provide_material")
         self.assertEqual(payload["state"]["next_actions"][0]["reason"], "insufficient_material")
+        self.assertNotIn("execution_record", payload)
         self.assertNotIn("paper_full_tex", json.dumps(payload))
 
     def test_orchestrator_summary_omits_unknown_private_dimension_label(self) -> None:

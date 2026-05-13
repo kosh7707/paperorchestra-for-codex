@@ -69,6 +69,7 @@ class OrchestratorMcpEntrypointTests(unittest.TestCase):
         self.assertEqual(payload["execution"], "bounded_plan_only")
         self.assertIn("evidence_bundle", payload)
         self.assertTrue(manifest_exists)
+        self.assertNotIn("execution_record", payload)
         self.assertNotIn("paper_full_tex", json.dumps(payload))
         self.assertNotIn(str(root), rendered)
 
