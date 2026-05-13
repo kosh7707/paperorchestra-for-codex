@@ -108,6 +108,14 @@ scripts/check-private-leakage.py --denylist /tmp/paperorchestra-private-denylist
 
 git diff --check
 # clean
+
+docker run paperorchestra-ubuntu-tools:24.04 ... orchestrator-v1-runtime
+# refreshed Codex/OMX CLIs through ~/helper/update-ai-clis.sh
+# installed editable package in a fresh container clone
+# targeted pytest: 18 passed
+# paperorchestra inspect-state includes "Score: unscored"
+# paperorchestra inspect-state --json scorecard_summary.status=unscored
+# MCP newline smoke with --probe-evidence-bundle: status ok, tool_count=63, mcp_probe_ok=true
 ```
 
 Critic implementation validation: APPROVE.
