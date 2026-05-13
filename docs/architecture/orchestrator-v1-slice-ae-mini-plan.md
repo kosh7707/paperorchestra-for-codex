@@ -1,6 +1,6 @@
 # Slice AE mini-plan — first-user Skill/MCP UX guide
 
-Status: draft mini-plan requiring Critic validation before tests or implementation
+Status: implemented and container-proven
 Date: 2026-05-13
 Branch: `orchestrator-v1-runtime`
 Scope: public, domain-general first-user onboarding and natural-language handoff guidance for Skill/MCP/CLI. Do not include private smoke material, private-domain terms, or private material names.
@@ -246,6 +246,52 @@ printf "HEAD=%s\n" "$(git rev-parse --short HEAD)"
 ```
 
 Record proof in this plan or a follow-up evidence commit.
+
+### Container proof recorded
+
+Implementation commit:
+
+```text
+2e9bfd9 Give first users a bounded guide instead of a command dump
+```
+
+Fresh-container command used:
+
+```bash
+docker run --rm \
+  -v /tmp/paperorchestra-private-denylist.txt:/tmp/paperorchestra-private-denylist.txt:ro \
+  paperorchestra-ubuntu-tools:24.04 bash -lc 'set -euo pipefail
+WORK=/tmp/paperorchestra-ae-proof
+rm -rf "$WORK"
+git clone --branch orchestrator-v1-runtime https://github.com/kosh7707/paperorchestra-for-codex.git "$WORK" >/tmp/git-clone.log
+cd "$WORK"
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e ".[dev]" >/tmp/pip-install.log
+python -m pytest tests/test_first_user_guide.py tests/test_paperorchestra_skill_guidance.py tests/test_orchestrator_mcp_entrypoints.py -q
+scripts/check-private-leakage.py --denylist /tmp/paperorchestra-private-denylist.txt --root "$PWD" --json
+printf "HEAD=%s\n" "$(git rev-parse --short HEAD)"
+'
+```
+
+Evidence:
+
+```text
+first-user/Skill/MCP container subset: 33 passed, 3 subtests
+private leakage scan: status ok, match_count 0
+HEAD=2e9bfd9
+```
+
+Local verification before the implementation commit:
+
+```text
+tests/test_first_user_guide.py: 8 passed
+first-user/Skill/CLI/MCP/protocol subset: 55 passed, 5 subtests
+full suite: 952 passed, 177 subtests
+private leakage scan: status ok, match_count 0
+private-domain literal grep: no output
+Critic implementation validation: APPROVE
+```
 
 ## 9. Stop/replan triggers
 
