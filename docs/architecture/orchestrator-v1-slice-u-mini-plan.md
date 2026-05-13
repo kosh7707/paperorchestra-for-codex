@@ -129,6 +129,9 @@ Current evidence:
 - Private leakage scan:
   `scripts/check-private-leakage.py --denylist /tmp/paperorchestra-private-denylist.txt --root "$PWD" --json`
   → `status=ok`, `scanned_file_count=201`, `match_count=0`
+- Fresh container targeted proof after push:
+  `docker run --rm paperorchestra-ubuntu-tools:24.04 ... git checkout orchestrator-v1-runtime ... python -m pytest tests/test_orchestrator_cli_entrypoints.py tests/test_orchestrator_mcp_entrypoints.py -q`
+  → checkout `9783d76`, `21 passed`
 
 ## 7. Explicit non-goals
 
