@@ -22,6 +22,7 @@ KNOWN_ACTIONS = [
     "export_results",
     "block",
     "auto_weaken_or_delete_claim",
+    "build_scoring_bundle",
 ]
 
 
