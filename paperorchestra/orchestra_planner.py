@@ -21,6 +21,7 @@ KNOWN_ACTIONS = [
     "compile_current",
     "export_results",
     "block",
+    "auto_weaken_or_delete_claim",
 ]
 
 
