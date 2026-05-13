@@ -657,6 +657,29 @@ def exec_argv_prefix_proves_web_search(prefix: object) -> bool:
     )
 
 
+def _contract_wrapper_path(contract_path: Path, payload: dict[str, object]) -> Path | None:
+    value = payload.get("wrapper_path")
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        recorded_path = Path(value)
+        if not recorded_path.is_absolute():
+            recorded_path = contract_path.parent / recorded_path
+        return recorded_path.resolve()
+    except (OSError, RuntimeError):
+        return None
+
+
+def _redacted_exec_argv_prefix_proves_web_search(mode_payload: dict[str, object]) -> bool:
+    return (
+        mode_payload.get("search_enabled") is True
+        and isinstance(mode_payload.get("exec_argv_prefix_label"), str)
+        and str(mode_payload.get("exec_argv_prefix_label")).startswith("redacted-exec-argv-prefix:")
+        and isinstance(mode_payload.get("exec_argv_prefix_sha256"), str)
+        and len(str(mode_payload.get("exec_argv_prefix_sha256"))) == 64
+    )
+
+
 def provider_web_search_capability_proof(provider: BaseProvider) -> dict[str, object] | None:
     """Return auditable web-search capability proof for trusted citation providers.
 
@@ -681,13 +704,11 @@ def provider_web_search_capability_proof(provider: BaseProvider) -> dict[str, ob
     wrapper_path = Path(argv[1]).resolve()
     if wrapper_path.name != "provider-wrap.sh" or not wrapper_path.exists():
         return None
+    contract_path = wrapper_path.with_name("provider-wrap.contract.json")
     payload = _read_wrapper_contract(wrapper_path)
     if not payload or payload.get("schema_version") != "provider-wrapper-contract/1":
         return None
-    try:
-        recorded_path = Path(str(payload.get("wrapper_path") or "")).resolve()
-    except (OSError, RuntimeError):
-        return None
+    recorded_path = _contract_wrapper_path(contract_path, payload)
     if recorded_path != wrapper_path:
         return None
     import hashlib as _hashlib
@@ -702,11 +723,12 @@ def provider_web_search_capability_proof(provider: BaseProvider) -> dict[str, ob
     if mode_payload.get("trace_wrapped") is not True or mode_payload.get("web_search_capable") is not True:
         return None
     prefix = mode_payload.get("exec_argv_prefix")
-    if not exec_argv_prefix_proves_web_search(prefix):
+    raw_prefix_proves_web = exec_argv_prefix_proves_web_search(prefix)
+    redacted_prefix_proves_web = _redacted_exec_argv_prefix_proves_web_search(mode_payload)
+    if not (raw_prefix_proves_web or redacted_prefix_proves_web):
         return None
-    contract_path = wrapper_path.with_name("provider-wrap.contract.json")
     contract_sha = _hashlib.sha256(contract_path.read_bytes()).hexdigest()
-    return {
+    proof: dict[str, object] = {
         "provider_capability_proof": "provider-wrapper-contract/1",
         "provider_command_digest": digest,
         "provider_contract_path": str(contract_path),
@@ -714,9 +736,14 @@ def provider_web_search_capability_proof(provider: BaseProvider) -> dict[str, ob
         "provider_wrapper_path": str(wrapper_path),
         "provider_wrapper_sha256": actual_wrapper_sha,
         "provider_wrapper_mode": "web",
-        "provider_wrapper_exec_argv_prefix": prefix,
         "web_search_capable": True,
     }
+    if raw_prefix_proves_web:
+        proof["provider_wrapper_exec_argv_prefix"] = prefix
+    else:
+        proof["provider_wrapper_exec_argv_prefix_label"] = mode_payload.get("exec_argv_prefix_label")
+        proof["provider_wrapper_exec_argv_prefix_sha256"] = mode_payload.get("exec_argv_prefix_sha256")
+    return proof
 
 def provider_supports_web_search(provider: BaseProvider) -> bool:
     return provider_web_search_capability_proof(provider) is not None

@@ -139,6 +139,16 @@ redact() {
   sed -E "s#(/home/kosh/temp/|\.\./)?${private_artifact_marker}[^[:space:]]*#[REDACTED_PRIVATE_ARTIFACT_PATH]#g; s/s2k-[A-Za-z0-9]+/[REDACTED_S2_KEY]/g; s/sk-(proj|live|test|svcacct)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}/[REDACTED_OPENAI_KEY]/g; s/Bearer[[:space:]]+[A-Za-z0-9._-]{20,}/Bearer [REDACTED_TOKEN]/g"
 }
 
+public_label() {
+  local kind="$1"; shift
+  python3 - "$kind" "$*" <<'PY_PUBLIC_LABEL'
+import hashlib, sys
+kind = sys.argv[1]
+value = sys.argv[2] if len(sys.argv) > 2 else ""
+print(f"redacted-{kind}:{hashlib.sha256(value.encode('utf-8', errors='replace')).hexdigest()[:12]}")
+PY_PUBLIC_LABEL
+}
+
 codex_cli_prefix_words() {
   python3 - "${PAPERO_CODEX_CLI_PREFIX:-codex}" <<'PY_CODEX_PREFIX'
 import shlex, sys
@@ -176,8 +186,10 @@ run_step() {
   local name="$1"; shift
   echo "==> $name"
   write_timeline "- $(date -u +%Y-%m-%dT%H:%M:%SZ) start $name"
-  printf '%q ' "$@" > "$LOGS/${name}.command"
-  printf '\n' >> "$LOGS/${name}.command"
+  {
+    printf '%q ' "$@"
+    printf '\n'
+  } | redact > "$LOGS/${name}.command"
   local had_smoke_command_name=0
   local old_smoke_command_name="${PAPERO_SMOKE_COMMAND_NAME:-}"
   if [[ ${PAPERO_SMOKE_COMMAND_NAME+x} ]]; then had_smoke_command_name=1; fi
@@ -518,10 +530,12 @@ EOF
 
 - started_at_utc: ${TS}
 - updated_at_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-- repo_root: ${REPO_ROOT}
+- repo_root_label: $(public_label repo-root "$REPO_ROOT")
 - head: $(git rev-parse HEAD 2>/dev/null || echo unknown)
-- material_root: ${MATERIAL_ROOT}
-- expected_material_root: ${EXPECTED_MATERIAL_ROOT}
+- evidence_root_label: $(public_label evidence-root "$EVIDENCE_ROOT")
+- material_root_label: $(public_label material-root "$MATERIAL_ROOT")
+- expected_material_root_label: $(public_label expected-material-root "$EXPECTED_MATERIAL_ROOT")
+- raw_paths: omitted_from_public_evidence
 - smoke_verdict: ${FINAL_SMOKE_VERDICT}
 - qa_loop_terminal_verdict: ${QA_LOOP_TERMINAL_VERDICT}
 - operator_feedback_cycles: ${OPERATOR_FEEDBACK_CYCLES}
@@ -936,23 +950,46 @@ WRAP
   python3 - "$WRAPPER_PATH" "${PAPERO_CODEX_CLI_PREFIX:-codex}" <<'PY_CONTRACT'
 import hashlib, json, shlex, sys
 from pathlib import Path
+
+
+def stable_json(value):
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def digest(value):
+    return hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()
+
+
+def label(kind, value):
+    return f"redacted-{kind}:{digest(value)[:12]}"
+
+
 wrapper = Path(sys.argv[1]).resolve()
 codex_prefix = shlex.split(sys.argv[2] or "codex") or ["codex"]
+prefix_payload = stable_json(codex_prefix)
+gen_prefix = [*codex_prefix, "exec"]
+web_prefix = [*codex_prefix, "--search", "exec"]
 contract = {
     "schema_version": "provider-wrapper-contract/1",
-    "wrapper_path": str(wrapper),
+    "wrapper_path": wrapper.name,
+    "wrapper_label": label("provider-wrapper", str(wrapper)),
     "wrapper_sha256": hashlib.sha256(wrapper.read_bytes()).hexdigest(),
-    "codex_cli_prefix": codex_prefix,
+    "codex_cli_prefix_label": label("codex-cli-prefix", prefix_payload),
+    "codex_cli_prefix_sha256": digest(prefix_payload),
     "modes": {
         "gen": {
             "trace_wrapped": True,
             "web_search_capable": False,
-            "exec_argv_prefix": [*codex_prefix, "exec"],
+            "exec_argv_prefix_label": label("exec-argv-prefix", stable_json(gen_prefix)),
+            "exec_argv_prefix_sha256": digest(stable_json(gen_prefix)),
+            "search_enabled": False,
         },
         "web": {
             "trace_wrapped": True,
             "web_search_capable": True,
-            "exec_argv_prefix": [*codex_prefix, "--search", "exec"],
+            "exec_argv_prefix_label": label("exec-argv-prefix", stable_json(web_prefix)),
+            "exec_argv_prefix_sha256": digest(stable_json(web_prefix)),
+            "search_enabled": True,
         },
     },
 }
@@ -963,17 +1000,40 @@ PY_CONTRACT
 emit_dry_run_contract() {
   write_provider_wrapper
   python3 - "$EVIDENCE_ROOT" "$WRAPPER_PATH" "$GEN_CMD" "$WEB_CMD" "${PAPERO_CODEX_CLI_PREFIX:-codex}" <<'PY_DRY'
-import json, shlex, sys
+import hashlib, json, shlex, sys
 from pathlib import Path
+
+
+def stable_json(value):
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def digest(value):
+    return hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()
+
+
+def label(kind, value):
+    return f"redacted-{kind}:{digest(value)[:12]}"
+
+
 root=Path(sys.argv[1]); wrapper=Path(sys.argv[2])
 sidecar=json.loads(wrapper.with_name("provider-wrap.contract.json").read_text(encoding="utf-8"))
 codex_prefix=shlex.split(sys.argv[5] or "codex") or ["codex"]
+prefix_payload=stable_json(codex_prefix)
+critic_prefix=[*codex_prefix, "exec"]
+provider_gen=json.loads(sys.argv[3])
+provider_web=json.loads(sys.argv[4])
 print(json.dumps({
   "schema_version":"fresh-full-live-smoke-contract/1",
-  "evidence_root":str(root),
-  "codex_cli_prefix":codex_prefix,
-  "critic_exec_argv_prefix":[*codex_prefix,"exec"],
-  "provider_commands":{"gen":json.loads(sys.argv[3]),"web":json.loads(sys.argv[4])},
+  "evidence_root_label":label("evidence-root", str(root)),
+  "codex_cli_prefix_label":label("codex-cli-prefix", prefix_payload),
+  "codex_cli_prefix_sha256":digest(prefix_payload),
+  "critic_exec_argv_prefix_label":label("critic-exec-argv-prefix", stable_json(critic_prefix)),
+  "critic_exec_argv_prefix_sha256":digest(stable_json(critic_prefix)),
+  "provider_commands":{
+    "gen":{"mode":"gen","command_label":label("provider-command", stable_json(provider_gen)),"command_sha256":digest(stable_json(provider_gen))},
+    "web":{"mode":"web","command_label":label("provider-command", stable_json(provider_web)),"command_sha256":digest(stable_json(provider_web)),"web_search_capable":True},
+  },
   "provider_wrapper_contract":sidecar,
   "stage_contracts":[
     {"name":"research_prior_work","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},

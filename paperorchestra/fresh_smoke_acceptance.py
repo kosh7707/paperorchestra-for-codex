@@ -408,8 +408,14 @@ def _safe_material_count(manifest: Mapping[str, Any] | None) -> int:
     count = manifest.get("material_count")
     if isinstance(count, int):
         return max(count, 0)
+    count = manifest.get("file_count")
+    if isinstance(count, int):
+        return max(count, 0)
     materials = manifest.get("materials")
-    return len(materials) if isinstance(materials, list) else 0
+    if isinstance(materials, list):
+        return len(materials)
+    files = manifest.get("files")
+    return len(files) if isinstance(files, list) else 0
 
 
 def _safe_int(value: Any, *, default: int = 0) -> int:

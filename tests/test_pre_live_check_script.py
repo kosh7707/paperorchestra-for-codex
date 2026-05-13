@@ -806,10 +806,11 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertNotIn("command not found", result.stdout + result.stderr)
         self.assertNotIn("make_manifest", result.stdout + result.stderr)
 
-    def test_fresh_full_live_smoke_dry_run_contract_exposes_custom_codex_cli_prefix(self) -> None:
+    def test_fresh_full_live_smoke_dry_run_contract_redacts_custom_codex_cli_prefix(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             env = os.environ.copy()
-            env["PAPERO_CODEX_CLI_PREFIX"] = "omx --madmax --high --dangerously-bypass-approvals-and-sandbox"
+            raw_prefix = "custom-codex --auth-profile private"
+            env["PAPERO_CODEX_CLI_PREFIX"] = raw_prefix
             result = subprocess.run(
                 [
                     "bash",
@@ -826,13 +827,102 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             )
 
         payload = json.loads(result.stdout)
-        expected_prefix = ["omx", "--madmax", "--high", "--dangerously-bypass-approvals-and-sandbox"]
-        self.assertEqual(payload["codex_cli_prefix"], expected_prefix)
-        self.assertEqual(payload["critic_exec_argv_prefix"], [*expected_prefix, "exec"])
+        rendered = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn(raw_prefix, rendered)
+        self.assertNotIn("custom-codex", rendered)
+        self.assertNotIn("--auth-profile", rendered)
+        self.assertIn("codex_cli_prefix_label", payload)
+        self.assertIn("critic_exec_argv_prefix_label", payload)
         contract = payload["provider_wrapper_contract"]
-        self.assertEqual(contract["codex_cli_prefix"], expected_prefix)
-        self.assertEqual(contract["modes"]["gen"]["exec_argv_prefix"], [*expected_prefix, "exec"])
-        self.assertEqual(contract["modes"]["web"]["exec_argv_prefix"], [*expected_prefix, "--search", "exec"])
+        self.assertIn("codex_cli_prefix_label", contract)
+        self.assertIn("codex_cli_prefix_sha256", contract)
+        self.assertNotIn("codex_cli_prefix", contract)
+        self.assertNotIn("exec_argv_prefix", contract["modes"]["gen"])
+        self.assertNotIn("exec_argv_prefix", contract["modes"]["web"])
+        self.assertIn("exec_argv_prefix_label", contract["modes"]["web"])
+        self.assertEqual(contract["modes"]["gen"]["web_search_capable"], False)
+        self.assertEqual(contract["modes"]["web"]["web_search_capable"], True)
+
+    def test_fresh_smoke_public_evidence_metadata_is_release_safety_clean_under_private_marker_paths(self) -> None:
+        wrapper_text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+        run_step_start = wrapper_text.index("redact() {")
+        run_step_end = wrapper_text.index("\n}\n\nrun_without_papero_env", run_step_start) + 3
+        run_step_helpers = wrapper_text[run_step_start:run_step_end]
+        scanner = Path("scripts/release-safety-scan.py")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            evidence = root / "paperorchestra-private-evidence"
+            material = root / "paperorchestra-private-material"
+            env = os.environ.copy()
+            raw_prefix = "custom-codex --auth-profile private"
+            env["PAPERO_CODEX_CLI_PREFIX"] = raw_prefix
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/fresh-full-live-smoke-loop.sh",
+                    "--dry-run-contract",
+                    "--evidence-root",
+                    str(evidence),
+                    "--material-root",
+                    str(material),
+                    "--expected-material-root",
+                    str(material),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                check=True,
+            )
+            (evidence / "dry-run-contract.json").write_text(result.stdout, encoding="utf-8")
+
+            harness = root / "run-step-harness.sh"
+            harness.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        f"REPO_ROOT={str(Path.cwd())!r}",
+                        f"EVIDENCE_ROOT={str(evidence)!r}",
+                        'LOGS="$EVIDENCE_ROOT/logs"',
+                        'READABLE="$EVIDENCE_ROOT/readable"',
+                        "COMMAND_ROWS=()",
+                        'mkdir -p "$LOGS" "$READABLE"',
+                        run_step_helpers,
+                        f"run_step synthetic_private_path_command printf '%s\\n' {str(material)!r}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            subprocess.run(["bash", str(harness)], check=True)
+
+            output = root / "release-safety-scan.json"
+            scan = subprocess.run(
+                [sys.executable, str(scanner), str(evidence), str(output)],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+
+            self.assertEqual(scan.returncode, 0, scan.stderr + scan.stdout)
+            payload = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(payload["blocking_finding_count"], 0)
+            self.assertEqual(payload["finding_count"], 0)
+            rendered = "\n".join(
+                [
+                    (evidence / "README.md").read_text(encoding="utf-8"),
+                    (evidence / "provider-wrap.contract.json").read_text(encoding="utf-8"),
+                    (evidence / "dry-run-contract.json").read_text(encoding="utf-8"),
+                    (evidence / "logs" / "synthetic_private_path_command.command").read_text(encoding="utf-8"),
+                ]
+            )
+            self.assertNotIn(str(evidence), rendered)
+            self.assertNotIn(str(material), rendered)
+            self.assertNotIn("paperorchestra-private", rendered)
+            self.assertNotIn(raw_prefix, rendered)
+            self.assertNotIn("custom-codex", rendered)
 
     def test_fresh_smoke_run_step_preserves_disabled_errexit_for_semantic_exit_codes(self) -> None:
         wrapper = Path("scripts/fresh-full-live-smoke-loop.sh")

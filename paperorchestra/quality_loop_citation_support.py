@@ -44,17 +44,28 @@ def _provider_proof_is_trusted(provenance: dict[str, Any], expected_direct_diges
     if not isinstance(payload, dict) or payload.get("schema_version") != "provider-wrapper-contract/1":
         return False
     try:
-        if Path(str(payload.get("wrapper_path") or "")).resolve() != wrapper.resolve():
+        recorded = Path(str(payload.get("wrapper_path") or ""))
+        if not recorded.is_absolute():
+            recorded = contract.parent / recorded
+        if recorded.resolve() != wrapper.resolve():
             return False
     except (OSError, RuntimeError):
         return False
     modes = payload.get("modes")
     mode = modes.get("web") if isinstance(modes, dict) else None
+    redacted_prefix_proof = (
+        isinstance(mode, dict)
+        and mode.get("search_enabled") is True
+        and isinstance(mode.get("exec_argv_prefix_label"), str)
+        and str(mode.get("exec_argv_prefix_label")).startswith("redacted-exec-argv-prefix:")
+        and isinstance(mode.get("exec_argv_prefix_sha256"), str)
+        and len(str(mode.get("exec_argv_prefix_sha256"))) == 64
+    )
     return (
         isinstance(mode, dict)
         and mode.get("trace_wrapped") is True
         and mode.get("web_search_capable") is True
-        and exec_argv_prefix_proves_web_search(mode.get("exec_argv_prefix"))
+        and (exec_argv_prefix_proves_web_search(mode.get("exec_argv_prefix")) or redacted_prefix_proof)
         and provenance.get("provider_wrapper_mode") == "web"
     )
 

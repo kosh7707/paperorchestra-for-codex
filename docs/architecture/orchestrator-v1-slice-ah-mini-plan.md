@@ -348,3 +348,98 @@ Stop and replan if:
 - the run reaches six or more operator cycles;
 - final smoke passes despite hard-gate failures;
 - the redacted summary cannot be consumed by `build_acceptance_ledger`.
+
+## 8. Hotfix addendum — generic redaction blockers found during AH execution
+
+Status: added after the first private-final smoke attempts exposed two generic
+smoke-harness blockers. These fixes are allowed by Section 3 because they
+prevent the generic smoke harness from running safely; they must remain
+domain-agnostic and must not encode private material assumptions.
+
+### 8.1 Blockers
+
+1. The public-safe acceptance summarizer rejects the redacted manifest emitted
+   by `scripts/prepare-private-smoke-materials.py` because it recognizes only
+   `material_count` / `materials`, while the prep script emits `file_count` /
+   `files`.
+2. `scripts/fresh-full-live-smoke-loop.sh` writes operational raw paths and raw
+   provider command details into wrapper-generated evidence before
+   `release_safety_scan_preflight`. When private material/evidence roots contain
+   private markers, the release-safety scan fails on the harness metadata rather
+   than on manuscript quality.
+
+### 8.2 Required tests before implementation
+
+1. Add a summarizer test that uses the actual redacted manifest shape emitted by
+   `scripts/prepare-private-smoke-materials.py`:
+   `private_safe_summary`, `file_count`, `extensions`, and `files[]` entries
+   with `path_label`, `path_sha256`, `extension`, `bytes`, and `sha256`.
+   Expected result: private-final summary can pass when all other evidence is
+   passing, `redacted_counts.material_file_count` is positive, and rendered
+   summary output contains no raw private paths.
+2. Add a runtime-generated evidence regression that creates the relevant
+   wrapper-generated public files under synthetic paths containing the generic
+   private evidence marker, runs `scripts/release-safety-scan.py`, and proves no
+   blocking residue is introduced by the harness itself. Static assertions alone
+   are insufficient.
+3. The runtime regression must cover at least:
+   - `README.md`;
+   - `logs/*.command`;
+   - provider wrapper contract JSON;
+   - dry-run contract JSON if generated as a public evidence artifact.
+4. Add assertions that provider contract/dry-run public outputs do not persist
+   raw provider prefix/argv strings, raw absolute wrapper paths, auth/config
+   paths, or raw `omx ...` / `codex ...` command strings. They may persist only
+   redacted labels, hashes, relative/basename identities, and capability
+   booleans.
+
+### 8.3 Allowed implementation shape
+
+- Extend the material-count helper narrowly to accept both
+  `material_count` / `materials` and `file_count` / `files`.
+- Add public-safe shell/Python helpers inside the smoke wrapper to emit
+  redacted labels/hashes for material root, expected material root, evidence
+  root, wrapper identity, and provider command prefix.
+- Keep raw paths and provider commands available only for execution variables,
+  never for public-readable evidence metadata.
+- Pipe `logs/*.command` through the same redaction path used for stdout/stderr.
+- Store provider wrapper contract/dry-run contract execution identity as
+  redacted labels/hashes plus capability booleans; do not persist exact provider
+  argv/prefix.
+
+### 8.4 Validation after implementation
+
+Run:
+
+```bash
+.venv/bin/python -m pytest tests/test_fresh_smoke_acceptance.py tests/test_pre_live_check_script.py tests/test_private_smoke_safety.py -q
+.venv/bin/python -m pytest -q
+bash -n scripts/fresh-full-live-smoke-loop.sh
+scripts/check-private-leakage.py --denylist /tmp/paperorchestra-private-denylist.txt --root "$PWD" --json
+git diff --check
+```
+
+Then re-run the container smoke proof and record only redacted status/count/hash
+evidence in public commits.
+
+### 8.5 Hotfix implementation evidence
+
+Critic validation:
+
+- plan revalidation: `APPROVE`;
+- implementation validation: `APPROVE`.
+
+Local verification after implementation:
+
+```text
+bash -n scripts/fresh-full-live-smoke-loop.sh scripts/pre-live-check.sh
+pytest targeted redaction/provider/smoke tests: 64 passed
+scripts/pre-live-check.sh --all: Pre-live check PASS
+pytest -q: 979 passed, 182 subtests passed
+private leakage denylist scan: status ok, match_count 0
+tracked private-domain literal grep: no matches
+git diff --check: clean
+```
+
+This evidence proves only the generic hotfix behavior. It does not claim that
+the long private final-smoke run has completed.

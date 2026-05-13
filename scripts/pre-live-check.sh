@@ -127,20 +127,25 @@ run_step fresh_smoke_contract_dry_run bash -lc '
   cleanup_contract_tmp() { rm -rf "$tmp"; }
   trap cleanup_contract_tmp EXIT
   scripts/fresh-full-live-smoke-loop.sh --dry-run-contract --evidence-root "$tmp/evidence" > "$tmp/contract.json"
-  python3 - "$tmp/contract.json" <<"PY_CONTRACT_CHECK"
+  python3 - "$tmp/contract.json" "$tmp/evidence/provider-wrap.sh" <<"PY_CONTRACT_CHECK"
 import json, sys
 from paperorchestra.providers import get_citation_support_provider, provider_supports_web_search
 payload=json.load(open(sys.argv[1], encoding="utf-8"))
-web_cmd=json.dumps(payload["provider_commands"]["web"])
+wrapper_path=sys.argv[2]
+web_cmd=json.dumps(["bash", wrapper_path, "web"])
 provider=get_citation_support_provider("shell", command=web_cmd, evidence_mode="web")
 assert provider_supports_web_search(provider)
 contract=payload["provider_wrapper_contract"]
-assert payload["codex_cli_prefix"] == ["codex"]
-assert payload["critic_exec_argv_prefix"] == ["codex", "exec"]
-assert contract["codex_cli_prefix"] == ["codex"]
+assert "codex_cli_prefix_label" in payload
+assert "critic_exec_argv_prefix_label" in payload
+assert "codex_cli_prefix" not in payload
+assert "critic_exec_argv_prefix" not in payload
+assert "codex_cli_prefix_label" in contract
+assert "codex_cli_prefix" not in contract
 assert contract["modes"]["web"]["trace_wrapped"] is True
 assert contract["modes"]["web"]["web_search_capable"] is True
-assert contract["modes"]["web"]["exec_argv_prefix"] == ["codex", "--search", "exec"]
+assert "exec_argv_prefix_label" in contract["modes"]["web"]
+assert "exec_argv_prefix" not in contract["modes"]["web"]
 assert any(item["name"] == "compile_initial" and item["class"] == "mandatory" for item in payload["stage_contracts"])
 PY_CONTRACT_CHECK
 '

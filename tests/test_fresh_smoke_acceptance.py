@@ -170,6 +170,42 @@ def _safe_material_manifest(path: Path) -> Path:
     return path
 
 
+def _prep_script_redacted_manifest(path: Path) -> Path:
+    _write_json(
+        path,
+        {
+            "private_safe_summary": True,
+            "source_zip_sha256": HEX,
+            "output_label": "redacted-output:001",
+            "file_count": 2,
+            "total_bytes": 579,
+            "extensions": {".md": 1, ".pdf": 1},
+            "files": [
+                {
+                    "path_label": "redacted-member:001",
+                    "path_sha256": HEX,
+                    "extension": ".md",
+                    "bytes": 123,
+                    "sha256": HEX,
+                },
+                {
+                    "path_label": "redacted-member:002",
+                    "path_sha256": "b" * 64,
+                    "extension": ".pdf",
+                    "bytes": 456,
+                    "sha256": "b" * 64,
+                },
+            ],
+            "checklist": [
+                "Keep this directory outside the public repository unless explicitly approved.",
+                "Do not commit raw private material, filenames, claims, figures, or BibTeX.",
+                "Use only redacted counts/hashes in public evidence.",
+            ],
+        },
+    )
+    return path
+
+
 def _decode_mcp_text(result: dict[str, object]) -> dict[str, object]:
     assert result.get("isError") is False
     content = result["content"]
@@ -220,6 +256,26 @@ def test_private_final_requires_safe_material_manifest_and_maps_private_gate() -
         rendered = json.dumps(summary, ensure_ascii=False)
         assert str(manifest.resolve()) not in rendered
         assert "private-material-manifest" not in rendered
+
+
+def test_private_final_accepts_prep_script_redacted_file_count_manifest() -> None:
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp) / "evidence"
+        _write_evidence_root(root)
+        manifest = _prep_script_redacted_manifest(Path(tmp) / "private-smoke-manifest.redacted.json")
+
+        summary = build_fresh_smoke_acceptance_summary(root, smoke_mode="private_final", material_manifest=manifest)
+
+        assert summary["overall_status"] == "pass"
+        assert summary["redacted_counts"]["material_file_count"] == 2
+        checks = {check["id"]: check for check in summary["checks"]}
+        assert checks["material_manifest_safety"]["status"] == "pass"
+        evidence = fresh_smoke_acceptance_evidence(summary)
+        assert evidence["private_final_live_smoke_redacted"]["status"] == "pass"
+        rendered = json.dumps(summary, ensure_ascii=False)
+        assert str(manifest.resolve()) not in rendered
+        assert "private-smoke-manifest" not in rendered
+        assert "redacted-member:001" not in rendered
 
 
 def test_forbidden_verdict_and_readiness_terms_do_not_become_success() -> None:
