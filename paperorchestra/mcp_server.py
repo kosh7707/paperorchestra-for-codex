@@ -59,6 +59,7 @@ from .omx_bridge import (
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
 from .orchestra_evidence import write_orchestrator_evidence_bundle
 from .orchestra_executor import LocalActionExecutor
+from .orchestra_omx_executor import OmxActionExecutor
 from .orchestrator import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state
 from .providers import get_citation_support_provider, get_provider
 from .quality_gate import write_quality_gate
@@ -116,6 +117,7 @@ TOOLS: list[JSON] = [
                 "material": {"type": "string"},
                 "execute_local": {"type": "boolean"},
                 "plan_full_loop": {"type": "boolean"},
+                "execute_omx": {"type": "boolean"},
                 "write_evidence": {"type": "boolean"},
                 "evidence_output": {"type": "string"},
             },
@@ -998,12 +1000,21 @@ def tool_inspect_state(arguments: JSON) -> JSON:
     return _ok(state.to_public_dict())
 
 
+def _make_omx_executor(cwd: Path, *, timeout_seconds: float = 30.0) -> OmxActionExecutor:
+    return OmxActionExecutor(cwd=cwd, timeout_seconds=timeout_seconds)
+
+
 def tool_orchestrate(arguments: JSON) -> JSON:
     cwd = _default_cwd(arguments)
     orchestrator = OrchestraOrchestrator(cwd)
     material = arguments.get("material")
-    if arguments.get("execute_local") and arguments.get("plan_full_loop"):
-        raise ValueError("execute_local and plan_full_loop are mutually exclusive.")
+    execution_modes = [
+        bool(arguments.get("execute_local")),
+        bool(arguments.get("plan_full_loop")),
+        bool(arguments.get("execute_omx")),
+    ]
+    if sum(execution_modes) > 1:
+        raise ValueError("execute_local, plan_full_loop, and execute_omx are mutually exclusive.")
     if arguments.get("execute_local"):
         result = orchestrator.step(
             material_path=material,
@@ -1012,6 +1023,11 @@ def tool_orchestrate(arguments: JSON) -> JSON:
         )
     elif arguments.get("plan_full_loop"):
         result = orchestrator.plan_full_loop(material_path=material)
+    elif arguments.get("execute_omx"):
+        result = orchestrator.execute_omx_once(
+            material_path=material,
+            executor=_make_omx_executor(cwd),
+        )
     else:
         result = orchestrator.run_until_blocked(material_path=material)
     state = result.state

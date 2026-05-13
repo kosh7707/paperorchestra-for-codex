@@ -7,9 +7,11 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from paperorchestra.cli import _orchestrator_summary_lines, build_parser, main
 from paperorchestra.models import InputBundle
+from paperorchestra.orchestra_omx_executor import FakeOmxRunner, OmxActionExecutor, OmxCommandResult
 from paperorchestra.session import artifact_path, create_session, save_session
 
 
@@ -35,6 +37,31 @@ class OrchestratorCliEntrypointTests(unittest.TestCase):
         (material / "experiment_log.md").write_text(
             "Experiment results show 12 checklist violations were caught before drafting. "
             "Artifact-first review improves reviewability.",
+            encoding="utf-8",
+        )
+        return material
+
+    def _goal_stdout(self, slug: str = "po-abcdef123456") -> str:
+        return json.dumps(
+            {
+                "ok": True,
+                "mission": {
+                    "mission_path": f".omx/goals/autoresearch/{slug}/mission.json",
+                    "rubric_path": f".omx/goals/autoresearch/{slug}/rubric.md",
+                    "ledger_path": f".omx/goals/autoresearch/{slug}/ledger.jsonl",
+                },
+            }
+        )
+
+    def _write_durable_material(self, root: Path) -> Path:
+        material = root / "durable_material"
+        material.mkdir()
+        (material / "idea.md").write_text(
+            "We introduce a new generic evidence workflow for manuscript orchestration.",
+            encoding="utf-8",
+        )
+        (material / "experiment_log.md").write_text(
+            "Synthetic experiment notes preserve artifact evidence for review.",
             encoding="utf-8",
         )
         return material
@@ -73,6 +100,7 @@ class OrchestratorCliEntrypointTests(unittest.TestCase):
         self.assertEqual(parser.parse_args(["orchestrate"]).command, "orchestrate")
         self.assertTrue(parser.parse_args(["orchestrate", "--execute-local"]).execute_local)
         self.assertTrue(parser.parse_args(["orchestrate", "--plan-full-loop"]).plan_full_loop)
+        self.assertTrue(parser.parse_args(["orchestrate", "--execute-omx"]).execute_omx)
         self.assertEqual(parser.parse_args(["continue-project"]).command, "continue-project")
         self.assertEqual(
             parser.parse_args(["answer-human-needed", "--answer", "Use the supported weaker claim."]).command,
@@ -264,3 +292,59 @@ class OrchestratorCliEntrypointTests(unittest.TestCase):
         parser = build_parser()
         with self.assertRaises(SystemExit):
             parser.parse_args(["orchestrate", "--execute-local", "--plan-full-loop"])
+
+    def test_orchestrate_execute_omx_conflicts_with_other_execution_modes(self) -> None:
+        parser = build_parser()
+        for argv in [
+            ["orchestrate", "--execute-local", "--execute-omx"],
+            ["orchestrate", "--plan-full-loop", "--execute-omx"],
+        ]:
+            with self.subTest(argv=argv):
+                with self.assertRaises(SystemExit):
+                    parser.parse_args(argv)
+
+    def test_orchestrate_execute_omx_json_returns_execution_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, _chdir(tmp):
+            root = Path(tmp)
+            material = self._write_durable_material(root)
+            runner = FakeOmxRunner([OmxCommandResult(return_code=0, stdout=self._goal_stdout())])
+            with mock.patch("paperorchestra.cli._make_omx_executor") as factory:
+                factory.side_effect = lambda cwd, **_: OmxActionExecutor(
+                    cwd=Path(cwd), runner=runner, slug="po-abcdef123456"
+                )
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    exit_code = main(["orchestrate", "--material", str(material), "--execute-omx", "--json"])
+            payload = json.loads(stdout.getvalue())
+            rendered = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["execution"], "bounded_omx_execution")
+        self.assertEqual(payload["action_taken"], "start_autoresearch_goal")
+        self.assertEqual(payload["execution_record"]["status"], "executed_omx")
+        self.assertNotIn("omx ", rendered)
+        self.assertNotIn(str(material), rendered)
+
+    def test_orchestrate_execute_omx_write_evidence_includes_execution_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, _chdir(tmp):
+            root = Path(tmp)
+            material = self._write_durable_material(root)
+            runner = FakeOmxRunner([OmxCommandResult(return_code=0, stdout=self._goal_stdout())])
+            with mock.patch("paperorchestra.cli._make_omx_executor") as factory:
+                factory.side_effect = lambda cwd, **_: OmxActionExecutor(
+                    cwd=Path(cwd), runner=runner, slug="po-abcdef123456"
+                )
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    exit_code = main(
+                        ["orchestrate", "--material", str(material), "--execute-omx", "--write-evidence", "--json"]
+                    )
+            payload = json.loads(stdout.getvalue())
+            output_dir = Path(payload["evidence_bundle"]["output_dir"])
+            rendered = "\n".join(path.read_text(encoding="utf-8") for path in output_dir.rglob("*.json"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertIn("orchestrator_execution_record", rendered)
+        self.assertNotIn("argv", rendered)
+        self.assertNotIn("omx ", rendered)
+        self.assertNotIn(str(material), rendered)

@@ -48,6 +48,7 @@ from .omx_diagnostics import export_omx_evidence, write_omx_review_handoff
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
 from .orchestra_evidence import write_orchestrator_evidence_bundle
 from .orchestra_executor import LocalActionExecutor
+from .orchestra_omx_executor import OmxActionExecutor
 from .orchestra_scorecard import render_scorecard_summary
 from .orchestrator import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state, run_until_blocked as orchestrator_run_until_blocked
 from .quality_loop import write_quality_eval, write_quality_loop_plan
@@ -131,6 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
     orchestrate_mode = orchestrate_parser.add_mutually_exclusive_group()
     orchestrate_mode.add_argument("--execute-local", action="store_true", help="Execute exactly one deterministic local orchestrator step")
     orchestrate_mode.add_argument("--plan-full-loop", action="store_true", help="Plan the next full-loop action without executing it")
+    orchestrate_mode.add_argument("--execute-omx", action="store_true", help="Execute exactly one bounded supported OMX action")
     orchestrate_parser.add_argument("--write-evidence", action="store_true", help="Persist a public-safe orchestrator evidence bundle")
     orchestrate_parser.add_argument("--evidence-output", help="Workspace-contained evidence bundle directory")
     orchestrate_parser.add_argument("--json", action="store_true")
@@ -785,6 +787,10 @@ def _print_orchestrator_payload(payload: dict[str, object], *, json_output: bool
         print("\n".join(lines))
 
 
+def _make_omx_executor(cwd: Path, *, timeout_seconds: float = 30.0) -> OmxActionExecutor:
+    return OmxActionExecutor(cwd=cwd, timeout_seconds=timeout_seconds)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -824,6 +830,11 @@ def main(argv: list[str] | None = None) -> int:
                 )
             elif args.plan_full_loop:
                 result = orchestrator.plan_full_loop(material_path=args.material)
+            elif args.execute_omx:
+                result = orchestrator.execute_omx_once(
+                    material_path=args.material,
+                    executor=_make_omx_executor(cwd),
+                )
             else:
                 result = orchestrator.run_until_blocked(material_path=args.material)
             state = result.state

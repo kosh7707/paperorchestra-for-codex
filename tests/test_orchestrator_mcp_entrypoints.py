@@ -4,9 +4,11 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from paperorchestra.mcp_server import TOOL_HANDLERS, TOOLS, _handle_request
 from paperorchestra.models import InputBundle
+from paperorchestra.orchestra_omx_executor import FakeOmxRunner, OmxActionExecutor, OmxCommandResult
 from paperorchestra.session import artifact_path, create_session, save_session
 
 
@@ -31,6 +33,31 @@ class OrchestratorMcpEntrypointTests(unittest.TestCase):
         (material / "experiment_log.md").write_text(
             "Experiment results show 12 checklist violations were caught before drafting. "
             "Artifact-first review improves reviewability.",
+            encoding="utf-8",
+        )
+        return material
+
+    def _goal_stdout(self, slug: str = "po-abcdef123456") -> str:
+        return json.dumps(
+            {
+                "ok": True,
+                "mission": {
+                    "mission_path": f".omx/goals/autoresearch/{slug}/mission.json",
+                    "rubric_path": f".omx/goals/autoresearch/{slug}/rubric.md",
+                    "ledger_path": f".omx/goals/autoresearch/{slug}/ledger.jsonl",
+                },
+            }
+        )
+
+    def _write_durable_material(self, root: Path) -> Path:
+        material = root / "durable_material"
+        material.mkdir()
+        (material / "idea.md").write_text(
+            "We introduce a new generic evidence workflow for manuscript orchestration.",
+            encoding="utf-8",
+        )
+        (material / "experiment_log.md").write_text(
+            "Synthetic experiment notes preserve artifact evidence for review.",
             encoding="utf-8",
         )
         return material
@@ -81,6 +108,8 @@ class OrchestratorMcpEntrypointTests(unittest.TestCase):
         self.assertEqual(tools["orchestrate"]["inputSchema"]["properties"]["execute_local"]["type"], "boolean")
         self.assertIn("plan_full_loop", tools["orchestrate"]["inputSchema"]["properties"])
         self.assertEqual(tools["orchestrate"]["inputSchema"]["properties"]["plan_full_loop"]["type"], "boolean")
+        self.assertIn("execute_omx", tools["orchestrate"]["inputSchema"]["properties"])
+        self.assertEqual(tools["orchestrate"]["inputSchema"]["properties"]["execute_omx"]["type"], "boolean")
 
     def test_mcp_inspect_state_returns_v1_state_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -183,6 +212,68 @@ class OrchestratorMcpEntrypointTests(unittest.TestCase):
         self.assertIsNotNone(response)
         self.assertTrue(response["result"]["isError"])
         self.assertIn("mutually exclusive", response["result"]["content"][0]["text"])
+
+    def test_mcp_orchestrate_execute_omx_conflicts_fail_closed(self) -> None:
+        conflict_args = [
+            {"execute_local": True, "execute_omx": True},
+            {"plan_full_loop": True, "execute_omx": True},
+            {"execute_local": True, "plan_full_loop": True, "execute_omx": True},
+        ]
+        for args in conflict_args:
+            with self.subTest(args=args), tempfile.TemporaryDirectory() as tmp:
+                response = _handle_request(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "tools/call",
+                        "params": {"name": "orchestrate", "arguments": {"cwd": tmp, **args}},
+                    }
+                )
+                self.assertIsNotNone(response)
+                self.assertTrue(response["result"]["isError"])
+                self.assertIn("mutually exclusive", response["result"]["content"][0]["text"])
+
+    def test_mcp_orchestrate_execute_omx_returns_execution_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            material = self._write_durable_material(root)
+            runner = FakeOmxRunner([OmxCommandResult(return_code=0, stdout=self._goal_stdout())])
+            with mock.patch("paperorchestra.mcp_server._make_omx_executor") as factory:
+                factory.side_effect = lambda cwd, **_: OmxActionExecutor(
+                    cwd=Path(cwd), runner=runner, slug="po-abcdef123456"
+                )
+                payload = _decode_text_result(
+                    TOOL_HANDLERS["orchestrate"]({"cwd": tmp, "material": str(material), "execute_omx": True})
+                )
+            rendered = json.dumps(payload, ensure_ascii=False)
+
+        self.assertEqual(payload["execution"], "bounded_omx_execution")
+        self.assertEqual(payload["action_taken"], "start_autoresearch_goal")
+        self.assertEqual(payload["execution_record"]["status"], "executed_omx")
+        self.assertNotIn("omx ", rendered)
+        self.assertNotIn(str(material), rendered)
+
+    def test_mcp_orchestrate_execute_omx_write_evidence_includes_execution_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            material = self._write_durable_material(root)
+            runner = FakeOmxRunner([OmxCommandResult(return_code=0, stdout=self._goal_stdout())])
+            with mock.patch("paperorchestra.mcp_server._make_omx_executor") as factory:
+                factory.side_effect = lambda cwd, **_: OmxActionExecutor(
+                    cwd=Path(cwd), runner=runner, slug="po-abcdef123456"
+                )
+                payload = _decode_text_result(
+                    TOOL_HANDLERS["orchestrate"](
+                        {"cwd": tmp, "material": str(material), "execute_omx": True, "write_evidence": True}
+                    )
+                )
+            output_dir = Path(payload["evidence_bundle"]["output_dir"])
+            rendered = "\n".join(path.read_text(encoding="utf-8") for path in output_dir.rglob("*.json"))
+
+        self.assertIn("orchestrator_execution_record", rendered)
+        self.assertNotIn("argv", rendered)
+        self.assertNotIn("omx ", rendered)
+        self.assertNotIn(str(material), rendered)
 
     def test_mcp_orchestrate_execute_local_write_evidence_includes_execution_record(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

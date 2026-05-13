@@ -10,6 +10,7 @@ from .orchestra_consensus import CriticConsensus
 from .orchestra_loop import FullLoopPlanner, LoopFacts
 from .orchestra_materials import build_material_inventory, build_source_digest
 from .orchestra_omx import build_research_mission_invocation_evidence
+from .orchestra_omx_executor import OmxActionExecutor, OmxCommandRunner
 from .orchestra_planner import ActionPlanner
 from .orchestra_references import build_reference_metadata_audit
 from .orchestra_research import build_evidence_research_mission
@@ -81,6 +82,52 @@ class OrchestraOrchestrator:
             execution="bounded_full_loop_plan",
             action_taken="none",
             execution_record=None,
+        )
+
+    def execute_omx_once(
+        self,
+        *,
+        material_path: str | Path | None = None,
+        runner: OmxCommandRunner | None = None,
+        executor: ActionExecutor | None = None,
+        timeout_seconds: float = 30.0,
+        slug: str | None = None,
+    ) -> OrchestratorRunResult:
+        state = _run_until_blocked(self.cwd, material_path=material_path)
+        if not state.next_actions:
+            action = None
+            record = ExecutionRecord(
+                action_type="none",
+                reason="no_omx_action_available",
+                status="unsupported",
+                adapter="omx",
+                evidence_refs=[],
+                state_rebuild_required=False,
+            )
+        else:
+            action = state.next_actions[0]
+            executor = executor or OmxActionExecutor(
+                cwd=self.cwd,
+                runner=runner,
+                timeout_seconds=timeout_seconds,
+                slug=slug,
+            )
+            protected_snapshot = state.to_dict(include_private=True)
+            record = executor.execute(action, state)
+            if state.to_dict(include_private=True) != protected_snapshot:
+                raise ValueError("ActionExecutor must not mutate OrchestraState during bounded execution.")
+            if record.evidence_refs:
+                state.evidence_refs.append(
+                    {
+                        "kind": "orchestrator_execution_record",
+                        "payload": record.to_public_dict(),
+                    }
+                )
+        return OrchestratorRunResult(
+            state=state,
+            execution="bounded_omx_execution",
+            action_taken=action.action_type if action is not None else "none",
+            execution_record=record,
         )
 
     def step(
