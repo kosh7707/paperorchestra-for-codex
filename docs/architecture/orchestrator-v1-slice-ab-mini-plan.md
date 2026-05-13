@@ -280,3 +280,24 @@ Critic implementation validation:
   command-like action types for all OMX executor records, not only handoffs.
 - Second pass: `APPROVE`; no remaining blockers before commit/push/container
   proof.
+
+## 11. Fresh container proof
+
+After pushing implementation commit `7e79353`, a fresh container cloned the public
+repository, checked out `orchestrator-v1-runtime`, installed the dev extra, and
+ran the AB contract suite:
+
+```bash
+docker run --rm paperorchestra-ubuntu-tools:24.04 bash -lc 'set -euo pipefail; \
+  git clone --quiet https://github.com/kosh7707/paperorchestra-for-codex.git repo; \
+  cd repo; \
+  git checkout --quiet orchestrator-v1-runtime; \
+  python3 -m venv .venv; \
+  . .venv/bin/activate; \
+  python -m pip install --quiet -e ".[dev]"; \
+  python -m pytest tests/test_orchestra_omx_executor.py \
+    tests/test_orchestrator_omx_entrypoints.py \
+    tests/test_orchestrator_cli_entrypoints.py \
+    tests/test_orchestrator_mcp_entrypoints.py -q'
+# 55 passed, 30 subtests passed in 0.43s
+```
