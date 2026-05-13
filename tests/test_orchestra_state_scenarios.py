@@ -20,15 +20,17 @@ class OrchestraStateScenarioTests(unittest.TestCase):
         self.assertEqual(state.readiness.label, "needs_material")
         self.assertIn("provide_material", [action.action_type for action in state.next_actions])
 
-    def test_material_path_provided_plans_inventory(self) -> None:
+    def test_material_path_with_insufficient_content_records_inventory_and_guidance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             material_dir = Path(tmp) / "synthetic_material"
             material_dir.mkdir()
             (material_dir / "idea.md").write_text("A synthetic method idea.\n", encoding="utf-8")
             state = inspect_state(tmp, material_path=material_dir)
 
-        self.assertEqual(state.facets.material, "inventory_needed")
-        self.assertIn("inspect_material", [action.action_type for action in state.next_actions])
+        self.assertEqual(state.facets.material, "inventoried_insufficient")
+        self.assertEqual(state.facets.source_digest, "blocked")
+        self.assertIn("insufficient_material", state.blocking_reasons)
+        self.assertIn("provide_material", [action.action_type for action in state.next_actions])
 
     def test_current_session_with_paper_full_tex_builds_draft_available_hash(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

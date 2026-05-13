@@ -56,5 +56,7 @@ class OrchestratorCliEntrypointTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(payload["execution"], "bounded_plan_only")
-        self.assertEqual(payload["state"]["next_actions"][0]["action_type"], "inspect_material")
+        self.assertEqual(payload["state"]["facets"]["material"], "inventoried_insufficient")
+        self.assertEqual(payload["state"]["next_actions"][0]["action_type"], "provide_material")
+        self.assertEqual(payload["state"]["next_actions"][0]["reason"], "insufficient_material")
         self.assertNotIn("paper_full_tex", json.dumps(payload))

@@ -123,6 +123,8 @@ class ActionPlanner:
             return [NextAction("block", "placeholder_figure_unresolved", risk="medium", state_after=current)]
         if facets.material == "missing" and facets.session == "no_session":
             return [NextAction("provide_material", "no_session_or_material", state_after=current)]
+        if facets.material == "inventoried_insufficient":
+            return [NextAction("provide_material", "insufficient_material", risk="low", state_after=current)]
         if facets.material == "inventory_needed":
             return [NextAction("inspect_material", "material_inventory_needed", state_after=current)]
         if facets.material == "inventoried_sufficient" and facets.source_digest == "missing":

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .orchestra_materials import build_material_inventory, build_source_digest
 from .orchestra_planner import ActionPlanner
 from .orchestra_state import OrchestraFacets, OrchestraState, file_sha256
 from .session import load_session
@@ -13,12 +14,28 @@ def inspect_state(cwd: str | Path | None = None, *, material_path: str | Path | 
     session_id = None
     manuscript_sha256 = None
     blocking_reasons: list[str] = []
+    evidence_refs: list[dict[str, object]] = []
 
     if material_path is not None:
         material = Path(material_path)
-        facets.material = "inventory_needed" if material.exists() else "missing"
         if not material.exists():
+            facets.material = "missing"
             blocking_reasons.append("material_path_missing")
+        else:
+            inventory = build_material_inventory(material)
+            digest = build_source_digest(inventory)
+            if digest.sufficient:
+                facets.material = "inventoried_sufficient"
+                facets.source_digest = "ready"
+                facets.artifacts = "fresh"
+            else:
+                facets.material = "inventoried_insufficient"
+                facets.source_digest = "blocked"
+                blocking_reasons.extend(digest.blocking_reasons)
+            evidence_refs.extend([
+                {"kind": "material_inventory", "payload": inventory.to_public_dict()},
+                {"kind": "source_digest", "payload": digest.to_public_dict()},
+            ])
 
     try:
         session = load_session(root)
@@ -51,6 +68,7 @@ def inspect_state(cwd: str | Path | None = None, *, material_path: str | Path | 
         facets=facets,
         blocking_reasons=blocking_reasons,
     )
+    state.evidence_refs = evidence_refs
     state.next_actions = ActionPlanner().plan(state, strict_omx=strict_omx)
     return state
 
