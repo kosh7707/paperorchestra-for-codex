@@ -16,7 +16,7 @@ class PaperOrchestraSkillGuidanceTests(unittest.TestCase):
 
     def test_skill_guides_first_use_to_high_level_orchestrator_not_readme_dump(self) -> None:
         text = self._skill()
-        for phrase in ["inspect_state", "orchestrate", "continue_project", "answer_human_needed", "export_results"]:
+        for phrase in ["first_use_guide", "inspect_state", "orchestrate", "continue_project", "answer_human_needed", "export_results"]:
             self.assertIn(phrase, text)
         self.assertIn("Do not dump README", text)
         self.assertIn("write_evidence", text)
@@ -64,3 +64,10 @@ class PaperOrchestraSkillGuidanceTests(unittest.TestCase):
         self.assertIn("no-live local-step check", text)
         self.assertIn("--execute-local", text)
         self.assertIn("execute_local", text)
+
+    def test_skill_uses_first_use_guide_for_natural_language_first_use(self) -> None:
+        text = self._skill()
+        self.assertIn("first_use_guide", text)
+        self.assertIn("paperorchestra first-use", text)
+        self.assertIn("바로 써줘", text)
+        self.assertIn("reject unsafe drafting", text)

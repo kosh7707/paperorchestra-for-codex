@@ -69,6 +69,7 @@ from .models import InputBundle
 from .doctor import build_session_recovery_hint
 from .teach import prepare_teach_bundle
 from .fidelity import write_reproducibility_audit
+from .first_user_guide import build_first_user_guide
 
 JSON = dict[str, Any]
 
@@ -106,6 +107,19 @@ TOOLS: list[JSON] = [
         "name": "inspect_state",
         "description": "Inspect the v1 OrchestraState and next actions without running live work.",
         "inputSchema": {"type": "object", "properties": {"cwd": {"type": "string"}, "material": {"type": "string"}}},
+    },
+    {
+        "name": "first_use_guide",
+        "description": "Return a compact first-user guide for natural-language PaperOrchestra setup/use requests without live drafting.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "cwd": {"type": "string"},
+                "intent": {"type": "string", "enum": ["auto", "setup", "how_to_use", "start", "write_now"]},
+                "material": {"type": "string"},
+                "mcp_attached": {"type": "string", "enum": ["yes", "no", "unknown"]},
+            },
+        },
     },
     {
         "name": "orchestrate",
@@ -1000,6 +1014,18 @@ def tool_inspect_state(arguments: JSON) -> JSON:
     return _ok(state.to_public_dict())
 
 
+def tool_first_use_guide(arguments: JSON) -> JSON:
+    cwd = _default_cwd(arguments)
+    return _ok(
+        build_first_user_guide(
+            cwd,
+            intent=arguments.get("intent", "auto"),
+            material=arguments.get("material"),
+            mcp_attached=arguments.get("mcp_attached"),
+        )
+    )
+
+
 def _make_omx_executor(cwd: Path, *, timeout_seconds: float = 30.0) -> OmxActionExecutor:
     return OmxActionExecutor(cwd=cwd, timeout_seconds=timeout_seconds)
 
@@ -1532,6 +1558,7 @@ def tool_shutdown_omx_team(arguments: JSON) -> JSON:
 
 TOOL_HANDLERS: dict[str, Callable[[JSON], JSON]] = {
     "inspect_state": tool_inspect_state,
+    "first_use_guide": tool_first_use_guide,
     "orchestrate": tool_orchestrate,
     "continue_project": tool_continue_project,
     "answer_human_needed": tool_answer_human_needed,

@@ -21,6 +21,7 @@ from .critics import write_citation_support_review, write_section_review
 from .doctor import build_doctor_report, build_session_recovery_hint
 from .environment import build_environment_inventory
 from .fidelity import write_reproducibility_audit
+from .first_user_guide import build_first_user_guide, render_first_user_guide_summary
 from .io_utils import write_json
 from .eval import (
     write_review_gate_comparison,
@@ -148,6 +149,12 @@ def build_parser() -> argparse.ArgumentParser:
     continue_project_parser.add_argument("--write-evidence", action="store_true", help="Persist a public-safe orchestrator evidence bundle")
     continue_project_parser.add_argument("--evidence-output", help="Workspace-contained evidence bundle directory")
     continue_project_parser.add_argument("--json", action="store_true")
+
+    first_use_parser = sub.add_parser("first-use", help="Print a compact first-user Skill/MCP/CLI guide for natural-language PaperOrchestra use")
+    first_use_parser.add_argument("--intent", default="auto", choices=["auto", "setup", "how_to_use", "start", "write_now"])
+    first_use_parser.add_argument("--material", help="Optional material folder/file to inspect without exposing raw content")
+    first_use_parser.add_argument("--mcp-attached", default="unknown", choices=["yes", "no", "unknown"], help="Whether the current Codex session exposes native PaperOrchestra MCP tools")
+    first_use_parser.add_argument("--json", action="store_true")
 
     answer_human_needed_parser = sub.add_parser("answer-human-needed", help="Record a bounded answer for a human_needed stop (skeleton)")
     answer_human_needed_parser.add_argument("--answer", required=True)
@@ -877,6 +884,19 @@ def main(argv: list[str] | None = None) -> int:
             if args.write_evidence:
                 payload["evidence_bundle"] = write_orchestrator_evidence_bundle(cwd, result.state, output_dir=args.evidence_output)
             _print_orchestrator_payload(payload, json_output=args.json)
+            return 0
+
+        if args.command == "first-use":
+            payload = build_first_user_guide(
+                cwd,
+                intent=args.intent,
+                material=args.material,
+                mcp_attached=args.mcp_attached,
+            )
+            if args.json:
+                print(json.dumps(payload, indent=2, ensure_ascii=False))
+            else:
+                print(render_first_user_guide_summary(payload))
             return 0
 
         if args.command == "answer-human-needed":

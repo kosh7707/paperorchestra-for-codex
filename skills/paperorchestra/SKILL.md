@@ -37,6 +37,7 @@ The system also records:
 
 For first-use natural-language requests such as "paperorchestra 어떻게 쓰는거야?", "이거 쓰고 싶어", or "바로 써줘", prefer the high-level orchestrator tools before low-level pipeline commands:
 
+- `first_use_guide` — return a compact first-user guide for setup/how-to-use/start/write-now intents. Use this first when the user says "이 프로젝트 셋업해줘", "paperorchestra 어떻게 쓰는거야?", "이거 쓰고 싶어", or "바로 써줘". If native MCP is absent, use the CLI fallback `paperorchestra first-use --intent ...` and say that native MCP attachment is unavailable.
 - `inspect_state` — inspect current session/material state and next valid actions.
 - `orchestrate` — run the bounded v1 orchestrator until the next block/action. By default it is bounded planning/run-until-blocked. With MCP `execute_local=true` it performs **one deterministic local step** only; this is not a full pipeline and must not be described as a full paper run. Prefer `write_evidence=true` when the MCP surface supports it so the agent leaves a public-safe evidence bundle for review.
 - `continue_project` — continue from current state without dumping a command catalog. Prefer `write_evidence=true` for long-running QA handoffs.
@@ -61,6 +62,7 @@ manually. Ask the user only for author judgment, missing private material, or
 strategy choices that cannot be discovered by the system.
 
 If there is insufficient material, that blocks drafting. Explain what is missing and propose the next valid step (`inspect_state`, guided intake, material upload/path, or safe mock demo) instead of fabricating claims, citations, or results.
+For "바로 써줘" with insufficient material, reject unsafe drafting explicitly: the engine cannot write a factual paper by inventing claims, citations, figures, or results. Offer `first_use_guide`, guided intake, material upload/path, or the safe mock demo instead.
 
 MCP note: `codex mcp list` proves registration, not active attachment. Raw MCP smoke proves server health; Codex attach smoke or visible `mcp__paperorchestra__...` tools prove active attachment. If active attachment is absent, use CLI fallback and say so explicitly.
 Evidence note: MCP/CLI evidence bundle persistence is a diagnostic artifact, not a readiness pass. A successful `write_evidence` bundle records state and blockers; it does not mean drafting, citations, or final quality are approved.
@@ -68,6 +70,7 @@ Evidence note: MCP/CLI evidence bundle persistence is a diagnostic artifact, not
 ## Preferred usage
 ### Via MCP
 If the `paperorchestra-mcp` server is configured, prefer MCP tool calls grouped by task:
+- First-user guide: `first_use_guide`
 - OMX orchestration: `recommend_omx_workflow`, `omx_status`, `omx_state`, `omx_explore`, `list_omx_teams`, `launch_omx_team`, `omx_team_status`, `shutdown_omx_team`
 - Guided intake: `start_intake`, `get_intake_status`, `get_intake_review`, `answer_intake_question`, `research_prior_work`, `finalize_intake`, `approve_intake_direction`
 - Session/bootstrap: `teach`, `init_session`, `status`, `start_run`, `get_run_status`, `tail_run_log`, `list_runs`, `cancel_run`
@@ -89,6 +92,7 @@ Use this when you want to run the same contract manually, outside the main OMX +
 
 ```bash
 paperorchestra --help
+paperorchestra first-use --intent how_to_use
 paperorchestra quickstart --scenario environment
 paperorchestra environment
 paperorchestra quickstart --scenario new-paper
