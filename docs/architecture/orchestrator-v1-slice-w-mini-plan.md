@@ -1,6 +1,6 @@
 # Slice W mini-plan — document explicit local-step orchestration
 
-Status: implemented; awaiting container proof after push
+Status: implemented with local and container proof
 Date: 2026-05-13
 Branch: `orchestrator-v1-runtime`
 
@@ -156,4 +156,12 @@ git diff --check
 
 scripts/check-private-leakage.py --denylist /tmp/paperorchestra-private-denylist.txt --root "$PWD" --json
 # status=ok, match_count=0
+```
+
+Fresh container proof after push:
+
+```bash
+docker run --rm paperorchestra-ubuntu-tools:24.04 bash -lc 'set -euo pipefail; git clone --quiet https://github.com/kosh7707/paperorchestra-for-codex.git repo; cd repo; git checkout --quiet orchestrator-v1-runtime; git log -1 --oneline; python3 -m venv .venv; . .venv/bin/activate; python -m pip install --quiet -e ".[dev]"; python -m pytest tests/test_paperorchestra_skill_guidance.py -q'
+# 34865a6 Explain explicit local orchestration to first-use agents
+# 7 passed in 0.01s
 ```
