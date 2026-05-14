@@ -744,10 +744,7 @@ def _mock_registry_entry_count(registry_path: str | Path | None) -> int:
         for item in payload:
             if not isinstance(item, dict):
                 continue
-            paper_id = str(item.get('paper_id') or '')
-            authors = item.get('authors') or []
-            venue = str(item.get('venue') or '')
-            if paper_id.startswith('mock-') or authors == ['Mock Author'] or venue == 'Mock Venue':
+            if _registry_entry_is_mock(item):
                 count += 1
     return count
 
@@ -774,54 +771,120 @@ def _registry_entry_has_live_verification(item: dict[str, Any]) -> bool:
     return bool(origin_tokens & live_buckets)
 
 
-def _citation_registry_live_provenance(registry_path: str | Path | None) -> dict[str, Any]:
+def _registry_entry_is_mock(item: dict[str, Any]) -> bool:
+    paper_id = str(item.get("paper_id") or "")
+    authors = item.get("authors") or []
+    venue = str(item.get("venue") or "")
+    return paper_id.startswith("mock-") or authors == ["Mock Author"] or venue == "Mock Venue"
+
+
+def _registry_entry_key_aliases(item: dict[str, Any]) -> set[str]:
+    keys: set[str] = set()
+    for field in ("bibtex_key", "key"):
+        value = item.get(field)
+        if isinstance(value, str) and value.strip():
+            keys.add(value.strip())
+    aliases = item.get("alias_bibtex_keys")
+    if isinstance(aliases, list):
+        for alias in aliases:
+            if isinstance(alias, str) and alias.strip():
+                keys.add(alias.strip())
+    return keys
+
+
+def _registry_entry_has_mixed_non_live_provenance(item: dict[str, Any]) -> bool:
+    """Return whether a cited entry has usable non-live provenance.
+
+    Seed entries imported specifically for later live verification are not
+    enough to support a cited claim.  Separately supplied authoritative or
+    manual sources can be useful, but they still need explicit mixed-provenance
+    acceptance before a claim-safe run can be treated as ready.
+    """
+
+    origin_tokens = {
+        token.strip().lower()
+        for token in re.split(r"[+,;]", str(item.get("origin") or ""))
+        if token.strip()
+    }
+    if origin_tokens and origin_tokens <= {"metadata_seed_for_live_verification"}:
+        return False
+    if origin_tokens & {"operator_authoritative_source", "manual_bibtex", "manual_seed", "codex_web_seed"}:
+        return True
+    external_ids = item.get("external_ids")
+    has_external_ids = isinstance(external_ids, dict) and any(str(value).strip() for value in external_ids.values())
+    has_url = bool(str(item.get("url") or "").strip())
+    return has_url or has_external_ids
+
+
+def _citation_registry_live_provenance(
+    registry_path: str | Path | None,
+    paper_path: str | Path | None = None,
+) -> dict[str, Any]:
+    empty_fields = {
+        "registry_count": 0,
+        "live_verified_count": 0,
+        "seed_only_count": 0,
+        "mock_entry_count": 0,
+        "live_coverage_ratio": 0.0,
+        "cited_entry_count": 0,
+        "unused_registry_count": 0,
+        "cited_live_verified_count": 0,
+        "cited_mixed_count": 0,
+        "cited_curated_seed_count": 0,
+        "cited_mock_count": 0,
+    }
     if not registry_path:
-        return {
-            "registry_count": 0,
-            "live_verified_count": 0,
-            "seed_only_count": 0,
-            "mock_entry_count": 0,
-            "live_coverage_ratio": 0.0,
-            "status": "missing",
-        }
+        return {**empty_fields, "status": "missing"}
     candidate = Path(registry_path)
     if not candidate.exists():
-        return {
-            "registry_count": 0,
-            "live_verified_count": 0,
-            "seed_only_count": 0,
-            "mock_entry_count": 0,
-            "live_coverage_ratio": 0.0,
-            "status": "missing",
-        }
+        return {**empty_fields, "status": "missing"}
     try:
         payload = read_json(candidate)
     except Exception:
-        return {
-            "registry_count": 0,
-            "live_verified_count": 0,
-            "seed_only_count": 0,
-            "mock_entry_count": 0,
-            "live_coverage_ratio": 0.0,
-            "status": "unreadable",
-        }
+        return {**empty_fields, "status": "unreadable"}
     if not isinstance(payload, list):
-        return {
-            "registry_count": 0,
-            "live_verified_count": 0,
-            "seed_only_count": 0,
-            "mock_entry_count": 0,
-            "live_coverage_ratio": 0.0,
-            "status": "malformed",
-        }
+        return {**empty_fields, "status": "malformed"}
     entries = [item for item in payload if isinstance(item, dict)]
     registry_count = len(entries)
     live_verified_count = sum(1 for item in entries if _registry_entry_has_live_verification(item))
-    mock_entry_count = _mock_registry_entry_count(registry_path)
+    mock_entry_count = sum(1 for item in entries if _registry_entry_is_mock(item))
     seed_only_count = max(registry_count - live_verified_count - mock_entry_count, 0)
     live_coverage_ratio = (live_verified_count / registry_count) if registry_count else 0.0
+    cited_keys: set[str] | None = None
+    if paper_path:
+        paper = Path(paper_path)
+        if paper.exists():
+            cited_keys = extract_citation_keys(paper.read_text(encoding="utf-8", errors="replace"))
+    if cited_keys is None:
+        cited_entries = entries
+    else:
+        cited_entries = [item for item in entries if _registry_entry_key_aliases(item) & cited_keys]
+    cited_entry_count = len(cited_entries)
+    cited_live_verified_count = sum(1 for item in cited_entries if _registry_entry_has_live_verification(item))
+    cited_mock_count = sum(1 for item in cited_entries if _registry_entry_is_mock(item))
+    cited_mixed_count = sum(
+        1
+        for item in cited_entries
+        if not _registry_entry_has_live_verification(item)
+        and not _registry_entry_is_mock(item)
+        and _registry_entry_has_mixed_non_live_provenance(item)
+    )
+    cited_curated_seed_count = max(
+        cited_entry_count - cited_live_verified_count - cited_mock_count - cited_mixed_count,
+        0,
+    )
+    unused_registry_count = max(registry_count - cited_entry_count, 0)
+    cited_scope_active = cited_keys is not None
     if not registry_count:
         status = "empty"
+    elif cited_mock_count:
+        status = "mock"
+    elif cited_mixed_count:
+        status = "mixed"
+    elif cited_curated_seed_count:
+        status = "curated"
+    elif cited_scope_active:
+        status = "live"
     elif mock_entry_count:
         status = "mock"
     elif seed_only_count:
@@ -834,6 +897,12 @@ def _citation_registry_live_provenance(registry_path: str | Path | None) -> dict
         "seed_only_count": seed_only_count,
         "mock_entry_count": mock_entry_count,
         "live_coverage_ratio": live_coverage_ratio,
+        "cited_entry_count": cited_entry_count,
+        "unused_registry_count": unused_registry_count,
+        "cited_live_verified_count": cited_live_verified_count,
+        "cited_mixed_count": cited_mixed_count,
+        "cited_curated_seed_count": cited_curated_seed_count,
+        "cited_mock_count": cited_mock_count,
         "status": status,
     }
 
@@ -1017,7 +1086,10 @@ def build_reproducibility_audit(cwd: str | Path | None, *, require_live_verifica
     prompt_trace_dir = state.artifacts.latest_prompt_trace_dir or (str(session_artifact_dir / "prompts") if session_artifact_dir else None)
     prompt_files = _prompt_trace_files(prompt_trace_dir)
     mock_registry_count = _mock_registry_entry_count(state.artifacts.citation_registry_json)
-    citation_live_provenance = _citation_registry_live_provenance(state.artifacts.citation_registry_json)
+    citation_live_provenance = _citation_registry_live_provenance(
+        state.artifacts.citation_registry_json,
+        state.artifacts.paper_full_tex,
+    )
     citation_surface = _citation_surface_health(state)
     validation_warning_reports = _validation_warning_reports(state, session_artifact_dir)
     validation_warning_count = sum(item["warning_count"] for item in validation_warning_reports)
@@ -1042,8 +1114,9 @@ def build_reproducibility_audit(cwd: str | Path | None, *, require_live_verifica
         block_reasons.append('Provider was mock; manuscript output is not a live factual draft.')
     if state.latest_verify_mode == 'mock':
         block_reasons.append('Citation verification used mock mode.')
-    if mock_registry_count > 0:
-        block_reasons.append(f'Citation registry contains {mock_registry_count} mock entry/entries.')
+    cited_mock_count = int(citation_live_provenance.get("cited_mock_count") or 0)
+    if cited_mock_count > 0:
+        block_reasons.append(f'Cited citation registry contains {cited_mock_count} mock entry/entries.')
     citation_lane_completed = _lane_completed(lane_summary, "literature", "verify")
     if citation_surface["issues"] and (
         verification_invoked
@@ -1064,13 +1137,27 @@ def build_reproducibility_audit(cwd: str | Path | None, *, require_live_verifica
         require_live_verification
         and verification_invoked
         and state.latest_verify_mode == "live"
-        and citation_live_provenance.get("seed_only_count", 0) > 0
+        and citation_live_provenance.get("cited_curated_seed_count", citation_live_provenance.get("seed_only_count", 0)) > 0
     ):
+        cited_curated_seed_count = citation_live_provenance.get("cited_curated_seed_count", citation_live_provenance.get("seed_only_count", 0))
         block_reasons.append(
             "Live citation verification was required, but "
-            f"{citation_live_provenance.get('seed_only_count')} citation registry entr"
-            f"{'y is' if citation_live_provenance.get('seed_only_count') == 1 else 'ies are'} "
+            f"{cited_curated_seed_count} cited reference"
+            f"{' is' if cited_curated_seed_count == 1 else 's are'} "
             "still seed-only or curated metadata without live verification."
+        )
+    if (
+        require_live_verification
+        and verification_invoked
+        and state.latest_verify_mode == "live"
+        and citation_live_provenance.get("cited_mixed_count", 0) > 0
+    ):
+        cited_mixed_count = citation_live_provenance.get("cited_mixed_count", 0)
+        block_reasons.append(
+            "Live citation verification was required, but "
+            f"{cited_mixed_count} cited reference"
+            f"{' has' if cited_mixed_count == 1 else 's have'} "
+            "mixed cited provenance that needs explicit operator acceptance."
         )
     if (
         not require_live_verification

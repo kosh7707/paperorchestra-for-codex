@@ -1311,6 +1311,138 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
 
         self.assertEqual(verdict, "human_needed")
 
+    def test_qa_loop_actions_route_mixed_cited_provenance_to_human_acceptance(self) -> None:
+        reproducibility = {
+            "blocking_reasons": [
+                "Live citation verification was required, but 1 cited reference has mixed cited provenance that needs explicit operator acceptance."
+            ],
+            "source_artifacts": {"citation_registry_json": "/tmp/session/artifacts/citation_registry.json"},
+        }
+
+        from paperorchestra.quality_loop_actions import _mode_actions
+
+        actions = _mode_actions(reproducibility)
+
+        mixed_actions = [action for action in actions if action.get("code") == "mixed_citation_provenance_requires_acceptance"]
+        self.assertEqual(len(mixed_actions), 1)
+        self.assertEqual(mixed_actions[0]["automation"], "human_needed")
+        self.assertIn("mixed cited provenance", mixed_actions[0]["reason"])
+        self.assertIn("explicitly accept", mixed_actions[0]["ralph_instruction"])
+
+    def test_qa_loop_actions_keep_seed_only_citations_on_live_verification_path(self) -> None:
+        reproducibility = {
+            "blocking_reasons": [
+                "Live citation verification was required, but 2 citation registry entries are still seed-only or curated metadata without live verification."
+            ],
+            "source_artifacts": {"citation_registry_json": "/tmp/session/artifacts/citation_registry.json"},
+        }
+
+        from paperorchestra.quality_loop_actions import _mode_actions
+
+        actions = _mode_actions(reproducibility)
+
+        seed_actions = [action for action in actions if action.get("code") == "incomplete_live_verification"]
+        mixed_actions = [action for action in actions if action.get("code") == "mixed_citation_provenance_requires_acceptance"]
+        self.assertEqual(len(seed_actions), 1)
+        self.assertEqual(seed_actions[0]["automation"], "human_needed")
+        self.assertEqual(mixed_actions, [])
+
+    def test_provenance_trust_uses_cited_counts_not_unused_registry_entries(self) -> None:
+        from paperorchestra.quality_loop import _provenance_trust
+
+        trust = _provenance_trust(
+            {
+                "verdict": "OK",
+                "verification_invoked": True,
+                "prompt_trace_file_count": 1,
+                "lane_manifest_summary": {"manifest_count": 1},
+                "citation_live_provenance": {
+                    "registry_count": 2,
+                    "seed_only_count": 1,
+                    "cited_entry_count": 1,
+                    "cited_curated_seed_count": 0,
+                    "cited_mixed_count": 0,
+                    "status": "live",
+                },
+            }
+        )
+
+        self.assertEqual(trust["level"], "live")
+        self.assertNotIn("citation_registry_seed_only_count=1", trust["mixed_evidence"])
+
+    def test_provenance_trust_marks_mixed_cited_provenance_as_mixed(self) -> None:
+        from paperorchestra.quality_loop import _provenance_trust
+
+        trust = _provenance_trust(
+            {
+                "verdict": "BLOCK",
+                "verification_invoked": True,
+                "prompt_trace_file_count": 1,
+                "lane_manifest_summary": {"manifest_count": 1},
+                "citation_live_provenance": {
+                    "registry_count": 1,
+                    "seed_only_count": 1,
+                    "cited_entry_count": 1,
+                    "cited_curated_seed_count": 0,
+                    "cited_mixed_count": 1,
+                    "status": "mixed",
+                },
+            }
+        )
+
+        self.assertEqual(trust["level"], "mixed")
+        self.assertIn("citation_cited_mixed_count=1", trust["mixed_evidence"])
+
+    def test_provenance_trust_ignores_unused_mock_registry_entries(self) -> None:
+        from paperorchestra.quality_loop import _provenance_trust
+
+        trust = _provenance_trust(
+            {
+                "verdict": "OK",
+                "verification_invoked": True,
+                "prompt_trace_file_count": 1,
+                "lane_manifest_summary": {"manifest_count": 1},
+                "mock_registry_entry_count": 1,
+                "citation_live_provenance": {
+                    "registry_count": 2,
+                    "mock_entry_count": 1,
+                    "cited_entry_count": 1,
+                    "cited_mock_count": 0,
+                    "cited_curated_seed_count": 0,
+                    "cited_mixed_count": 0,
+                    "status": "live",
+                },
+            }
+        )
+
+        self.assertEqual(trust["level"], "live")
+        self.assertEqual(trust["mock_evidence"], [])
+
+    def test_provenance_trust_marks_cited_mock_entries_as_mock(self) -> None:
+        from paperorchestra.quality_loop import _provenance_trust
+
+        trust = _provenance_trust(
+            {
+                "verdict": "BLOCK",
+                "verification_invoked": True,
+                "prompt_trace_file_count": 1,
+                "lane_manifest_summary": {"manifest_count": 1},
+                "mock_registry_entry_count": 1,
+                "citation_live_provenance": {
+                    "registry_count": 1,
+                    "mock_entry_count": 1,
+                    "cited_entry_count": 1,
+                    "cited_mock_count": 1,
+                    "cited_curated_seed_count": 0,
+                    "cited_mixed_count": 0,
+                    "status": "mock",
+                },
+            }
+        )
+
+        self.assertEqual(trust["level"], "mock")
+        self.assertIn("citation_cited_mock_count=1", trust["mock_evidence"])
+
     def test_qa_loop_step_is_the_budget_consuming_event(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

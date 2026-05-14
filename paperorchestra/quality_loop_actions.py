@@ -307,6 +307,26 @@ def _mode_actions(reproducibility: dict[str, Any]) -> list[dict[str, Any]]:
                 ralph_instruction="Do not present citation provenance as fully live until every registry entry is live-verified or explicitly removed/scoped.",
             )
         )
+    if any("mixed cited provenance" in reason for reason in reasons):
+        actions.append(
+            _action(
+                action_id="verification-mode:3",
+                code="mixed_citation_provenance_requires_acceptance",
+                source=reproducibility.get("source_artifacts", {}).get("citation_registry_json"),
+                target="citation provenance",
+                automation="human_needed",
+                reason="One or more cited references have mixed cited provenance rather than live verification.",
+                suggested_commands=[
+                    "paperorchestra qa-loop-plan --accept-mixed-provenance",
+                    "paperorchestra audit-reproducibility --require-live-verification",
+                ],
+                ralph_instruction=(
+                    "Do not treat mixed cited provenance as fully live. Either replace the affected cited references "
+                    "with live-verified sources or explicitly accept the mixed provenance with an operator-owned "
+                    "acceptance artifact before final readiness."
+                ),
+            )
+        )
     if any("Prompt trace artifacts are missing" in reason for reason in reasons):
         actions.append(
             _action(

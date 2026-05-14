@@ -167,11 +167,303 @@ class AuditSurfaceInvariantTests(unittest.TestCase):
             self.assertEqual(payload["citation_live_provenance"]["registry_count"], 2)
             self.assertEqual(payload["citation_live_provenance"]["live_verified_count"], 1)
             self.assertEqual(payload["citation_live_provenance"]["seed_only_count"], 1)
-            self.assertEqual(payload["citation_live_provenance"]["status"], "mixed")
+            self.assertEqual(payload["citation_live_provenance"]["status"], "curated")
             self.assertEqual(payload["verdict"], "BLOCK")
             self.assertTrue(
                 any("seed-only or curated metadata without live verification" in reason for reason in payload["blocking_reasons"])
             )
+
+    def test_required_live_verification_ignores_unused_curated_registry_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_session_with_minimal_inputs(root)
+            registry_path = artifact_path(root, "citation_registry.json")
+            registry_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "bibtex_key": "UnusedCurated2026",
+                            "title": "Unused curated entry",
+                            "paper_id": "S2-SEED",
+                            "origin": "metadata_seed_for_live_verification",
+                        },
+                        {
+                            "bibtex_key": "Matched2026",
+                            "alias_bibtex_keys": ["MatchedAlias2026"],
+                            "title": "Live matched",
+                            "paper_id": "S2-LIVE",
+                            "origin": "metadata_seed_for_live_verification+macro_candidates",
+                        },
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            citation_map_path = artifact_path(root, "citation_map.json")
+            citation_map_path.write_text('{"UnusedCurated2026": {}, "Matched2026": {}}', encoding="utf-8")
+            references_path = artifact_path(root, "references.bib")
+            references_path.write_text(
+                "@article{UnusedCurated2026,title={Unused curated entry},year={2026}}\n"
+                "@article{Matched2026,title={Live matched},year={2026}}\n",
+                encoding="utf-8",
+            )
+            paper_path = artifact_path(root, "paper.full.tex")
+            paper_path.write_text(
+                "\\documentclass{article}\n\\begin{document}\n"
+                "Only the live alias is cited~\\cite{MatchedAlias2026}.\n"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+            prompt_dir = artifact_path(root, "prompts/dummy.system.md").parent
+            (prompt_dir / "outline.system.md").write_text("system", encoding="utf-8")
+            (prompt_dir / "outline.user.md").write_text("user", encoding="utf-8")
+            state = load_session(root)
+            state.artifacts.citation_registry_json = str(registry_path)
+            state.artifacts.citation_map_json = str(citation_map_path)
+            state.artifacts.references_bib = str(references_path)
+            state.artifacts.paper_full_tex = str(paper_path)
+            state.artifacts.latest_prompt_trace_dir = str(prompt_dir)
+            state.latest_provider_name = "shell"
+            state.latest_runtime_mode = "compatibility"
+            state.latest_verify_mode = "live"
+            save_session(root, state)
+
+            payload = build_reproducibility_audit(root, require_live_verification=True)
+
+            provenance = payload["citation_live_provenance"]
+            self.assertEqual(provenance["registry_count"], 2)
+            self.assertEqual(provenance["cited_entry_count"], 1)
+            self.assertEqual(provenance["unused_registry_count"], 1)
+            self.assertEqual(provenance["cited_live_verified_count"], 1)
+            self.assertEqual(provenance["cited_curated_seed_count"], 0)
+            self.assertEqual(provenance["status"], "live")
+            self.assertFalse(
+                any("seed-only or curated metadata without live verification" in reason for reason in payload["blocking_reasons"])
+            )
+
+    def test_required_live_verification_ignores_unused_mock_registry_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_session_with_minimal_inputs(root)
+            registry_path = artifact_path(root, "citation_registry.json")
+            registry_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "bibtex_key": "UnusedMock2026",
+                            "title": "Unused mock entry",
+                            "paper_id": "mock-unused",
+                            "authors": ["Mock Author"],
+                            "venue": "Mock Venue",
+                        },
+                        {
+                            "bibtex_key": "Matched2026",
+                            "title": "Live matched",
+                            "paper_id": "S2-LIVE",
+                            "origin": "metadata_seed_for_live_verification+macro_candidates",
+                        },
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            citation_map_path = artifact_path(root, "citation_map.json")
+            citation_map_path.write_text('{"UnusedMock2026": {}, "Matched2026": {}}', encoding="utf-8")
+            references_path = artifact_path(root, "references.bib")
+            references_path.write_text(
+                "@article{UnusedMock2026,title={Unused mock entry},year={2026}}\n"
+                "@article{Matched2026,title={Live matched},year={2026}}\n",
+                encoding="utf-8",
+            )
+            paper_path = artifact_path(root, "paper.full.tex")
+            paper_path.write_text(
+                "\\documentclass{article}\n\\begin{document}\n"
+                "Only the live source is cited~\\cite{Matched2026}.\n"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+            prompt_dir = artifact_path(root, "prompts/dummy.system.md").parent
+            (prompt_dir / "outline.system.md").write_text("system", encoding="utf-8")
+            (prompt_dir / "outline.user.md").write_text("user", encoding="utf-8")
+            state = load_session(root)
+            state.artifacts.citation_registry_json = str(registry_path)
+            state.artifacts.citation_map_json = str(citation_map_path)
+            state.artifacts.references_bib = str(references_path)
+            state.artifacts.paper_full_tex = str(paper_path)
+            state.artifacts.latest_prompt_trace_dir = str(prompt_dir)
+            state.latest_provider_name = "shell"
+            state.latest_runtime_mode = "compatibility"
+            state.latest_verify_mode = "live"
+            save_session(root, state)
+
+            payload = build_reproducibility_audit(root, require_live_verification=True)
+
+            provenance = payload["citation_live_provenance"]
+            self.assertEqual(payload["mock_registry_entry_count"], 1)
+            self.assertEqual(provenance["mock_entry_count"], 1)
+            self.assertEqual(provenance["cited_mock_count"], 0)
+            self.assertEqual(provenance["unused_registry_count"], 1)
+            self.assertEqual(provenance["status"], "live")
+            self.assertFalse(any("mock entry" in reason for reason in payload["blocking_reasons"]))
+
+    def test_required_live_verification_blocks_cited_mock_registry_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_session_with_minimal_inputs(root)
+            registry_path = artifact_path(root, "citation_registry.json")
+            registry_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "bibtex_key": "MockCited2026",
+                            "title": "Mock cited entry",
+                            "paper_id": "mock-cited",
+                            "authors": ["Mock Author"],
+                            "venue": "Mock Venue",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            citation_map_path = artifact_path(root, "citation_map.json")
+            citation_map_path.write_text('{"MockCited2026": {}}', encoding="utf-8")
+            references_path = artifact_path(root, "references.bib")
+            references_path.write_text("@article{MockCited2026,title={Mock cited entry},year={2026}}\n", encoding="utf-8")
+            paper_path = artifact_path(root, "paper.full.tex")
+            paper_path.write_text(
+                "\\documentclass{article}\n\\begin{document}\n"
+                "The draft cites mock evidence~\\cite{MockCited2026}.\n"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+            prompt_dir = artifact_path(root, "prompts/dummy.system.md").parent
+            (prompt_dir / "outline.system.md").write_text("system", encoding="utf-8")
+            (prompt_dir / "outline.user.md").write_text("user", encoding="utf-8")
+            state = load_session(root)
+            state.artifacts.citation_registry_json = str(registry_path)
+            state.artifacts.citation_map_json = str(citation_map_path)
+            state.artifacts.references_bib = str(references_path)
+            state.artifacts.paper_full_tex = str(paper_path)
+            state.artifacts.latest_prompt_trace_dir = str(prompt_dir)
+            state.latest_provider_name = "shell"
+            state.latest_runtime_mode = "compatibility"
+            state.latest_verify_mode = "live"
+            save_session(root, state)
+
+            payload = build_reproducibility_audit(root, require_live_verification=True)
+
+            provenance = payload["citation_live_provenance"]
+            self.assertEqual(provenance["status"], "mock")
+            self.assertEqual(provenance["cited_mock_count"], 1)
+            self.assertEqual(payload["verdict"], "BLOCK")
+            self.assertTrue(any("cited citation registry contains 1 mock" in reason.lower() for reason in payload["blocking_reasons"]))
+
+    def test_required_live_verification_reports_mixed_cited_provenance_distinctly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_session_with_minimal_inputs(root)
+            registry_path = artifact_path(root, "citation_registry.json")
+            registry_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "bibtex_key": "MixedSource2026",
+                            "title": "Authoritative source",
+                            "paper_id": "DOC-1",
+                            "origin": "operator_authoritative_source",
+                            "url": "https://example.invalid/source",
+                            "external_ids": {"DOI": "10.1000/example"},
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            citation_map_path = artifact_path(root, "citation_map.json")
+            citation_map_path.write_text('{"MixedSource2026": {}}', encoding="utf-8")
+            references_path = artifact_path(root, "references.bib")
+            references_path.write_text("@misc{MixedSource2026,title={Authoritative source},year={2026}}\n", encoding="utf-8")
+            paper_path = artifact_path(root, "paper.full.tex")
+            paper_path.write_text(
+                "\\documentclass{article}\n\\begin{document}\n"
+                "A claim cites mixed provenance~\\cite{MixedSource2026}.\n"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+            prompt_dir = artifact_path(root, "prompts/dummy.system.md").parent
+            (prompt_dir / "outline.system.md").write_text("system", encoding="utf-8")
+            (prompt_dir / "outline.user.md").write_text("user", encoding="utf-8")
+            state = load_session(root)
+            state.artifacts.citation_registry_json = str(registry_path)
+            state.artifacts.citation_map_json = str(citation_map_path)
+            state.artifacts.references_bib = str(references_path)
+            state.artifacts.paper_full_tex = str(paper_path)
+            state.artifacts.latest_prompt_trace_dir = str(prompt_dir)
+            state.latest_provider_name = "shell"
+            state.latest_runtime_mode = "compatibility"
+            state.latest_verify_mode = "live"
+            save_session(root, state)
+
+            payload = build_reproducibility_audit(root, require_live_verification=True)
+
+            provenance = payload["citation_live_provenance"]
+            self.assertEqual(provenance["status"], "mixed")
+            self.assertEqual(provenance["cited_mixed_count"], 1)
+            self.assertEqual(provenance["cited_curated_seed_count"], 0)
+            self.assertEqual(payload["verdict"], "BLOCK")
+            self.assertTrue(any("mixed cited provenance" in reason for reason in payload["blocking_reasons"]))
+            self.assertFalse(
+                any("seed-only or curated metadata without live verification" in reason for reason in payload["blocking_reasons"])
+            )
+
+    def test_metadata_seed_with_external_ids_remains_curated_without_live_bucket(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_session_with_minimal_inputs(root)
+            registry_path = artifact_path(root, "citation_registry.json")
+            registry_path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "bibtex_key": "SeedWithExternalId2026",
+                            "title": "Seed with external identifier",
+                            "paper_id": "S2-SEED",
+                            "origin": "metadata_seed_for_live_verification",
+                            "url": "https://example.invalid/seed",
+                            "external_ids": {"DOI": "10.1000/seed"},
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            citation_map_path = artifact_path(root, "citation_map.json")
+            citation_map_path.write_text('{"SeedWithExternalId2026": {}}', encoding="utf-8")
+            references_path = artifact_path(root, "references.bib")
+            references_path.write_text("@article{SeedWithExternalId2026,title={Seed with external identifier},year={2026}}\n", encoding="utf-8")
+            paper_path = artifact_path(root, "paper.full.tex")
+            paper_path.write_text(
+                "\\documentclass{article}\n\\begin{document}\n"
+                "A claim cites metadata seed evidence~\\cite{SeedWithExternalId2026}.\n"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+            prompt_dir = artifact_path(root, "prompts/dummy.system.md").parent
+            (prompt_dir / "outline.system.md").write_text("system", encoding="utf-8")
+            (prompt_dir / "outline.user.md").write_text("user", encoding="utf-8")
+            state = load_session(root)
+            state.artifacts.citation_registry_json = str(registry_path)
+            state.artifacts.citation_map_json = str(citation_map_path)
+            state.artifacts.references_bib = str(references_path)
+            state.artifacts.paper_full_tex = str(paper_path)
+            state.artifacts.latest_prompt_trace_dir = str(prompt_dir)
+            state.latest_provider_name = "shell"
+            state.latest_runtime_mode = "compatibility"
+            state.latest_verify_mode = "live"
+            save_session(root, state)
+
+            payload = build_reproducibility_audit(root, require_live_verification=True)
+
+            provenance = payload["citation_live_provenance"]
+            self.assertEqual(provenance["status"], "curated")
+            self.assertEqual(provenance["cited_curated_seed_count"], 1)
+            self.assertEqual(provenance["cited_mixed_count"], 0)
 
     def test_empty_citation_artifacts_downgrade_fidelity_and_block_reproducibility(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
