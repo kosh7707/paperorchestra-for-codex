@@ -1016,6 +1016,25 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             self.assertEqual(allowed_payload["blocking_finding_count"], 0)
             self.assertGreater(allowed_payload["allowed_private_residue_count"], 0)
 
+    def test_fresh_smoke_records_compile_env_and_runtime_parity_before_quality_eval_snapshots(self) -> None:
+        wrapper_text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+
+        init_idx = wrapper_text.index("run_step init")
+        compile_env_idx = wrapper_text.index("run_step check_compile_env_initial", init_idx)
+        initial_parity_idx = wrapper_text.index("run_step record_runtime_parity_initial", compile_env_idx)
+        initial_quality_idx = wrapper_text.index('run_step "quality_eval_iter_${iter}"')
+        self.assertLess(init_idx, compile_env_idx)
+        self.assertLess(compile_env_idx, initial_quality_idx)
+        self.assertLess(initial_parity_idx, initial_quality_idx)
+
+        final_compile_idx = wrapper_text.index("run_step compile_final")
+        final_compile_env_idx = wrapper_text.index("run_step check_compile_env_final", final_compile_idx)
+        final_parity_idx = wrapper_text.index("run_step record_runtime_parity_final", final_compile_env_idx)
+        final_quality_idx = wrapper_text.index("run_step quality_eval_final", final_compile_idx)
+        self.assertLess(final_compile_idx, final_compile_env_idx)
+        self.assertLess(final_compile_env_idx, final_parity_idx)
+        self.assertLess(final_parity_idx, final_quality_idx)
+
     def test_fresh_smoke_run_step_preserves_disabled_errexit_for_semantic_exit_codes(self) -> None:
         wrapper = Path("scripts/fresh-full-live-smoke-loop.sh")
         text = wrapper.read_text(encoding="utf-8")

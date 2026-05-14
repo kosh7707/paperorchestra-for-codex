@@ -1523,6 +1523,49 @@ class PipelineTests(unittest.TestCase):
             literature = next(item for item in payload["checks"] if item["stage"] == "literature")
             self.assertEqual(literature["status"], "implemented")
 
+    def test_record_runtime_parity_cli_writes_report_and_updates_session_pointer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_session_with_minimal_inputs(root)
+            artifacts_dir = artifact_path(root, "placeholder").parent
+            for stage, lane_type in [
+                ("outline", "ralph"),
+                ("plot", "team"),
+                ("literature", "team"),
+                ("intro_related", "ralph"),
+                ("section_writing", "ralph"),
+                ("review", "reviewer"),
+                ("refinement", "refiner"),
+            ]:
+                record_lane_manifest(
+                    root,
+                    stage=stage,
+                    role=f"{stage} role",
+                    runtime_mode="omx_native",
+                    lane_type=lane_type,
+                    owner="test",
+                    status="completed",
+                    input_artifacts=[],
+                    output_artifacts=[str(artifacts_dir / f"{stage}.json")],
+                    fallback_used=False,
+                )
+            output = artifacts_dir / "runtime-parity.cli.json"
+            old_cwd = Path.cwd()
+            stdout = io.StringIO()
+            try:
+                os.chdir(root)
+                with contextlib.redirect_stdout(stdout):
+                    code = cli_main(["record-runtime-parity", "--output", str(output)])
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertEqual(code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(Path(payload["path"]), output)
+            self.assertEqual(payload["runtime_parity"]["overall_status"], "implemented")
+            refreshed = load_session(root)
+            self.assertEqual(refreshed.artifacts.latest_runtime_parity_json, str(output))
+
     def test_data_block_escaping_handles_literal_closing_marker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -125,7 +125,12 @@ def write_lane_manifest_summary(cwd: str | Path | None, *, name: str = "lane-man
     save_session(cwd, state)
     return path, payload
 
-def record_runtime_parity_report(cwd: str | Path | None, *, name: str = "runtime-parity.json") -> tuple[Path, dict[str, Any]]:
+def record_runtime_parity_report(
+    cwd: str | Path | None,
+    *,
+    name: str = "runtime-parity.json",
+    output_path: str | Path | None = None,
+) -> tuple[Path, dict[str, Any]]:
     manifests = collect_lane_manifests(cwd)
     required_stages = {
         "outline",
@@ -196,7 +201,8 @@ def record_runtime_parity_report(cwd: str | Path | None, *, name: str = "runtime
         checks.append({"stage": stage, "status": "implemented", "reason": "OMX-native lane manifest recorded"})
     overall = "implemented" if all(item["status"] == "implemented" for item in checks) else "partial"
     payload = {"overall_status": overall, "checks": checks, "manifest_count": len(manifests)}
-    path = artifact_path(cwd, name)
+    path = Path(output_path).resolve() if output_path else artifact_path(cwd, name)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(__import__("json").dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     state = load_session(cwd)
     state.artifacts.latest_runtime_parity_json = str(path)

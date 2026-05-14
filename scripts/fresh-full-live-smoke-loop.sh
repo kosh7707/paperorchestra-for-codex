@@ -1232,6 +1232,7 @@ PY
 
 cd "$WORKDIR"
 run_step init "${CLI[@]}" init --idea inputs/idea.tex --experimental-log inputs/experimental_log.tex --template inputs/template.tex --guidelines inputs/guidelines.md --figures-dir inputs/figures --venue "TDSC-style systems/security paper" --page-limit 12 --cutoff-date 2026-04-01 || fail_now fail_execution_error '"init"' '"logs/init.stderr.log"' 1
+run_step check_compile_env_initial "${CLI[@]}" check-compile-env || fail_now fail_execution_error '"check_compile_env_initial"' '"logs/check_compile_env_initial.stderr.log"' 1
 if grep -Eq '^[[:space:]]*@' inputs/reference_metadata_seed.bib; then
   run_step import_reference_metadata_seed "${CLI[@]}" import-prior-work --seed-file inputs/reference_metadata_seed.bib --source metadata_seed_for_live_verification || fail_now fail_execution_error '"import_reference_metadata_seed"' '"logs/import_reference_metadata_seed.stderr.log"' 1
 else
@@ -1278,6 +1279,7 @@ copy_session_artifacts
 run_step build_source_obligations "${CLI[@]}" build-source-obligations --output "$ARTIFACTS/source_obligations.json" || fail_now fail_execution_error '"build_source_obligations"' '"logs/build_source_obligations.stderr.log"' 1
 run_step validate_current "${CLI[@]}" validate-current --output "$ARTIFACTS/validation.current.json" || fail_now fail_execution_error '"validate_current"' '"logs/validate_current.stderr.log"' 1
 refresh_citation_integrity_artifacts initial
+run_step record_runtime_parity_initial "${CLI[@]}" record-runtime-parity --output "$ARTIFACTS/runtime-parity.initial.json" || fail_now fail_execution_error '"record_runtime_parity_initial"' '"logs/record_runtime_parity_initial.stderr.log"' 1
 
 FINAL="continue"; STEP_RC=10; LOOP_STOP_REASON="max_iterations_exhausted"
 for iter in $(seq 1 "$MAX_ITER"); do
@@ -1354,6 +1356,8 @@ case "$FINAL" in
 esac
 
 run_step compile_final "${CLI[@]}" compile || true
+run_step check_compile_env_final "${CLI[@]}" check-compile-env || true
+run_step record_runtime_parity_final "${CLI[@]}" record-runtime-parity --output "$ARTIFACTS/runtime-parity.final.json" || true
 run_step review_sections_final "${CLI[@]}" review-sections --output "$ARTIFACTS/section_review.final.json" || true
 run_step review_citations_web_final_session "${CLI[@]}" review-citations --evidence-mode web "${WEB_PROVIDER[@]}" || true
 run_step review_citations_web_final "${CLI[@]}" review-citations --evidence-mode web "${WEB_PROVIDER[@]}" --output "$ARTIFACTS/citation_support_review.final.json" || true

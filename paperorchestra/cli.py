@@ -88,6 +88,7 @@ from .pipeline import (
 )
 from .providers import get_citation_support_provider, get_provider
 from .revisions import write_revision_suggestions
+from .runtime_parity import record_runtime_parity_report
 from .session import artifact_path, create_session, get_current_session_id, load_session, run_dir
 from .source_obligations import write_source_obligations
 from .teach import prepare_teach_bundle
@@ -336,6 +337,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("compile", help="Compile the current paper.full.tex")
     sub.add_parser("check-compile-env", help="Inspect and record the compile environment readiness")
+    runtime_parity_parser = sub.add_parser("record-runtime-parity", help="Record the current lane-manifest runtime parity report")
+    runtime_parity_parser.add_argument("--output", help="Optional explicit report path (default: current session artifact runtime-parity.json)")
     sub.add_parser("bootstrap-compile-env", help="Print compile environment remediation commands and generated bootstrap script path")
     environment_parser = sub.add_parser("environment", help="Show the canonical environment-variable inventory, docs, and readiness profiles")
     environment_parser.add_argument("--json", action="store_true", help="Print the full machine-readable inventory (default for compatibility)")
@@ -1277,6 +1280,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "check-compile-env":
             path, payload = record_compile_environment_report(cwd)
             print(json.dumps({"path": str(path), "report": payload, **payload}, indent=2, ensure_ascii=False))
+            return 0
+
+        if args.command == "record-runtime-parity":
+            path, payload = record_runtime_parity_report(cwd, output_path=args.output)
+            print(json.dumps({"path": str(path), "runtime_parity": payload}, indent=2, ensure_ascii=False))
             return 0
 
         if args.command == "bootstrap-compile-env":

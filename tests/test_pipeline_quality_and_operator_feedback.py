@@ -799,6 +799,32 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertNotIn("fidelity_runtime_parity_missing", executable_section)
             self.assertIn("do not stop only because separate human-needed actions are also listed", brief)
 
+    def test_fidelity_actions_distinguish_missing_from_recorded_partial_runtime_parity(self) -> None:
+        from paperorchestra.quality_loop_actions import _fidelity_actions
+
+        implemented_actions = _fidelity_actions(
+            {
+                "checks": [
+                    {"code": "compile_environment_ready", "status": "implemented", "rationale": "ready"},
+                    {"code": "runtime_parity", "status": "implemented", "rationale": "all lanes recorded"},
+                ]
+            }
+        )
+        self.assertEqual(implemented_actions, [])
+
+        partial_actions = _fidelity_actions(
+            {
+                "checks": [
+                    {"code": "compile_environment_ready", "status": "implemented", "rationale": "ready"},
+                    {"code": "runtime_parity", "status": "partial", "rationale": "refinement lane is absent"},
+                ]
+            }
+        )
+
+        codes = {action.get("code") for action in partial_actions}
+        self.assertIn("fidelity_runtime_parity_partial", codes)
+        self.assertNotIn("fidelity_runtime_parity_missing", codes)
+
     def test_next_ralph_instruction_uses_supported_executable_action(self) -> None:
         instruction = _next_ralph_instruction(
             "continue",
