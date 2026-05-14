@@ -920,6 +920,275 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(bad_result["reason"], "unknown_citation_keys")
             self.assertIn("QUIC is always faster", paper.read_text(encoding="utf-8"))
 
+    def test_repair_citation_claims_prompt_includes_density_and_high_risk_issue_context(self) -> None:
+        class RepairProvider(MockProvider):
+            def __init__(self, latex: str):
+                self.latex = latex
+                self.prompt = ""
+
+            def complete(self, request: CompletionRequest) -> str:
+                self.prompt = request.user_prompt
+                return "```latex\n" + self.latex + "\n```"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            seed_path = root / "refs.bib"
+            seed_path.write_text(
+                "@article{RefA,title={A},year={2020}}\n"
+                "@article{RefB,title={B},year={2020}}\n"
+                "@article{RefC,title={C},year={2020}}\n"
+                "@article{RefD,title={D},year={2020}}\n",
+                encoding="utf-8",
+            )
+            import_prior_work(root, seed_file=seed_path, source="manual_bibtex")
+            paper = artifact_path(root, "paper.full.tex")
+            original = (
+                "\\documentclass{article}\n\\begin{document}\n"
+                "\\section{Intro}\n"
+                "Background context is over-cited~\\cite{RefA,RefB,RefC,RefD}.\n"
+                "The construction proves invariant-safety security with a 2.5x improvement.\n"
+                "\\bibliographystyle{plain}\n\\bibliography{references}\n"
+                "\\end{document}\n"
+            )
+            paper.write_text(original, encoding="utf-8")
+            state = load_session(root)
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            review_path = artifact_path(root, "citation_support_review.json")
+            review_path.write_text(json.dumps({"items": [], "summary": {}}), encoding="utf-8")
+            from paperorchestra.citation_integrity import write_citation_integrity_audit
+            from paperorchestra.quality_loop_source_checks import _high_risk_claim_sweep
+
+            write_citation_integrity_audit(root, quality_mode="claim_safe")
+            sweep = _high_risk_claim_sweep(load_session(root), {"status": "fail", "path": str(artifact_path(root, "source_obligations.json"))})
+            artifact_path(root, "quality-eval.json").write_text(
+                json.dumps(
+                    {
+                        "tiers": {
+                            "tier_2_claim_safety": {
+                                "checks": {
+                                    "high_risk_claim_sweep": sweep,
+                                }
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            provider = RepairProvider(original)
+
+            repair_citation_claims(root, provider, citation_review_path=review_path)
+
+            self.assertIn("claim_safety_repair_issues.json", provider.prompt)
+            self.assertIn("citation_bomb_sentence", provider.prompt)
+            self.assertIn("high_risk_uncited_claim", provider.prompt)
+            self.assertIn("invariant-safety security", provider.prompt)
+            self.assertIn("required_action", provider.prompt)
+
+    def test_repair_citation_claims_accepts_improved_candidate_with_candidate_scoped_rechecks(self) -> None:
+        class RepairProvider(MockProvider):
+            def __init__(self, latex: str):
+                self.latex = latex
+
+            def complete(self, request: CompletionRequest) -> str:
+                return "```latex\n" + self.latex + "\n```"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            seed_path = root / "refs.bib"
+            seed_path.write_text(
+                "@article{RefA,title={A},year={2020}}\n"
+                "@article{RefB,title={B},year={2020}}\n"
+                "@article{RefC,title={C},year={2020}}\n"
+                "@article{RefD,title={D},year={2020}}\n",
+                encoding="utf-8",
+            )
+            import_prior_work(root, seed_file=seed_path, source="manual_bibtex")
+            paper = artifact_path(root, "paper.full.tex")
+            original = (
+                "\\documentclass{article}\n\\begin{document}\n"
+                "\\section{Intro}\n"
+                "Background context is over-cited~\\cite{RefA,RefB,RefC,RefD}.\n"
+                "The construction proves invariant-safety security with a 2.5x improvement.\n"
+                "\\bibliographystyle{plain}\n\\bibliography{references}\n"
+                "\\end{document}\n"
+            )
+            candidate = (
+                "\\documentclass{article}\n\\begin{document}\n"
+                "\\section{Intro}\n"
+                "The current draft does not claim security, benchmark improvement, or general performance superiority.\n"
+                "Prior work is cited as background~\\cite{RefA}. Additional context is separated~\\cite{RefB}.\n"
+                "\\bibliographystyle{plain}\n\\bibliography{references}\n"
+                "\\end{document}\n"
+            )
+            paper.write_text(original, encoding="utf-8")
+            state = load_session(root)
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            review_path = artifact_path(root, "citation_support_review.json")
+            review_path.write_text(json.dumps({"items": [], "summary": {}}), encoding="utf-8")
+            from paperorchestra.citation_integrity import write_citation_integrity_audit
+            from paperorchestra.quality_loop_source_checks import _high_risk_claim_sweep
+
+            canonical_citation_path, _ = write_citation_integrity_audit(root, quality_mode="claim_safe")
+            canonical_citation_before = canonical_citation_path.read_text(encoding="utf-8")
+            sweep = _high_risk_claim_sweep(load_session(root), {"status": "fail", "path": str(artifact_path(root, "source_obligations.json"))})
+            quality_eval_path = artifact_path(root, "quality-eval.json")
+            quality_eval_payload = {
+                "tiers": {"tier_2_claim_safety": {"checks": {"high_risk_claim_sweep": sweep}}},
+            }
+            quality_eval_path.write_text(json.dumps(quality_eval_payload), encoding="utf-8")
+            state = load_session(root)
+            state.artifacts.latest_validation_json = str(artifact_path(root, "validation.before.json"))
+            Path(state.artifacts.latest_validation_json).write_text(json.dumps({"ok": True}), encoding="utf-8")
+            save_session(root, state)
+            before_pointer = load_session(root).artifacts.latest_validation_json
+            provider = RepairProvider(candidate)
+
+            validation_path = artifact_path(root, "validation.citation-repair.json")
+            with patch(
+                "paperorchestra.ralph_bridge_repair.record_current_validation_report",
+                return_value=(validation_path, {"ok": True, "blocking_issue_count": 0}),
+            ):
+                result = repair_citation_claims(root, provider, citation_review_path=review_path)
+
+            self.assertTrue(result["accepted"])
+            self.assertFalse(result["committed"])
+            self.assertEqual(paper.read_text(encoding="utf-8"), original)
+            self.assertEqual(load_session(root).artifacts.latest_validation_json, before_pointer)
+            self.assertEqual(canonical_citation_path.read_text(encoding="utf-8"), canonical_citation_before)
+            self.assertEqual(json.loads(quality_eval_path.read_text(encoding="utf-8")), quality_eval_payload)
+            semantic = result["semantic_recheck"]
+            self.assertEqual(semantic["status"], "pass")
+            self.assertTrue(Path(semantic["citation_integrity"]["path"]).exists())
+            self.assertTrue(Path(semantic["high_risk_claim_sweep"]["path"]).exists())
+            self.assertLess(semantic["citation_integrity"]["after"]["citation_bomb_sentence_count"], semantic["citation_integrity"]["before"]["citation_bomb_sentence_count"])
+            self.assertLess(semantic["high_risk_claim_sweep"]["after"]["item_count"], semantic["high_risk_claim_sweep"]["before"]["item_count"])
+
+    def test_repair_citation_claims_rejects_candidate_without_semantic_improvement(self) -> None:
+        class RepairProvider(MockProvider):
+            def __init__(self, latex: str):
+                self.latex = latex
+
+            def complete(self, request: CompletionRequest) -> str:
+                return "```latex\n" + self.latex + "\n```"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            seed_path = root / "refs.bib"
+            seed_path.write_text(
+                "@article{RefA,title={A},year={2020}}\n"
+                "@article{RefB,title={B},year={2020}}\n"
+                "@article{RefC,title={C},year={2020}}\n"
+                "@article{RefD,title={D},year={2020}}\n",
+                encoding="utf-8",
+            )
+            import_prior_work(root, seed_file=seed_path, source="manual_bibtex")
+            paper = artifact_path(root, "paper.full.tex")
+            original = (
+                "\\documentclass{article}\n\\begin{document}\n"
+                "\\section{Intro}\n"
+                "Background context is over-cited~\\cite{RefA,RefB,RefC,RefD}.\n"
+                "The construction proves invariant-safety security with a 2.5x improvement.\n"
+                "\\bibliographystyle{plain}\n\\bibliography{references}\n"
+                "\\end{document}\n"
+            )
+            paper.write_text(original, encoding="utf-8")
+            state = load_session(root)
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            review_path = artifact_path(root, "citation_support_review.json")
+            review_path.write_text(json.dumps({"items": [], "summary": {}}), encoding="utf-8")
+            from paperorchestra.citation_integrity import write_citation_integrity_audit
+            from paperorchestra.quality_loop_source_checks import _high_risk_claim_sweep
+
+            canonical_citation_path, _ = write_citation_integrity_audit(root, quality_mode="claim_safe")
+            canonical_citation_before = canonical_citation_path.read_text(encoding="utf-8")
+            sweep = _high_risk_claim_sweep(load_session(root), {"status": "fail", "path": str(artifact_path(root, "source_obligations.json"))})
+            quality_eval_path = artifact_path(root, "quality-eval.json")
+            quality_eval_payload = {"tiers": {"tier_2_claim_safety": {"checks": {"high_risk_claim_sweep": sweep}}}}
+            quality_eval_path.write_text(json.dumps(quality_eval_payload), encoding="utf-8")
+            provider = RepairProvider(original)
+
+            validation_path = artifact_path(root, "validation.citation-repair.json")
+            with patch(
+                "paperorchestra.ralph_bridge_repair.record_current_validation_report",
+                return_value=(validation_path, {"ok": True, "blocking_issue_count": 0}),
+            ):
+                result = repair_citation_claims(root, provider, citation_review_path=review_path)
+
+            self.assertFalse(result["accepted"])
+            self.assertEqual(result["reason"], "semantic_recheck_failed")
+            self.assertEqual(paper.read_text(encoding="utf-8"), original)
+            self.assertEqual(canonical_citation_path.read_text(encoding="utf-8"), canonical_citation_before)
+            self.assertEqual(json.loads(quality_eval_path.read_text(encoding="utf-8")), quality_eval_payload)
+            self.assertEqual(result["semantic_recheck"]["status"], "fail")
+
+    def test_repair_citation_claims_restores_state_when_semantic_recheck_errors(self) -> None:
+        class RepairProvider(MockProvider):
+            def __init__(self, latex: str):
+                self.latex = latex
+
+            def complete(self, request: CompletionRequest) -> str:
+                return "```latex\n" + self.latex + "\n```"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            seed_path = root / "refs.bib"
+            seed_path.write_text("@techreport{RFC9001,title={Using TLS to Secure QUIC},year={2021}}\n", encoding="utf-8")
+            import_prior_work(root, seed_file=seed_path, source="manual_bibtex")
+            paper = artifact_path(root, "paper.full.tex")
+            original = (
+                "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\n"
+                "QUIC is always faster than every transport~\\cite{RFC9001}.\n"
+                "\\bibliographystyle{plain}\n\\bibliography{references}\n\\end{document}\n"
+            )
+            candidate = original.replace(
+                "QUIC is always faster than every transport~\\cite{RFC9001}.",
+                "RFC 9001 describes TLS use in QUIC~\\cite{RFC9001}.",
+            )
+            paper.write_text(original, encoding="utf-8")
+            state = load_session(root)
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.latest_validation_json = str(artifact_path(root, "validation.before.json"))
+            Path(state.artifacts.latest_validation_json).write_text(json.dumps({"ok": True}), encoding="utf-8")
+            save_session(root, state)
+            before_pointer = load_session(root).artifacts.latest_validation_json
+            review_path = artifact_path(root, "citation_support_review.json")
+            review_path.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "id": "cite-001",
+                                "sentence": "QUIC is always faster than every transport~\\cite{RFC9001}.",
+                                "citation_keys": ["RFC9001"],
+                                "support_status": "unsupported",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            provider = RepairProvider(candidate)
+            validation_path = artifact_path(root, "validation.citation-repair.json")
+            with patch(
+                "paperorchestra.ralph_bridge_repair.record_current_validation_report",
+                return_value=(validation_path, {"ok": True, "blocking_issue_count": 0}),
+            ):
+                with patch("paperorchestra.ralph_bridge_repair._candidate_semantic_recheck", side_effect=RuntimeError("boom")):
+                    result = repair_citation_claims(root, provider, citation_review_path=review_path)
+
+            self.assertFalse(result["accepted"])
+            self.assertEqual(result["reason"], "semantic_recheck_error")
+            self.assertEqual(result["semantic_recheck"]["status"], "error")
+            self.assertEqual(paper.read_text(encoding="utf-8"), original)
+            self.assertEqual(load_session(root).artifacts.latest_validation_json, before_pointer)
+
     def test_ralph_start_dry_run_cli_does_not_launch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

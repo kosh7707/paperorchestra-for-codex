@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 from typing import Any
 
-from .io_utils import extract_latex
+from .citation_integrity import build_citation_integrity_audit
+from .io_utils import extract_latex, write_json
 from .models import utc_now_iso
 from .pipeline import (
     ContractError,
@@ -14,6 +16,7 @@ from .pipeline import (
     record_current_validation_report,
 )
 from .providers import BaseProvider
+from .quality_loop_source_checks import _high_risk_claim_sweep
 from .ralph_bridge_state import (
     NON_SUPPORTED_CITATION_STATUSES,
     atomic_write_text,
@@ -25,6 +28,7 @@ from .ralph_bridge_state import (
     recover_pending_manuscript_write,
 )
 from .session import artifact_path, load_session, save_session
+from .source_obligations import evaluate_source_obligations
 from .validator import extract_citation_keys
 
 
@@ -118,6 +122,121 @@ def _high_risk_repair_issues(cwd: str | Path | None, *, limit: int = 16) -> list
 
 def _claim_safety_repair_issues(cwd: str | Path | None) -> list[dict[str, Any]]:
     return _citation_density_repair_issues(cwd) + _high_risk_repair_issues(cwd)
+
+def _file_sha256(path: str | Path | None) -> str | None:
+    if not path:
+        return None
+    candidate = Path(path)
+    if not candidate.exists() or not candidate.is_file():
+        return None
+    return hashlib.sha256(candidate.read_bytes()).hexdigest()
+
+def _citation_integrity_metrics(payload: dict[str, Any]) -> dict[str, Any]:
+    checks = payload.get("checks") if isinstance(payload.get("checks"), dict) else {}
+    density = checks.get("citation_density") if isinstance(checks.get("citation_density"), dict) else {}
+    duplicate = checks.get("duplicate_support") if isinstance(checks.get("duplicate_support"), dict) else {}
+    bomb_sentence_count = len([item for item in density.get("bomb_sentences") or [] if isinstance(item, dict)])
+    bomb_paragraph_count = len([item for item in density.get("bomb_paragraph_key_sets") or [] if isinstance(item, list)])
+    duplicate_support_count = len([item for item in duplicate.get("duplicate_keys") or [] if str(item).strip()])
+    total = bomb_sentence_count + bomb_paragraph_count + duplicate_support_count
+    return {
+        "status": str(payload.get("status") or "unknown"),
+        "failing_codes": [str(code) for code in payload.get("failing_codes") or []],
+        "citation_bomb_sentence_count": bomb_sentence_count,
+        "citation_bomb_paragraph_count": bomb_paragraph_count,
+        "duplicate_support_count": duplicate_support_count,
+        "target_issue_count": total,
+    }
+
+def _citation_issue_metrics_from_packet(issues: list[dict[str, Any]]) -> dict[str, Any]:
+    bomb_sentence_count = sum(1 for item in issues if item.get("issue_type") == "citation_bomb_sentence")
+    bomb_paragraph_count = sum(1 for item in issues if item.get("issue_type") == "citation_bomb_paragraph")
+    total = bomb_sentence_count + bomb_paragraph_count
+    return {
+        "status": "fail" if total else "pass",
+        "failing_codes": ["citation_bomb_detected"] if total else [],
+        "citation_bomb_sentence_count": bomb_sentence_count,
+        "citation_bomb_paragraph_count": bomb_paragraph_count,
+        "duplicate_support_count": 0,
+        "target_issue_count": total,
+    }
+
+def _high_risk_metrics(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": str(payload.get("status") or "unknown"),
+        "failing_codes": [str(code) for code in payload.get("failing_codes") or []],
+        "item_count": int(payload.get("item_count") or len(payload.get("items") or [])),
+    }
+
+def _high_risk_issue_metrics_from_packet(issues: list[dict[str, Any]]) -> dict[str, Any]:
+    count = sum(1 for item in issues if item.get("issue_type") == "high_risk_uncited_claim")
+    return {
+        "status": "fail" if count else "pass",
+        "failing_codes": ["high_risk_uncited_claim"] if count else [],
+        "item_count": count,
+    }
+
+def _strictly_improves(before_count: int, after_count: int) -> bool:
+    return before_count <= 0 or after_count < before_count
+
+def _candidate_semantic_recheck(
+    cwd: str | Path | None,
+    *,
+    claim_safety_issues: list[dict[str, Any]],
+    quality_mode: str = "claim_safe",
+) -> dict[str, Any]:
+    citation_targeted = any(str(item.get("issue_type") or "").startswith("citation_bomb_") for item in claim_safety_issues)
+    high_risk_targeted = any(item.get("issue_type") == "high_risk_uncited_claim" for item in claim_safety_issues)
+
+    canonical_citation_path = artifact_path(cwd, "citation_integrity.audit.json")
+    try:
+        canonical_citation = _read_json(canonical_citation_path)
+    except Exception:
+        canonical_citation = {}
+    citation_before = (
+        _citation_integrity_metrics(canonical_citation)
+        if isinstance(canonical_citation, dict) and canonical_citation
+        else _citation_issue_metrics_from_packet(claim_safety_issues)
+    )
+    citation_after_payload = build_citation_integrity_audit(cwd, quality_mode=quality_mode)
+    citation_after = _citation_integrity_metrics(citation_after_payload)
+    citation_path = artifact_path(cwd, "citation-integrity.citation-repair.candidate.json")
+    write_json(citation_path, citation_after_payload)
+
+    high_risk_before = _high_risk_issue_metrics_from_packet(claim_safety_issues)
+    high_risk_after_payload = _high_risk_claim_sweep(load_session(cwd), evaluate_source_obligations(cwd))
+    high_risk_after = _high_risk_metrics(high_risk_after_payload)
+    high_risk_path = artifact_path(cwd, "high-risk-sweep.citation-repair.candidate.json")
+    write_json(high_risk_path, high_risk_after_payload)
+
+    citation_improved = (not citation_targeted) or _strictly_improves(
+        int(citation_before.get("target_issue_count") or 0),
+        int(citation_after.get("target_issue_count") or 0),
+    )
+    high_risk_improved = (not high_risk_targeted) or _strictly_improves(
+        int(high_risk_before.get("item_count") or 0),
+        int(high_risk_after.get("item_count") or 0),
+    )
+    status = "pass" if citation_improved and high_risk_improved else "fail"
+    return {
+        "status": status,
+        "citation_integrity": {
+            "targeted": citation_targeted,
+            "path": str(citation_path),
+            "sha256": _file_sha256(citation_path),
+            "before": citation_before,
+            "after": citation_after,
+            "improved": citation_improved,
+        },
+        "high_risk_claim_sweep": {
+            "targeted": high_risk_targeted,
+            "path": str(high_risk_path),
+            "sha256": _file_sha256(high_risk_path),
+            "before": high_risk_before,
+            "after": high_risk_after,
+            "improved": high_risk_improved,
+        },
+    }
 
 def _repair_prompt(
     current_paper: str,
@@ -237,6 +356,25 @@ def repair_citation_claims(
         clear_pending_manuscript_write(cwd, status="restored", reason="citation_repair_validation_failed")
         _restore_session_mutation_snapshot(cwd, mutation_snapshot)
         result.update({"reason": "validation_failed", "completed_at": utc_now_iso()})
+        return result
+    try:
+        semantic_recheck = _candidate_semantic_recheck(cwd, claim_safety_issues=claim_safety_issues)
+    except Exception as exc:
+        atomic_write_text(paper_path, original)
+        clear_pending_manuscript_write(cwd, status="restored", reason="citation_repair_semantic_recheck_error")
+        _restore_session_mutation_snapshot(cwd, mutation_snapshot)
+        result["semantic_recheck"] = {
+            "status": "error",
+            "error_type": type(exc).__name__,
+        }
+        result.update({"reason": "semantic_recheck_error", "completed_at": utc_now_iso()})
+        return result
+    result["semantic_recheck"] = semantic_recheck
+    if semantic_recheck.get("status") != "pass":
+        atomic_write_text(paper_path, original)
+        clear_pending_manuscript_write(cwd, status="restored", reason="citation_repair_semantic_recheck_failed")
+        _restore_session_mutation_snapshot(cwd, mutation_snapshot)
+        result.update({"reason": "semantic_recheck_failed", "completed_at": utc_now_iso()})
         return result
     if require_compile:
         try:
