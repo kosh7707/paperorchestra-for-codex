@@ -164,10 +164,25 @@ for part in parts:
 PY_CODEX_PREFIX
 }
 
+release_safety_scan_allow_private_residue_enabled() {
+  case "${PAPERO_RELEASE_SAFETY_ALLOW_PRIVATE_RESIDUE:-}" in
+    1|true|TRUE|yes|YES|on|ON)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 run_release_safety_scan() {
   local scan_root="$1"
   local output="$2"
-  python3 "$REPO_ROOT/scripts/release-safety-scan.py" "$scan_root" "$output"
+  local args=(python3 "$REPO_ROOT/scripts/release-safety-scan.py" "$scan_root" "$output")
+  if release_safety_scan_allow_private_residue_enabled; then
+    args+=("--allow-private-residue")
+  fi
+  "${args[@]}"
 }
 record_command_markdown() {
   {

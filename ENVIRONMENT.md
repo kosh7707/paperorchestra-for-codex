@@ -353,6 +353,15 @@ For private fresh-smoke material packets outside the checkout, use
 --expected-material-root /private/materials`. This keeps private inputs out of
 git while preserving pointer/hash/manifest validation.
 
+Raw private full-smoke evidence may intentionally contain private/domain terms in
+the generated manuscript, PDFs, prompt traces, and intermediate artifacts. For
+that private evidence root only, set
+`PAPERO_RELEASE_SAFETY_ALLOW_PRIVATE_RESIDUE=1` so the final release-safety scan
+records private/domain residue as allowed findings while **still blocking
+secrets**. Keep public summaries, repository scans, and redacted reports in the
+default strict mode. This flag is not a manuscript-readiness override: quality
+gates may still end in `human_needed` or `not_ready`.
+
 `PAPERO_DOMAIN` is intentionally conservative. The public package bundles only
 the domain-neutral `generic` profile. External/private material packs may call
 `paperorchestra.domains.register_domain(profile)` and then set `PAPERO_DOMAIN`
@@ -380,6 +389,7 @@ closed instead of silently falling back to `generic`.
 | `PAPERO_SMOKE_STEP_RETRY_BACKOFF_SECONDS` | Fresh smoke optional | `15` | Backoff between smoke-level provider-backed stage replays |
 | `PAPERO_SMOKE_STEP_RETRY_JITTER_SECONDS` | Fresh smoke optional | `0` | Optional random jitter added to smoke-level provider-backed stage replay backoff |
 | `PAPERO_CODEX_CLI_PREFIX` | Fresh smoke optional | `codex` | Non-interactive replacement for shell aliases; set to `omx --madmax --high --dangerously-bypass-approvals-and-sandbox` when container QA should route Codex calls through OMX |
+| `PAPERO_RELEASE_SAFETY_ALLOW_PRIVATE_RESIDUE` | Private fresh smoke optional | `0` | Allow private/domain residue in raw private QA evidence only; secret findings remain blocking and public summaries/repo scans should stay strict |
 | `PAPERO_PROVIDER_SEED` | Advanced optional | unset | Seed passthrough for shell-provider subprocesses; downstream command must honor it; not a byte-identical generation guarantee |
 | `PAPERO_PROVIDER_TEMPERATURE` | Advanced optional | unset | Temperature passthrough for shell-provider subprocesses |
 | `PAPERO_PROVIDER_MAX_OUTPUT_TOKENS` | Advanced optional | unset | Max-output-tokens passthrough for shell-provider subprocesses |

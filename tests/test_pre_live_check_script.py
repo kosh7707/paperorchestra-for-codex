@@ -951,6 +951,71 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             self.assertNotIn("custom-codex", rendered)
             self.assertIn("provider-wrap.sh", (evidence / "logs" / "synthetic_wrapped_provider_command.command").read_text(encoding="utf-8"))
 
+    def test_fresh_smoke_release_safety_private_residue_requires_explicit_private_qa_flag(self) -> None:
+        wrapper_text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+        helper_start = wrapper_text.index("release_safety_scan_allow_private_residue_enabled() {")
+        helper_end = wrapper_text.index("\n}\nrecord_command_markdown", helper_start) + 3
+        helpers = wrapper_text[helper_start:helper_end]
+        self.assertIn('--allow-private-residue', helpers)
+        self.assertNotIn("paperorchestra-private", helpers)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            scan_root = root / "scan"
+            scan_root.mkdir()
+            (scan_root / "raw-private-evidence.txt").write_text(
+                "Raw private QA evidence may mention "
+                + ("c" + "ci")
+                + " and "
+                + ("AES" + "-GCM")
+                + " only when explicitly allowed.\n",
+                encoding="utf-8",
+            )
+            harness = root / "release-safety-harness.sh"
+            harness.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        f"REPO_ROOT={str(Path.cwd())!r}",
+                        helpers,
+                        'run_release_safety_scan "$1" "$2"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            strict_out = root / "strict.json"
+            strict = subprocess.run(
+                ["bash", str(harness), str(scan_root), str(strict_out)],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertNotEqual(strict.returncode, 0)
+            strict_payload = json.loads(strict_out.read_text(encoding="utf-8"))
+            self.assertEqual(strict_payload["status"], "fail")
+            self.assertFalse(strict_payload["allow_private_residue"])
+            self.assertGreater(strict_payload["blocking_finding_count"], 0)
+
+            allowed_out = root / "allowed.json"
+            env = os.environ.copy()
+            env["PAPERO_RELEASE_SAFETY_ALLOW_PRIVATE_RESIDUE"] = "1"
+            allowed = subprocess.run(
+                ["bash", str(harness), str(scan_root), str(allowed_out)],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                check=False,
+            )
+            self.assertEqual(allowed.returncode, 0, allowed.stderr + allowed.stdout)
+            allowed_payload = json.loads(allowed_out.read_text(encoding="utf-8"))
+            self.assertEqual(allowed_payload["status"], "pass")
+            self.assertTrue(allowed_payload["allow_private_residue"])
+            self.assertEqual(allowed_payload["blocking_finding_count"], 0)
+            self.assertGreater(allowed_payload["allowed_private_residue_count"], 0)
+
     def test_fresh_smoke_run_step_preserves_disabled_errexit_for_semantic_exit_codes(self) -> None:
         wrapper = Path("scripts/fresh-full-live-smoke-loop.sh")
         text = wrapper.read_text(encoding="utf-8")
