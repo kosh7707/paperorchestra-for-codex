@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .critics import citation_item_has_valid_supporting_evidence
 from .quality_loop_actions import _action
 from .quality_loop_history import _failing_codes_from_quality_eval, _tier_statuses
 from .quality_loop_policy import (
@@ -12,7 +13,59 @@ from .quality_loop_policy import (
     QA_LOOP_SUPPORTED_HANDLER_CODES,
     REVIEW_REFRESH_CODES,
 )
-from .quality_loop_utils import _path_ref
+from .quality_loop_utils import _path_ref, _read_json_if_exists
+
+
+AUTHOR_JUDGMENT_AUTHORITY_CLASSES = {"author_judgment", "operator_judgment", "domain_judgment", "author_feedback"}
+
+
+def _manual_check_classification(citation_check: dict[str, Any]) -> dict[str, Any]:
+    path = citation_check.get("path")
+    payload = _read_json_if_exists(path) if isinstance(path, (str, Path)) else None
+    if not isinstance(payload, dict):
+        return {"machine_solvable_count": 0, "author_judgment_count": 1, "payload_unavailable": True}
+    items = [
+        item
+        for item in payload.get("items") or []
+        if isinstance(item, dict) and str(item.get("support_status") or "").strip() in {"needs_manual_check", "manual_check"}
+    ]
+    if not items:
+        return {"machine_solvable_count": 0, "author_judgment_count": 1, "payload_unavailable": True}
+    machine_solvable_count = 0
+    author_judgment_count = 0
+    for item in items:
+        suggested_fix = str(item.get("suggested_fix") or item.get("suggested_action") or "").strip()
+        authority_class = str(item.get("authority_class") or "").strip().lower()
+        flags = {str(flag).strip().lower() for flag in item.get("flags") or [] if str(flag).strip()} if isinstance(item.get("flags"), list) else set()
+        explicit_author_judgment = (
+            item.get("requires_author_judgment") is True
+            or item.get("author_judgment_required") is True
+            or item.get("requires_operator_judgment") is True
+            or item.get("operator_judgment_required") is True
+            or authority_class in AUTHOR_JUDGMENT_AUTHORITY_CLASSES
+            or bool(
+                flags
+                & {
+                    "requires_author_judgment",
+                    "author_judgment_required",
+                    "requires_operator_judgment",
+                    "operator_judgment_required",
+                    "operator_judgment",
+                    "domain_judgment",
+                    "author_feedback",
+                }
+            )
+        )
+        valid_support_evidence = citation_item_has_valid_supporting_evidence(item)
+        if suggested_fix and valid_support_evidence and not explicit_author_judgment:
+            machine_solvable_count += 1
+        else:
+            author_judgment_count += 1
+    return {
+        "machine_solvable_count": machine_solvable_count,
+        "author_judgment_count": author_judgment_count,
+        "payload_unavailable": False,
+    }
 
 
 def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
@@ -88,11 +141,10 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     ralph_instruction="Run the citation-support critic for the current manuscript with the writer blind to reviewer scores, then rebuild the QA loop plan.",
                 )
             )
-        if {
+        citation_repair_codes = {
             "citation_support_unsupported",
             "citation_support_contradicted",
             "citation_support_weak",
-            "citation_support_manual_check",
             "citation_support_metadata_only",
             "citation_support_insufficient_evidence",
             "citation_support_evidence_missing",
@@ -107,7 +159,19 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
             "citation_support_trace_missing",
             "citation_support_trace_mismatch",
             "citation_support_trace_invalid",
-        } & citation_codes:
+        }
+        manual_check = _manual_check_classification(citation_check) if "citation_support_manual_check" in citation_codes else {
+            "machine_solvable_count": 0,
+            "author_judgment_count": 0,
+            "payload_unavailable": False,
+        }
+        if (citation_repair_codes & citation_codes) or int(manual_check.get("machine_solvable_count") or 0) > 0:
+            machine_manual_count = int(manual_check.get("machine_solvable_count") or 0)
+            manual_phrase = (
+                f" {machine_manual_count} manual-check item(s) have concrete fixes and support evidence for bounded repair."
+                if machine_manual_count
+                else ""
+            )
             actions.append(
                 _action(
                     action_id="quality-eval:citation-support-weak",
@@ -115,11 +179,42 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     source=citation_check.get("path"),
                     target="claim safety",
                     automation="semi_auto",
-                    reason="Citation-support critic found unsupported or weakly supported cited claims.",
+                    reason="Citation-support critic found cited-claim support failures that can be attempted by bounded repair." + manual_phrase,
                     suggested_commands=["paperorchestra review-citations --evidence-mode web", "paperorchestra write-sections", "paperorchestra validate-current"],
-                    ralph_instruction="Produce a candidate claim-safe rewrite only from existing verified citations, then require citation-support critic approval.",
+                    ralph_instruction="Produce a candidate claim-safe rewrite only from existing verified citations and machine-solvable manual-check issue counts, then require citation-support critic approval.",
                     why_not_automatic="Resolving unsupported citations can alter factual claims; writer cannot decide source support alone.",
                     approval_required_from="citation_support_critic",
+                )
+            )
+        if "citation_support_manual_check" in citation_codes and (
+            int(manual_check.get("author_judgment_count") or 0) > 0 or manual_check.get("payload_unavailable") is True
+        ):
+            author_count = int(manual_check.get("author_judgment_count") or 0)
+            unavailable = manual_check.get("payload_unavailable") is True
+            reason = (
+                "Citation-support manual-check payload is unavailable for safe machine classification."
+                if unavailable
+                else f"{author_count} citation-support manual-check item(s) require author/operator judgment."
+            )
+            actions.append(
+                _action(
+                    action_id="quality-eval:citation-support-manual-author",
+                    code="citation_support_manual_check_requires_author_judgment",
+                    source=citation_check.get("path"),
+                    target="claim safety",
+                    automation="human_needed",
+                    reason=reason,
+                    suggested_commands=[
+                        "paperorchestra build-operator-review-packet",
+                        "paperorchestra review-citations --evidence-mode web",
+                        "paperorchestra qa-loop-plan --quality-mode claim_safe",
+                    ],
+                    ralph_instruction=(
+                        "Stop automatic promotion for the author-owned citation-support manual-check item count. "
+                        "Ask the author/operator to decide whether to provide evidence, soften/delete the claim, or accept responsibility."
+                    ),
+                    why_not_automatic="Manual-check items without concrete support evidence or with explicit author-judgment markers cannot be resolved by the writer alone.",
+                    approval_required_from="author_operator",
                 )
             )
     citation_integrity_check = (tier2.get("checks") or {}).get("citation_integrity_gate") if isinstance(tier2, dict) else None

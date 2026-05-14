@@ -1712,6 +1712,167 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
         self.assertEqual(trust["level"], "mock")
         self.assertIn("citation_cited_mock_count=1", trust["mock_evidence"])
 
+    def _manual_check_quality_eval(self, review_path: Path, failing_codes: list[str] | None = None) -> dict:
+        return {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "checks": {
+                        "citation_support_critic": {
+                            "status": "fail",
+                            "path": str(review_path),
+                            "failing_codes": failing_codes or ["citation_support_manual_check"],
+                        }
+                    }
+                }
+            }
+        }
+
+    def _write_manual_check_review(self, path: Path, items: list[dict]) -> None:
+        summary: dict[str, int] = {}
+        for item in items:
+            status = str(item.get("support_status") or "needs_manual_check")
+            summary[status] = summary.get(status, 0) + 1
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "citation-support-review/2",
+                    "claims_checked": len(items),
+                    "summary": summary,
+                    "evidence_provenance": {"claim_support_not_metadata_lookup": True},
+                    "items": items,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def _machine_solvable_manual_item(self) -> dict:
+        return {
+            "id": "manual-1",
+            "sentence": "Private raw sentence should not leak.",
+            "citation_keys": ["RefA"],
+            "citation_entries": [{"key": "RefA", "title": "Reference A", "url": "https://example.invalid/ref-a"}],
+            "support_status": "needs_manual_check",
+            "suggested_fix": "Scope the claim to the cited reference.",
+            "evidence": [
+                {
+                    "citation_key": "RefA",
+                    "source_title": "Reference A",
+                    "url": "https://example.invalid/ref-a",
+                    "evidence_quote_or_summary": "Reference A supports the narrowed claim.",
+                    "supports_claim": True,
+                }
+            ],
+        }
+
+    def test_manual_check_with_fix_and_support_evidence_routes_to_semi_auto_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            self._write_manual_check_review(review_path, [self._machine_solvable_manual_item()])
+
+            actions = _quality_eval_actions(self._manual_check_quality_eval(review_path))
+
+        codes = {action.get("code") for action in actions}
+        self.assertIn("citation_support_critic_failed", codes)
+        self.assertNotIn("citation_support_manual_check_requires_author_judgment", codes)
+
+    def test_manual_check_requiring_author_judgment_routes_to_human_needed_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            self._write_manual_check_review(
+                review_path,
+                [
+                    {
+                        "id": "manual-1",
+                        "sentence": "Author-domain interpretation is required.",
+                        "citation_keys": ["RefA"],
+                        "support_status": "needs_manual_check",
+                        "requires_author_judgment": True,
+                    }
+                ],
+            )
+
+            actions = _quality_eval_actions(self._manual_check_quality_eval(review_path))
+
+        manual_actions = [action for action in actions if action.get("code") == "citation_support_manual_check_requires_author_judgment"]
+        repair_actions = [action for action in actions if action.get("code") == "citation_support_critic_failed"]
+        self.assertEqual(len(manual_actions), 1)
+        self.assertEqual(manual_actions[0]["automation"], "human_needed")
+        self.assertEqual(repair_actions, [])
+
+    def test_mixed_manual_check_emits_repair_and_author_judgment_actions_without_raw_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            author_owned = {
+                "id": "manual-2",
+                "sentence": "Do not leak this raw author-owned sentence.",
+                "citation_keys": ["RefB"],
+                "support_status": "needs_manual_check",
+                "requires_author_judgment": True,
+            }
+            self._write_manual_check_review(review_path, [self._machine_solvable_manual_item(), author_owned])
+
+            actions = _quality_eval_actions(self._manual_check_quality_eval(review_path))
+
+        codes = {action.get("code") for action in actions}
+        self.assertIn("citation_support_critic_failed", codes)
+        self.assertIn("citation_support_manual_check_requires_author_judgment", codes)
+        joined_public_text = "\n".join(str(action.get("reason", "")) + "\n" + str(action.get("ralph_instruction", "")) for action in actions)
+        self.assertNotIn("Private raw sentence", joined_public_text)
+        self.assertNotIn("Do not leak this raw author-owned sentence", joined_public_text)
+
+    def test_manual_check_with_only_citation_entries_is_author_judgment_not_machine_solvable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            self._write_manual_check_review(
+                review_path,
+                [
+                    {
+                        "id": "manual-1",
+                        "citation_keys": ["RefA"],
+                        "citation_entries": [{"key": "RefA", "title": "Reference A", "url": "https://example.invalid/ref-a"}],
+                        "support_status": "needs_manual_check",
+                        "suggested_fix": "Scope the claim.",
+                    }
+                ],
+            )
+
+            actions = _quality_eval_actions(self._manual_check_quality_eval(review_path))
+
+        codes = {action.get("code") for action in actions}
+        self.assertIn("citation_support_manual_check_requires_author_judgment", codes)
+        self.assertNotIn("citation_support_critic_failed", codes)
+
+    def test_manual_check_with_missing_payload_fails_closed_to_author_judgment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "missing-citation-support.json"
+
+            actions = _quality_eval_actions(self._manual_check_quality_eval(missing))
+
+        codes = {action.get("code") for action in actions}
+        self.assertIn("citation_support_manual_check_requires_author_judgment", codes)
+        self.assertNotIn("citation_support_critic_failed", codes)
+
+    def test_metadata_only_citation_support_remains_repairable_not_supported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            self._write_manual_check_review(
+                review_path,
+                [
+                    {
+                        "id": "metadata-1",
+                        "citation_keys": ["RefA"],
+                        "citation_entries": [{"key": "RefA", "title": "Reference A"}],
+                        "support_status": "metadata_only",
+                    }
+                ],
+            )
+
+            actions = _quality_eval_actions(self._manual_check_quality_eval(review_path, ["citation_support_metadata_only"]))
+
+        codes = {action.get("code") for action in actions}
+        self.assertIn("citation_support_critic_failed", codes)
+        self.assertNotIn("citation_support_manual_check_requires_author_judgment", codes)
+
     def test_qa_loop_step_is_the_budget_consuming_event(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
