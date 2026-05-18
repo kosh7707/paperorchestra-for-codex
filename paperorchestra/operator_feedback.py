@@ -913,6 +913,66 @@ def _actionable_failure(owner_categories: list[str], reason: str, *, execution_e
         payload["execution_error"] = execution_error
     return payload
 
+
+def _compact_operator_attempt_failure(attempts: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return deterministic, code-only diagnostics from the latest operator attempt.
+
+    Operator candidates can contain manuscript text or sensitive source paths.
+    This helper intentionally copies only compact failure-code style fields from
+    the latest attempt so execution/history consumers can detect repeated hard
+    gate failures without leaking candidate content.
+    """
+    latest = attempts[-1] if attempts else {}
+    if not isinstance(latest, dict):
+        latest = {}
+
+    def _strings(key: str) -> list[str]:
+        return sorted(
+            dict.fromkeys(
+                str(value)
+                for value in latest.get(key) or []
+                if str(value).strip()
+            )
+        )
+
+    payload: dict[str, Any] = {
+        "attempt_index": latest.get("attempt_index"),
+        "latest_gate_reasons": _strings("gate_reasons"),
+        "new_tier2_failures": _strings("new_tier2_failures"),
+        "resolved_active_failures": _strings("resolved_active_failures"),
+        "candidate_active_failures": _strings("candidate_active_failures"),
+        "base_active_failures": _strings("base_active_failures"),
+    }
+    executor_failure = str(latest.get("executor_failure_category") or "").strip()
+    if executor_failure:
+        payload["executor_failure_category"] = executor_failure
+    return payload
+
+
+def _operator_actionable_failure(
+    owner_categories: list[str],
+    reason: str,
+    *,
+    category: str,
+    code: str,
+    attempts: list[dict[str, Any]] | None = None,
+    execution_error: str | None = None,
+) -> dict[str, Any]:
+    payload = _actionable_failure(owner_categories, reason, execution_error=execution_error)
+    payload.update(
+        {
+            "category": category,
+            "code": code,
+            "next_steps": [
+                "Inspect latest_gate_reasons before retrying operator feedback.",
+                "Address new Tier 2 failures before promoting a candidate.",
+                "Avoid identical or no-progress candidates; rerun the QA loop after targeted changes.",
+            ],
+        }
+    )
+    payload.update(_compact_operator_attempt_failure(attempts or []))
+    return payload
+
 def _verification_snapshot(
     cwd: str | Path | None,
     *,
@@ -1512,6 +1572,25 @@ def apply_operator_feedback(
             )
         final_state = load_session(cwd)
         after_sha = _file_sha256(final_state.artifacts.paper_full_tex)
+        if executor_crashed:
+            failure_reason = "supervised operator feedback command failed"
+            failure_category = "operator_execution_error"
+            failure_code = "operator_executor_crashed"
+        elif intent == "reject_candidate_with_reason":
+            failure_reason = "operator feedback explicitly rejected the candidate"
+            failure_category = "operator_rejected_candidate"
+            failure_code = "operator_rejected_candidate"
+        else:
+            failure_reason = "operator feedback did not produce an acceptable canonical manuscript update"
+            failure_category = "operator_candidate_failed_hard_gate"
+            failure_code = str(execution.get("promotion_reason") or "operator_candidate_failed_hard_gate")
+        non_promoted_actionable_failure = None if promoted else _operator_actionable_failure(
+            owner_categories,
+            failure_reason,
+            category=failure_category,
+            code=failure_code,
+            attempts=execution.get("attempts") or [],
+        )
         incorporation_report = {
             "schema_version": OPERATOR_FEEDBACK_INCORPORATION_SCHEMA_VERSION,
             "generated_at": utc_now_iso(),
@@ -1521,7 +1600,7 @@ def apply_operator_feedback(
             "manuscript_sha256_before": current_sha,
             "manuscript_sha256_after": after_sha,
             "promotion_status": execution["promotion_status"],
-            "actionable_failure": None if promoted else _actionable_failure(owner_categories, "operator feedback explicitly rejected the candidate" if intent == "reject_candidate_with_reason" else "operator feedback did not produce an acceptable canonical manuscript update"),
+            "actionable_failure": non_promoted_actionable_failure,
             "issues": final_incorporation,
         }
         incorporation_path = artifact_path(cwd, "operator_feedback.incorporation.json")
@@ -1539,7 +1618,7 @@ def apply_operator_feedback(
                 "candidate_result": final_candidate_result,
                 "incorporation_report": str(incorporation_path),
                 "verification": _verification_block(final_verification) if final_verification else {},
-                "actionable_failure": None if promoted else _actionable_failure(owner_categories, "operator feedback explicitly rejected the candidate" if intent == "reject_candidate_with_reason" else "operator feedback did not produce an acceptable canonical manuscript update"),
+                "actionable_failure": non_promoted_actionable_failure,
             }
         )
         if not promoted:
@@ -1570,6 +1649,7 @@ def apply_operator_feedback(
                     "supervised_budget_exhausted": execution["supervised_budget_exhausted"],
                     "promotion_status": execution["promotion_status"],
                     "post_promotion_qa_verdict": execution["post_promotion_qa_verdict"],
+                    "actionable_failure": non_promoted_actionable_failure,
                 },
             )
         return execution_path, execution
@@ -1598,6 +1678,22 @@ def apply_operator_feedback(
             restored_block = _verification_block(rollback_verification)
         elif rollback_verification:
             restored_block = {"error": rollback_verification.get("error")}
+        exception_actionable_failure = _operator_actionable_failure(
+            owner_categories,
+            "supervised operator feedback command failed",
+            category="operator_execution_error",
+            code="supervised_operator_feedback_command_failed",
+            attempts=execution.get("attempts") or [],
+            execution_error=type(exc).__name__ + ": " + str(exc),
+        )
+        exception_history_actionable_failure = _operator_actionable_failure(
+            owner_categories,
+            "supervised operator feedback command failed",
+            category="operator_execution_error",
+            code="supervised_operator_feedback_command_failed",
+            attempts=execution.get("attempts") or [],
+        )
+        exception_history_actionable_failure["error_type"] = type(exc).__name__
         execution.update(
             {
                 "completed_at": utc_now_iso(),
@@ -1607,7 +1703,7 @@ def apply_operator_feedback(
                 "error": str(exc),
                 "candidate_rollback": {"reason": "exception", "restored_verification": restored_block},
                 "verification": {"restored_after_exception": restored_block},
-                "actionable_failure": _actionable_failure(owner_categories, "supervised operator feedback command failed", execution_error=type(exc).__name__ + ": " + str(exc)),
+                "actionable_failure": exception_actionable_failure,
             }
         )
         execution_path = artifact_path(cwd, "operator_feedback.execution.json")
@@ -1627,8 +1723,9 @@ def apply_operator_feedback(
                     "supervised_max_iterations": execution["supervised_max_iterations"],
                     "supervised_remaining": max(execution["supervised_max_iterations"] - (len(execution.get("attempts") or []) or 1), 0),
                     "supervised_budget_exhausted": True,
-                    "execution_error": type(exc).__name__ + ": " + str(exc),
+                    "execution_error_type": type(exc).__name__,
                     "promotion_status": "rolled_back",
+                    "actionable_failure": exception_history_actionable_failure,
                 },
             )
         return execution_path, execution

@@ -3906,6 +3906,9 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(execution["promotion_status"], "rolled_back")
             self.assertEqual(execution["promotion_reason"], "operator_rejected_candidate")
             self.assertEqual(execution["candidate_rollback"]["reason"], "operator_rejected_candidate")
+            self.assertEqual(execution["actionable_failure"]["category"], "operator_rejected_candidate")
+            self.assertEqual(execution["actionable_failure"]["code"], "operator_rejected_candidate")
+            self.assertEqual(execution["actionable_failure"]["latest_gate_reasons"], [])
             self.assertEqual(execution["supervised_iteration_index"], 0)
             self.assertEqual(execution["attempts"], [])
 
@@ -4717,6 +4720,19 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertNotIn("executor_crashed", execution["attempts"][-1]["gate_reasons"])
             self.assertEqual(execution["attempts"][-1]["executor_failure_category"], "none")
             self.assertEqual(execution["attempts"][-1]["executor_environment"], "preexisting_candidate")
+            failure = execution["actionable_failure"]
+            self.assertEqual(failure["category"], "operator_candidate_failed_hard_gate")
+            self.assertEqual(failure["code"], "operator_candidate_failed_hard_gate")
+            self.assertIn("no_textual_change", failure["latest_gate_reasons"])
+            self.assertIn("executor_returned_identical_content", failure["latest_gate_reasons"])
+            incorporation = json.loads(Path(execution["incorporation_report"]).read_text(encoding="utf-8"))
+            self.assertEqual(incorporation["actionable_failure"]["latest_gate_reasons"], failure["latest_gate_reasons"])
+            history_path = root / ".paper-orchestra" / "qa-loop-history.jsonl"
+            history = [json.loads(line) for line in history_path.read_text(encoding="utf-8").splitlines()]
+            history_failure = history[-1]["actionable_failure"]
+            self.assertEqual(history_failure["category"], "operator_candidate_failed_hard_gate")
+            self.assertIn("no_textual_change", history_failure["latest_gate_reasons"])
+            self.assertNotIn("Draft", json.dumps(history_failure))
             self.assertEqual(paper.read_text(encoding="utf-8"), original)
 
     def test_import_operator_feedback_accepts_action_kind_intent_and_rejects_conflict(self) -> None:
@@ -4787,6 +4803,8 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertIn("tier2_claim_safety_new_failures", with_new["attempts"][-1]["gate_reasons"])
             self.assertIn("active_blocker_progress_missing", with_new["attempts"][-1]["gate_reasons"])
             self.assertEqual(with_new["attempts"][-1]["new_tier2_failures"], ["new_claim_issue"])
+            self.assertEqual(with_new["actionable_failure"]["new_tier2_failures"], ["new_claim_issue"])
+            self.assertIn("tier2_claim_safety_new_failures", with_new["actionable_failure"]["latest_gate_reasons"])
 
     def test_operator_feedback_rollback_records_restored_verification(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -4951,6 +4969,11 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(history[-1]["verdict"], "execution_error")
             self.assertEqual(history[-1]["plan_path"], str(root / "restored-plan.json"))
             self.assertFalse(history[-1]["consumes_budget"])
+            self.assertNotIn("execution_error", history[-1])
+            self.assertEqual(history[-1]["actionable_failure"]["category"], "operator_execution_error")
+            self.assertEqual(history[-1]["actionable_failure"]["code"], "operator_executor_crashed")
+            self.assertEqual(history[-1]["actionable_failure"]["executor_failure_category"], "unexpected_exception")
+            self.assertNotIn("boom", json.dumps(history[-1]["actionable_failure"]))
 
     def test_qa_loop_step_cli_passes_citation_provider_settings(self) -> None:
         class Result:
