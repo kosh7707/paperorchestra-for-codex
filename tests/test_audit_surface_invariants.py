@@ -3043,6 +3043,9 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             _, plan = write_quality_loop_plan(root)
             figure_action = next(action for action in plan["repair_actions"] if action["code"] == "tail_clump")
             command = " ".join(figure_action["suggested_commands"])
+            self.assertEqual(figure_action["automation"], "human_needed")
+            self.assertIn("figure_placement_review_critic", figure_action["approval_required_from"])
+            self.assertIn("cannot safely auto-commit", figure_action["why_not_automatic"])
             self.assertIn("'Results; rm -rf /'", command)
             self.assertNotIn('"Results; rm -rf /"', command)
 

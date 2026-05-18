@@ -202,18 +202,17 @@ def _strict_content_actions(reproducibility: dict[str, Any]) -> list[dict[str, A
                 "Regenerate figure-placement review for the current manuscript before moving figures or rewriting figure references."
             )
         elif kind == "figure_placement_warning":
-            automation = "semi_auto" if code in FIGURE_REPAIR_CODES else "human_needed"
+            automation = "human_needed"
             commands = [
                 "paperorchestra review-figure-placement",
                 "paperorchestra write-sections --only-sections \"Implementation Results\"",
                 "paperorchestra audit-reproducibility",
             ]
             instruction = (
-                "Prepare a targeted candidate patch that redistributes or removes figure references without inventing new figure assets; require figure-placement review or HITL approval before applying."
+                "Prepare a targeted figure-layout decision for a human reviewer; do not auto-edit figure placement from the quality loop."
             )
-            if automation == "semi_auto":
-                why = "Figure placement changes affect narrative flow and layout taste; writer may propose candidates but cannot auto-commit them."
-                approval = "figure_placement_review_critic"
+            why = "Figure placement changes affect narrative flow and layout taste; PaperOrchestra can flag them but cannot safely auto-commit final placement."
+            approval = "figure_placement_review_critic"
         else:
             automation = _automation_for_issue(code)
             commands = _commands_for_validation_issue(code, None)
@@ -438,22 +437,21 @@ def _figure_review_actions(state) -> list[dict[str, Any]]:
         label = str(figure.get("label") or "unknown")
         section = figure.get("section_title") if isinstance(figure.get("section_title"), str) else None
         for code in actionable:
-            automation = "semi_auto" if code in FIGURE_REPAIR_CODES else "human_needed"
             actions.append(
                 _action(
                     action_id=f"figure:{len(actions)+1}",
                     code=code,
                     source=state.artifacts.latest_figure_placement_review_json,
                     target=label,
-                    automation=automation,
+                    automation="human_needed",
                     reason=f"Figure {label} has placement warning {code}." + (f" Section: {section}." if section else ""),
                     suggested_commands=[
                         "paperorchestra review-figure-placement",
                         f"paperorchestra write-sections --only-sections {shlex.quote(section or 'Implementation Results')}",
                         "paperorchestra audit-reproducibility",
                     ],
-                    ralph_instruction="Treat figure edits as semi-automatic: produce a candidate redistribution/removal patch, then request HITL review for final figure layout.",
-                    why_not_automatic="Figure placement changes affect narrative flow; writer may propose candidates but cannot auto-commit final placement.",
+                    ralph_instruction="Stop automatic figure-layout editing and request human/critic review for figure redistribution, removal, or final artwork placement.",
+                    why_not_automatic="Figure placement changes affect narrative flow and layout taste; PaperOrchestra can flag them but cannot safely auto-commit final placement.",
                     approval_required_from="figure_placement_review_critic",
                 )
             )

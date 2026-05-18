@@ -181,10 +181,22 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
                 "repair_actions": [{"code": "citation_density_policy_failed", "automation": "semi_auto"}],
             }
             plan_after = {**plan, "verdict": "human_needed"}
+            validation_path = root / "validation.citation-repair.json"
+            validation_path.write_text(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "blocking_issue_count": 1,
+                        "issues": [{"code": "citation_coverage_insufficient"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
             repair_payload = {
                 "accepted": False,
                 "reason": "validation_failed",
                 "issue_count": 1,
+                "validation": {"path": str(validation_path), "ok": False, "blocking_issue_count": 1},
             }
             with patch("paperorchestra.ralph_bridge.write_quality_eval", side_effect=[(root / "before.json", before_eval), (root / "after.json", after_eval)]):
                 with patch("paperorchestra.ralph_bridge.write_quality_loop_plan", side_effect=[(root / "plan-before.json", plan), (root / "plan-after.json", plan_after)]):
@@ -201,6 +213,11 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             attempted = result.payload.get("actions_attempted", [])
             self.assertEqual(attempted[0]["code"], "citation_density_policy_failed")
             self.assertEqual(attempted[0]["handler"], "repair_citation_claims")
+            failure = result.payload["repair_failures"][0]
+            self.assertEqual(failure["reason"], "validation_failed")
+            self.assertEqual(failure["validation"]["failing_codes"], ["citation_coverage_insufficient"])
+            self.assertEqual(result.payload["actionable_failure"]["category"], "citation_repair_failed")
+            self.assertEqual(result.payload["actionable_failure"]["validation_failing_codes"], ["citation_coverage_insufficient"])
             self.assertNotEqual(result.payload["verdict"], "ready_for_human_finalization")
 
     def test_qa_loop_step_refreshes_unbound_citation_evidence_before_repair(self) -> None:

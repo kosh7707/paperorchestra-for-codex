@@ -163,6 +163,41 @@ def _restore_current_after_uncommitted_candidate(
     }
 
 
+def _validation_failing_codes_from_repair(repair: dict[str, Any]) -> list[str]:
+    validation = repair.get("validation") if isinstance(repair.get("validation"), dict) else {}
+    path = validation.get("path") if isinstance(validation, dict) else None
+    payload = _read_json(path) if path else None
+    issues = payload.get("issues") if isinstance(payload, dict) and isinstance(payload.get("issues"), list) else []
+    codes = [str(issue.get("code")) for issue in issues if isinstance(issue, dict) and issue.get("code")]
+    if not codes and isinstance(validation, dict) and validation.get("ok") is False:
+        codes.append("validation_failed")
+    return sorted(dict.fromkeys(codes))
+
+
+def _citation_repair_failure_payload(code: str, repair: dict[str, Any]) -> dict[str, Any]:
+    validation = repair.get("validation") if isinstance(repair.get("validation"), dict) else {}
+    validation_codes = _validation_failing_codes_from_repair(repair)
+    return {
+        "code": code,
+        "handler": "repair_citation_claims",
+        "reason": str(repair.get("reason") or "repair_not_accepted"),
+        "issue_count": repair.get("issue_count"),
+        "claim_safety_issue_count": repair.get("claim_safety_issue_count"),
+        "candidate_path": repair.get("candidate_path"),
+        "validation": {
+            "path": validation.get("path") if isinstance(validation, dict) else None,
+            "ok": validation.get("ok") if isinstance(validation, dict) else None,
+            "blocking_issue_count": validation.get("blocking_issue_count") if isinstance(validation, dict) else None,
+            "failing_codes": validation_codes,
+        },
+        "next_steps": [
+            "Inspect validation failing codes before retrying citation repair.",
+            "Refresh citation support evidence or weaken/delete unsupported claims.",
+            "Rerun paperorchestra qa-loop-plan --quality-mode claim_safe after targeted changes.",
+        ],
+    }
+
+
 
 
 
@@ -444,6 +479,15 @@ def run_qa_loop_step(
         elif code in {"citation_support_critic_failed", "citation_density_policy_failed", "high_risk_uncited_claim"}:
             repair = repair_citation_claims(cwd, provider, runtime_mode=runtime_mode, require_compile=require_compile, commit=False)
             if not repair.get("accepted"):
+                failure = _citation_repair_failure_payload(code, repair)
+                execution.setdefault("repair_failures", []).append(failure)
+                execution["actionable_failure"] = {
+                    "category": "citation_repair_failed",
+                    "code": code,
+                    "reason": failure["reason"],
+                    "validation_failing_codes": failure["validation"]["failing_codes"],
+                    "next_steps": failure["next_steps"],
+                }
                 execution["actions_attempted"].append({"code": code, "handler": "repair_citation_claims", "result": repair})
                 break
             if paper_path and repair.get("candidate_path"):
