@@ -1045,23 +1045,14 @@ def _check_operator_cycle_artifacts(
                         packet_failures.append({"reason": "artifact_entry_not_object"})
                         continue
                     raw_path = str(artifact.get("path") or "")
-                    artifact_path = Path(raw_path)
-                    if not artifact_path.is_absolute():
-                        artifact_path = root / raw_path
-                    try:
-                        resolved = artifact_path.resolve()
-                    except OSError:
-                        packet_failures.append({"role": artifact.get("role"), "path": raw_path, "reason": "not_found"})
-                        continue
-                    try:
-                        rel_path = resolved.relative_to(root)
-                    except ValueError:
+                    artifact_path, rel_path = _resolve_operator_packet_snapshot_path(root, raw_path)
+                    if artifact_path is None or rel_path is None:
                         packet_failures.append({"role": artifact.get("role"), "path": raw_path, "reason": "not_snapshotted_under_evidence_root"})
                         continue
                     if not str(rel_path).startswith("operator-feedback/"):
                         packet_failures.append({"role": artifact.get("role"), "path": str(rel_path), "reason": "snapshot_outside_operator_feedback"})
                         continue
-                    digest = _sha256_file(resolved) if resolved.exists() and resolved.is_file() else None
+                    digest = _sha256_file(artifact_path) if artifact_path.exists() and artifact_path.is_file() else None
                     expected = str(artifact.get("sha256") or "")
                     if not digest or digest != expected:
                         packet_failures.append(
@@ -1089,6 +1080,50 @@ def _check_operator_cycle_artifacts(
         failing_codes.add("operator_prompt_response_traces_missing")
     else:
         checked.append({"check": "operator_prompt_response_traces", "prompts": len(prompts), "responses": len(responses)})
+
+
+def _resolve_operator_packet_snapshot_path(root: Path, raw_path: str) -> tuple[Path | None, Path | None]:
+    """Resolve an operator-review packet artifact path inside ``root``.
+
+    Operator packets are often created inside a Docker container where the
+    evidence root is mounted at a short absolute path such as
+    ``/evidence/fresh-smoke``.  The same evidence bundle may later be audited
+    from a different host path.  The packet snapshot is portable because the
+    immutable artifact copy lives under ``operator-feedback/`` and is protected
+    by the recorded sha256.  Accept relocated absolute paths only when they can
+    be mapped back to that operator-feedback snapshot subtree.
+    """
+
+    candidates: list[Path] = []
+    original = Path(raw_path)
+    if original.is_absolute():
+        candidates.append(original)
+        parts = original.parts
+        if "operator-feedback" in parts:
+            idx = parts.index("operator-feedback")
+            candidates.append(root / Path(*parts[idx:]))
+    else:
+        candidates.append(root / original)
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            continue
+        try:
+            rel_path = resolved.relative_to(root)
+        except ValueError:
+            continue
+        if not str(rel_path).startswith("operator-feedback/"):
+            return resolved, rel_path
+        if resolved.exists() and resolved.is_file():
+            return resolved, rel_path
+    return None, None
 
 
 def _check_operator_history_cycle_count(

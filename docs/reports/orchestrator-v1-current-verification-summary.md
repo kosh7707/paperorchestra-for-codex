@@ -178,3 +178,24 @@ This satisfies the current `fresh_container_functional_smoke` and
 only and does not satisfy private final live manuscript quality, citation
 integrity, critical-claim support, figure matching, final Critic consensus, or
 Verifier completion audit.
+
+## 10. Fresh private final live smoke rerun
+
+A current private final live smoke rerun was summarized in public-safe form:
+
+```text
+smoke_verdict: pass_loop_verified
+operator_feedback_cycles: 5
+acceptance overall: pass
+quality_gate_status: fail_tier2
+manuscript_readiness: not_ready
+```
+
+Public-safe reports:
+
+```text
+docs/reports/orchestrator-v1-redacted-final-smoke-20260518.md
+docs/reports/orchestrator-v1-redacted-final-smoke-20260518.summary.json
+```
+
+This satisfies the redacted private-final runtime/evidence gate and confirms leakage/evidence completeness. It does **not** satisfy manuscript-readiness gates: Tier 2 claim/citation safety still fails, citation integrity has duplicate-support findings, and figure placement still has warnings.

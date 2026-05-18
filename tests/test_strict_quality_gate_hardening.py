@@ -1485,6 +1485,71 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             passed_from_relative_root = validate_evidence_completeness(Path(os.path.relpath(root, Path.cwd())))
             self.assertEqual(passed_from_relative_root["status"], "pass")
 
+            container_mounted_artifact_path = (
+                "/evidence/fresh-smoke/operator-feedback/"
+                f"{packet_snapshot_dir.name}/{frozen_artifact.name}"
+            )
+            (root / "operator-feedback" / "operator-review-packet.cycle-1.json").write_text(
+                json.dumps(
+                    {
+                        "packet_sha256": "abc",
+                        "artifacts": [
+                            {
+                                "role": "quality_eval",
+                                "path": container_mounted_artifact_path,
+                                "sha256": frozen_sha,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            relocated_packet = validate_evidence_completeness(root)
+            self.assertEqual(relocated_packet["status"], "pass")
+
+            (root / "operator-feedback" / "operator-review-packet.cycle-1.json").write_text(
+                json.dumps(
+                    {
+                        "packet_sha256": "abc",
+                        "artifacts": [
+                            {
+                                "role": "quality_eval",
+                                "path": container_mounted_artifact_path,
+                                "sha256": "0" * 64,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            relocated_wrong_hash = validate_evidence_completeness(root)
+            self.assertEqual(relocated_wrong_hash["status"], "fail")
+            self.assertIn("operator_packet_artifact_snapshot_invalid", relocated_wrong_hash["failing_codes"])
+
+            (root / "operator-feedback" / "operator-review-packet.cycle-1.json").write_text(
+                json.dumps(
+                    {
+                        "packet_sha256": "abc",
+                        "artifacts": [
+                            {
+                                "role": "quality_eval",
+                                "path": str(root / "artifacts" / "quality-eval.json"),
+                                "sha256": hashlib.sha256((root / "artifacts" / "quality-eval.json").read_bytes()).hexdigest(),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            relocated_outside_snapshot_dir = validate_evidence_completeness(root)
+            self.assertEqual(relocated_outside_snapshot_dir["status"], "fail")
+            self.assertIn("operator_packet_artifact_snapshot_invalid", relocated_outside_snapshot_dir["failing_codes"])
+
+            (root / "operator-feedback" / "operator-review-packet.cycle-1.json").write_text(
+                json.dumps({"packet_sha256": "abc", "artifacts": [{"role": "quality_eval", "path": str(frozen_artifact), "sha256": frozen_sha}]}),
+                encoding="utf-8",
+            )
+
             (root / "artifacts" / "qa-loop.plan.json").write_text(
                 json.dumps({"verdict": "continue", "orchestration_terminal": {"verdict": "human_needed"}}),
                 encoding="utf-8",

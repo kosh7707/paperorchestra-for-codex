@@ -1,6 +1,6 @@
 {
   "schema_version": "orchestrator-acceptance-ledger/1",
-  "overall_status": "blocked",
+  "overall_status": "failed",
   "gate_count": 19,
   "gates": [
     {
@@ -161,28 +161,23 @@
     {
       "id": "private_final_live_smoke_redacted",
       "title": "Private final live smoke produced redacted evidence",
-      "status": "blocked",
+      "status": "pass",
       "required": true,
       "evidence_refs": [
         {
           "kind": "report",
-          "summary": "Execution index defines current evidence requirements.",
-          "path": "docs/reports/orchestrator-v1-execution-index.md"
+          "summary": "Current redacted final live smoke summary.",
+          "path": "docs/reports/orchestrator-v1-redacted-final-smoke-20260518.md"
         },
         {
           "kind": "report",
-          "summary": "Historical redacted smoke summary remains context only.",
-          "path": "<redacted>"
-        },
-        {
-          "kind": "plan",
-          "summary": "Tier-2 plan requires fresh rerun after hardening.",
-          "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+          "summary": "Machine-readable redacted final live smoke summary.",
+          "path": "docs/reports/orchestrator-v1-redacted-final-smoke-20260518.summary.json"
         }
       ],
       "notes": [
-        "Historical AH evidence is stale context only and cannot satisfy the current gate.",
-        "Fresh final smoke must be rerun after T2 and wrapper-safety changes."
+        "Fresh redacted final live smoke completed as a system-loop pass.",
+        "This is not a submission-readiness claim; manuscript readiness remains not_ready."
       ],
       "private_safe_summary": true
     },
@@ -194,79 +189,63 @@
       "evidence_refs": [
         {
           "kind": "report",
-          "summary": "Current local verification summary before next fresh full live smoke.",
-          "path": "docs/reports/orchestrator-v1-current-verification-summary.md"
+          "summary": "Current redacted final live smoke summary includes meta-leakage pass.",
+          "path": "docs/reports/orchestrator-v1-redacted-final-smoke-20260518.md"
         }
       ],
       "notes": [
-        "Current ledger checkpoint after local verification baseline.",
-        "Current tracked-file denylist scan found no matches after removing a generic wrapper residue."
+        "Raw residue remained local-only; committed summary contains public-safe status count and hash fields."
       ],
       "private_safe_summary": true
     },
     {
       "id": "no_unsupported_critical_claims",
       "title": "No unsupported critical claims remain",
-      "status": "blocked",
+      "status": "fail",
       "required": true,
       "evidence_refs": [
         {
           "kind": "report",
-          "summary": "Execution index defines current evidence requirements.",
-          "path": "docs/reports/orchestrator-v1-execution-index.md"
-        },
-        {
-          "kind": "plan",
-          "summary": "Tier-2 plan requires fresh rerun after hardening.",
-          "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+          "summary": "Current redacted final smoke summary records Tier-2 claim and citation safety failure.",
+          "path": "docs/reports/orchestrator-v1-redacted-final-smoke-20260518.md"
         }
       ],
       "notes": [
-        "Requires fresh functional or final smoke evidence after the current T2 and wrapper-safety changes."
+        "Tier-2 claim safety failed; citation support still contains weak/manual-check items and a high-risk citation failure."
       ],
       "private_safe_summary": true
     },
     {
       "id": "no_unknown_refs_for_critical_claims",
       "title": "No Unknown references support critical claims",
-      "status": "blocked",
+      "status": "pass",
       "required": true,
       "evidence_refs": [
         {
           "kind": "report",
-          "summary": "Execution index defines current evidence requirements.",
-          "path": "docs/reports/orchestrator-v1-execution-index.md"
-        },
-        {
-          "kind": "plan",
-          "summary": "Tier-2 plan requires fresh rerun after hardening.",
-          "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+          "summary": "Rendered reference audit in the current redacted final smoke reported no unknown metadata or missing cited BibTeX keys.",
+          "path": "docs/reports/orchestrator-v1-redacted-final-smoke-20260518.md"
         }
       ],
       "notes": [
-        "Requires fresh functional or final smoke evidence after the current T2 and wrapper-safety changes."
+        "Rendered reference audit passed with no unknown metadata keys and no missing BibTeX keys for cites."
       ],
       "private_safe_summary": true
     },
     {
       "id": "citation_integrity",
       "title": "Citation integrity passes or only non-critical warnings remain",
-      "status": "blocked",
+      "status": "fail",
       "required": true,
       "evidence_refs": [
         {
           "kind": "report",
-          "summary": "Execution index defines current evidence requirements.",
-          "path": "docs/reports/orchestrator-v1-execution-index.md"
-        },
-        {
-          "kind": "plan",
-          "summary": "Tier-2 plan requires fresh rerun after hardening.",
-          "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+          "summary": "Current redacted final smoke summary records citation-integrity audit and Critic failures.",
+          "path": "docs/reports/orchestrator-v1-redacted-final-smoke-20260518.md"
         }
       ],
       "notes": [
-        "Requires fresh functional or final smoke evidence after the current T2 and wrapper-safety changes."
+        "Citation integrity audit and Critic failed with duplicate-support findings."
       ],
       "private_safe_summary": true
     },
@@ -278,88 +257,68 @@
       "evidence_refs": [
         {
           "kind": "report",
-          "summary": "Execution index defines current evidence requirements.",
-          "path": "docs/reports/orchestrator-v1-execution-index.md"
-        },
-        {
-          "kind": "plan",
-          "summary": "Tier-2 plan requires fresh rerun after hardening.",
-          "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+          "summary": "Current redacted final smoke summary records figure placement review counts and warnings.",
+          "path": "docs/reports/orchestrator-v1-redacted-final-smoke-20260518.md"
         }
       ],
       "notes": [
-        "Requires fresh functional or final smoke evidence after the current T2 and wrapper-safety changes."
+        "Figure review ran and counted generated figures, but final supplied-figure match quality remains warning-bearing and needs follow-up."
       ],
       "private_safe_summary": true
     },
     {
       "id": "hard_gates_no_fail_except_human_polish",
       "title": "Hard gates do not fail except final human-only polish",
-      "status": "blocked",
+      "status": "fail",
       "required": true,
       "evidence_refs": [
         {
           "kind": "report",
-          "summary": "Execution index defines current evidence requirements.",
-          "path": "docs/reports/orchestrator-v1-execution-index.md"
-        },
-        {
-          "kind": "report",
-          "summary": "Historical redacted smoke summary remains context only.",
-          "path": "<redacted>"
-        },
-        {
-          "kind": "plan",
-          "summary": "Tier-2 plan requires fresh rerun after hardening.",
-          "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+          "summary": "Current redacted final smoke summary records Tier-2 hard-gate failure.",
+          "path": "docs/reports/orchestrator-v1-redacted-final-smoke-20260518.md"
         }
       ],
       "notes": [
-        "Historical AH evidence had Tier-2 blocker status; current smoke proof is required."
+        "Tier-2 claim/citation safety failed; this is not merely human polish."
       ],
       "private_safe_summary": true
     },
     {
       "id": "critic_consensus_near_ready_or_better",
       "title": "Critic consensus says near_ready or better",
-      "status": "blocked",
+      "status": "fail",
       "required": true,
       "evidence_refs": [
         {
           "kind": "report",
-          "summary": "Execution index defines current evidence requirements.",
-          "path": "docs/reports/orchestrator-v1-execution-index.md"
-        },
-        {
-          "kind": "report",
-          "summary": "Historical redacted smoke summary remains context only.",
-          "path": "<redacted>"
+          "summary": "Current redacted final smoke summary records manuscript readiness not_ready.",
+          "path": "docs/reports/orchestrator-v1-redacted-final-smoke-20260518.md"
         }
       ],
       "notes": [
-        "No current final manuscript Critic consensus exists after T2 and wrapper-safety changes."
+        "Current final smoke ended with manuscript_readiness not_ready; no near_ready-or-better consensus is claimed."
       ],
       "private_safe_summary": true
     },
     {
       "id": "verifier_evidence_completeness_no_leakage",
       "title": "Verifier confirms evidence completeness and no leakage",
-      "status": "blocked",
+      "status": "pass",
       "required": true,
       "evidence_refs": [
         {
           "kind": "report",
-          "summary": "Execution index defines current evidence requirements.",
-          "path": "docs/reports/orchestrator-v1-execution-index.md"
+          "summary": "Current redacted final live smoke summary shows evidence completeness and meta-leakage checks passed.",
+          "path": "docs/reports/orchestrator-v1-redacted-final-smoke-20260518.md"
         },
         {
-          "kind": "plan",
-          "summary": "Tier-2 plan requires fresh rerun after hardening.",
-          "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+          "kind": "report",
+          "summary": "Portable evidence-completeness rerun summary.",
+          "path": "docs/reports/orchestrator-v1-redacted-final-smoke-20260518.summary.json"
         }
       ],
       "notes": [
-        "Requires fresh functional or final smoke evidence after the current T2 and wrapper-safety changes."
+        "Evidence completeness and meta-leakage checks passed after portable operator-packet path validation."
       ],
       "private_safe_summary": true
     },

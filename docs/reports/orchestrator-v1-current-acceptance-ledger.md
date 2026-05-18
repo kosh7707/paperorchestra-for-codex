@@ -1,13 +1,13 @@
 Acceptance ledger
-overall: blocked
+overall: failed
 gates: 19
-pass: 10
-fail: 0
-blocked: 8
+pass: 13
+fail: 4
+blocked: 1
 unknown: 1
 first open gates:
-  - private_final_live_smoke_redacted
   - no_unsupported_critical_claims
-  - no_unknown_refs_for_critical_claims
   - citation_integrity
   - supplied_figures_inventoried_matched_or_blocked
+  - hard_gates_no_fail_except_human_polish
+  - critic_consensus_near_ready_or_better
