@@ -628,6 +628,13 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(density[0]["citation_count"], 4)
             self.assertEqual(density[1]["issue_type"], "citation_bomb_paragraph")
             self.assertEqual(density[1]["citation_count"], 6)
+            constraints = context["refinement_constraints"]
+            self.assertIn("citation_bomb_detected", constraints["before_failing_codes"])
+            self.assertIn("citation_support_weak", constraints["forbidden_new_tier2_codes"])
+            self.assertIn("citation_support_manual_check", constraints["forbidden_new_tier2_codes"])
+            self.assertIn("citation_support_unsupported", constraints["forbidden_new_tier2_codes"])
+            self.assertIn("citation_support_insufficient_evidence", constraints["forbidden_new_tier2_codes"])
+            self.assertTrue(any("Do not introduce new citation-bomb" in item for item in constraints["hard_constraints"]))
 
     def test_operator_issue_context_ignores_missing_citation_density_artifact(self) -> None:
         from paperorchestra.operator_feedback import _operator_issue_context
@@ -645,12 +652,6 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             context = _operator_issue_context({"packet_path": str(packet_path)})
 
             self.assertNotIn("citation_density_issues", context)
-
-    def test_content_refinement_prompt_names_citation_density_issue_context(self) -> None:
-        prompt = Path("paperorchestra/prompt_assets/content_refinement_agent.md").read_text(encoding="utf-8")
-
-        self.assertIn("issue_context.citation_density_issues", prompt)
-        self.assertIn("do not add new bibliography keys", prompt.lower())
 
     def test_qa_loop_plan_supervised_handoff_uses_canonical_packet_sha(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -3428,6 +3429,83 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(context["high_risk_uncited_claims"][0]["line"], 12)
             self.assertIn("High-risk uncited security claim", context["high_risk_uncited_claims"][0]["sentence"])
             self.assertIn("primary repair targets", context["writer_instruction"])
+            self.assertIn("refinement_constraints", context)
+            self.assertIn("citation_support_weak", context["refinement_constraints"]["forbidden_new_tier2_codes"])
+            self.assertIn("citation_support_manual_check", context["refinement_constraints"]["forbidden_new_tier2_codes"])
+            self.assertIn("citation_support_metadata_only", context["refinement_constraints"]["forbidden_new_tier2_codes"])
+            self.assertIn("citation_support_evidence_missing", context["refinement_constraints"]["forbidden_new_tier2_codes"])
+            self.assertIn("high_risk_uncited_claim", context["refinement_constraints"]["forbidden_new_tier2_codes"])
+
+    def test_operator_issue_context_includes_duplicate_support_from_packet(self) -> None:
+        from paperorchestra.operator_feedback import _operator_issue_context
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n\\begin{document}\n"
+                "One claim~\\cite{Repeat}. Another claim~\\cite{Repeat}. "
+                "Third claim~\\cite{Repeat}. Fourth claim~\\cite{Repeat}.\n"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            self._write_terminal_human_needed_plan(root, verdict="human_needed")
+            artifact_path(root, "citation_support_review.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "citation-support-review/1",
+                        "items": [
+                            {
+                                "id": f"cite-{idx}",
+                                "support_status": "supported",
+                                "claim_type": "background",
+                                "sentence": f"Claim {idx} uses the repeated source.",
+                                "citation_keys": ["Repeat"],
+                            }
+                            for idx in range(1, 5)
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            artifact_path(root, "citation_integrity.audit.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "citation-integrity-audit/1",
+                        "status": "fail",
+                        "failing_codes": ["citation_duplicate_support"],
+                        "checks": {
+                            "duplicate_support": {
+                                "status": "fail",
+                                "duplicate_keys": ["Repeat"],
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            packet_path, _packet = build_operator_review_packet(root, review_scope="tex_only")
+
+            context = _operator_issue_context({"packet_path": str(packet_path)})
+
+            duplicate = context["citation_duplicate_support_issues"]
+            self.assertEqual(duplicate[0]["issue_type"], "citation_duplicate_support")
+            self.assertEqual(duplicate[0]["citation_key"], "Repeat")
+            self.assertEqual(duplicate[0]["occurrence_count"], 4)
+            self.assertEqual(duplicate[0]["affected_items"][0]["id"], "cite-1")
+            self.assertIn("without adding bibliography keys", duplicate[0]["suggested_fix"])
+
+    def test_content_refinement_prompt_names_citation_density_issue_context(self) -> None:
+        prompt = Path("paperorchestra/prompt_assets/content_refinement_agent.md").read_text(encoding="utf-8")
+
+        self.assertIn("issue_context.citation_density_issues", prompt)
+        self.assertIn("issue_context.citation_duplicate_support_issues", prompt)
+        self.assertIn("issue_context.refinement_constraints", prompt)
+        self.assertIn("do not add new bibliography keys", prompt.lower())
+        self.assertIn("do not introduce new citation bombs", prompt.lower())
 
     def test_operator_feedback_cli_trio_smoke_runs_explicit_supervised_flow(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

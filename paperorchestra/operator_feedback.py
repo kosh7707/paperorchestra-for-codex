@@ -80,6 +80,20 @@ AXIS_CATASTROPHIC_DROP = 15.0
 HUMAN_REVIEWABLE_NEW_TIER2_CODES = {
     "citation_support_manual_check",
 }
+OPERATOR_REFINEMENT_FORBIDDEN_NEW_TIER2_CODES = {
+    "citation_bomb_detected",
+    "citation_duplicate_support",
+    "citation_integrity_failed",
+    "citation_integrity_audit_fail",
+    "citation_support_weak",
+    "citation_support_manual_check",
+    "citation_support_unsupported",
+    "citation_support_contradicted",
+    "citation_support_metadata_only",
+    "citation_support_insufficient_evidence",
+    "citation_support_evidence_missing",
+    "high_risk_uncited_claim",
+}
 
 def _review_scope(require_pdf: bool, review_scope: str | None, pdf_path: str | Path | None) -> str:
     if review_scope:
@@ -505,6 +519,80 @@ def _high_risk_claim_context(payload: dict[str, Any] | None, *, limit: int = 16)
             break
     return result
 
+def _duplicate_support_context(
+    citation_integrity_payload: dict[str, Any] | None,
+    citation_review_payload: dict[str, Any] | None,
+    *,
+    limit: int = 16,
+    examples_per_key: int = 4,
+) -> list[dict[str, Any]]:
+    if not isinstance(citation_integrity_payload, dict):
+        return []
+    checks = citation_integrity_payload.get("checks") if isinstance(citation_integrity_payload.get("checks"), dict) else {}
+    duplicate = checks.get("duplicate_support") if isinstance(checks.get("duplicate_support"), dict) else {}
+    duplicate_keys = [str(key).strip() for key in duplicate.get("duplicate_keys") or [] if str(key).strip()]
+    if not duplicate_keys:
+        return []
+    review_items = citation_review_payload.get("items") if isinstance(citation_review_payload, dict) else []
+    support_items = [item for item in review_items if isinstance(item, dict)] if isinstance(review_items, list) else []
+    result: list[dict[str, Any]] = []
+    for key in duplicate_keys:
+        affected: list[dict[str, Any]] = []
+        for index, item in enumerate(support_items, start=1):
+            keys = {str(candidate).strip() for candidate in item.get("citation_keys") or [] if str(candidate).strip()}
+            if key not in keys:
+                continue
+            affected.append(
+                {
+                    "id": str(item.get("id") or f"citation-support-{index}"),
+                    "support_status": str(item.get("support_status") or item.get("status") or "unknown"),
+                    "claim_type": item.get("claim_type"),
+                    "risk": item.get("risk"),
+                    "sentence": _truncate_context_text(item.get("sentence"), limit=900),
+                }
+            )
+        result.append(
+            {
+                "issue_type": "citation_duplicate_support",
+                "citation_key": key,
+                "occurrence_count": len(affected) or None,
+                "affected_items": affected[:examples_per_key],
+                "suggested_fix": (
+                    "Keep this citation only where it directly supports a distinct claim; "
+                    "otherwise remove the repeated key, merge redundant support, or redistribute existing citations without adding bibliography keys."
+                ),
+            }
+        )
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _operator_refinement_constraints(
+    quality_eval_payload: dict[str, Any] | None,
+    citation_integrity_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    before_failing_codes: list[str] = []
+    if isinstance(quality_eval_payload, dict):
+        tiers = quality_eval_payload.get("tiers") if isinstance(quality_eval_payload.get("tiers"), dict) else {}
+        tier2 = tiers.get("tier_2_claim_safety") if isinstance(tiers.get("tier_2_claim_safety"), dict) else {}
+        before_failing_codes.extend(str(code) for code in tier2.get("failing_codes") or [] if str(code).strip())
+    if isinstance(citation_integrity_payload, dict):
+        before_failing_codes.extend(str(code) for code in citation_integrity_payload.get("failing_codes") or [] if str(code).strip())
+    before_failing_codes = sorted(dict.fromkeys(before_failing_codes))
+    return {
+        "before_failing_codes": before_failing_codes,
+        "forbidden_new_tier2_codes": sorted(OPERATOR_REFINEMENT_FORBIDDEN_NEW_TIER2_CODES),
+        "hard_constraints": [
+            "Use only bibliography keys already present in citation_map.json; do not add new bibliography keys.",
+            "Do not introduce new citation-bomb sentences or paragraphs.",
+            "Do not introduce weak, unsupported, manual-check, metadata-only, or insufficient-evidence citation support.",
+            "Do not introduce new high-risk uncited claims; scope, delete, or ground existing high-risk claims instead.",
+            "Reduce duplicate-support and citation-density issues; never make their counts worse.",
+        ],
+    }
+
+
 def _citation_density_context(payload: dict[str, Any] | None, *, limit: int = 16) -> list[dict[str, Any]]:
     if not isinstance(payload, dict):
         return []
@@ -566,9 +654,12 @@ def _operator_issue_context(imported: dict[str, Any]) -> dict[str, Any]:
         "problematic_citation_items": _problematic_citation_context(citation_review),
         "high_risk_uncited_claims": _high_risk_claim_context(quality_eval),
         "citation_density_issues": _citation_density_context(citation_integrity_audit),
+        "citation_duplicate_support_issues": _duplicate_support_context(citation_integrity_audit, citation_review),
+        "refinement_constraints": _operator_refinement_constraints(quality_eval, citation_integrity_audit),
         "writer_instruction": (
             "Use these concrete sentences as the primary repair targets. Do not add new bibliography keys; "
-            "either ground each sentence with existing directly supporting evidence, soften it into scoped author-material prose, or remove it."
+            "either ground each sentence with existing directly supporting evidence, soften it into scoped author-material prose, or remove it. "
+            "A candidate that introduces new citation bombs, weak citation support, duplicate support, or high-risk uncited claims will be rejected."
         ),
     }
     return {key: value for key, value in context.items() if value}

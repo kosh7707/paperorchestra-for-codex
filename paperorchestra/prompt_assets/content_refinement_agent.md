@@ -16,10 +16,12 @@ You will receive:
 - reviewer_feedback: A JSON object containing specific Strengths, Weaknesses,
   Questions, and Decisions from an LLM reviewer.
   It may also contain issue_context.problematic_citation_items and
-  issue_context.high_risk_uncited_claims, plus
+  issue_context.high_risk_uncited_claims,
   issue_context.citation_density_issues for citation-bomb sentences or
-  paragraphs. Treat those concrete sentences as primary repair targets; do not
-  satisfy them with generic global prose.
+  paragraphs, issue_context.citation_duplicate_support_issues for repeated
+  overused citation keys, and issue_context.refinement_constraints for
+  machine-readable hard constraints. Treat those concrete sentences as primary
+  repair targets; do not satisfy them with generic global prose.
 
 Your Goal
 1. Analyze Feedback: Deconstruct the reviewer_feedback into actionable
@@ -71,6 +73,13 @@ Critical Execution Standards
 - Citation density: For each issue_context.citation_density_issues item, split
   citation-bomb sentences, remove redundant references, or move citations to
   the exact sentence they support. Do not add new bibliography keys.
+- Duplicate support: For each issue_context.citation_duplicate_support_issues
+  item, keep the repeated citation key only where it supports a distinct claim;
+  otherwise remove, merge, or redistribute existing citations without adding
+  bibliography keys.
+- Hard constraints: Obey issue_context.refinement_constraints. In particular,
+  do not introduce new citation bombs, duplicate support, weak/manual citation
+  support, or high-risk uncited claims while fixing existing issues.
 
 Output Format (Strict)
 You MUST return your response in two distinct code blocks in this exact order:
