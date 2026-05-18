@@ -132,22 +132,29 @@
     {
       "id": "fresh_container_functional_smoke",
       "title": "Fresh container functional smoke passes",
-      "status": "blocked",
+      "status": "pass",
       "required": true,
       "evidence_refs": [
         {
           "kind": "report",
-          "summary": "Execution index defines current evidence requirements.",
-          "path": "docs/reports/orchestrator-v1-execution-index.md"
+          "summary": "Current fresh-container functional smoke summary.",
+          "path": "docs/reports/orchestrator-v1-fresh-container-functional-smoke-20260518.md"
         },
         {
-          "kind": "plan",
-          "summary": "Tier-2 plan requires fresh rerun after hardening.",
-          "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+          "kind": "report",
+          "summary": "Generated public machine summary for the fresh-container functional smoke.",
+          "path": "docs/reports/orchestrator-v1-fresh-container-functional-smoke-20260518.summary.json"
+        },
+        {
+          "kind": "report",
+          "summary": "Current local verification summary before next fresh full live smoke.",
+          "path": "docs/reports/orchestrator-v1-current-verification-summary.md"
         }
       ],
       "notes": [
-        "Requires fresh functional or final smoke evidence after the current T2 and wrapper-safety changes."
+        "Fresh Docker-container functional smoke passed from clean public branch clone.",
+        "Synthetic container mode only; this does not satisfy redacted final live manuscript-readiness gates.",
+        "Generated public machine summary records key raw evidence hashes and redacted counts."
       ],
       "private_safe_summary": true
     },
@@ -359,22 +366,29 @@
     {
       "id": "exported_pdf_tex_evidence_bundle",
       "title": "Exported PDF, TeX, and evidence bundle exist",
-      "status": "blocked",
+      "status": "pass",
       "required": true,
       "evidence_refs": [
         {
           "kind": "report",
-          "summary": "Execution index defines current evidence requirements.",
-          "path": "docs/reports/orchestrator-v1-execution-index.md"
+          "summary": "Current fresh-container functional smoke summary.",
+          "path": "docs/reports/orchestrator-v1-fresh-container-functional-smoke-20260518.md"
         },
         {
-          "kind": "plan",
-          "summary": "Tier-2 plan requires fresh rerun after hardening.",
-          "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+          "kind": "report",
+          "summary": "Generated public machine summary for the fresh-container functional smoke.",
+          "path": "docs/reports/orchestrator-v1-fresh-container-functional-smoke-20260518.summary.json"
+        },
+        {
+          "kind": "report",
+          "summary": "Current local verification summary before next fresh full live smoke.",
+          "path": "docs/reports/orchestrator-v1-current-verification-summary.md"
         }
       ],
       "notes": [
-        "Requires fresh functional or final smoke evidence after the current T2 and wrapper-safety changes."
+        "Fresh container smoke exported PDF, TeX, and public evidence bundle files.",
+        "Synthetic container mode only; final redacted live manuscript quality gates remain blocked.",
+        "Generated public machine summary records key raw evidence hashes and redacted counts."
       ],
       "private_safe_summary": true
     },

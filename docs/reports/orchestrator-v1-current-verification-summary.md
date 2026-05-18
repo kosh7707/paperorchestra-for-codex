@@ -116,9 +116,6 @@ results.
 This checkpoint does not prove v1 completion. The current acceptance ledger remains
 blocked because the following still require fresh evidence:
 
-- mock demo rerun;
-- compile/export rerun;
-- fresh container functional smoke;
 - fresh private final live smoke after T2 hardening;
 - citation and critical-claim quality proof;
 - supplied-figure inventory/match/replacement proof;
@@ -148,5 +145,36 @@ pdf size: 46480 bytes
 ```
 
 This satisfies the current `mock_demo` and `compile_export` gates. It does not
-satisfy final private-smoke manuscript quality, fresh-container functional smoke,
-or final exported evidence-bundle gates.
+satisfy final private-smoke manuscript quality or any citation/claim/figure/final
+consensus gates.
+
+## 9. Fresh-container functional smoke
+
+A fresh Docker-container functional smoke was run against the pushed
+`orchestrator-v1-runtime` branch after `cd9c5db`. The raw packet stays outside
+the tracked repository; the public-safe summary is recorded in:
+
+```text
+docs/reports/orchestrator-v1-fresh-container-functional-smoke-20260518.md
+docs/reports/orchestrator-v1-fresh-container-functional-smoke-20260518.summary.json
+```
+
+The container proof passed:
+
+```text
+fresh-qa status: ok
+full pytest: 1016 passed, 182 subtests passed
+MCP raw smokes: pass, 66 tools
+Codex attach smoke: pass
+OMX explore: OK
+compile/export: pass, 2-page PDF, 46468 bytes
+leakage matches: 0
+fresh-smoke acceptance summary: pass
+public machine summary: key raw evidence hashes recorded
+```
+
+This satisfies the current `fresh_container_functional_smoke` and
+`exported_pdf_tex_evidence_bundle` gates. It remains synthetic-container evidence
+only and does not satisfy private final live manuscript quality, citation
+integrity, critical-claim support, figure matching, final Critic consensus, or
+Verifier completion audit.

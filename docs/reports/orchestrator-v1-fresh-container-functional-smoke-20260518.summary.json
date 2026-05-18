@@ -1,0 +1,408 @@
+{
+  "schema_version": "fresh-container-functional-smoke-public-summary/1",
+  "safe_summary": true,
+  "raw_packet_label": "redacted-container-packet:501f4adba1fd",
+  "source_branch": "orchestrator-v1-runtime",
+  "host_head_commit_before_smoke": "cd9c5db",
+  "container_recipe": {
+    "engine": "docker",
+    "image": "paperorchestra-ubuntu-tools:24.04",
+    "clean_clone": true,
+    "sensitive_materials_used": false,
+    "smoke_mode": "synthetic_container"
+  },
+  "command_exit_codes": [
+    {
+      "name": "update_ai_clis",
+      "exit_code": 1
+    },
+    {
+      "name": "omx_setup",
+      "exit_code": 0
+    },
+    {
+      "name": "versions",
+      "exit_code": 0
+    },
+    {
+      "name": "apt_update",
+      "exit_code": 0
+    },
+    {
+      "name": "apt_compile_stack",
+      "exit_code": 0
+    },
+    {
+      "name": "clone_checkout",
+      "exit_code": 0
+    },
+    {
+      "name": "install_dev",
+      "exit_code": 0
+    },
+    {
+      "name": "cli_version",
+      "exit_code": 0
+    },
+    {
+      "name": "environment_summary",
+      "exit_code": 0
+    },
+    {
+      "name": "doctor",
+      "exit_code": 0
+    },
+    {
+      "name": "register_mcp",
+      "exit_code": 0
+    },
+    {
+      "name": "mcp_raw_content_length",
+      "exit_code": 0
+    },
+    {
+      "name": "mcp_raw_newline",
+      "exit_code": 0
+    },
+    {
+      "name": "codex_attach_smoke",
+      "exit_code": 0
+    },
+    {
+      "name": "omx_explore_smoke",
+      "exit_code": 0
+    },
+    {
+      "name": "fresh_qa",
+      "exit_code": 0
+    },
+    {
+      "name": "demo_mock",
+      "exit_code": 0
+    },
+    {
+      "name": "compile_demo",
+      "exit_code": 0
+    },
+    {
+      "name": "export_current",
+      "exit_code": 0
+    },
+    {
+      "name": "pdfinfo_export",
+      "exit_code": 0
+    },
+    {
+      "name": "tracked_leakage_scan",
+      "exit_code": 0
+    },
+    {
+      "name": "build_artifact_manifest",
+      "exit_code": 0
+    },
+    {
+      "name": "validate_evidence",
+      "exit_code": 0
+    },
+    {
+      "name": "summarize_fresh_smoke",
+      "exit_code": 0
+    }
+  ],
+  "versions": [
+    "codex-cli 0.130.0",
+    "oh-my-codex v0.17.3",
+    "Node.js v22.22.2",
+    "Platform: linux x64",
+    "Python 3.12.3",
+    "v22.22.2",
+    "10.9.7"
+  ],
+  "fresh_qa": {
+    "status": "ok",
+    "steps": {
+      "audit_fidelity": "ok",
+      "cli_help": "ok",
+      "compile": "ok",
+      "compile_env": "ok",
+      "doctor": "ok",
+      "environment": "ok",
+      "generated_citation_titles": "ok",
+      "init_minimal": "ok",
+      "install": "ok",
+      "mock_pipeline": "ok",
+      "review_gate_comparison": "ok",
+      "session_eval": "ok",
+      "tests": "ok",
+      "venv": "ok"
+    },
+    "compile_environment_ready": true,
+    "selected_sandbox": "/usr/bin/firejail",
+    "remaining": [],
+    "workdir_label": "redacted-fresh-qa-workdir",
+    "logs_label": "redacted-fresh-qa-logs"
+  },
+  "pytest": {
+    "summary": "1016 passed, 182 subtests passed in 73.11s (0:01:13)"
+  },
+  "mcp_raw": {
+    "content_length": {
+      "status": "ok",
+      "registered": true,
+      "server_ok": true,
+      "tools_list_ok": true,
+      "tool_count": 66,
+      "expected_tools_present": true,
+      "status_call_reached_server": true
+    },
+    "newline": {
+      "status": "ok",
+      "registered": true,
+      "server_ok": true,
+      "tools_list_ok": true,
+      "tool_count": 66,
+      "expected_tools_present": true,
+      "status_call_reached_server": true
+    }
+  },
+  "codex_attach": {
+    "status": "ok",
+    "codex_version": "codex-cli 0.130.0",
+    "mcp_tool_call_found": true,
+    "tool_name": "status"
+  },
+  "omx_explore": {
+    "exit_code": 0,
+    "stdout_sha256": "565339bc4d33d72817b583024112eb7f5cdf3e5eef0252d6ec1b9c9a94e12bb3",
+    "stdout_text": "OK"
+  },
+  "compile_export": {
+    "compile_exit_code": 0,
+    "export_exit_code": 0,
+    "pdf_pages": 2,
+    "pdf_size_bytes": 46468,
+    "exported_files": [
+      "compile-report.json",
+      "fidelity.audit.json",
+      "paper.full.pdf",
+      "paper.full.tex",
+      "references.bib",
+      "reproducibility.audit.json",
+      "review.latest.json",
+      "runtime-parity.json",
+      "session.json"
+    ]
+  },
+  "leakage": {
+    "status": "ok",
+    "match_count": 0,
+    "scanned_file_count": 237
+  },
+  "evidence_completeness": {
+    "status": "pass",
+    "missing_count": 0,
+    "inconsistent_count": 0,
+    "failing_codes": []
+  },
+  "fresh_smoke_acceptance": {
+    "schema_version": "fresh-smoke-acceptance-summary/1",
+    "overall_status": "pass",
+    "smoke_mode": "synthetic_container",
+    "checks": [
+      {
+        "id": "evidence_completeness",
+        "status": "pass",
+        "reason": "evidence_completeness_pass"
+      },
+      {
+        "id": "fresh_smoke_verdict",
+        "status": "pass",
+        "reason": "fresh_smoke_verdict_schema_pass"
+      },
+      {
+        "id": "material_invariance",
+        "status": "pass",
+        "reason": "material_invariance_pass"
+      },
+      {
+        "id": "meta_leakage_scan",
+        "status": "pass",
+        "reason": "meta_leakage_scan_pass"
+      },
+      {
+        "id": "operator_feedback_cycles",
+        "status": "pass",
+        "reason": "operator_feedback_cycle_counters_pass"
+      },
+      {
+        "id": "exported_pdf_tex_evidence",
+        "status": "pass",
+        "reason": "exported_pdf_tex_evidence_present"
+      },
+      {
+        "id": "material_manifest_safety",
+        "status": "pass",
+        "reason": "material_manifest_not_required_for_synthetic"
+      }
+    ],
+    "redacted_counts": {
+      "operator_feedback_cycles": 0,
+      "artifact_file_count": 416,
+      "material_file_count": 0
+    },
+    "acceptance_evidence": {
+      "fresh_container_functional_smoke": {
+        "status": "pass",
+        "evidence_refs": [
+          {
+            "kind": "fresh_smoke/summary",
+            "summary": "container smoke summary",
+            "path": "artifacts/fresh-smoke-acceptance-summary.json"
+          }
+        ],
+        "notes": [
+          "container_mode"
+        ]
+      },
+      "private_final_live_smoke_redacted": {
+        "status": "blocked",
+        "evidence_refs": [
+          {
+            "kind": "fresh_smoke/summary",
+            "summary": "redacted final smoke summary",
+            "path": "artifacts/fresh-smoke-acceptance-summary.json"
+          }
+        ],
+        "notes": [
+          "synthetic_only_not_final_evidence"
+        ]
+      },
+      "private_leakage_scan": {
+        "status": "pass",
+        "evidence_refs": [
+          {
+            "kind": "fresh_smoke/leakage",
+            "summary": "redacted leakage scan summary",
+            "path": "artifacts/fresh-smoke-acceptance-summary.json"
+          }
+        ],
+        "notes": [
+          "synthetic_only"
+        ]
+      },
+      "compile_export": {
+        "status": "pass",
+        "evidence_refs": [
+          {
+            "kind": "fresh_smoke/export",
+            "summary": "compiled/exported PDF and TeX accounted for",
+            "path": "artifacts/fresh-smoke-acceptance-summary.json"
+          }
+        ],
+        "notes": [
+          "export_manifest_checked"
+        ]
+      },
+      "exported_pdf_tex_evidence_bundle": {
+        "status": "pass",
+        "evidence_refs": [
+          {
+            "kind": "fresh_smoke/export",
+            "summary": "PDF TeX and evidence bundle accounted for",
+            "path": "artifacts/fresh-smoke-acceptance-summary.json"
+          }
+        ],
+        "notes": [
+          "export_bundle_checked"
+        ]
+      }
+    },
+    "source_file_sha256": "723e849df744b944b8e3268bb5b760240f3a5e7b8c6d78ecb72222a625564c04"
+  },
+  "key_file_hashes": [
+    {
+      "role": "packet_readme",
+      "relpath_sha256": "b335630551682c19a781afebcf4d07bf978fb1f8ac04c6bf87428ed5106870f5",
+      "sha256": "56cadcc852c8cd155180681552f6191188f2cbf0770fd6a4104e061484fd7ab9",
+      "size_bytes": 716
+    },
+    {
+      "role": "command_ledger",
+      "relpath_sha256": "26d03d2942aa9c4ca65807baf54071878004582cbfe687fc10a24898c59ccdb4",
+      "sha256": "c84f52cdded9f65409c2b8967227295fca57c64a87e12b4646089a767e0006ab",
+      "size_bytes": 602
+    },
+    {
+      "role": "verdict",
+      "relpath_sha256": "95c1aeda1144530c545042efaf23e30f50b0e92d831ff571b170f0fd906c92e0",
+      "sha256": "f2596680ae9073d78c48896be8ba669f5ce4ea7a5c687f0bb7c6b5f2a95cb6d1",
+      "size_bytes": 759
+    },
+    {
+      "role": "artifact_manifest",
+      "relpath_sha256": "dbe675def4b9580d70057b86d99948844f7cca24fe45b7f59e36fc5eb3aff19d",
+      "sha256": "6284559ebb5a0f633a7af92cc1f27d736a26f76a40b67faf5e7b4b1a8a18f983",
+      "size_bytes": 87389
+    },
+    {
+      "role": "acceptance_summary",
+      "relpath_sha256": "7d4d239332853bdb069574f74faa3418d5b3558397f3f6e44930fd436409251f",
+      "sha256": "723e849df744b944b8e3268bb5b760240f3a5e7b8c6d78ecb72222a625564c04",
+      "size_bytes": 3078
+    },
+    {
+      "role": "fresh_qa_summary",
+      "relpath_sha256": "0d5f6089fd016fa7be92d8c7387b7f76cf4d2dcfea1bf76db1a11bf298548064",
+      "sha256": "5ccf8b02d3627b8fad1bba5c2dae842bc405879d7e6c4b483edf7cd639d03ecc",
+      "size_bytes": 876
+    },
+    {
+      "role": "evidence_completeness",
+      "relpath_sha256": "090d5717da9191ef3c82502140544aded714af71a3194351e6e408e1928806b5",
+      "sha256": "4a7d36b3a11c52a7366b78bdeac5fc989649aef3356f7f7c0bd988d05c4dd58e",
+      "size_bytes": 10720
+    },
+    {
+      "role": "leakage_scan",
+      "relpath_sha256": "b31e9447b78552b9eb0f4b0cc8d2acca26139e064197675d0a81b3624530aa3f",
+      "sha256": "e4b40068de200060d8748795d3f4b6d6197b930400b10a574915785c2910763b",
+      "size_bytes": 226
+    },
+    {
+      "role": "codex_attach_report",
+      "relpath_sha256": "322e5be41eac1ef9d94a1fb82092fc47e203165566665694081be72dab75edff",
+      "sha256": "9ce4b83a20795ff169890934a2324d23e4d393d00748d7ac03be050cb0ec3baf",
+      "size_bytes": 1301
+    },
+    {
+      "role": "mcp_raw_content_length",
+      "relpath_sha256": "cbe8ab6a240621b48fecd033716438d146b04ac40d4cdeb93590a3abd1472a42",
+      "sha256": "a5cb28d8e58498a006d24a0cf04e20adf61bbb71a48a0443147570dcb0a9cad7",
+      "size_bytes": 1680
+    },
+    {
+      "role": "mcp_raw_newline",
+      "relpath_sha256": "8440bac9254b1033f8898efc39fa430f0c001f856e5ac422174718ff00d917ac",
+      "sha256": "fd13712493d448cd9104a2244058656e5dc970cfaa3a46d60d58307475e79827",
+      "size_bytes": 1666
+    },
+    {
+      "role": "omx_explore_stdout",
+      "relpath_sha256": "ca42feb4d0556517e7033ff3779eff59cf4d915aa7a86cba690a7d1368bfa9f9",
+      "sha256": "565339bc4d33d72817b583024112eb7f5cdf3e5eef0252d6ec1b9c9a94e12bb3",
+      "size_bytes": 2
+    },
+    {
+      "role": "exported_pdf",
+      "relpath_sha256": "b08439d1e0b1369daca661d3e2dc011292e23d633c4d7db9565d1d3ee034c194",
+      "sha256": "eacd04f38a43b376500945e1392adaa28bef89f12310c9931261c70314a01d11",
+      "size_bytes": 46468
+    },
+    {
+      "role": "exported_tex",
+      "relpath_sha256": "7dbe597bf45dfd351d766e1b166411e5647ce09b954c984e4697a18d96c39a92",
+      "sha256": "63194a518baf28e682caaf93af597562078421df3d645d5e1a2591dcfacac536",
+      "size_bytes": 2266
+    }
+  ]
+}
