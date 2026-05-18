@@ -204,6 +204,46 @@ class PreLiveCheckScriptTests(unittest.TestCase):
                 (root / "fail.err").read_text(encoding="utf-8"),
             )
 
+    def test_fresh_full_live_smoke_redacts_full_private_marker_path_token(self) -> None:
+        wrapper = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+        start = wrapper.index("redact() {")
+        end = wrapper.index("\n}\n\npublic_label()", start) + 3
+        function_text = wrapper[start:end]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            harness = root / "harness.sh"
+            sample = "/tmp/example/paperorchestra-private-material/foo/provider-wrap.sh"
+            harness.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        function_text,
+                        f"printf '%s\\n' {sample!r} | redact",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(["bash", str(harness)], text=True, capture_output=True, check=True)
+
+            self.assertIn("[REDACTED_PRIVATE_ARTIFACT_PATH]", result.stdout)
+            self.assertNotIn("paperorchestra-" + "private", result.stdout)
+            self.assertNotIn(sample, result.stdout)
+            self.assertNotIn("/tmp/example", result.stdout)
+
+    def test_fresh_full_live_smoke_venue_is_generic_and_configurable(self) -> None:
+        text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+        subprocess.run(["bash", "-n", "scripts/fresh-full-live-smoke-loop.sh"], check=True)
+
+        self.assertIn("PAPERO_FRESH_SMOKE_VENUE", text)
+        self.assertIn("FRESH_SMOKE_VENUE=", text)
+        self.assertIn('--venue "$FRESH_SMOKE_VENUE"', text)
+        self.assertNotIn("TD" + "SC", text)
+        self.assertNotIn("An_" + "AEAD", text)
+        self.assertNotIn("C" + "CI", text)
+
     def test_fresh_full_live_smoke_skips_empty_reference_metadata_seed(self) -> None:
         text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
         subprocess.run(["bash", "-n", "scripts/fresh-full-live-smoke-loop.sh"], check=True)
@@ -1652,21 +1692,38 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         selectors = sorted(set(re.findall(r"tests\.[A-Za-z0-9_\.]+\.test_[A-Za-z0-9_]+", text)))
         self.assertTrue(selectors)
 
-        def iter_cases(suite: unittest.TestSuite):
-            for item in suite:
-                if isinstance(item, unittest.TestSuite):
-                    yield from iter_cases(item)
-                else:
-                    yield item
+        probe = """
+import json, sys, unittest
+selectors = json.loads(sys.stdin.read())
 
-        loader = unittest.TestLoader()
-        broken = []
-        for selector in selectors:
-            suite = loader.loadTestsFromName(selector)
-            failed = [case for case in iter_cases(suite) if case.__class__.__name__ == "_FailedTest"]
-            if failed:
-                broken.append(selector)
-        self.assertEqual(broken, [])
+def iter_cases(suite):
+    for item in suite:
+        if isinstance(item, unittest.TestSuite):
+            yield from iter_cases(item)
+        else:
+            yield item
+
+loader = unittest.TestLoader()
+broken = []
+for selector in selectors:
+    suite = loader.loadTestsFromName(selector)
+    failed = [case for case in iter_cases(suite) if case.__class__.__name__ == '_FailedTest']
+    if failed:
+        broken.append(selector)
+print(json.dumps(broken))
+sys.exit(1 if broken else 0)
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", probe],
+            input=json.dumps(selectors),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        broken = json.loads(result.stdout or "[]")
+        self.assertEqual(broken, [], result.stderr)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":

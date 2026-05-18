@@ -1,13 +1,13 @@
 Acceptance ledger
 overall: blocked
 gates: 19
-pass: 0
+pass: 6
 fail: 0
-blocked: 15
-unknown: 4
+blocked: 12
+unknown: 1
 first open gates:
-  - state_contract_tests
-  - action_planner_scenario_tests
-  - fake_omx_unit_contract_tests
-  - real_bounded_omx_command_probes
-  - mcp_raw_and_attach_smoke
+  - mock_demo
+  - compile_export
+  - fresh_container_functional_smoke
+  - private_final_live_smoke_redacted
+  - no_unsupported_critical_claims

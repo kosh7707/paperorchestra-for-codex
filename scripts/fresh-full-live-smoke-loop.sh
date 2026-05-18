@@ -140,7 +140,7 @@ LOOP_STOP_REASON="not_started"
 
 redact() {
   local private_artifact_marker="paperorchestra-""private"
-  sed -E "s#([^[:space:]]*${private_artifact_marker}[^[:space:]]*/)(provider-wrap\\.sh)#[REDACTED_PRIVATE_ARTIFACT_PATH]/\\2#g; s#(/home/kosh/temp/|\\.\\./)?${private_artifact_marker}[^[:space:]]*#[REDACTED_PRIVATE_ARTIFACT_PATH]#g; s/s2k-[A-Za-z0-9]+/[REDACTED_S2_KEY]/g; s/sk-(proj|live|test|svcacct)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}/[REDACTED_OPENAI_KEY]/g; s/Bearer[[:space:]]+[A-Za-z0-9._-]{20,}/Bearer [REDACTED_TOKEN]/g"
+  sed -E "s#([^[:space:]]*${private_artifact_marker}[^[:space:]]*/)(provider-wrap\\.sh)#[REDACTED_PRIVATE_ARTIFACT_PATH]/\\2#g; s#[^[:space:]]*${private_artifact_marker}[^[:space:]]*#[REDACTED_PRIVATE_ARTIFACT_PATH]#g; s/s2k-[A-Za-z0-9]+/[REDACTED_S2_KEY]/g; s/sk-(proj|live|test|svcacct)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}/[REDACTED_OPENAI_KEY]/g; s/Bearer[[:space:]]+[A-Za-z0-9._-]{20,}/Bearer [REDACTED_TOKEN]/g"
 }
 
 public_label() {
@@ -945,8 +945,8 @@ for attempt in $(seq 1 "$attempts"); do
   if retryable_transport_file "${prefix}.attempt-${attempt}.stderr.log.raw"; then retryable=true; fi
   printf '{"mode":"%s","attempt":%s,"exit_code":%s,"retryable_transport":%s,"replayed":%s}\n' "$mode" "$attempt" "$rc" "$retryable" "$([[ "$attempt" -gt 1 ]] && echo true || echo false)" >> "${prefix}.retry.jsonl"
   private_artifact_marker="paperorchestra-""private"
-  sed -E "s#(/home/kosh/temp/|\\.\\./)?${private_artifact_marker}[^[:space:]]*#[REDACTED_PRIVATE_ARTIFACT_PATH]#g; s/s2k-[A-Za-z0-9]+/[REDACTED_S2_KEY]/g; s/sk-(proj|live|test|svcacct)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}/[REDACTED_OPENAI_KEY]/g; s/Bearer[[:space:]]+[A-Za-z0-9._-]{20,}/Bearer [REDACTED_TOKEN]/g" < "${prefix}.attempt-${attempt}.response.md.raw" > "${prefix}.attempt-${attempt}.response.md"
-  sed -E "s#(/home/kosh/temp/|\\.\\./)?${private_artifact_marker}[^[:space:]]*#[REDACTED_PRIVATE_ARTIFACT_PATH]#g; s/s2k-[A-Za-z0-9]+/[REDACTED_S2_KEY]/g; s/sk-(proj|live|test|svcacct)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}/[REDACTED_OPENAI_KEY]/g; s/Bearer[[:space:]]+[A-Za-z0-9._-]{20,}/Bearer [REDACTED_TOKEN]/g" < "${prefix}.attempt-${attempt}.stderr.log.raw" > "${prefix}.attempt-${attempt}.stderr.log"
+  sed -E "s#[^[:space:]]*${private_artifact_marker}[^[:space:]]*#[REDACTED_PRIVATE_ARTIFACT_PATH]#g; s/s2k-[A-Za-z0-9]+/[REDACTED_S2_KEY]/g; s/sk-(proj|live|test|svcacct)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}/[REDACTED_OPENAI_KEY]/g; s/Bearer[[:space:]]+[A-Za-z0-9._-]{20,}/Bearer [REDACTED_TOKEN]/g" < "${prefix}.attempt-${attempt}.response.md.raw" > "${prefix}.attempt-${attempt}.response.md"
+  sed -E "s#[^[:space:]]*${private_artifact_marker}[^[:space:]]*#[REDACTED_PRIVATE_ARTIFACT_PATH]#g; s/s2k-[A-Za-z0-9]+/[REDACTED_S2_KEY]/g; s/sk-(proj|live|test|svcacct)-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}/[REDACTED_OPENAI_KEY]/g; s/Bearer[[:space:]]+[A-Za-z0-9._-]{20,}/Bearer [REDACTED_TOKEN]/g" < "${prefix}.attempt-${attempt}.stderr.log.raw" > "${prefix}.attempt-${attempt}.stderr.log"
   rm -f "${prefix}.attempt-${attempt}.response.md.raw" "${prefix}.attempt-${attempt}.stderr.log.raw"
   cp "${prefix}.attempt-${attempt}.response.md" "${prefix}.response.md"
   cp "${prefix}.attempt-${attempt}.stderr.log" "${prefix}.stderr.log"
@@ -1231,7 +1231,8 @@ for base in [root/'workdir'/'inputs', root/'inputs-materials', root/'evidence-on
 PY
 
 cd "$WORKDIR"
-run_step init "${CLI[@]}" init --idea inputs/idea.tex --experimental-log inputs/experimental_log.tex --template inputs/template.tex --guidelines inputs/guidelines.md --figures-dir inputs/figures --venue "TDSC-style systems/security paper" --page-limit 12 --cutoff-date 2026-04-01 || fail_now fail_execution_error '"init"' '"logs/init.stderr.log"' 1
+FRESH_SMOKE_VENUE="${PAPERO_FRESH_SMOKE_VENUE:-research paper}"
+run_step init "${CLI[@]}" init --idea inputs/idea.tex --experimental-log inputs/experimental_log.tex --template inputs/template.tex --guidelines inputs/guidelines.md --figures-dir inputs/figures --venue "$FRESH_SMOKE_VENUE" --page-limit 12 --cutoff-date 2026-04-01 || fail_now fail_execution_error '"init"' '"logs/init.stderr.log"' 1
 run_step check_compile_env_initial "${CLI[@]}" check-compile-env || fail_now fail_execution_error '"check_compile_env_initial"' '"logs/check_compile_env_initial.stderr.log"' 1
 if grep -Eq '^[[:space:]]*@' inputs/reference_metadata_seed.bib; then
   run_step import_reference_metadata_seed "${CLI[@]}" import-prior-work --seed-file inputs/reference_metadata_seed.bib --source metadata_seed_for_live_verification || fail_now fail_execution_error '"import_reference_metadata_seed"' '"logs/import_reference_metadata_seed.stderr.log"' 1
