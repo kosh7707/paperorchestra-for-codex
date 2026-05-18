@@ -96,44 +96,36 @@
     {
       "id": "mock_demo",
       "title": "Mock demo still passes",
-      "status": "blocked",
+      "status": "pass",
       "required": true,
       "evidence_refs": [
         {
           "kind": "report",
-          "summary": "Execution index defines current evidence requirements.",
-          "path": "docs/reports/orchestrator-v1-execution-index.md"
-        },
-        {
-          "kind": "plan",
-          "summary": "Tier-2 plan requires fresh rerun after hardening.",
-          "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+          "summary": "Current local verification summary before next fresh full live smoke.",
+          "path": "docs/reports/orchestrator-v1-current-verification-summary.md"
         }
       ],
       "notes": [
-        "Requires fresh functional or final smoke evidence after the current T2 and wrapper-safety changes."
+        "Current repo-local mock demo completed successfully and produced draft_complete session artifacts.",
+        "This is current local/public smoke evidence only, not final live manuscript-readiness evidence."
       ],
       "private_safe_summary": true
     },
     {
       "id": "compile_export",
       "title": "Compile/export still passes",
-      "status": "blocked",
+      "status": "pass",
       "required": true,
       "evidence_refs": [
         {
           "kind": "report",
-          "summary": "Execution index defines current evidence requirements.",
-          "path": "docs/reports/orchestrator-v1-execution-index.md"
-        },
-        {
-          "kind": "plan",
-          "summary": "Tier-2 plan requires fresh rerun after hardening.",
-          "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+          "summary": "Current local verification summary before next fresh full live smoke.",
+          "path": "docs/reports/orchestrator-v1-current-verification-summary.md"
         }
       ],
       "notes": [
-        "Requires fresh functional or final smoke evidence after the current T2 and wrapper-safety changes."
+        "Current mock session compiled to PDF and exported the main TeX/PDF/evidence artifacts.",
+        "This is current local/public smoke evidence only, not final live manuscript-readiness evidence."
       ],
       "private_safe_summary": true
     },

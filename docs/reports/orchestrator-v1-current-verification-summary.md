@@ -124,3 +124,29 @@ blocked because the following still require fresh evidence:
 - supplied-figure inventory/match/replacement proof;
 - final Critic consensus and Verifier evidence bundle;
 - final README/ENVIRONMENT/Skill refresh.
+
+
+## 8. Current mock demo and compile/export smoke
+
+A current mock demo was rerun in a persistent repo-local workdir:
+
+```text
+status: SUCCESS
+session: po-bf0fa0f9a354
+phase before compile: draft_complete
+```
+
+The same session was compiled and exported:
+
+```text
+compile: pass
+status after compile: complete
+export: pass
+exported files: paper.full.tex, paper.full.pdf, references.bib, review.latest.json, reproducibility.audit.json, fidelity.audit.json, runtime-parity.json, compile-report.json, session.json
+pdf pages: 2
+pdf size: 46480 bytes
+```
+
+This satisfies the current `mock_demo` and `compile_export` gates. It does not
+satisfy final private-smoke manuscript quality, fresh-container functional smoke,
+or final exported evidence-bundle gates.
