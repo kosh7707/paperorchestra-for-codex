@@ -36,6 +36,44 @@ def _history_entry_consumes_budget(entry: dict[str, Any]) -> bool:
     return str(entry.get("event_type") or "") in BUDGET_CONSUMING_HISTORY_EVENTS
 
 
+def _actionable_failure_signature(entry: dict[str, Any]) -> dict[str, Any] | None:
+    failure = entry.get("actionable_failure")
+    if not isinstance(failure, dict):
+        return None
+    category = str(failure.get("category") or "").strip()
+    code = str(failure.get("code") or "").strip()
+    reason = str(failure.get("reason") or "").strip()
+    validation_codes = sorted(
+        {
+            str(code).strip()
+            for code in failure.get("validation_failing_codes") or []
+            if str(code).strip()
+        }
+    )
+    if not any([category, code, reason, validation_codes]):
+        return None
+    return {
+        "category": category,
+        "code": code,
+        "reason": reason,
+        "validation_failing_codes": validation_codes,
+    }
+
+
+def _repeated_actionable_failure(budget_history: list[dict[str, Any]]) -> dict[str, Any]:
+    signatures = [_actionable_failure_signature(entry) for entry in budget_history]
+    signatures = [signature for signature in signatures if signature]
+    if len(signatures) < 2:
+        return {"detected": False, "count": len(signatures), "signature": signatures[-1] if signatures else None}
+    latest = signatures[-1]
+    count = 1
+    for signature in reversed(signatures[:-1]):
+        if signature != latest:
+            break
+        count += 1
+    return {"detected": count >= 2, "count": count, "signature": latest}
+
+
 def operator_feedback_cycle_count(cwd: str | Path | None, session_id: str | None = None) -> int:
     if session_id is None:
         current_session = runtime_root(cwd) / "current_session.txt"
@@ -404,5 +442,6 @@ def _build_cross_iteration(
             "tier_3_axis_drops": axis_drops,
             "oscillation": {"detected": oscillation_detected, "flapping_codes": flapping_codes},
             "forward_progress": forward_progress,
+            "repeated_actionable_failure": _repeated_actionable_failure(budget_history),
         },
     }

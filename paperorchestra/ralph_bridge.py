@@ -764,5 +764,6 @@ def run_qa_loop_step(
             execution_path=path,
             event_type="qa_loop_step",
             consumes_budget=True,
+            extra={"actionable_failure": execution.get("actionable_failure")} if execution.get("actionable_failure") else None,
         )
     return StepResult(path=path, payload=execution, exit_code=qa_loop_exit_code(verdict))

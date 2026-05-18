@@ -514,6 +514,71 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertTrue(cross["regression"]["same_manuscript_as_previous"])
             self.assertFalse(cross["regression"]["forward_progress"])
 
+    def test_quality_loop_cross_iteration_detects_repeated_actionable_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / ".paper-orchestra"
+            runtime.mkdir()
+            failure = {
+                "category": "citation_repair_failed",
+                "code": "citation_support_critic_failed",
+                "reason": "validation_failed",
+                "validation_failing_codes": ["citation_coverage_insufficient"],
+            }
+            (runtime / "qa-loop-history.jsonl").write_text(
+                "\n".join(
+                    json.dumps(
+                        {
+                            "session_id": "s1",
+                            "event_type": "qa_loop_step",
+                            "consumes_budget": True,
+                            "manuscript_hash": f"sha256:{idx}",
+                            "failing_codes": ["citation_support_weak"],
+                            "actionable_failure": failure,
+                        }
+                    )
+                    for idx in range(2)
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            cross = _build_cross_iteration(root, "s1", "sha256:current", ["citation_support_weak"], 10)
+
+            repeated = cross["regression"]["repeated_actionable_failure"]
+            self.assertTrue(repeated["detected"])
+            self.assertEqual(repeated["count"], 2)
+            self.assertEqual(repeated["signature"], failure)
+
+    def test_quality_loop_cross_iteration_single_actionable_failure_does_not_escalate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / ".paper-orchestra"
+            runtime.mkdir()
+            (runtime / "qa-loop-history.jsonl").write_text(
+                json.dumps(
+                    {
+                        "session_id": "s1",
+                        "event_type": "qa_loop_step",
+                        "consumes_budget": True,
+                        "manuscript_hash": "sha256:one",
+                        "failing_codes": ["citation_support_weak"],
+                        "actionable_failure": {
+                            "category": "citation_repair_failed",
+                            "code": "citation_support_critic_failed",
+                            "reason": "validation_failed",
+                            "validation_failing_codes": ["citation_coverage_insufficient"],
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            cross = _build_cross_iteration(root, "s1", "sha256:current", ["citation_support_weak"], 10)
+
+            self.assertFalse(cross["regression"]["repeated_actionable_failure"]["detected"])
+
     def test_citation_support_review_reuses_same_session_web_review(self) -> None:
         class CountingCitationProvider(MockProvider):
             def __init__(self) -> None:
@@ -1724,6 +1789,40 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
         quality_eval["cross_iteration"]["budget"]["current_attempt_consumes_budget"] = False
         verdict, _ = _plan_verdict(quality_eval, actions, accept_mixed_provenance=False)
         self.assertEqual(verdict, "continue")
+
+    def test_quality_loop_plan_stops_on_repeated_actionable_repair_failure(self) -> None:
+        quality_eval = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "status": "fail",
+                    "failing_codes": ["citation_support_weak"],
+                }
+            },
+            "cross_iteration": {
+                "budget": {"remaining": 3, "current_attempt_consumes_budget": False},
+                "regression": {
+                    "forward_progress": True,
+                    "oscillation": {"detected": False, "flapping_codes": []},
+                    "tier_3_axis_drops": [],
+                    "repeated_actionable_failure": {
+                        "detected": True,
+                        "count": 2,
+                        "signature": {
+                            "category": "citation_repair_failed",
+                            "code": "citation_support_critic_failed",
+                            "reason": "validation_failed",
+                            "validation_failing_codes": ["citation_coverage_insufficient"],
+                        },
+                    },
+                },
+            },
+        }
+        actions = [{"code": "citation_support_critic_failed", "automation": "semi_auto"}]
+
+        verdict, rationale = _plan_verdict(quality_eval, actions, accept_mixed_provenance=False)
+
+        self.assertEqual(verdict, "human_needed")
+        self.assertIn("repeated actionable repair failure", rationale)
 
     def test_section_process_residue_is_non_reviewable_failure(self) -> None:
         quality_eval = {

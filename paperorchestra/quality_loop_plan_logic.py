@@ -691,6 +691,11 @@ def _plan_verdict(
         return "human_needed", "the latest budgeted qa-loop step made no forward progress"
     if regression.get("tier_3_axis_drops"):
         return "human_needed", "Tier 3 reviewer-axis regression exceeded tolerance"
+    repeated_failure = regression.get("repeated_actionable_failure") if isinstance(regression.get("repeated_actionable_failure"), dict) else {}
+    if repeated_failure.get("detected"):
+        signature = repeated_failure.get("signature") if isinstance(repeated_failure.get("signature"), dict) else {}
+        reason = signature.get("reason") or "same actionable repair failure"
+        return "human_needed", f"repeated actionable repair failure detected: {reason}"
     tier3 = tiers.get("tier_3_scholarly_quality") if isinstance(tiers.get("tier_3_scholarly_quality"), dict) else {}
     if isinstance(tier3, dict) and tier3.get("anti_inflation_triggered"):
         return "human_needed", "reviewer score anti-inflation guard triggered"
