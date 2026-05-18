@@ -39,6 +39,30 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
         self.assertEqual(density_actions[0]["approval_required_from"], "citation_integrity_critic")
         self.assertIn("citation-bomb", density_actions[0]["ralph_instruction"])
 
+    def test_qa_loop_plan_surfaces_duplicate_support_as_executable_repair(self) -> None:
+        quality_eval = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "status": "fail",
+                    "checks": {
+                        "citation_integrity_gate": {
+                            "status": "fail",
+                            "failing_codes": ["citation_duplicate_support"],
+                            "citation_integrity_audit": {"path": "/tmp/citation_integrity.audit.json"},
+                        }
+                    },
+                }
+            }
+        }
+
+        actions = _quality_eval_actions(quality_eval)
+
+        density_actions = [action for action in actions if action.get("code") == "citation_density_policy_failed"]
+        self.assertEqual(len(density_actions), 1)
+        self.assertEqual(density_actions[0]["automation"], "semi_auto")
+        self.assertEqual(density_actions[0]["approval_required_from"], "citation_integrity_critic")
+        self.assertIn("repeated support", density_actions[0]["ralph_instruction"])
+
     def test_qa_loop_plan_continues_for_supported_citation_density_repair(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -985,6 +1009,82 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertIn("high_risk_uncited_claim", provider.prompt)
             self.assertIn("invariant-safety security", provider.prompt)
             self.assertIn("required_action", provider.prompt)
+
+    def test_repair_citation_claims_prompt_includes_duplicate_support_issue_context(self) -> None:
+        class RepairProvider(MockProvider):
+            def __init__(self, latex: str):
+                self.latex = latex
+                self.prompt = ""
+
+            def complete(self, request: CompletionRequest) -> str:
+                self.prompt = request.user_prompt
+                return "```latex\n" + self.latex + "\n```"
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            seed_path = root / "refs.bib"
+            seed_path.write_text("@article{RefA,title={A},year={2020}}\n", encoding="utf-8")
+            import_prior_work(root, seed_file=seed_path, source="manual_bibtex")
+            paper = artifact_path(root, "paper.full.tex")
+            original = (
+                "\\documentclass{article}\n\\begin{document}\n"
+                "\\section{Intro}\n"
+                "Repeated background claim one~\\cite{RefA}.\n"
+                "Repeated background claim two~\\cite{RefA}.\n"
+                "Repeated background claim three~\\cite{RefA}.\n"
+                "Repeated background claim four~\\cite{RefA}.\n"
+                "\\bibliographystyle{plain}\n\\bibliography{references}\n"
+                "\\end{document}\n"
+            )
+            paper.write_text(original, encoding="utf-8")
+            state = load_session(root)
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            review_path = artifact_path(root, "citation_support_review.json")
+            review_path.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "id": f"support-{index}",
+                                "sentence": f"Repeated background claim {index}.",
+                                "citation_keys": ["RefA"],
+                                "support_status": "supported",
+                            }
+                            for index in range(1, 5)
+                        ],
+                        "summary": {"supported": 4},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            from paperorchestra.citation_integrity import write_citation_integrity_audit
+
+            write_citation_integrity_audit(root, quality_mode="claim_safe")
+            artifact_path(root, "quality-eval.json").write_text(
+                json.dumps({"tiers": {"tier_2_claim_safety": {"checks": {"high_risk_claim_sweep": {"items": []}}}}}),
+                encoding="utf-8",
+            )
+            provider = RepairProvider(original)
+
+            validation_path = artifact_path(root, "validation.citation-repair.json")
+            with patch(
+                "paperorchestra.ralph_bridge_repair.record_current_validation_report",
+                return_value=(validation_path, {"ok": True, "blocking_issue_count": 0}),
+            ):
+                result = repair_citation_claims(root, provider, citation_review_path=review_path)
+
+            self.assertFalse(result["accepted"])
+            self.assertEqual(result["reason"], "semantic_recheck_failed")
+            self.assertIn("claim_safety_repair_issues.json", provider.prompt)
+            self.assertIn("citation_duplicate_support", provider.prompt)
+            self.assertIn("RefA", provider.prompt)
+            self.assertIn("affected_items", provider.prompt)
+            self.assertNotIn("citation_bomb_sentence", provider.prompt)
+            self.assertNotIn("high_risk_uncited_claim", provider.prompt)
+            self.assertGreater(result["semantic_recheck"]["citation_integrity"]["before"]["duplicate_support_count"], 0)
+            self.assertGreater(result["semantic_recheck"]["citation_integrity"]["after"]["duplicate_support_count"], 0)
 
     def test_repair_citation_claims_accepts_improved_candidate_with_candidate_scoped_rechecks(self) -> None:
         class RepairProvider(MockProvider):

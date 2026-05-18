@@ -91,6 +91,54 @@ def _citation_density_repair_issues(cwd: str | Path | None, *, limit: int = 16) 
             break
     return issues
 
+def _duplicate_support_repair_issues(cwd: str | Path | None, *, limit: int = 16, examples_per_key: int = 4) -> list[dict[str, Any]]:
+    audit_path = artifact_path(cwd, "citation_integrity.audit.json")
+    try:
+        audit = _read_json(audit_path)
+    except Exception:
+        return []
+    if not isinstance(audit, dict):
+        return []
+    checks = audit.get("checks") if isinstance(audit.get("checks"), dict) else {}
+    duplicate = checks.get("duplicate_support") if isinstance(checks.get("duplicate_support"), dict) else {}
+    duplicate_keys = [str(key).strip() for key in duplicate.get("duplicate_keys") or [] if str(key).strip()]
+    if not duplicate_keys:
+        return []
+    review_path = artifact_path(cwd, "citation_support_review.json")
+    try:
+        citation_review = _read_json(review_path)
+    except Exception:
+        citation_review = {}
+    items = citation_review.get("items") if isinstance(citation_review, dict) else []
+    support_items = [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+    issues: list[dict[str, Any]] = []
+    for key in duplicate_keys:
+        matching_items: list[dict[str, Any]] = []
+        for index, item in enumerate(support_items, start=1):
+            keys = {str(candidate).strip() for candidate in item.get("citation_keys") or [] if str(candidate).strip()}
+            if key not in keys:
+                continue
+            matching_items.append(
+                {
+                    "id": str(item.get("id") or f"citation-support-{index}"),
+                    "sentence": _truncate_issue_text(item.get("sentence")),
+                    "support_status": str(item.get("support_status") or "unknown"),
+                    "claim_type": item.get("claim_type"),
+                }
+            )
+        issues.append(
+            {
+                "issue_type": "citation_duplicate_support",
+                "citation_key": key,
+                "occurrence_count": len(matching_items) or None,
+                "affected_items": matching_items[:examples_per_key],
+                "required_action": "remove or redistribute redundant repeated uses of this citation key; preserve the citation only where it directly supports a distinct claim and do not add bibliography keys",
+            }
+        )
+        if len(issues) >= limit:
+            break
+    return issues
+
 def _high_risk_repair_issues(cwd: str | Path | None, *, limit: int = 16) -> list[dict[str, Any]]:
     quality_path = artifact_path(cwd, "quality-eval.json")
     try:
@@ -121,7 +169,7 @@ def _high_risk_repair_issues(cwd: str | Path | None, *, limit: int = 16) -> list
     return issues
 
 def _claim_safety_repair_issues(cwd: str | Path | None) -> list[dict[str, Any]]:
-    return _citation_density_repair_issues(cwd) + _high_risk_repair_issues(cwd)
+    return _citation_density_repair_issues(cwd) + _duplicate_support_repair_issues(cwd) + _high_risk_repair_issues(cwd)
 
 def _file_sha256(path: str | Path | None) -> str | None:
     if not path:
@@ -151,13 +199,19 @@ def _citation_integrity_metrics(payload: dict[str, Any]) -> dict[str, Any]:
 def _citation_issue_metrics_from_packet(issues: list[dict[str, Any]]) -> dict[str, Any]:
     bomb_sentence_count = sum(1 for item in issues if item.get("issue_type") == "citation_bomb_sentence")
     bomb_paragraph_count = sum(1 for item in issues if item.get("issue_type") == "citation_bomb_paragraph")
-    total = bomb_sentence_count + bomb_paragraph_count
+    duplicate_support_count = sum(1 for item in issues if item.get("issue_type") == "citation_duplicate_support")
+    total = bomb_sentence_count + bomb_paragraph_count + duplicate_support_count
+    failing_codes: list[str] = []
+    if bomb_sentence_count or bomb_paragraph_count:
+        failing_codes.append("citation_bomb_detected")
+    if duplicate_support_count:
+        failing_codes.append("citation_duplicate_support")
     return {
         "status": "fail" if total else "pass",
-        "failing_codes": ["citation_bomb_detected"] if total else [],
+        "failing_codes": failing_codes,
         "citation_bomb_sentence_count": bomb_sentence_count,
         "citation_bomb_paragraph_count": bomb_paragraph_count,
-        "duplicate_support_count": 0,
+        "duplicate_support_count": duplicate_support_count,
         "target_issue_count": total,
     }
 
@@ -185,7 +239,11 @@ def _candidate_semantic_recheck(
     claim_safety_issues: list[dict[str, Any]],
     quality_mode: str = "claim_safe",
 ) -> dict[str, Any]:
-    citation_targeted = any(str(item.get("issue_type") or "").startswith("citation_bomb_") for item in claim_safety_issues)
+    citation_targeted = any(
+        str(item.get("issue_type") or "").startswith("citation_bomb_")
+        or item.get("issue_type") == "citation_duplicate_support"
+        for item in claim_safety_issues
+    )
     high_risk_targeted = any(item.get("issue_type") == "high_risk_uncited_claim" for item in claim_safety_issues)
 
     canonical_citation_path = artifact_path(cwd, "citation_integrity.audit.json")
@@ -249,7 +307,7 @@ You are a bounded PaperOrchestra citation-claim repair writer.
 Revise only sentences listed in the citation or claim-safety issue packet.
 Do not add new citations outside citation_map.json.
 Do not add new empirical results, proof claims, or external facts.
-Prefer softening, splitting, or removing unsupported cited claims, citation-dense sentences, and high-risk uncited claims.
+Prefer softening, splitting, or removing unsupported cited claims, citation-dense sentences, redundant repeated citation support, and high-risk uncited claims.
 Return the full revised LaTeX manuscript only.
 """.strip()
     user_prompt = f"""
@@ -275,6 +333,7 @@ Rules:
 - Use only citation keys already present in citation_map.json.
 - Do not include reviewer numeric scores.
 - For citation-density issues, split citation-bomb sentences, remove redundant references, or place citations on the exact supported sentence.
+- For duplicate-support issues, keep a repeated citation only where it directly supports a distinct claim; otherwise remove, redistribute, or merge the redundant support.
 - For high-risk uncited claims, ground with existing verified evidence, scope as a limitation/author-material claim, or delete the claim.
 """.strip()
     return system_prompt, user_prompt
