@@ -1,10 +1,10 @@
 # Orchestrator v1 execution index
 
-Status: draft execution index for Critic validation  
-Date: 2026-05-18  
-Branch: `orchestrator-v1-runtime`  
-Base: `origin/main` at `7b183fd`  
-Head inspected: `fdfb3fb`  
+Status: draft execution index for Critic validation
+Date: 2026-05-18
+Branch: `orchestrator-v1-runtime`
+Base: `origin/main` at `7b183fd`
+Head inspected: `b53eb7f` for the execution-index commit; ledger files below were generated immediately after that commit and before the next smoke cycle.
 Scope: public, domain-general execution map. Do not add private material names, raw private paths, private claims, or domain-specific smoke shortcuts.
 
 ## 1. Why this index exists
@@ -35,7 +35,8 @@ Critic-validated before another implementation or private final-smoke cycle star
 ```text
 origin/main..HEAD: 75 commits
 branch: orchestrator-v1-runtime
-head: fdfb3fb Keep author-owned citation checks visible
+head before index commit: fdfb3fb Keep author-owned citation checks visible
+index commit: b53eb7f Keep orchestrator completion evidence navigable
 base main: 7b183fd Make Codex MCP attachment diagnosable and compatible
 ```
 
@@ -142,16 +143,16 @@ High-level classification:
 
 | Gate | Status | Evidence | Gap before v1 completion |
 | --- | --- | --- | --- |
-| `state_contract_tests` | pass-known | state tests and slice evidence | rerun current full suite |
-| `action_planner_scenario_tests` | pass-known | action planner tests | rerun current full suite |
-| `fake_omx_unit_contract_tests` | pass-known | OMX fake/contract tests | rerun current full suite |
+| `state_contract_tests` | historical-pass-known | state tests and slice evidence | rerun current full suite |
+| `action_planner_scenario_tests` | historical-pass-known | action planner tests | rerun current full suite |
+| `fake_omx_unit_contract_tests` | historical-pass-known | OMX fake/contract tests | rerun current full suite |
 | `real_bounded_omx_command_probes` | partial | bounded probes in Y/Z | current environment proof needed |
 | `mcp_raw_and_attach_smoke` | partial | issue #5 fix/smokes | current raw+attach smoke needed |
-| `mock_demo` | pass-known | prior container proofs | rerun before final acceptance |
-| `compile_export` | pass-known | prior compile/export proofs | rerun before final acceptance |
-| `fresh_container_functional_smoke` | pass-known | prior container proofs | rerun after final changes |
+| `mock_demo` | historical-pass-known | prior container proofs | rerun before final acceptance |
+| `compile_export` | historical-pass-known | prior compile/export proofs | rerun before final acceptance |
+| `fresh_container_functional_smoke` | historical-pass-known | prior container proofs | rerun after final changes |
 | `private_final_live_smoke_redacted` | partial | AH summary | rerun after T2 hardening |
-| `private_leakage_scan` | pass-known | prior scans | rerun after final smoke/docs |
+| `private_leakage_scan` | historical-pass-known | prior scans | rerun after final smoke/docs |
 | `no_unsupported_critical_claims` | fail-known/unknown | AH failed Tier-2 | prove after T2 rerun |
 | `no_unknown_refs_for_critical_claims` | partial | T2-B/T2-C/T2-D | prove after T2 rerun |
 | `citation_integrity` | partial | AC and T2 hardening | prove after T2 rerun |
@@ -159,7 +160,7 @@ High-level classification:
 | `hard_gates_no_fail_except_human_polish` | fail-known | AH `fail_tier2` | must improve or produce only true human-owned blockers |
 | `critic_consensus_near_ready_or_better` | fail-known/unknown | AH not ready | final Critic consensus required |
 | `verifier_evidence_completeness_no_leakage` | partial | AF verifier harness | final evidence bundle required |
-| `exported_pdf_tex_evidence_bundle` | pass-known | AH exported bundle | rerun final export |
+| `exported_pdf_tex_evidence_bundle` | historical-pass-known | AH exported bundle | rerun final export |
 | `readme_environment_skill_docs_updated` | partial | README, ENVIRONMENT, and Skill updates | final post-acceptance docs refresh |
 
 ## 7. Immediate next work

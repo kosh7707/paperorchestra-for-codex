@@ -1,0 +1,340 @@
+{
+  "state_contract_tests": {
+    "status": "unknown",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      }
+    ],
+    "notes": [
+      "Current-head proof not yet refreshed after execution-index approval."
+    ]
+  },
+  "action_planner_scenario_tests": {
+    "status": "unknown",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      }
+    ],
+    "notes": [
+      "Current-head proof not yet refreshed after execution-index approval."
+    ]
+  },
+  "fake_omx_unit_contract_tests": {
+    "status": "unknown",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      }
+    ],
+    "notes": [
+      "Current-head proof not yet refreshed after execution-index approval."
+    ]
+  },
+  "real_bounded_omx_command_probes": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "plan",
+        "summary": "Tier-2 plan requires a fresh rerun after T2 hardening.",
+        "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+      }
+    ],
+    "notes": [
+      "Requires current verification or fresh external smoke after T2-A through T2-D."
+    ]
+  },
+  "mcp_raw_and_attach_smoke": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "plan",
+        "summary": "Tier-2 plan requires a fresh rerun after T2 hardening.",
+        "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+      }
+    ],
+    "notes": [
+      "Requires current verification or fresh external smoke after T2-A through T2-D."
+    ]
+  },
+  "mock_demo": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "plan",
+        "summary": "Tier-2 plan requires a fresh rerun after T2 hardening.",
+        "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+      }
+    ],
+    "notes": [
+      "Requires current verification or fresh external smoke after T2-A through T2-D."
+    ]
+  },
+  "compile_export": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "plan",
+        "summary": "Tier-2 plan requires a fresh rerun after T2 hardening.",
+        "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+      }
+    ],
+    "notes": [
+      "Requires current verification or fresh external smoke after T2-A through T2-D."
+    ]
+  },
+  "fresh_container_functional_smoke": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "plan",
+        "summary": "Tier-2 plan requires a fresh rerun after T2 hardening.",
+        "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+      }
+    ],
+    "notes": [
+      "Requires current verification or fresh external smoke after T2-A through T2-D."
+    ]
+  },
+  "private_final_live_smoke_redacted": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "report",
+        "summary": "Historical redacted smoke summary recorded system-loop proof but not manuscript readiness.",
+        "path": "<redacted>"
+      },
+      {
+        "kind": "plan",
+        "summary": "Tier-2 plan requires a fresh rerun after T2 hardening.",
+        "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+      }
+    ],
+    "notes": [
+      "Historical AH summary is useful evidence but cannot satisfy current v1 acceptance after T2 changes.",
+      "AH showed system-loop proof while manuscript readiness remained not_ready."
+    ]
+  },
+  "private_leakage_scan": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "plan",
+        "summary": "Tier-2 plan requires a fresh rerun after T2 hardening.",
+        "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+      }
+    ],
+    "notes": [
+      "Requires current verification or fresh external smoke after T2-A through T2-D."
+    ]
+  },
+  "no_unsupported_critical_claims": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "plan",
+        "summary": "Tier-2 plan requires a fresh rerun after T2 hardening.",
+        "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+      }
+    ],
+    "notes": [
+      "Requires current verification or fresh external smoke after T2-A through T2-D."
+    ]
+  },
+  "no_unknown_refs_for_critical_claims": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "plan",
+        "summary": "Tier-2 plan requires a fresh rerun after T2 hardening.",
+        "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+      }
+    ],
+    "notes": [
+      "Requires current verification or fresh external smoke after T2-A through T2-D."
+    ]
+  },
+  "citation_integrity": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "plan",
+        "summary": "Tier-2 plan requires a fresh rerun after T2 hardening.",
+        "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+      }
+    ],
+    "notes": [
+      "Requires current verification or fresh external smoke after T2-A through T2-D."
+    ]
+  },
+  "supplied_figures_inventoried_matched_or_blocked": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "plan",
+        "summary": "Tier-2 plan requires a fresh rerun after T2 hardening.",
+        "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+      }
+    ],
+    "notes": [
+      "Requires current verification or fresh external smoke after T2-A through T2-D."
+    ]
+  },
+  "hard_gates_no_fail_except_human_polish": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "report",
+        "summary": "Historical redacted smoke summary recorded system-loop proof but not manuscript readiness.",
+        "path": "<redacted>"
+      },
+      {
+        "kind": "plan",
+        "summary": "Tier-2 plan requires a fresh rerun after T2 hardening.",
+        "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+      }
+    ],
+    "notes": [
+      "Historical AH evidence had Tier-2 gate failure; must be rechecked after T2 hardening."
+    ]
+  },
+  "critic_consensus_near_ready_or_better": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "report",
+        "summary": "Historical redacted smoke summary recorded system-loop proof but not manuscript readiness.",
+        "path": "<redacted>"
+      }
+    ],
+    "notes": [
+      "Historical AH evidence did not prove near_ready final manuscript quality."
+    ]
+  },
+  "verifier_evidence_completeness_no_leakage": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "plan",
+        "summary": "Tier-2 plan requires a fresh rerun after T2 hardening.",
+        "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+      }
+    ],
+    "notes": [
+      "Requires current verification or fresh external smoke after T2-A through T2-D."
+    ]
+  },
+  "exported_pdf_tex_evidence_bundle": {
+    "status": "blocked",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "plan",
+        "summary": "Tier-2 plan requires a fresh rerun after T2 hardening.",
+        "path": "docs/architecture/orchestrator-v1-tier2-quality-triage-plan.md"
+      }
+    ],
+    "notes": [
+      "Requires current verification or fresh external smoke after T2-A through T2-D."
+    ]
+  },
+  "readme_environment_skill_docs_updated": {
+    "status": "unknown",
+    "evidence_refs": [
+      {
+        "kind": "report",
+        "summary": "Execution index marks current evidence as historical or pending where appropriate.",
+        "path": "docs/reports/orchestrator-v1-execution-index.md"
+      },
+      {
+        "kind": "report",
+        "summary": "Public-safe decision summary without raw external material details.",
+        "path": "docs/reports/orchestrator-v1-interview-decisions-redacted.md"
+      }
+    ],
+    "notes": [
+      "Documentation exists but final v1 runtime docs must be refreshed after final acceptance evidence."
+    ]
+  }
+}
