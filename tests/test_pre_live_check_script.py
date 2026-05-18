@@ -257,6 +257,17 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             text.index("run_retryable_step research_prior_work"),
         )
 
+    def test_fresh_full_live_smoke_copies_source_figures_before_derivation(self) -> None:
+        text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+        subprocess.run(["bash", "-n", "scripts/fresh-full-live-smoke-loop.sh"], check=True)
+
+        self.assertIn('if [[ -d "$MATERIAL_ROOT/figures" ]]; then', text)
+        self.assertIn('cp -R "$MATERIAL_ROOT/figures/." "$EVIDENCE_ROOT/inputs-materials/figures/"', text)
+        self.assertLess(
+            text.index('cp -R "$MATERIAL_ROOT/figures/." "$EVIDENCE_ROOT/inputs-materials/figures/"'),
+            text.index('run_step derive_fresh_inputs python3 scripts/derive-fresh-smoke-inputs.py "$EVIDENCE_ROOT"'),
+        )
+
     def test_pre_live_secret_scan_does_not_scan_generated_review_logs(self) -> None:
         text = Path("scripts/pre-live-check.sh").read_text(encoding="utf-8")
         line = next(line for line in text.splitlines() if line.startswith("run_step secret_scan "))

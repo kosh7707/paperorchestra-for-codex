@@ -1216,6 +1216,10 @@ cp "$MATERIAL_ROOT/review/all-files.sha256" "$EVIDENCE_ROOT/evidence-only/all-fi
 cp "$MATERIAL_ROOT/review/material-validation.json" "$EVIDENCE_ROOT/evidence-only/material-validation.json" 2>/dev/null || true
 cp "$MATERIAL_ROOT/review/external-review-manifest.json" "$EVIDENCE_ROOT/evidence-only/external-review-manifest.json" 2>/dev/null || true
 cp "$MATERIAL_ROOT/materials/"*.tex "$EVIDENCE_ROOT/inputs-materials/"
+if [[ -d "$MATERIAL_ROOT/figures" ]]; then
+  mkdir -p "$EVIDENCE_ROOT/inputs-materials/figures"
+  cp -R "$MATERIAL_ROOT/figures/." "$EVIDENCE_ROOT/inputs-materials/figures/"
+fi
 cp "$MATERIAL_ROOT/policy/material-boundary.md" "$EVIDENCE_ROOT/inputs-materials/material-boundary.md"
 run_step derive_fresh_inputs python3 scripts/derive-fresh-smoke-inputs.py "$EVIDENCE_ROOT" || fail_now fail_preflight '"derive_fresh_inputs"' '"logs/derive_fresh_inputs.stderr.log"' 1
 mkdir -p "$EVIDENCE_ROOT/inputs"

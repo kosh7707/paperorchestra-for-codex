@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import hashlib, json, re, sys
+import hashlib, json, re, shutil, sys
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -12,11 +12,112 @@ inputs = root / "workdir" / "inputs"
 inputs.mkdir(parents=True, exist_ok=True)
 (inputs / "figures").mkdir(parents=True, exist_ok=True)
 
+SUPPORTED_SOURCE_FIGURE_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg"}
+HEX_SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+
 def read(name: str) -> str:
     return (materials / name).read_text(encoding="utf-8")
 
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def read_material_manifest() -> dict:
+    """Read the validated material manifest when the wrapper provides one."""
+
+    manifest_path = root / "evidence-only" / "material-manifest.original.json"
+    if not manifest_path.exists():
+        return {}
+    return json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
+def manifest_figure_entries(manifest: dict) -> dict[str, dict]:
+    entries: dict[str, dict] = {}
+    for entry in manifest.get("materials") or []:
+        rel = str(entry.get("path") or "")
+        normalized = rel[2:] if rel.startswith("./") else rel
+        if not normalized.startswith("figures/"):
+            continue
+        entries[normalized] = entry
+    return entries
+
+
+def normalized_manifest_sha256(entry: dict) -> str:
+    expected_sha = str(entry.get("sha256") or "")
+    expected_sha = expected_sha.split("sha256:", 1)[1] if expected_sha.startswith("sha256:") else expected_sha
+    if not HEX_SHA256_RE.fullmatch(expected_sha):
+        raise SystemExit("source_figure_hash_missing_or_invalid")
+    return expected_sha
+
+
+def normalized_manifest_size(entry: dict) -> int:
+    expected_bytes = entry.get("bytes")
+    if not isinstance(expected_bytes, int) or expected_bytes < 0:
+        raise SystemExit("source_figure_size_missing_or_invalid")
+    return expected_bytes
+
+
+def copy_registered_source_figures() -> list[dict[str, object]]:
+    """Copy source figures to prompt-facing inputs with generic filenames.
+
+    Source material packets may include private or domain-specific figure names.
+    The authoring prompts see ``workdir/inputs/figures`` through the normal
+    PaperOrchestra session machinery, so raw source filenames must not be copied
+    into that prompt-facing directory.  Accept only figure assets covered by the
+    already-validated material manifest and rename them deterministically.
+    """
+
+    manifest = read_material_manifest()
+    figure_entries = manifest_figure_entries(manifest)
+    source_dir = materials / "figures"
+    if not source_dir.exists():
+        if figure_entries:
+            raise SystemExit("registered_source_figure_missing")
+        return []
+    copied: list[dict[str, object]] = []
+    all_source_files = sorted(path for path in source_dir.rglob("*") if path.is_file())
+    if all_source_files and not figure_entries:
+        raise SystemExit("unregistered_source_figure_asset")
+
+    manifest_paths = set(figure_entries)
+    actual_paths = {str(path.relative_to(materials)) for path in all_source_files}
+    extra_paths = actual_paths - manifest_paths
+    missing_paths = manifest_paths - actual_paths
+    if extra_paths:
+        raise SystemExit("unregistered_source_figure_asset")
+    if missing_paths:
+        raise SystemExit("registered_source_figure_missing")
+
+    for index, rel in enumerate(sorted(manifest_paths), start=1):
+        entry = figure_entries[rel]
+        src = materials / rel
+        suffix = src.suffix.lower()
+        if suffix not in SUPPORTED_SOURCE_FIGURE_EXTENSIONS:
+            raise SystemExit("unsupported_source_figure_extension")
+        expected_sha = normalized_manifest_sha256(entry)
+        expected_bytes = normalized_manifest_size(entry)
+        actual_sha = sha(src)
+        actual_bytes = src.stat().st_size
+        if expected_sha != actual_sha:
+            raise SystemExit("source_figure_hash_mismatch")
+        if expected_bytes != actual_bytes:
+            raise SystemExit("source_figure_size_mismatch")
+        dest_name = f"source-figure-{index:03d}{suffix}"
+        dest = inputs / "figures" / dest_name
+        shutil.copy2(src, dest)
+        copied.append(
+            {
+                "output": f"workdir/inputs/figures/{dest_name}",
+                "generator": "scripts/derive-fresh-smoke-inputs.py",
+                "role": "source_figure_asset",
+                "source_path_sha256": hashlib.sha256(rel.encode("utf-8", errors="replace")).hexdigest(),
+                "sha256": actual_sha,
+                "byte_size": actual_bytes,
+                "extension": suffix,
+                "derivation_policy": "deterministic registered-source figure copy with generic prompt-facing filename",
+            }
+        )
+    return copied
 
 def strip_latex_comments(text: str) -> str:
     """Remove unescaped LaTeX comments while preserving command text.
@@ -330,6 +431,7 @@ outputs = {
     "reference_metadata_seed.bib": seed,
 }
 ledger=[]
+figure_ledger = copy_registered_source_figures()
 for name, content in outputs.items():
     path=inputs/name
     path.write_text(content, encoding="utf-8")
@@ -339,6 +441,7 @@ for name, content in outputs.items():
     elif name == "template.tex": source_materials = ["00_core_macros.tex","01_methodology_core.tex","02_security_model_and_full_proof.tex","03_benchmark_method_and_results_core.tex","04_claim_boundaries.tex","05_author_notes_for_positioning.tex"]
     elif name == "reference_metadata_seed.bib": source_materials = ["01_methodology_core.tex","02_security_model_and_full_proof.tex","03_benchmark_method_and_results_core.tex"]
     ledger.append({"output": f"workdir/inputs/{name}", "generator": "scripts/derive-fresh-smoke-inputs.py", "source_materials": source_materials, "sha256": sha(path), "byte_size": path.stat().st_size, "derivation_policy": "deterministic registered-input extraction/paraphrase; no prior smoke artifacts"})
+ledger.extend(figure_ledger)
 ledger_path = inputs / "provenance-ledger.json"
 ledger_payload = {
     "schema_version": "fresh-input-provenance/1",

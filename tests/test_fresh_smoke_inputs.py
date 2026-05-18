@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import subprocess
 import tempfile
 import textwrap
@@ -49,6 +50,15 @@ class FreshSmokeInputDerivationTests(unittest.TestCase):
         for name, content in files.items():
             (materials / name).write_text(textwrap.dedent(content).strip() + "\n", encoding="utf-8")
         return materials
+
+    def _write_material_manifest(self, root: Path, entries: list[dict[str, object]]) -> None:
+        evidence_only = root / "evidence-only"
+        evidence_only.mkdir(exist_ok=True)
+        (evidence_only / "material-manifest.original.json").write_text(
+            json.dumps({"schema_version": "fresh-smoke-material-manifest/1", "materials": entries}, indent=2)
+            + "\n",
+            encoding="utf-8",
+        )
 
     def test_citation_free_material_packet_still_derives_usable_prior_work_seed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -184,6 +194,142 @@ class FreshSmokeInputDerivationTests(unittest.TestCase):
             self.assertEqual(ledger["source_citation_policy"]["unique_source_citation_keys"], 2)
             self.assertEqual(ledger["source_citation_policy"]["metadata_backed_prompt_citation_keys"], 1)
             self.assertEqual(ledger["source_citation_policy"]["metadata_less_source_citation_keys_removed"], 1)
+
+    def test_registered_source_figures_are_generic_prompt_facing_assets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            materials = self._write_citation_free_material_packet(root)
+            figures = materials / "figures"
+            figures.mkdir()
+            raw_name = "author_benchmark_internal_result.png"
+            raw_bytes = b"\x89PNG\r\n\x1a\nregistered figure bytes\n"
+            source = figures / raw_name
+            source.write_bytes(raw_bytes)
+            digest = hashlib.sha256(raw_bytes).hexdigest()
+            self._write_material_manifest(
+                root,
+                [
+                    {
+                        "path": f"figures/{raw_name}",
+                        "sha256": f"sha256:{digest}",
+                        "bytes": len(raw_bytes),
+                    }
+                ],
+            )
+
+            subprocess.run(
+                ["python3", "scripts/derive-fresh-smoke-inputs.py", str(root)],
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+
+            output = root / "workdir" / "inputs" / "figures" / "source-figure-001.png"
+            self.assertEqual(output.read_bytes(), raw_bytes)
+            figure_listing = "\n".join(path.name for path in (root / "workdir" / "inputs" / "figures").iterdir())
+            self.assertIn("source-figure-001.png", figure_listing)
+            self.assertNotIn(raw_name, figure_listing)
+
+            ledger_text = (root / "workdir" / "inputs" / "provenance-ledger.json").read_text(encoding="utf-8")
+            ledger = json.loads(ledger_text)
+            figure_items = [item for item in ledger["items"] if item.get("role") == "source_figure_asset"]
+            self.assertEqual(len(figure_items), 1)
+            self.assertEqual(figure_items[0]["output"], "workdir/inputs/figures/source-figure-001.png")
+            self.assertEqual(figure_items[0]["sha256"], digest)
+            self.assertEqual(figure_items[0]["byte_size"], len(raw_bytes))
+            self.assertEqual(figure_items[0]["extension"], ".png")
+            self.assertIn("source_path_sha256", figure_items[0])
+            self.assertNotIn(raw_name, ledger_text)
+
+            for generated in [
+                root / "workdir" / "inputs" / "idea.tex",
+                root / "workdir" / "inputs" / "experimental_log.tex",
+                root / "workdir" / "inputs" / "template.tex",
+                root / "workdir" / "inputs" / "guidelines.md",
+            ]:
+                self.assertNotIn(raw_name, generated.read_text(encoding="utf-8"))
+
+    def test_unregistered_source_figure_fails_closed_without_raw_filename(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            materials = self._write_citation_free_material_packet(root)
+            figures = materials / "figures"
+            figures.mkdir()
+            raw_name = "author_benchmark_internal_result.png"
+            (figures / raw_name).write_bytes(b"\x89PNG\r\n\x1a\nunregistered figure bytes\n")
+
+            result = subprocess.run(
+                ["python3", "scripts/derive-fresh-smoke-inputs.py", str(root)],
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            combined = result.stdout + result.stderr
+            self.assertIn("unregistered_source_figure_asset", combined)
+            self.assertNotIn(raw_name, combined)
+
+    def test_registered_source_figure_missing_directory_fails_without_raw_filename(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_citation_free_material_packet(root)
+            raw_name = "author_benchmark_internal_result.png"
+            self._write_material_manifest(
+                root,
+                [
+                    {
+                        "path": f"figures/{raw_name}",
+                        "sha256": "sha256:" + "a" * 64,
+                        "bytes": 12,
+                    }
+                ],
+            )
+
+            result = subprocess.run(
+                ["python3", "scripts/derive-fresh-smoke-inputs.py", str(root)],
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            combined = result.stdout + result.stderr
+            self.assertIn("registered_source_figure_missing", combined)
+            self.assertNotIn(raw_name, combined)
+
+    def test_source_figure_manifest_metadata_failures_are_generic(self) -> None:
+        cases = [
+            ("missing_hash", {"bytes": 3}, "source_figure_hash_missing_or_invalid"),
+            ("malformed_hash", {"sha256": "sha256:", "bytes": 3}, "source_figure_hash_missing_or_invalid"),
+            ("missing_bytes", {"sha256": "sha256:" + "a" * 64}, "source_figure_size_missing_or_invalid"),
+            ("string_bytes", {"sha256": "sha256:" + "a" * 64, "bytes": "3"}, "source_figure_size_missing_or_invalid"),
+            ("hash_mismatch", {"sha256": "sha256:" + "b" * 64, "bytes": 3}, "source_figure_hash_mismatch"),
+            (
+                "size_mismatch",
+                {"sha256": "sha256:" + hashlib.sha256(b"abc").hexdigest(), "bytes": 4},
+                "source_figure_size_mismatch",
+            ),
+        ]
+        for _label, metadata, expected_error in cases:
+            with self.subTest(expected_error=expected_error), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                materials = self._write_citation_free_material_packet(root)
+                figures = materials / "figures"
+                figures.mkdir()
+                raw_name = "author_benchmark_internal_result.png"
+                (figures / raw_name).write_bytes(b"abc")
+                entry = {"path": f"figures/{raw_name}", **metadata}
+                self._write_material_manifest(root, [entry])
+
+                result = subprocess.run(
+                    ["python3", "scripts/derive-fresh-smoke-inputs.py", str(root)],
+                    text=True,
+                    capture_output=True,
+                )
+
+                self.assertNotEqual(result.returncode, 0)
+                combined = result.stdout + result.stderr
+                self.assertIn(expected_error, combined)
+                self.assertNotIn(raw_name, combined)
 
 
 if __name__ == "__main__":
