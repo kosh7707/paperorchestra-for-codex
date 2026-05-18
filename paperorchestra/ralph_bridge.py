@@ -342,13 +342,13 @@ def run_qa_loop_step(
         "before": {"failing_codes": _failing_codes(before_eval), "citation_support_summary": before_summary},
     }
     actions = _executable_actions(before_plan)
-    unsupported_actions = _unsupported_executable_actions(before_plan)
-    for action in unsupported_actions:
-        execution["actions_skipped"].append({"code": action.get("code"), "reason": "unsupported_handler"})
     if initial_verdict in TERMINAL_VERDICTS:
         execution.update({"completed_at": utc_now_iso(), "verdict": initial_verdict, "terminal_noop": True})
         path = _write_execution_artifact(cwd, execution)
         return StepResult(path=path, payload=execution, exit_code=qa_loop_exit_code(initial_verdict))
+    unsupported_actions = _unsupported_executable_actions(before_plan)
+    for action in unsupported_actions:
+        execution["actions_skipped"].append({"code": action.get("code"), "reason": "unsupported_handler"})
 
     if not actions:
         execution.update({"completed_at": utc_now_iso(), "verdict": "human_needed", "reason": "no_supported_executable_handlers"})
@@ -416,6 +416,22 @@ def run_qa_loop_step(
         elif code in {"citation_support_review_missing", "citation_support_review_stale", "citation_support_evidence_research_needed"}:
             review_path = write_citation_support_review(cwd, provider=citation_provider, evidence_mode=citation_evidence_mode)
             execution["actions_attempted"].append({"code": code, "handler": "review_citations", "path": str(review_path)})
+        elif code in {
+            "critical_unknown_reference",
+            "critical_missing_bib_entry",
+            "critical_unsupported_citation",
+            "critical_citation_support_missing",
+        }:
+            review_path = write_citation_support_review(cwd, provider=citation_provider, evidence_mode=citation_evidence_mode)
+            refreshed = _refresh_citation_integrity_for_current_manuscript(cwd, quality_mode=quality_mode)
+            execution["actions_attempted"].append(
+                {
+                    "code": code,
+                    "handler": "refresh_citation_quality",
+                    "citation_support_review": str(review_path),
+                    "citation_integrity": refreshed,
+                }
+            )
         elif code in {
             "rendered_reference_audit_missing",
             "rendered_reference_audit_stale",

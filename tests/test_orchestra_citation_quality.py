@@ -20,6 +20,7 @@ from paperorchestra.orchestra_citation_quality import (
 from paperorchestra.orchestrator import run_until_blocked
 from paperorchestra.quality_loop import build_quality_eval
 from paperorchestra.quality_loop_plan_logic import _quality_eval_actions
+from paperorchestra.quality_loop_policy import QA_LOOP_SUPPORTED_HANDLER_CODES
 from paperorchestra.session import artifact_path, create_session, load_session, save_session
 
 
@@ -349,6 +350,14 @@ class CitationQualityGateTests(unittest.TestCase):
         self.assertTrue(citation_actions)
         self.assertTrue(all(action.get("automation") in {"automatic", "semi_auto"} for action in citation_actions))
         self.assertFalse(any(action.get("automation") == "human_needed" for action in citation_actions))
+        self.assertTrue(
+            {
+                "critical_unknown_reference",
+                "critical_missing_bib_entry",
+                "critical_unsupported_citation",
+                "critical_citation_support_missing",
+            }.issubset(QA_LOOP_SUPPORTED_HANDLER_CODES)
+        )
 
     def test_machine_solvable_citation_gap_remains_research_routed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

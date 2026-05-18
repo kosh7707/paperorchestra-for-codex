@@ -220,6 +220,52 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(result.payload["actionable_failure"]["validation_failing_codes"], ["citation_coverage_insufficient"])
             self.assertNotEqual(result.payload["verdict"], "ready_for_human_finalization")
 
+    def test_qa_loop_step_routes_critical_citation_quality_to_refresh_handler(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n\\begin{document}\n"
+                "Claim~\\cite{Unknown}.\\end{document}\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            before_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "manuscript_hash": "sha256:" + hashlib.sha256(paper.read_bytes()).hexdigest(),
+                "tiers": {"tier_2_claim_safety": {"status": "fail", "failing_codes": ["critical_unsupported_citation"]}},
+            }
+            after_eval = {
+                **before_eval,
+                "tiers": {"tier_2_claim_safety": {"status": "fail", "failing_codes": ["critical_unsupported_citation"]}},
+            }
+            plan = {
+                "schema_version": "qa-loop-plan/2",
+                "session_id": state.session_id,
+                "verdict": "continue",
+                "repair_actions": [{"code": "critical_unsupported_citation", "automation": "semi_auto"}],
+            }
+            plan_after = {**plan, "verdict": "human_needed"}
+            with patch("paperorchestra.ralph_bridge.write_quality_eval", side_effect=[(root / "before.json", before_eval), (root / "after.json", after_eval)]):
+                with patch("paperorchestra.ralph_bridge.write_quality_loop_plan", side_effect=[(root / "plan-before.json", plan), (root / "plan-after.json", plan_after)]):
+                    with patch("paperorchestra.ralph_bridge._citation_summary", return_value={}):
+                        with patch("paperorchestra.ralph_bridge.write_citation_support_review", return_value=root / "citation_support_review.json") as review:
+                            with patch("paperorchestra.ralph_bridge._refresh_citation_integrity_for_current_manuscript", return_value={"status": "fail", "failing_codes": ["critical_unsupported_citation"]}) as refresh:
+                                with patch("paperorchestra.ralph_bridge.record_current_validation_report", return_value=(root / "validation.json", {"ok": True})):
+                                    with patch("paperorchestra.ralph_bridge.write_section_review", return_value=root / "section_review.json"):
+                                        with patch("paperorchestra.ralph_bridge.write_figure_placement_review", return_value=(root / "figure_review.json", {"manuscript_sha256": "x"})):
+                                            result = run_qa_loop_step(root, MockProvider(), citation_evidence_mode="heuristic")
+
+            self.assertGreaterEqual(review.call_count, 1)
+            self.assertGreaterEqual(refresh.call_count, 1)
+            attempted = result.payload.get("actions_attempted", [])
+            self.assertEqual(attempted[0]["code"], "critical_unsupported_citation")
+            self.assertEqual(attempted[0]["handler"], "refresh_citation_quality")
+            self.assertEqual(result.payload.get("actions_skipped"), [])
+
     def test_qa_loop_step_refreshes_unbound_citation_evidence_before_repair(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -2525,6 +2571,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(result.payload["verdict"], "human_needed")
             self.assertTrue(result.payload["terminal_noop"])
             self.assertEqual(result.payload["actions_attempted"], [])
+            self.assertEqual(result.payload["actions_skipped"], [])
             review_citations.assert_not_called()
 
     def test_operator_review_packet_requires_terminal_human_needed_plan(self) -> None:
