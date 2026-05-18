@@ -51,6 +51,7 @@ HARD_HUMAN_ACTION_CODES = {
     "mock_verification",
     "missing_prompt_trace",
     "placement_hint_missing",
+    "pdf_text_scan_unavailable",
 }
 
 NON_REVIEWABLE_TIER1_CODES = {

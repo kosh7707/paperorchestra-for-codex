@@ -174,6 +174,26 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     ralph_instruction="Compile the current manuscript and require the compile report manuscript hash to match paper.full.tex before continuing.",
                 )
             )
+        for code in tier1.get("failing_codes") or []:
+            if str(code) != "pdf_text_scan_unavailable":
+                continue
+            actions.append(
+                _action(
+                    action_id="quality-eval:pdf_text_scan_unavailable",
+                    code="pdf_text_scan_unavailable",
+                    source=None,
+                    target="PDF text leakage scan",
+                    automation="human_needed",
+                    reason="Claim-safe readiness requires extracting compiled PDF text before PaperOrchestra can prove prompt/meta leakage did not reach the rendered manuscript.",
+                    suggested_commands=[
+                        "apt-get install -y poppler-utils  # or: sudo apt-get install -y poppler-utils",
+                        "PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile",
+                        "paperorchestra quality-eval --quality-mode claim_safe",
+                    ],
+                    ralph_instruction="Do not rewrite the manuscript for this blocker. Install or expose pdftotext/poppler-utils, recompile, and rebuild quality-eval so the rendered PDF text can be scanned.",
+                    why_not_automatic="This is an execution-environment dependency, not a manuscript repair; automated rewriting cannot prove rendered-PDF leakage without pdftotext.",
+                )
+            )
     tier2 = tiers.get("tier_2_claim_safety") if isinstance(tiers.get("tier_2_claim_safety"), dict) else {}
     citation_check = (tier2.get("checks") or {}).get("citation_support_critic") if isinstance(tier2, dict) else None
     if isinstance(citation_check, dict):

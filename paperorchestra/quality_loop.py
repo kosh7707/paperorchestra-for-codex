@@ -63,8 +63,10 @@ from .quality_loop_history import (
 )
 
 from .quality_loop_leakage import (
+    PDF_TEXT_SCAN_UNAVAILABLE_CODE,
     _leakage_markers_in_text,
     _manuscript_prompt_leakage,
+    _manuscript_prompt_leakage_report,
     _pdf_text_for_prompt_leakage,
     _plot_asset_text_paths,
     _scan_text_file_for_prompt_leakage,
@@ -435,7 +437,17 @@ def build_quality_eval(
     )
 
     tiers: dict[str, Any] = {"tier_0_preconditions": tier0}
-    leakage = _manuscript_prompt_leakage(state)
+    if getattr(_manuscript_prompt_leakage, "__module__", "") == "paperorchestra.quality_loop_leakage":
+        leakage_report = _manuscript_prompt_leakage_report(state)
+        leakage = leakage_report["markers"]
+        pdf_text_scan_unavailable = leakage_report["pdf_text_scan_unavailable"]
+    else:
+        # Tests and downstream integrators have historically patched
+        # `quality_loop._manuscript_prompt_leakage` to isolate higher-tier
+        # quality gates.  Preserve that seam: a patched leakage scanner owns
+        # the prompt/PDF leakage surface for that invocation.
+        leakage = _manuscript_prompt_leakage(state)
+        pdf_text_scan_unavailable = []
     non_reviewable = {
         "status": "fail" if leakage else "pass",
         "failing_codes": ["prompt_meta_leakage"] if leakage else [],
@@ -504,6 +516,8 @@ def build_quality_eval(
             tier1_failing.append("citation_key_integrity")
         if leakage:
             tier1_failing.append("prompt_meta_leakage")
+        if mode == "claim_safe" and pdf_text_scan_unavailable:
+            tier1_failing.append(PDF_TEXT_SCAN_UNAVAILABLE_CODE)
         provenance_complete = int(reproducibility.get("prompt_trace_file_count") or 0) > 0
         tier1 = _tier(
             status=_status_from_failures(tier1_failing),
@@ -511,6 +525,20 @@ def build_quality_eval(
                 "compile_clean": compile_check,
                 "citation_key_integrity": {"status": "pass" if not citation_issues else "fail", "issues": citation_issues},
                 "prompt_meta_leakage": {"status": "pass" if not leakage else "fail", "markers": leakage},
+                "pdf_text_scan": {
+                    "status": "fail"
+                    if mode == "claim_safe" and pdf_text_scan_unavailable
+                    else ("warn" if pdf_text_scan_unavailable else "pass"),
+                    "markers": pdf_text_scan_unavailable,
+                    "orthogonal_to_prompt_meta_leakage": True,
+                    "next_steps": [
+                        "Install poppler-utils or otherwise provide a working pdftotext binary.",
+                        "Rerun: PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile",
+                        "Rerun: paperorchestra quality-eval --quality-mode claim_safe",
+                    ]
+                    if pdf_text_scan_unavailable
+                    else [],
+                },
                 "provenance_complete": {
                     "status": "pass" if provenance_complete else "warn",
                     "prompt_trace_file_count": reproducibility.get("prompt_trace_file_count"),

@@ -145,7 +145,7 @@ from paperorchestra.ralph_bridge_state import (
     recover_pending_manuscript_write,
 )
 from paperorchestra.runtime_parity import record_lane_manifest, record_runtime_parity_report
-from paperorchestra.session import artifact_path, create_session, load_session, review_path, save_session
+from paperorchestra.session import artifact_path, create_session, load_session, review_path, runtime_root, save_session
 from paperorchestra.teach import prepare_teach_bundle
 from paperorchestra.validator import validate_manuscript
 
@@ -1026,6 +1026,52 @@ class PipelineTests(unittest.TestCase):
             ),
         )
 
+    def _attach_clean_manuscript_compile_report(self, root: Path, state, *, paper_text: str = "Clean rendered text.") -> None:
+        paper = artifact_path(root, "paper.full.tex")
+        paper.write_text(
+            "\\documentclass{article}\n\\begin{document}\n"
+            f"\\section{{Introduction}}\n{paper_text}\n"
+            "\\end{document}\n",
+            encoding="utf-8",
+        )
+        pdf = runtime_root(root) / "build" / "compiled" / "paper.full.pdf"
+        pdf.parent.mkdir(parents=True, exist_ok=True)
+        pdf.write_bytes(b"%PDF-1.5\n% unit-test placeholder\n")
+        log = runtime_root(root) / "build" / "compiled" / "latex-build.log"
+        log.write_text("clean compile\n", encoding="utf-8")
+        compile_report_path = artifact_path(root, "compile-report.json")
+        compile_report_path.write_text(
+            json.dumps(
+                {
+                    "pdf_path": str(pdf),
+                    "log_path": str(log),
+                    "return_code": 0,
+                    "pdf_exists": True,
+                    "clean": True,
+                    "manuscript_sha256": hashlib.sha256(paper.read_bytes()).hexdigest(),
+                    "pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest(),
+                    "warning_summary": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        state.artifacts.paper_full_tex = str(paper)
+        state.artifacts.compiled_pdf = str(pdf)
+        state.artifacts.latest_compile_report_json = str(compile_report_path)
+        save_session(root, state)
+
+    def _quality_eval_tier0_green_patches(self):
+        return (
+            patch(
+                "paperorchestra.quality_loop.build_reproducibility_audit",
+                return_value={"prompt_trace_file_count": 1, "citation_artifact_issues": []},
+            ),
+            patch(
+                "paperorchestra.quality_loop.planning_artifact_status",
+                return_value={"status": "pass", "failing_codes": [], "artifacts": {}},
+            ),
+        )
+
     def _write_terminal_human_needed_plan(self, root: Path, *, verdict: str = "human_needed") -> Path:
         state = load_session(root)
         manuscript_sha = None
@@ -1288,6 +1334,63 @@ class PipelineTests(unittest.TestCase):
 
         benign = "Artifact validation is a normal term in reproducibility papers."
         self.assertFalse(_leakage_markers_in_text(benign, source="unit"))
+
+    def test_pdf_text_scan_unavailable_is_structural_not_prompt_leakage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            self._attach_clean_manuscript_compile_report(root, state)
+            repro_patch, planning_patch = self._quality_eval_tier0_green_patches()
+            with repro_patch, planning_patch, patch("paperorchestra.quality_loop_leakage.subprocess.run", side_effect=FileNotFoundError()):
+                _, quality_eval = write_quality_eval(root, quality_mode="claim_safe")
+                tier1 = quality_eval["tiers"]["tier_1_structural"]
+
+                self.assertIn("pdf_text_scan_unavailable", tier1["failing_codes"])
+                self.assertNotIn("prompt_meta_leakage", tier1["failing_codes"])
+                self.assertNotIn("prompt_meta_leakage", quality_eval["non_reviewable"]["failing_codes"])
+                self.assertEqual(tier1["checks"]["pdf_text_scan"]["status"], "fail")
+                self.assertTrue(any("pdftotext not found" in marker for marker in tier1["checks"]["pdf_text_scan"]["markers"]))
+
+    def test_pdf_text_scan_unavailable_plan_is_human_needed_dependency(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            self._attach_clean_manuscript_compile_report(root, state)
+            failed_proc = subprocess.CompletedProcess(["pdftotext"], 1, stdout="", stderr="bad pdf")
+            repro_patch, planning_patch = self._quality_eval_tier0_green_patches()
+            with repro_patch, planning_patch, patch("paperorchestra.quality_loop_leakage.subprocess.run", return_value=failed_proc):
+                _, plan = write_quality_loop_plan(root, quality_mode="claim_safe")
+
+                self.assertIn("pdf_text_scan_unavailable", plan["quality_eval_summary"]["failing_codes"])
+                self.assertNotIn("prompt_meta_leakage", plan["quality_eval_summary"]["failing_codes"])
+                self.assertEqual(plan["verdict"], "human_needed")
+                actions = [action for action in plan["repair_actions"] if action.get("code") == "pdf_text_scan_unavailable"]
+                self.assertEqual(len(actions), 1)
+                self.assertEqual(actions[0]["automation"], "human_needed")
+                self.assertIn("poppler-utils", "\n".join(actions[0]["suggested_commands"]))
+                self.assertIn("not a manuscript repair", actions[0]["why_not_automatic"])
+
+    def test_pdf_text_prompt_leakage_still_blocks_when_scan_succeeds(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            self._attach_clean_manuscript_compile_report(root, state)
+            leaked_proc = subprocess.CompletedProcess(
+                ["pdftotext"],
+                0,
+                stdout="Caption intent: leaked plotting prompt\n",
+                stderr="",
+            )
+            repro_patch, planning_patch = self._quality_eval_tier0_green_patches()
+            with repro_patch, planning_patch, patch("paperorchestra.quality_loop_leakage.subprocess.run", return_value=leaked_proc):
+                _, quality_eval = write_quality_eval(root, quality_mode="claim_safe")
+                tier1 = quality_eval["tiers"]["tier_1_structural"]
+
+                self.assertIn("prompt_meta_leakage", quality_eval["non_reviewable"]["failing_codes"])
+                self.assertIn("prompt_meta_leakage", tier1["failing_codes"])
+                self.assertNotIn("pdf_text_scan_unavailable", tier1["failing_codes"])
+                markers = quality_eval["non_reviewable"]["checks"]["prompt_meta_leakage"]["markers"]
+                self.assertTrue(any("pdftotext" in marker for marker in markers))
 
     def test_source_boundary_meta_leakage_plan_is_failed_not_human_needed(self) -> None:
         old_strict = os.environ.get("PAPERO_STRICT_CONTENT_GATES")

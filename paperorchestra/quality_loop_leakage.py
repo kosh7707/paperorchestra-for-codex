@@ -6,6 +6,8 @@ from pathlib import Path
 from .quality_loop_policy import LEAKAGE_PATTERNS_ALWAYS, LEAKAGE_PATTERNS_VISUAL
 from .quality_loop_utils import _read_json_if_exists
 
+PDF_TEXT_SCAN_UNAVAILABLE_CODE = "pdf_text_scan_unavailable"
+
 def _leakage_markers_in_text(text: str, *, source: str, visual_context: bool = False) -> list[str]:
     found: list[str] = []
     patterns = list(LEAKAGE_PATTERNS_ALWAYS)
@@ -53,30 +55,61 @@ def _plot_asset_text_paths(state) -> list[Path]:
     return sorted({path.resolve() for path in result})
 
 
-def _pdf_text_for_prompt_leakage(path: str | Path | None) -> list[str]:
+def _pdf_text_prompt_leakage_scan(path: str | Path | None) -> dict[str, list[str]]:
     if not path or not Path(path).exists():
-        return []
+        return {"markers": [], "unavailable": []}
     try:
         proc = subprocess.run(
             ["pdftotext", str(path), "-"],
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             check=False,
             text=True,
             timeout=10,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return [f"pdf_text_scan_unavailable ({path})"]
+    except FileNotFoundError:
+        return {
+            "markers": [],
+            "unavailable": [f"{PDF_TEXT_SCAN_UNAVAILABLE_CODE} ({path}; pdftotext not found)"],
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "markers": [],
+            "unavailable": [f"{PDF_TEXT_SCAN_UNAVAILABLE_CODE} ({path}; pdftotext timed out)"],
+        }
     if proc.returncode != 0:
-        return [f"pdf_text_scan_unavailable ({path})"]
-    return _leakage_markers_in_text(proc.stdout, source=f"{path}:pdftotext", visual_context=True)
+        detail = (proc.stderr or "").strip().splitlines()
+        reason = detail[0] if detail else f"pdftotext exited {proc.returncode}"
+        return {
+            "markers": [],
+            "unavailable": [f"{PDF_TEXT_SCAN_UNAVAILABLE_CODE} ({path}; {reason})"],
+        }
+    return {
+        "markers": _leakage_markers_in_text(proc.stdout, source=f"{path}:pdftotext", visual_context=True),
+        "unavailable": [],
+    }
 
 
-def _manuscript_prompt_leakage(state) -> list[str]:
+def _pdf_text_for_prompt_leakage(path: str | Path | None) -> list[str]:
+    return _pdf_text_prompt_leakage_scan(path)["markers"]
+
+
+def _manuscript_prompt_leakage_report(state) -> dict[str, list[str]]:
+    pdf_scan = _pdf_text_prompt_leakage_scan(state.artifacts.compiled_pdf)
     found: list[str] = []
     found.extend(_scan_text_file_for_prompt_leakage(state.artifacts.paper_full_tex, source="paper_full_tex"))
     for path in _plot_asset_text_paths(state):
         found.extend(_scan_text_file_for_prompt_leakage(path, source=f"plot_asset:{path.name}", visual_context=True))
-    found.extend(_pdf_text_for_prompt_leakage(state.artifacts.compiled_pdf))
-    return sorted(dict.fromkeys(found))
+    found.extend(pdf_scan["markers"])
+    return {
+        "markers": sorted(dict.fromkeys(found)),
+        "pdf_text_scan_unavailable": sorted(dict.fromkeys(pdf_scan["unavailable"])),
+    }
 
+
+def _manuscript_prompt_leakage(state) -> list[str]:
+    return _manuscript_prompt_leakage_report(state)["markers"]
+
+
+def _manuscript_pdf_text_scan_unavailable(state) -> list[str]:
+    return _pdf_text_prompt_leakage_scan(state.artifacts.compiled_pdf)["unavailable"]
