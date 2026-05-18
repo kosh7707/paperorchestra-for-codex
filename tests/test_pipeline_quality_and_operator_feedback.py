@@ -220,6 +220,107 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(result.payload["actionable_failure"]["validation_failing_codes"], ["citation_coverage_insufficient"])
             self.assertNotEqual(result.payload["verdict"], "ready_for_human_finalization")
 
+    def test_citation_repair_failure_payload_summarizes_semantic_recheck(self) -> None:
+        from paperorchestra.ralph_bridge import _citation_repair_failure_payload
+
+        repair = {
+            "reason": "semantic_recheck_failed",
+            "issue_count": 2,
+            "claim_safety_issue_count": 1,
+            "candidate_path": "/tmp/private-candidate-with-text.tex",
+            "validation": {"ok": True, "blocking_issue_count": 0},
+            "semantic_recheck": {
+                "status": "fail",
+                "citation_integrity": {
+                    "targeted": True,
+                    "improved": False,
+                    "path": "/tmp/citation-integrity.json",
+                    "sha256": "sha256:citation",
+                    "before": {"target_issue_count": 3, "other_detail": "do not copy"},
+                    "after": {"target_issue_count": 3},
+                },
+                "high_risk_claim_sweep": {
+                    "targeted": True,
+                    "improved": True,
+                    "path": "/tmp/high-risk.json",
+                    "sha256": "sha256:highrisk",
+                    "before": {"item_count": 2},
+                    "after": {"item_count": 0},
+                },
+            },
+        }
+
+        failure = _citation_repair_failure_payload("citation_support_critic_failed", repair)
+
+        self.assertEqual(failure["reason"], "semantic_recheck_failed")
+        self.assertEqual(failure["semantic_recheck_blockers"], ["citation_integrity_not_improved"])
+        citation = failure["semantic_recheck"]["citation_integrity"]
+        self.assertTrue(citation["targeted"])
+        self.assertFalse(citation["improved"])
+        self.assertEqual(citation["before_count"], 3)
+        self.assertEqual(citation["after_count"], 3)
+        high_risk = failure["semantic_recheck"]["high_risk_claim_sweep"]
+        self.assertTrue(high_risk["improved"])
+        self.assertEqual(high_risk["before_count"], 2)
+        self.assertEqual(high_risk["after_count"], 0)
+        self.assertIn("semantic_recheck blockers", failure["next_steps"][0])
+        self.assertNotIn("do not copy", json.dumps(failure))
+
+    def test_qa_loop_step_actionable_failure_includes_semantic_recheck_blockers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\documentclass{article}\n\\begin{document}\nClaim~\\cite{A}.\\end{document}\n", encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            before_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "manuscript_hash": "sha256:" + hashlib.sha256(paper.read_bytes()).hexdigest(),
+                "tiers": {"tier_2_claim_safety": {"status": "fail", "failing_codes": ["citation_support_critic_failed"]}},
+            }
+            plan = {
+                "schema_version": "qa-loop-plan/2",
+                "session_id": state.session_id,
+                "verdict": "continue",
+                "repair_actions": [{"code": "citation_support_critic_failed", "automation": "semi_auto"}],
+            }
+            repair_payload = {
+                "accepted": False,
+                "reason": "semantic_recheck_failed",
+                "issue_count": 1,
+                "claim_safety_issue_count": 1,
+                "validation": {"ok": True, "blocking_issue_count": 0},
+                "semantic_recheck": {
+                    "status": "fail",
+                    "citation_integrity": {
+                        "targeted": True,
+                        "improved": False,
+                        "before": {"target_issue_count": 2},
+                        "after": {"target_issue_count": 2},
+                    },
+                    "high_risk_claim_sweep": {
+                        "targeted": False,
+                        "improved": True,
+                        "before": {"item_count": 0},
+                        "after": {"item_count": 0},
+                    },
+                },
+            }
+            with patch("paperorchestra.ralph_bridge.write_quality_eval", return_value=(root / "before.json", before_eval)):
+                with patch("paperorchestra.ralph_bridge.write_quality_loop_plan", return_value=(root / "plan-before.json", plan)):
+                    with patch("paperorchestra.ralph_bridge._citation_summary", return_value={}):
+                        with patch("paperorchestra.ralph_bridge.repair_citation_claims", return_value=repair_payload):
+                            result = run_qa_loop_step(root, MockProvider(), citation_evidence_mode="heuristic")
+
+            failure = result.payload["actionable_failure"]
+            self.assertEqual(failure["category"], "citation_repair_failed")
+            self.assertEqual(failure["reason"], "semantic_recheck_failed")
+            self.assertEqual(failure["semantic_recheck_blockers"], ["citation_integrity_not_improved"])
+            self.assertEqual(result.payload["repair_failures"][0]["semantic_recheck_blockers"], ["citation_integrity_not_improved"])
+            self.assertNotIn("Claim~", json.dumps(failure))
+
     def test_qa_loop_step_routes_critical_citation_quality_to_refresh_handler(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
