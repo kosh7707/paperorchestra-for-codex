@@ -19,21 +19,38 @@ from .quality_loop_utils import _path_ref, _read_json_if_exists
 AUTHOR_JUDGMENT_AUTHORITY_CLASSES = {"author_judgment", "operator_judgment", "domain_judgment", "author_feedback"}
 
 
-def _manual_check_classification(citation_check: dict[str, Any]) -> dict[str, Any]:
+def _citation_support_gap_classification(citation_check: dict[str, Any]) -> dict[str, Any]:
     path = citation_check.get("path")
     payload = _read_json_if_exists(path) if isinstance(path, (str, Path)) else None
     if not isinstance(payload, dict):
-        return {"machine_solvable_count": 0, "author_judgment_count": 1, "payload_unavailable": True}
+        return {
+            "machine_solvable_count": 0,
+            "machine_research_needed_count": 0,
+            "manual_author_judgment_count": 1,
+            "author_judgment_count": 1,
+            "payload_unavailable": True,
+        }
+    manual_statuses = {"needs_manual_check", "manual_check"}
+    target_statuses = {"needs_manual_check", "manual_check", "weakly_supported"}
     items = [
         item
         for item in payload.get("items") or []
-        if isinstance(item, dict) and str(item.get("support_status") or "").strip() in {"needs_manual_check", "manual_check"}
+        if isinstance(item, dict) and str(item.get("support_status") or "").strip() in target_statuses
     ]
     if not items:
-        return {"machine_solvable_count": 0, "author_judgment_count": 1, "payload_unavailable": True}
+        return {
+            "machine_solvable_count": 0,
+            "machine_research_needed_count": 0,
+            "manual_author_judgment_count": 1,
+            "author_judgment_count": 1,
+            "payload_unavailable": True,
+        }
     machine_solvable_count = 0
-    author_judgment_count = 0
+    machine_research_needed_count = 0
+    manual_author_judgment_count = 0
+    weak_author_marker_count = 0
     for item in items:
+        status = str(item.get("support_status") or "").strip()
         suggested_fix = str(item.get("suggested_fix") or item.get("suggested_action") or "").strip()
         authority_class = str(item.get("authority_class") or "").strip().lower()
         flags = {str(flag).strip().lower() for flag in item.get("flags") or [] if str(flag).strip()} if isinstance(item.get("flags"), list) else set()
@@ -57,15 +74,49 @@ def _manual_check_classification(citation_check: dict[str, Any]) -> dict[str, An
             )
         )
         valid_support_evidence = citation_item_has_valid_supporting_evidence(item)
+        evidence_surface = _has_concrete_unbound_evidence_surface(item)
         if suggested_fix and valid_support_evidence and not explicit_author_judgment:
             machine_solvable_count += 1
+        elif suggested_fix and evidence_surface and not explicit_author_judgment:
+            machine_research_needed_count += 1
+        elif status in manual_statuses:
+            manual_author_judgment_count += 1
+        elif explicit_author_judgment:
+            weak_author_marker_count += 1
         else:
-            author_judgment_count += 1
+            continue
     return {
         "machine_solvable_count": machine_solvable_count,
-        "author_judgment_count": author_judgment_count,
+        "machine_research_needed_count": machine_research_needed_count,
+        "manual_author_judgment_count": manual_author_judgment_count,
+        "weak_author_marker_count": weak_author_marker_count,
+        "author_judgment_count": manual_author_judgment_count,
         "payload_unavailable": False,
     }
+
+
+def _manual_check_classification(citation_check: dict[str, Any]) -> dict[str, Any]:
+    return _citation_support_gap_classification(citation_check)
+
+
+def _has_concrete_unbound_evidence_surface(item: dict[str, Any]) -> bool:
+    evidence = item.get("evidence")
+    if not isinstance(evidence, list):
+        return False
+    for entry in evidence:
+        if not isinstance(entry, dict):
+            continue
+        locator = str(entry.get("url") or entry.get("source_url") or entry.get("source_title") or entry.get("title") or "").strip()
+        support_text = str(
+            entry.get("evidence_quote_or_summary")
+            or entry.get("quoted_or_paraphrased_support")
+            or entry.get("quote_or_summary")
+            or entry.get("summary")
+            or ""
+        ).strip()
+        if locator and support_text:
+            return True
+    return False
 
 
 def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
@@ -160,12 +211,34 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
             "citation_support_trace_mismatch",
             "citation_support_trace_invalid",
         }
-        manual_check = _manual_check_classification(citation_check) if "citation_support_manual_check" in citation_codes else {
+        manual_check = _citation_support_gap_classification(citation_check) if citation_codes & {"citation_support_manual_check", "citation_support_weak"} else {
             "machine_solvable_count": 0,
+            "machine_research_needed_count": 0,
             "author_judgment_count": 0,
             "payload_unavailable": False,
         }
-        if (citation_repair_codes & citation_codes) or int(manual_check.get("machine_solvable_count") or 0) > 0:
+        machine_research_count = int(manual_check.get("machine_research_needed_count") or 0)
+        weak_author_marker_count = int(manual_check.get("weak_author_marker_count") or 0)
+        if machine_research_count > 0:
+            actions.append(
+                _action(
+                    action_id="quality-eval:citation-support-evidence-research",
+                    code="citation_support_evidence_research_needed",
+                    source=citation_check.get("path"),
+                    target="citation support evidence",
+                    automation="automatic",
+                    reason=f"{machine_research_count} citation-support manual-check item(s) have concrete but unbound evidence surfaces and must be re-verified by search before author judgment.",
+                    suggested_commands=[
+                        "paperorchestra review-citations --evidence-mode web",
+                        "paperorchestra qa-loop-plan --quality-mode claim_safe",
+                    ],
+                    ralph_instruction="Refresh citation-support evidence with web/S2-backed verification for the machine-solvable unbound evidence surfaces before attempting rewrite or asking the author.",
+                )
+            )
+        repair_codes_for_current_gap = set(citation_repair_codes & citation_codes)
+        if machine_research_count > 0 or weak_author_marker_count > 0:
+            repair_codes_for_current_gap.discard("citation_support_weak")
+        if repair_codes_for_current_gap or int(manual_check.get("machine_solvable_count") or 0) > 0:
             machine_manual_count = int(manual_check.get("machine_solvable_count") or 0)
             manual_phrase = (
                 f" {machine_manual_count} manual-check item(s) have concrete fixes and support evidence for bounded repair."
@@ -186,10 +259,14 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     approval_required_from="citation_support_critic",
                 )
             )
-        if "citation_support_manual_check" in citation_codes and (
-            int(manual_check.get("author_judgment_count") or 0) > 0 or manual_check.get("payload_unavailable") is True
+        if (
+            ("citation_support_manual_check" in citation_codes and int(manual_check.get("manual_author_judgment_count") or manual_check.get("author_judgment_count") or 0) > 0)
+            or weak_author_marker_count > 0
+            or ("citation_support_manual_check" in citation_codes and manual_check.get("payload_unavailable") is True)
         ):
-            author_count = int(manual_check.get("author_judgment_count") or 0)
+            author_count = int(manual_check.get("manual_author_judgment_count") or manual_check.get("author_judgment_count") or 0)
+            if weak_author_marker_count:
+                author_count += weak_author_marker_count
             unavailable = manual_check.get("payload_unavailable") is True
             reason = (
                 "Citation-support manual-check payload is unavailable for safe machine classification."

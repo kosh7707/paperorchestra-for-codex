@@ -203,6 +203,86 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(attempted[0]["handler"], "repair_citation_claims")
             self.assertNotEqual(result.payload["verdict"], "ready_for_human_finalization")
 
+    def test_qa_loop_step_refreshes_unbound_citation_evidence_before_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\documentclass{article}\n\\begin{document}\nClaim~\\cite{A}.\\end{document}\n", encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            before_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "tiers": {"tier_2_claim_safety": {"status": "fail", "failing_codes": ["citation_support_manual_check"]}},
+            }
+            plan = {
+                "schema_version": "qa-loop-plan/2",
+                "session_id": state.session_id,
+                "verdict": "continue",
+                "repair_actions": [{"code": "citation_support_evidence_research_needed", "automation": "automatic"}],
+            }
+            after_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "tiers": {"tier_2_claim_safety": {"status": "fail", "failing_codes": ["citation_support_manual_check"]}},
+            }
+            after_plan = {**plan, "verdict": "human_needed"}
+            with patch("paperorchestra.ralph_bridge.write_quality_eval", side_effect=[(root / "before.json", before_eval), (root / "after.json", after_eval)]):
+                with patch("paperorchestra.ralph_bridge.write_quality_loop_plan", side_effect=[(root / "plan-before.json", plan), (root / "plan-after.json", after_plan)]):
+                    with patch("paperorchestra.ralph_bridge._citation_summary", return_value={}):
+                        with patch("paperorchestra.ralph_bridge.repair_citation_claims") as repair:
+                            with patch("paperorchestra.ralph_bridge.record_current_validation_report", return_value=(root / "validation.json", {"ok": True})):
+                                with patch("paperorchestra.ralph_bridge.write_section_review", return_value=root / "section_review.json"):
+                                    with patch("paperorchestra.ralph_bridge.write_figure_placement_review", return_value=(root / "figure_review.json", {"manuscript_sha256": "x"})):
+                                        with patch("paperorchestra.ralph_bridge.write_citation_support_review", return_value=root / "citation_support_review.json") as review:
+                                            with patch("paperorchestra.ralph_bridge._refresh_citation_integrity_for_current_manuscript", return_value={"status": "pass"}):
+                                                result = run_qa_loop_step(root, MockProvider(), citation_evidence_mode="web")
+
+            repair.assert_not_called()
+            review.assert_called()
+            attempted = result.payload.get("actions_attempted", [])
+            self.assertEqual(attempted[0]["code"], "citation_support_evidence_research_needed")
+            self.assertEqual(attempted[0]["handler"], "review_citations")
+
+    def test_qa_loop_step_refreshes_weak_unbound_citation_evidence_before_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\documentclass{article}\n\\begin{document}\nClaim~\\cite{A}.\\end{document}\n", encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            before_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "tiers": {"tier_2_claim_safety": {"status": "fail", "failing_codes": ["citation_support_weak"]}},
+            }
+            plan = {
+                "schema_version": "qa-loop-plan/2",
+                "session_id": state.session_id,
+                "verdict": "continue",
+                "repair_actions": [{"code": "citation_support_evidence_research_needed", "automation": "automatic"}],
+            }
+            after_eval = before_eval
+            after_plan = {**plan, "verdict": "human_needed"}
+            with patch("paperorchestra.ralph_bridge.write_quality_eval", side_effect=[(root / "before.json", before_eval), (root / "after.json", after_eval)]):
+                with patch("paperorchestra.ralph_bridge.write_quality_loop_plan", side_effect=[(root / "plan-before.json", plan), (root / "plan-after.json", after_plan)]):
+                    with patch("paperorchestra.ralph_bridge._citation_summary", return_value={}):
+                        with patch("paperorchestra.ralph_bridge.repair_citation_claims") as repair:
+                            with patch("paperorchestra.ralph_bridge.record_current_validation_report", return_value=(root / "validation.json", {"ok": True})):
+                                with patch("paperorchestra.ralph_bridge.write_section_review", return_value=root / "section_review.json"):
+                                    with patch("paperorchestra.ralph_bridge.write_figure_placement_review", return_value=(root / "figure_review.json", {"manuscript_sha256": "x"})):
+                                        with patch("paperorchestra.ralph_bridge.write_citation_support_review", return_value=root / "citation_support_review.json") as review:
+                                            with patch("paperorchestra.ralph_bridge._refresh_citation_integrity_for_current_manuscript", return_value={"status": "pass"}):
+                                                result = run_qa_loop_step(root, MockProvider(), citation_evidence_mode="web")
+
+            repair.assert_not_called()
+            review.assert_called()
+            attempted = result.payload.get("actions_attempted", [])
+            self.assertEqual(attempted[0]["code"], "citation_support_evidence_research_needed")
+            self.assertEqual(attempted[0]["handler"], "review_citations")
+
     def test_qa_loop_plan_makes_stale_citation_integrity_refresh_executable(self) -> None:
         quality_eval = {
             "tiers": {
@@ -1875,6 +1955,82 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
         self.assertIn("citation_support_critic_failed", codes)
         self.assertNotIn("citation_support_manual_check_requires_author_judgment", codes)
 
+    def test_manual_check_with_unbound_evidence_routes_to_research_not_repair_or_human(self) -> None:
+        item = self._machine_solvable_manual_item()
+        item["evidence"][0]["source_title"] = "A different but concrete source surface"
+        item["evidence"][0]["url"] = "https://example.invalid/different-source"
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            self._write_manual_check_review(review_path, [item])
+
+            actions = _quality_eval_actions(self._manual_check_quality_eval(review_path))
+
+        codes = {action.get("code") for action in actions}
+        self.assertIn("citation_support_evidence_research_needed", codes)
+        self.assertNotIn("citation_support_critic_failed", codes)
+        self.assertNotIn("citation_support_manual_check_requires_author_judgment", codes)
+        research_action = [action for action in actions if action.get("code") == "citation_support_evidence_research_needed"][0]
+        self.assertEqual(research_action["automation"], "automatic")
+        self.assertIn("paperorchestra review-citations --evidence-mode web", research_action["suggested_commands"])
+        public_text = "\n".join(str(research_action.get(field, "")) for field in ["reason", "ralph_instruction"])
+        self.assertNotIn("Private raw sentence", public_text)
+        self.assertNotIn("different but concrete", public_text)
+
+    def test_weak_support_with_unbound_evidence_routes_to_research_not_repair_or_human(self) -> None:
+        item = self._machine_solvable_manual_item()
+        item["support_status"] = "weakly_supported"
+        item["evidence"][0]["source_title"] = "A different but concrete source surface"
+        item["evidence"][0]["url"] = "https://example.invalid/different-source"
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            self._write_manual_check_review(review_path, [item])
+
+            actions = _quality_eval_actions(self._manual_check_quality_eval(review_path, ["citation_support_weak"]))
+
+        codes = {action.get("code") for action in actions}
+        self.assertIn("citation_support_evidence_research_needed", codes)
+        self.assertNotIn("citation_support_critic_failed", codes)
+        self.assertNotIn("citation_support_manual_check_requires_author_judgment", codes)
+
+    def test_weak_support_with_author_marker_routes_to_human_not_research_or_repair(self) -> None:
+        item = self._machine_solvable_manual_item()
+        item["support_status"] = "weakly_supported"
+        item["requires_author_judgment"] = True
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            self._write_manual_check_review(review_path, [item])
+
+            actions = _quality_eval_actions(self._manual_check_quality_eval(review_path, ["citation_support_weak"]))
+
+        codes = {action.get("code") for action in actions}
+        self.assertIn("citation_support_manual_check_requires_author_judgment", codes)
+        self.assertNotIn("citation_support_evidence_research_needed", codes)
+        self.assertNotIn("citation_support_critic_failed", codes)
+
+    def test_mixed_manual_unbound_and_weak_plain_gap_does_not_false_human_needed(self) -> None:
+        manual_item = self._machine_solvable_manual_item()
+        manual_item["evidence"][0]["source_title"] = "A different but concrete source surface"
+        manual_item["evidence"][0]["url"] = "https://example.invalid/different-source"
+        weak_item = {
+            "id": "weak-1",
+            "sentence": "Weak item text should not leak.",
+            "citation_keys": ["RefB"],
+            "support_status": "weakly_supported",
+            "suggested_fix": "Refresh evidence before rewriting.",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            self._write_manual_check_review(review_path, [manual_item, weak_item])
+
+            actions = _quality_eval_actions(
+                self._manual_check_quality_eval(review_path, ["citation_support_manual_check", "citation_support_weak"])
+            )
+
+        codes = {action.get("code") for action in actions}
+        self.assertIn("citation_support_evidence_research_needed", codes)
+        self.assertNotIn("citation_support_manual_check_requires_author_judgment", codes)
+        self.assertNotIn("citation_support_critic_failed", codes)
+
     def test_manual_check_requiring_author_judgment_routes_to_human_needed_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             review_path = Path(tmp) / "citation_support_review.json"
@@ -1941,6 +2097,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
         codes = {action.get("code") for action in actions}
         self.assertIn("citation_support_manual_check_requires_author_judgment", codes)
         self.assertNotIn("citation_support_critic_failed", codes)
+        self.assertNotIn("citation_support_evidence_research_needed", codes)
 
     def test_manual_check_with_missing_payload_fails_closed_to_author_judgment(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

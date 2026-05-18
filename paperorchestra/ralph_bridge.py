@@ -378,7 +378,7 @@ def run_qa_loop_step(
                     else None,
                 }
             )
-        elif code in {"citation_support_review_missing", "citation_support_review_stale"}:
+        elif code in {"citation_support_review_missing", "citation_support_review_stale", "citation_support_evidence_research_needed"}:
             review_path = write_citation_support_review(cwd, provider=citation_provider, evidence_mode=citation_evidence_mode)
             execution["actions_attempted"].append({"code": code, "handler": "review_citations", "path": str(review_path)})
         elif code in {

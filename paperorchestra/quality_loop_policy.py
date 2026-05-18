@@ -82,6 +82,7 @@ QA_LOOP_SUPPORTED_HANDLER_CODES = {
     "figure_placement_review_stale",
     "citation_support_review_missing",
     "citation_support_review_stale",
+    "citation_support_evidence_research_needed",
     "rendered_reference_audit_missing",
     "rendered_reference_audit_stale",
     "citation_intent_plan_missing",
