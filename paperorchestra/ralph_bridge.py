@@ -207,6 +207,8 @@ def _semantic_recheck_gate_summary(payload: dict[str, Any]) -> tuple[dict[str, A
             "before_count": _semantic_metric_count(before, count_key),
             "after_count": _semantic_metric_count(after, count_key),
         }
+        if lane.get("baseline_source"):
+            compact["baseline_source"] = lane.get("baseline_source")
         if lane.get("path"):
             compact["path"] = lane.get("path")
         if lane.get("sha256"):

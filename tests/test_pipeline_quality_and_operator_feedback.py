@@ -220,6 +220,97 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(result.payload["actionable_failure"]["validation_failing_codes"], ["citation_coverage_insufficient"])
             self.assertNotEqual(result.payload["verdict"], "ready_for_human_finalization")
 
+    def test_candidate_semantic_recheck_uses_bound_full_high_risk_baseline(self) -> None:
+        from paperorchestra.ralph_bridge_repair import _candidate_semantic_recheck
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            original = "\\documentclass{article}\n\\begin{document}\nOriginal claim.\n\\end{document}\n"
+            paper.write_text(original, encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            original_hash = hashlib.sha256(original.encode("utf-8")).hexdigest()
+            artifact_path(root, "quality-eval.json").write_text(
+                json.dumps(
+                    {
+                        "manuscript_hash": "sha256:" + original_hash,
+                        "tiers": {
+                            "tier_2_claim_safety": {
+                                "checks": {
+                                    "high_risk_claim_sweep": {
+                                        "status": "fail",
+                                        "failing_codes": ["high_risk_uncited_claim"],
+                                        "item_count": 20,
+                                        "items": [{} for _ in range(20)],
+                                    }
+                                }
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            paper.write_text(original.replace("Original", "Candidate"), encoding="utf-8")
+            issues = [{"issue_type": "high_risk_uncited_claim", "sentence": f"issue {i}"} for i in range(16)]
+            with patch("paperorchestra.ralph_bridge_repair.build_citation_integrity_audit", return_value={"status": "pass", "failing_codes": [], "checks": {}}):
+                with patch("paperorchestra.ralph_bridge_repair.evaluate_source_obligations", return_value={}):
+                    with patch("paperorchestra.ralph_bridge_repair._high_risk_claim_sweep", return_value={"status": "fail", "failing_codes": ["high_risk_uncited_claim"], "item_count": 18, "items": [{} for _ in range(18)]}):
+                        result = _candidate_semantic_recheck(root, claim_safety_issues=issues, original_manuscript_hash=original_hash)
+
+            high_risk = result["high_risk_claim_sweep"]
+            self.assertEqual(result["status"], "pass")
+            self.assertEqual(high_risk["baseline_source"], "quality_eval")
+            self.assertEqual(high_risk["before"]["item_count"], 20)
+            self.assertEqual(high_risk["after"]["item_count"], 18)
+            self.assertTrue(high_risk["improved"])
+
+    def test_candidate_semantic_recheck_ignores_stale_high_risk_baseline(self) -> None:
+        from paperorchestra.ralph_bridge_repair import _candidate_semantic_recheck
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            original = "\\documentclass{article}\n\\begin{document}\nOriginal claim.\n\\end{document}\n"
+            paper.write_text(original, encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            original_hash = hashlib.sha256(original.encode("utf-8")).hexdigest()
+            artifact_path(root, "quality-eval.json").write_text(
+                json.dumps(
+                    {
+                        "manuscript_hash": "sha256:stale",
+                        "tiers": {
+                            "tier_2_claim_safety": {
+                                "checks": {
+                                    "high_risk_claim_sweep": {
+                                        "status": "fail",
+                                        "failing_codes": ["high_risk_uncited_claim"],
+                                        "item_count": 20,
+                                    }
+                                }
+                            }
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            paper.write_text(original.replace("Original", "Candidate"), encoding="utf-8")
+            issues = [{"issue_type": "high_risk_uncited_claim", "sentence": f"issue {i}"} for i in range(16)]
+            with patch("paperorchestra.ralph_bridge_repair.build_citation_integrity_audit", return_value={"status": "pass", "failing_codes": [], "checks": {}}):
+                with patch("paperorchestra.ralph_bridge_repair.evaluate_source_obligations", return_value={}):
+                    with patch("paperorchestra.ralph_bridge_repair._high_risk_claim_sweep", return_value={"status": "fail", "failing_codes": ["high_risk_uncited_claim"], "item_count": 18, "items": [{} for _ in range(18)]}):
+                        result = _candidate_semantic_recheck(root, claim_safety_issues=issues, original_manuscript_hash=original_hash)
+
+            high_risk = result["high_risk_claim_sweep"]
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(high_risk["baseline_source"], "quality_eval_stale_ignored")
+            self.assertEqual(high_risk["before"]["item_count"], 16)
+            self.assertEqual(high_risk["after"]["item_count"], 18)
+            self.assertFalse(high_risk["improved"])
+
     def test_citation_repair_failure_payload_summarizes_semantic_recheck(self) -> None:
         from paperorchestra.ralph_bridge import _citation_repair_failure_payload
 

@@ -230,6 +230,35 @@ def _high_risk_issue_metrics_from_packet(issues: list[dict[str, Any]]) -> dict[s
         "item_count": count,
     }
 
+def _canonical_high_risk_baseline(
+    cwd: str | Path | None,
+    *,
+    original_manuscript_hash: str | None,
+) -> tuple[dict[str, Any] | None, str]:
+    quality_path = artifact_path(cwd, "quality-eval.json")
+    try:
+        quality_eval = _read_json(quality_path)
+    except Exception:
+        return None, "quality_eval_missing"
+    if not isinstance(quality_eval, dict):
+        return None, "quality_eval_missing"
+    expected_hash = str(original_manuscript_hash or "").strip()
+    if expected_hash and not expected_hash.startswith("sha256:"):
+        expected_hash = "sha256:" + expected_hash
+    recorded_hash = str(quality_eval.get("manuscript_hash") or "").strip()
+    if expected_hash and recorded_hash and recorded_hash != expected_hash:
+        return None, "quality_eval_stale_ignored"
+    if expected_hash and not recorded_hash:
+        return None, "quality_eval_unbound_ignored"
+    tiers = quality_eval.get("tiers") if isinstance(quality_eval.get("tiers"), dict) else {}
+    tier2 = tiers.get("tier_2_claim_safety") if isinstance(tiers.get("tier_2_claim_safety"), dict) else {}
+    checks = tier2.get("checks") if isinstance(tier2.get("checks"), dict) else {}
+    sweep = checks.get("high_risk_claim_sweep") if isinstance(checks.get("high_risk_claim_sweep"), dict) else None
+    if not isinstance(sweep, dict):
+        return None, "quality_eval_high_risk_missing"
+    return _high_risk_metrics(sweep), "quality_eval"
+
+
 def _strictly_improves(before_count: int, after_count: int) -> bool:
     return before_count <= 0 or after_count < before_count
 
@@ -238,6 +267,7 @@ def _candidate_semantic_recheck(
     *,
     claim_safety_issues: list[dict[str, Any]],
     quality_mode: str = "claim_safe",
+    original_manuscript_hash: str | None = None,
 ) -> dict[str, Any]:
     citation_targeted = any(
         str(item.get("issue_type") or "").startswith("citation_bomb_")
@@ -261,7 +291,14 @@ def _candidate_semantic_recheck(
     citation_path = artifact_path(cwd, "citation-integrity.citation-repair.candidate.json")
     write_json(citation_path, citation_after_payload)
 
-    high_risk_before = _high_risk_issue_metrics_from_packet(claim_safety_issues)
+    high_risk_before, high_risk_baseline_source = _canonical_high_risk_baseline(
+        cwd,
+        original_manuscript_hash=original_manuscript_hash,
+    )
+    if high_risk_before is None:
+        high_risk_before = _high_risk_issue_metrics_from_packet(claim_safety_issues)
+        if high_risk_baseline_source in {"quality_eval_missing", "quality_eval_high_risk_missing"}:
+            high_risk_baseline_source = "repair_packet"
     high_risk_after_payload = _high_risk_claim_sweep(load_session(cwd), evaluate_source_obligations(cwd))
     high_risk_after = _high_risk_metrics(high_risk_after_payload)
     high_risk_path = artifact_path(cwd, "high-risk-sweep.citation-repair.candidate.json")
@@ -288,6 +325,7 @@ def _candidate_semantic_recheck(
         },
         "high_risk_claim_sweep": {
             "targeted": high_risk_targeted,
+            "baseline_source": high_risk_baseline_source,
             "path": str(high_risk_path),
             "sha256": _file_sha256(high_risk_path),
             "before": high_risk_before,
@@ -417,7 +455,11 @@ def repair_citation_claims(
         result.update({"reason": "validation_failed", "completed_at": utc_now_iso()})
         return result
     try:
-        semantic_recheck = _candidate_semantic_recheck(cwd, claim_safety_issues=claim_safety_issues)
+        semantic_recheck = _candidate_semantic_recheck(
+            cwd,
+            claim_safety_issues=claim_safety_issues,
+            original_manuscript_hash=hashlib.sha256(original.encode("utf-8")).hexdigest(),
+        )
     except Exception as exc:
         atomic_write_text(paper_path, original)
         clear_pending_manuscript_write(cwd, status="restored", reason="citation_repair_semantic_recheck_error")
