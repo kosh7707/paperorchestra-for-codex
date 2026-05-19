@@ -1012,6 +1012,7 @@ def _candidate_attempt_ready_for_human_review(attempt: dict[str, Any]) -> bool:
         "compile_failed",
         "tier0_failed",
         "tier1_failed",
+        "active_blocker_metric_progress_missing",
         "active_blocker_progress_missing",
         "issue_progress_missing",
         "reviewer_catastrophic_regression",

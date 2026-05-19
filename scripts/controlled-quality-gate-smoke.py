@@ -12,9 +12,13 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT))
 
 from paperorchestra.boundary import control_prose_markers
 from paperorchestra.cli import main as cli_main
@@ -194,7 +198,10 @@ def main() -> int:
             base_active_failures=["existing_claim_issue"],
             resolved_active_failures=[],
         )
-        _require(not same_blocker_ok and "active_blocker_progress_missing" in same_blocker_reasons, "same-blocker candidate passed A3 promotion gate")
+        _require(
+            not same_blocker_ok and "active_blocker_metric_progress_missing" in same_blocker_reasons,
+            f"same-blocker candidate passed A3 promotion gate ok={same_blocker_ok} reasons={same_blocker_reasons}",
+        )
         resolved_ok, resolved_reasons = _candidate_hard_gate(
             validation_payload={"ok": True},
             compile_payload=None,

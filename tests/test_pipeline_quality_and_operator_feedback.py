@@ -5206,6 +5206,27 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
         self.assertFalse(ok)
         self.assertIn("active_blocker_metric_progress_missing", reasons)
 
+    def test_operator_feedback_human_review_filter_rejects_metric_progress_missing(self) -> None:
+        from paperorchestra.operator_feedback import _candidate_attempt_ready_for_human_review
+
+        with tempfile.TemporaryDirectory() as tmp:
+            candidate = Path(tmp) / "candidate.tex"
+            candidate.write_text("candidate", encoding="utf-8")
+            base_attempt = {
+                "candidate_path": str(candidate),
+                "resolved_active_failures": ["citation_support_manual_check"],
+                "new_tier2_failures": [],
+            }
+
+            allowed = dict(base_attempt, gate_reasons=[])
+            self.assertTrue(_candidate_attempt_ready_for_human_review(allowed))
+
+            blocked_new_reason = dict(base_attempt, gate_reasons=["active_blocker_metric_progress_missing"])
+            self.assertFalse(_candidate_attempt_ready_for_human_review(blocked_new_reason))
+
+            blocked_historical_reason = dict(base_attempt, gate_reasons=["active_blocker_progress_missing"])
+            self.assertFalse(_candidate_attempt_ready_for_human_review(blocked_historical_reason))
+
     def test_operator_feedback_rollback_records_restored_verification(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
