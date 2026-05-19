@@ -4854,7 +4854,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
                             with patch("paperorchestra.operator_feedback.write_quality_loop_plan", return_value=(root / "plan.json", {"verdict": "continue"})):
                                 _, execution = apply_operator_feedback(root, MockProvider(), imported_feedback_path=imported_path)
             self.assertEqual(execution["promotion_status"], "promoted")
-            self.assertNotIn("active_blocker_progress_missing", execution["attempts"][0]["gate_reasons"])
+            self.assertNotIn("active_blocker_metric_progress_missing", execution["attempts"][0]["gate_reasons"])
             self.assertIn("Candidate reduces citation issue count", paper.read_text(encoding="utf-8"))
 
     def test_operator_feedback_rejects_existing_candidate_without_resolved_active_blocker(self) -> None:
@@ -5063,7 +5063,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
 
             existing_only = run_with_codes(["existing_claim_issue"])
             self.assertEqual(existing_only["promotion_status"], "rolled_back")
-            self.assertIn("active_blocker_progress_missing", existing_only["attempts"][-1]["gate_reasons"])
+            self.assertIn("active_blocker_metric_progress_missing", existing_only["attempts"][-1]["gate_reasons"])
             self.assertEqual(existing_only["attempts"][-1]["resolved_active_failures"], [])
             resolved = run_with_codes([])
             self.assertEqual(resolved["promotion_status"], "promoted")
@@ -5071,10 +5071,140 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             with_new = run_with_codes(["existing_claim_issue", "new_claim_issue"])
             self.assertEqual(with_new["promotion_status"], "rolled_back")
             self.assertIn("tier2_claim_safety_new_failures", with_new["attempts"][-1]["gate_reasons"])
-            self.assertIn("active_blocker_progress_missing", with_new["attempts"][-1]["gate_reasons"])
+            self.assertIn("active_blocker_metric_progress_missing", with_new["attempts"][-1]["gate_reasons"])
             self.assertEqual(with_new["attempts"][-1]["new_tier2_failures"], ["new_claim_issue"])
             self.assertEqual(with_new["actionable_failure"]["new_tier2_failures"], ["new_claim_issue"])
             self.assertIn("tier2_claim_safety_new_failures", with_new["actionable_failure"]["latest_gate_reasons"])
+
+    def test_operator_feedback_hard_gate_rejects_active_tier2_metric_regression(self) -> None:
+        from paperorchestra.operator_feedback import _candidate_hard_gate
+
+        base_quality_eval = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "status": "fail",
+                    "failing_codes": ["citation_support_weak", "citation_support_manual_check", "high_risk_uncited_claim"],
+                    "checks": {
+                        "citation_support_critic": {
+                            "weakly_supported_count": 3,
+                            "needs_manual_check_count": 3,
+                        },
+                        "high_risk_claim_sweep": {"item_count": 39},
+                    },
+                }
+            }
+        }
+        candidate_quality_eval = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "status": "fail",
+                    "failing_codes": ["citation_support_manual_check", "high_risk_uncited_claim"],
+                    "checks": {
+                        "citation_support_critic": {
+                            "weakly_supported_count": 0,
+                            "needs_manual_check_count": 7,
+                        },
+                        "high_risk_claim_sweep": {"item_count": 41},
+                    },
+                }
+            }
+        }
+
+        ok, reasons = _candidate_hard_gate(
+            validation_payload={"ok": True},
+            compile_payload={"ok": True},
+            quality_eval=candidate_quality_eval,
+            base_quality_eval=base_quality_eval,
+            quality_mode="claim_safe",
+            incorporation=[{"status": "reflected"}],
+            candidate_result={"candidate_progress": {"forward_progress": True, "citation_issue_delta": -3}},
+            require_issue_progress=True,
+            manuscript_changed=True,
+            new_tier2_failures=[],
+            base_active_failures=["citation_support_weak", "citation_support_manual_check", "high_risk_uncited_claim"],
+            resolved_active_failures=["citation_support_weak"],
+        )
+
+        self.assertFalse(ok)
+        self.assertIn("active_tier2_metric_regression", reasons)
+
+    def test_operator_feedback_hard_gate_allows_metric_progress_without_code_resolution(self) -> None:
+        from paperorchestra.operator_feedback import _candidate_hard_gate
+
+        base_quality_eval = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "status": "fail",
+                    "failing_codes": ["citation_support_manual_check", "high_risk_uncited_claim"],
+                    "checks": {
+                        "citation_support_critic": {"needs_manual_check_count": 7},
+                        "high_risk_claim_sweep": {"item_count": 41},
+                    },
+                }
+            }
+        }
+        candidate_quality_eval = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "status": "fail",
+                    "failing_codes": ["citation_support_manual_check", "high_risk_uncited_claim"],
+                    "checks": {
+                        "citation_support_critic": {"needs_manual_check_count": 5},
+                        "high_risk_claim_sweep": {"item_count": 39},
+                    },
+                }
+            }
+        }
+
+        ok, reasons = _candidate_hard_gate(
+            validation_payload={"ok": True},
+            compile_payload={"ok": True},
+            quality_eval=candidate_quality_eval,
+            base_quality_eval=base_quality_eval,
+            quality_mode="claim_safe",
+            incorporation=[{"status": "reflected"}],
+            candidate_result={"candidate_progress": {"forward_progress": True}},
+            require_issue_progress=True,
+            manuscript_changed=True,
+            new_tier2_failures=[],
+            base_active_failures=["citation_support_manual_check", "high_risk_uncited_claim"],
+            resolved_active_failures=[],
+        )
+
+        self.assertTrue(ok)
+        self.assertNotIn("active_tier2_metric_regression", reasons)
+        self.assertNotIn("active_blocker_metric_progress_missing", reasons)
+
+    def test_operator_feedback_hard_gate_rejects_no_code_or_metric_progress(self) -> None:
+        from paperorchestra.operator_feedback import _candidate_hard_gate
+
+        quality_eval = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "status": "fail",
+                    "failing_codes": ["citation_support_manual_check"],
+                    "checks": {"citation_support_critic": {"needs_manual_check_count": 7}},
+                }
+            }
+        }
+
+        ok, reasons = _candidate_hard_gate(
+            validation_payload={"ok": True},
+            compile_payload={"ok": True},
+            quality_eval=quality_eval,
+            base_quality_eval=quality_eval,
+            quality_mode="claim_safe",
+            incorporation=[{"status": "reflected"}],
+            candidate_result={"candidate_progress": {"forward_progress": True}},
+            require_issue_progress=True,
+            manuscript_changed=True,
+            new_tier2_failures=[],
+            base_active_failures=["citation_support_manual_check"],
+            resolved_active_failures=[],
+        )
+
+        self.assertFalse(ok)
+        self.assertIn("active_blocker_metric_progress_missing", reasons)
 
     def test_operator_feedback_rollback_records_restored_verification(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
