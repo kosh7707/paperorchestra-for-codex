@@ -758,22 +758,58 @@ def _escape_bibtex_value(value: str, *, field: str) -> str:
     return "".join(escaped)
 
 
+_UNKNOWN_METADATA_VALUES = {"", "unknown", "unknown venue", "n/a", "na", "none", "null", "tbd", "todo", "anonymous"}
+
+
+def _metadata_unknownish(value: Any) -> bool:
+    normalized = re.sub(r"\s+", " ", str(value or "").strip()).lower()
+    return normalized in _UNKNOWN_METADATA_VALUES
+
+
+def paper_citable_metadata_failures(paper: VerifiedPaper) -> list[str]:
+    """Return reasons a registry entry must not be exposed as citable.
+
+    A missing citation is safer than a bibliography entry rendered with
+    ``Unknown`` placeholders.  Keep incomplete entries in the registry for
+    diagnostics/repair, but exclude them from ``references.bib`` and
+    ``citation_map.json`` until enough metadata is available to make the source
+    traceable by a reader.
+    """
+
+    failures: list[str] = []
+    if _metadata_unknownish(paper.title):
+        failures.append("title_unknown")
+    if paper.authors and all(_metadata_unknownish(author) for author in paper.authors):
+        failures.append("author_or_organization_unknown")
+    if paper.year is None and _metadata_unknownish(paper.publication_date):
+        failures.append("year_unknown")
+    return sorted(dict.fromkeys(failures))
+
+
+def is_citable_paper(paper: VerifiedPaper) -> bool:
+    return not paper_citable_metadata_failures(paper)
+
+
 def registry_to_bibtex(registry: list[VerifiedPaper]) -> str:
     entries = []
     for paper in registry:
-        authors = " and ".join(paper.authors) if paper.authors else "Unknown"
+        if not is_citable_paper(paper):
+            continue
+        authors = " and ".join(author for author in paper.authors if not _metadata_unknownish(author))
         is_journal = bool(paper.venue and any(token in paper.venue.lower() for token in ["journal", "transactions"]))
         entry_type = "article" if is_journal else "inproceedings"
         venue_field = "journal" if is_journal else "booktitle"
-        venue_value = paper.venue or "Unknown Venue"
+        venue_value = paper.venue if not _metadata_unknownish(paper.venue) else None
         def render_entry(bibtex_key: str) -> str:
             lines = [
                 f"@{entry_type}{{{bibtex_key},",
                 f"  title = {{{_escape_bibtex_value(paper.title, field='title')}}},",
-                f"  author = {{{_escape_bibtex_value(authors, field='author')}}},",
                 f"  year = {{{_escape_bibtex_value(str(paper.year or ''), field='year')}}},",
-                f"  {venue_field} = {{{_escape_bibtex_value(venue_value, field=venue_field)}}},",
             ]
+            if authors:
+                lines.append(f"  author = {{{_escape_bibtex_value(authors, field='author')}}},")
+            if venue_value:
+                lines.append(f"  {venue_field} = {{{_escape_bibtex_value(venue_value, field=venue_field)}}},")
             if paper.url:
                 lines.append(f"  url = {{{_escape_bibtex_value(paper.url, field='url')}}},")
             if paper.external_ids.get("DOI"):

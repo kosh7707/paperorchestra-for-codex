@@ -45,6 +45,7 @@ from .fidelity import run_fidelity_audit, write_reproducibility_audit
 from .literature import (
     build_search_grounded_candidates,
     ensure_unique_bibtex_keys,
+    is_citable_paper,
     load_prior_work_seed,
     mock_verified_paper,
     prior_work_entries_to_verified_papers,
@@ -2592,7 +2593,10 @@ def build_bib(cwd: str | Path | None) -> Path:
     bib = registry_to_bibtex(registry)
     path = artifact_path(cwd, "references.bib")
     write_text(path, bib)
+    citation_map_path = artifact_path(cwd, "citation_map.json")
+    write_json(citation_map_path, _citation_map_from_registry(registry))
     state.artifacts.references_bib = str(path)
+    state.artifacts.citation_map_json = str(citation_map_path)
     state.active_artifact = "references.bib"
     state.notes.append("BibTeX file generated.")
     save_session(cwd, state)
@@ -2602,6 +2606,8 @@ def build_bib(cwd: str | Path | None) -> Path:
 def _citation_map_from_registry(registry: list[VerifiedPaper]) -> dict[str, Any]:
     payload: dict[str, Any] = {}
     for paper in registry:
+        if not is_citable_paper(paper):
+            continue
         entry = _registry_entry_payload(paper)
         for key in [paper.bibtex_key, *paper.alias_bibtex_keys]:
             if key:

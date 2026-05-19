@@ -8,12 +8,15 @@ from paperorchestra.literature import (
     ensure_unique_bibtex_keys,
     load_prior_work_seed,
     make_bibtex_key,
+    paper_citable_metadata_failures,
     registry_to_bibtex,
     title_match_ratio,
     year_month_passes_cutoff,
 )
+from paperorchestra.io_utils import read_json, write_json
 from paperorchestra.models import InputBundle, VerifiedPaper
-from paperorchestra.session import create_session, load_session
+from paperorchestra.pipeline import build_bib
+from paperorchestra.session import artifact_path, create_session, load_session, save_session
 
 
 class CitationTests(unittest.TestCase):
@@ -180,6 +183,123 @@ class CitationTests(unittest.TestCase):
         paper.bibtex_key = make_bibtex_key(paper)
         with self.assertRaisesRegex(ValueError, "unbalanced braces"):
             registry_to_bibtex([paper])
+
+    def test_registry_to_bibtex_omits_uncitable_unknown_metadata_instead_of_rendering_unknown(self) -> None:
+        incomplete = VerifiedPaper(
+            paper_id="p-incomplete",
+            title="Unknown",
+            year=None,
+            publication_date=None,
+            venue=None,
+            abstract="abstract",
+            authors=[],
+            citation_count=None,
+        )
+        incomplete.bibtex_key = "unknown2026"
+
+        bib = registry_to_bibtex([incomplete])
+
+        self.assertEqual(bib, "")
+        self.assertNotIn("Unknown", bib)
+        self.assertEqual(
+            paper_citable_metadata_failures(incomplete),
+            ["title_unknown", "year_unknown"],
+        )
+
+    def test_registry_to_bibtex_keeps_traceable_reference_without_unknown_venue_placeholder(self) -> None:
+        paper = VerifiedPaper(
+            paper_id="p-traceable",
+            title="Traceable Reference Without Venue",
+            year=2024,
+            publication_date=None,
+            venue=None,
+            abstract="abstract",
+            authors=["Ada Example"],
+            citation_count=1,
+            url="https://example.test/traceable",
+        )
+        paper.bibtex_key = "traceable2024"
+
+        bib = registry_to_bibtex([paper])
+
+        self.assertIn("@inproceedings{traceable2024", bib)
+        self.assertIn("url = {https://example.test/traceable}", bib)
+        self.assertNotIn("Unknown", bib)
+        self.assertNotIn("Unknown Venue", bib)
+
+    def test_registry_to_bibtex_omits_explicit_unknown_author_placeholder(self) -> None:
+        paper = VerifiedPaper(
+            paper_id="p-unknown-author",
+            title="Known Title",
+            year=2024,
+            publication_date=None,
+            venue="Known Venue",
+            abstract="abstract",
+            authors=["Unknown"],
+            citation_count=1,
+        )
+        paper.bibtex_key = "unknownAuthor2024"
+
+        bib = registry_to_bibtex([paper])
+
+        self.assertEqual(bib, "")
+        self.assertEqual(paper_citable_metadata_failures(paper), ["author_or_organization_unknown"])
+
+    def test_build_bib_filters_uncitable_registry_entries_from_bib_and_citation_map(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            inputs = {}
+            for name in ["idea.md", "experimental_log.md", "template.tex", "guidelines.md"]:
+                path = root / name
+                path.write_text(f"content for {name}\n", encoding="utf-8")
+                inputs[name] = path
+            state = create_session(
+                root,
+                InputBundle(
+                    idea_path=str(inputs["idea.md"]),
+                    experimental_log_path=str(inputs["experimental_log.md"]),
+                    template_path=str(inputs["template.tex"]),
+                    guidelines_path=str(inputs["guidelines.md"]),
+                ),
+            )
+            good = VerifiedPaper(
+                paper_id="p-good",
+                title="Good Reference",
+                year=2024,
+                publication_date=None,
+                venue="Good Venue",
+                abstract="abstract",
+                authors=["Ada Example"],
+                citation_count=1,
+                url="https://example.test/good",
+            )
+            good.bibtex_key = "good2024"
+            bad = VerifiedPaper(
+                paper_id="p-bad",
+                title="Unknown",
+                year=None,
+                publication_date=None,
+                venue=None,
+                abstract="abstract",
+                authors=[],
+                citation_count=None,
+            )
+            bad.bibtex_key = "bad2024"
+            registry_path = artifact_path(root, "citation_registry.json")
+            write_json(registry_path, [good.to_dict(), bad.to_dict()])
+            state.artifacts.citation_registry_json = str(registry_path)
+            save_session(root, state)
+
+            references_path = build_bib(root)
+            state = load_session(root)
+            bib = references_path.read_text(encoding="utf-8")
+            citation_map = read_json(state.artifacts.citation_map_json)
+
+        self.assertIn("good2024", bib)
+        self.assertNotIn("bad2024", bib)
+        self.assertNotIn("Unknown", bib)
+        self.assertIn("good2024", citation_map)
+        self.assertNotIn("bad2024", citation_map)
 
 
 class SessionTests(unittest.TestCase):
