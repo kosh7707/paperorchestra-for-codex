@@ -3954,6 +3954,319 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertIn("repeated_non_promotable_candidate", execution["attempts"][1]["gate_reasons"])
             self.assertNotIn("candidate_approval", execution)
 
+    def test_operator_feedback_first_attempt_receives_packet_carried_prior_rejection_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            original = "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nDraft claim.\n\\end{document}\n"
+            repeated = "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nRepeated cross-cycle repair.\n\\end{document}\n"
+            paper.write_text(original, encoding="utf-8")
+            review = review_path(root, "review.latest.json")
+            review.write_text(json.dumps({"overall_score": 50, "axis_scores": {}, "summary": {}}), encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.latest_review_json = str(review)
+            save_session(root, state)
+            self._write_terminal_human_needed_plan(root)
+            original_sha = hashlib.sha256(original.encode("utf-8")).hexdigest()
+            repeated_sha = hashlib.sha256(repeated.encode("utf-8")).hexdigest()
+            base_quality_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "manuscript_hash": "sha256:" + original_sha,
+                "tiers": {
+                    "tier_2_claim_safety": {
+                        "status": "fail",
+                        "failing_codes": ["citation_support_manual_check", "citation_support_weak"],
+                        "checks": {
+                            "citation_support_critic": {
+                                "needs_manual_check_count": 3,
+                                "weakly_supported_count": 5,
+                            }
+                        },
+                    }
+                },
+            }
+            artifact_path(root, "quality-eval.json").write_text(json.dumps(base_quality_eval), encoding="utf-8")
+            artifact_path(root, "operator_feedback.execution.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-feedback-execution/1",
+                        "verdict": "human_needed",
+                        "manuscript_sha256_before": original_sha,
+                        "attempts": [
+                            {
+                                "attempt_index": 1,
+                                "candidate_sha256": "sha256:" + repeated_sha,
+                                "gate_passed": False,
+                                "gate_reasons": ["active_tier2_metric_regression"],
+                                "base_active_failures": ["citation_support_manual_check", "citation_support_weak"],
+                                "candidate_active_failures": ["citation_support_manual_check"],
+                                "resolved_active_failures": ["citation_support_weak"],
+                                "new_tier2_failures": [],
+                                "active_tier2_metric_delta": {
+                                    "regressions": [{"code": "citation_support_manual_check", "before": 3, "after": 4, "delta": 1}],
+                                    "improvements": [{"code": "citation_support_weak", "before": 5, "after": 2, "delta": -3}],
+                                    "base_total": 8,
+                                    "candidate_total": 6,
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            packet_path, packet = build_operator_review_packet(root, review_scope="tex_only")
+            self.assertIn("operator_feedback_execution", {artifact["role"] for artifact in packet["artifacts"]})
+            issue_id = derive_operator_issue_id(
+                packet["packet_sha256"],
+                source_artifact_role="operator_feedback_execution",
+                source_item_key="attempts[0]",
+                target_section="Intro",
+                rationale="The previous operator cycle found a metric-regressing repair.",
+                suggested_action="Generate a different repair that does not regress active citation metrics.",
+            )
+            feedback_path = root / "operator-feedback.json"
+            feedback_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-feedback/1",
+                        "source": "codex_operator",
+                        "not_independent_human_review": True,
+                        "intent": "generate_new_operator_candidate",
+                        "packet_sha256": packet["packet_sha256"],
+                        "manuscript_sha256": packet["manuscript_sha256"],
+                        "issues": [
+                            {
+                                "id": issue_id,
+                                "source_artifact_role": "operator_feedback_execution",
+                                "source_item_key": "attempts[0]",
+                                "target_section": "Intro",
+                                "severity": "major",
+                                "rationale": "The previous operator cycle found a metric-regressing repair.",
+                                "suggested_action": "Generate a different repair that does not regress active citation metrics.",
+                                "authority_class": "citation_repair",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            imported_path, _ = import_operator_feedback(root, packet_path=packet_path, feedback_path=feedback_path)
+            reviews_seen: list[dict[str, Any]] = []
+
+            def fake_refine(cwd, provider, **kwargs):
+                reviews_seen.append(json.loads(Path(load_session(cwd).artifacts.latest_review_json).read_text(encoding="utf-8")))
+                Path(load_session(cwd).artifacts.paper_full_tex).write_text(repeated, encoding="utf-8")
+                return [{"iteration": 1, "accepted": True, "reason": "test"}]
+
+            candidate_quality_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "tiers": {
+                    "tier_2_claim_safety": {
+                        "status": "fail",
+                        "failing_codes": ["citation_support_manual_check"],
+                        "checks": {"citation_support_critic": {"needs_manual_check_count": 4, "weakly_supported_count": 2}},
+                    }
+                },
+            }
+            quality_side_effects = [
+                (root / "quality-attempt-1.json", candidate_quality_eval),
+                (root / "quality-rollback.json", base_quality_eval),
+            ]
+            for path, payload in quality_side_effects:
+                path.write_text(json.dumps(payload), encoding="utf-8")
+
+            with patch("paperorchestra.operator_feedback.refine_current_paper", side_effect=fake_refine):
+                with patch("paperorchestra.operator_feedback.record_current_validation_report", return_value=(root / "validation.json", {"ok": True})):
+                    with patch("paperorchestra.operator_feedback.write_section_review", return_value=root / "section.json"):
+                        with patch("paperorchestra.operator_feedback.write_figure_placement_review", return_value=(root / "figure.json", {"manuscript_sha256": "sha256:test"})):
+                            with patch("paperorchestra.operator_feedback.write_citation_support_review", return_value=root / "citation.json"):
+                                with patch("paperorchestra.operator_feedback.review_current_paper", return_value=root / "review.json"):
+                                    with patch("paperorchestra.operator_feedback.write_rendered_reference_audit", return_value=root / "rendered.json"):
+                                        with patch("paperorchestra.operator_feedback.write_citation_integrity_audit", return_value=root / "integrity.json"):
+                                            with patch("paperorchestra.operator_feedback.write_citation_integrity_critic", return_value=root / "critic.json"):
+                                                with patch("paperorchestra.operator_feedback.write_quality_eval", side_effect=quality_side_effects):
+                                                    with patch("paperorchestra.operator_feedback.write_quality_loop_plan", return_value=(root / "plan.json", {"verdict": "human_needed"})):
+                                                        _, execution = apply_operator_feedback(
+                                                            root,
+                                                            MockProvider(),
+                                                            imported_feedback_path=imported_path,
+                                                            max_supervised_iterations=1,
+                                                        )
+
+            memory = reviews_seen[0]["issue_context"]["prior_rejected_attempts"]
+            self.assertEqual(memory[0]["candidate_sha256"], "sha256:" + repeated_sha)
+            self.assertEqual(memory[0]["gate_reasons"], ["active_tier2_metric_regression"])
+            self.assertIn("repeated_non_promotable_candidate", execution["attempts"][0]["gate_reasons"])
+            self.assertNotIn("candidate_approval", execution)
+
+    def test_operator_feedback_ignores_stale_packet_carried_prior_rejection_memory(self) -> None:
+        from paperorchestra.operator_feedback_packets import _file_sha256, _packet_sha256
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            original = "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nDraft claim.\n\\end{document}\n"
+            repeated = "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nRepeated stale repair.\n\\end{document}\n"
+            paper.write_text(original, encoding="utf-8")
+            review = review_path(root, "review.latest.json")
+            review.write_text(json.dumps({"overall_score": 50, "axis_scores": {}, "summary": {}}), encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.latest_review_json = str(review)
+            save_session(root, state)
+            self._write_terminal_human_needed_plan(root)
+            original_sha = hashlib.sha256(original.encode("utf-8")).hexdigest()
+            stale_sha = hashlib.sha256(b"stale manuscript").hexdigest()
+            repeated_sha = hashlib.sha256(repeated.encode("utf-8")).hexdigest()
+            base_quality_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "manuscript_hash": "sha256:" + original_sha,
+                "tiers": {
+                    "tier_2_claim_safety": {
+                        "status": "fail",
+                        "failing_codes": ["citation_support_manual_check", "citation_support_weak"],
+                        "checks": {
+                            "citation_support_critic": {
+                                "needs_manual_check_count": 3,
+                                "weakly_supported_count": 5,
+                            }
+                        },
+                    }
+                },
+            }
+            artifact_path(root, "quality-eval.json").write_text(json.dumps(base_quality_eval), encoding="utf-8")
+            artifact_path(root, "operator_feedback.execution.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-feedback-execution/1",
+                        "verdict": "human_needed",
+                        "manuscript_sha256_before": original_sha,
+                        "attempts": [
+                            {
+                                "attempt_index": 1,
+                                "candidate_sha256": "sha256:" + repeated_sha,
+                                "gate_passed": False,
+                                "gate_reasons": ["active_tier2_metric_regression"],
+                                "base_active_failures": ["citation_support_manual_check", "citation_support_weak"],
+                                "candidate_active_failures": ["citation_support_manual_check"],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            packet_path, packet = build_operator_review_packet(root, review_scope="tex_only")
+            operator_record = next(artifact for artifact in packet["artifacts"] if artifact["role"] == "operator_feedback_execution")
+            Path(operator_record["path"]).write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-feedback-execution/1",
+                        "verdict": "human_needed",
+                        "manuscript_sha256_before": "sha256:" + stale_sha,
+                        "attempts": [
+                            {
+                                "attempt_index": 1,
+                                "candidate_sha256": "sha256:" + repeated_sha,
+                                "gate_passed": False,
+                                "gate_reasons": ["active_tier2_metric_regression"],
+                                "base_active_failures": ["citation_support_manual_check", "citation_support_weak"],
+                                "candidate_active_failures": ["citation_support_manual_check"],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            operator_record["sha256"] = _file_sha256(operator_record["path"])
+            operator_record["size_bytes"] = Path(operator_record["path"]).stat().st_size
+            packet["packet_sha256"] = _packet_sha256(packet)
+            Path(packet_path).write_text(json.dumps(packet, sort_keys=True, indent=2), encoding="utf-8")
+            issue_id = derive_operator_issue_id(
+                packet["packet_sha256"],
+                source_artifact_role="qa_loop_plan",
+                source_item_key="verdict",
+                target_section="Intro",
+                rationale="The current human-needed plan requests a different supervised repair.",
+                suggested_action="Generate a repair from current artifacts only.",
+            )
+            feedback_path = root / "operator-feedback.json"
+            feedback_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-feedback/1",
+                        "source": "codex_operator",
+                        "not_independent_human_review": True,
+                        "intent": "generate_new_operator_candidate",
+                        "packet_sha256": packet["packet_sha256"],
+                        "manuscript_sha256": packet["manuscript_sha256"],
+                        "issues": [
+                            {
+                                "id": issue_id,
+                                "source_artifact_role": "qa_loop_plan",
+                                "source_item_key": "verdict",
+                                "target_section": "Intro",
+                                "severity": "major",
+                                "rationale": "The current human-needed plan requests a different supervised repair.",
+                                "suggested_action": "Generate a repair from current artifacts only.",
+                                "authority_class": "citation_repair",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            imported_path, _ = import_operator_feedback(root, packet_path=packet_path, feedback_path=feedback_path)
+            reviews_seen: list[dict[str, Any]] = []
+
+            def fake_refine(cwd, provider, **kwargs):
+                reviews_seen.append(json.loads(Path(load_session(cwd).artifacts.latest_review_json).read_text(encoding="utf-8")))
+                Path(load_session(cwd).artifacts.paper_full_tex).write_text(repeated, encoding="utf-8")
+                return [{"iteration": 1, "accepted": True, "reason": "test"}]
+
+            candidate_quality_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "tiers": {
+                    "tier_2_claim_safety": {
+                        "status": "fail",
+                        "failing_codes": ["citation_support_manual_check"],
+                        "checks": {"citation_support_critic": {"needs_manual_check_count": 4, "weakly_supported_count": 2}},
+                    }
+                },
+            }
+            quality_side_effects = [
+                (root / "quality-attempt-1.json", candidate_quality_eval),
+                (root / "quality-rollback.json", base_quality_eval),
+            ]
+            for path, payload in quality_side_effects:
+                path.write_text(json.dumps(payload), encoding="utf-8")
+
+            with patch("paperorchestra.operator_feedback.refine_current_paper", side_effect=fake_refine):
+                with patch("paperorchestra.operator_feedback.record_current_validation_report", return_value=(root / "validation.json", {"ok": True})):
+                    with patch("paperorchestra.operator_feedback.write_section_review", return_value=root / "section.json"):
+                        with patch("paperorchestra.operator_feedback.write_figure_placement_review", return_value=(root / "figure.json", {"manuscript_sha256": "sha256:test"})):
+                            with patch("paperorchestra.operator_feedback.write_citation_support_review", return_value=root / "citation.json"):
+                                with patch("paperorchestra.operator_feedback.review_current_paper", return_value=root / "review.json"):
+                                    with patch("paperorchestra.operator_feedback.write_rendered_reference_audit", return_value=root / "rendered.json"):
+                                        with patch("paperorchestra.operator_feedback.write_citation_integrity_audit", return_value=root / "integrity.json"):
+                                            with patch("paperorchestra.operator_feedback.write_citation_integrity_critic", return_value=root / "critic.json"):
+                                                with patch("paperorchestra.operator_feedback.write_quality_eval", side_effect=quality_side_effects):
+                                                    with patch("paperorchestra.operator_feedback.write_quality_loop_plan", return_value=(root / "plan.json", {"verdict": "human_needed"})):
+                                                        _, execution = apply_operator_feedback(
+                                                            root,
+                                                            MockProvider(),
+                                                            imported_feedback_path=imported_path,
+                                                            max_supervised_iterations=1,
+                                                        )
+
+            self.assertNotIn("prior_rejected_attempts", reviews_seen[0].get("issue_context", {}))
+            self.assertNotIn("repeated_non_promotable_candidate", execution["attempts"][0]["gate_reasons"])
+            self.assertNotIn("candidate_approval", execution)
+
     def test_repeated_non_promotable_reason_is_not_human_reviewable(self) -> None:
         from paperorchestra.operator_feedback import _candidate_attempt_ready_for_human_review
 

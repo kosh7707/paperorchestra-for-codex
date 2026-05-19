@@ -1253,7 +1253,7 @@ def _repeats_non_promotable_candidate(
     prior_attempts: list[dict[str, Any]],
     candidate_sha256: str | None,
 ) -> bool:
-    candidate_sha = str(candidate_sha256 or "").strip()
+    candidate_sha = _normalized_sha(candidate_sha256)
     if not candidate_sha:
         return False
     for prior in prior_attempts:
@@ -1261,7 +1261,7 @@ def _repeats_non_promotable_candidate(
             continue
         if prior.get("gate_passed") is True:
             continue
-        prior_sha = str(prior.get("candidate_sha256") or "").strip()
+        prior_sha = _normalized_sha(prior.get("candidate_sha256"))
         prior_reasons = [str(reason) for reason in prior.get("gate_reasons") or [] if str(reason).strip()]
         if prior_sha and prior_sha == candidate_sha and prior_reasons:
             return True
@@ -1415,6 +1415,42 @@ def _packet_artifact_payload(packet: dict[str, Any], role: str) -> dict[str, Any
         return None
     payload = read_json(record["path"])
     return payload if isinstance(payload, dict) else None
+
+
+def _operator_execution_matches_packet_manuscript(
+    payload: dict[str, Any],
+    packet_manuscript_sha256: str | None,
+) -> bool:
+    bound_sha = _artifact_bound_manuscript_sha("operator_feedback_execution", payload)
+    packet_sha = _normalized_sha(packet_manuscript_sha256)
+    return bool(bound_sha and packet_sha and bound_sha == packet_sha)
+
+
+def _packet_prior_operator_attempts(packet: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract failed-attempt memory from packet-carried operator executions.
+
+    Fresh smoke advances through separate operator-feedback cycles.  The next
+    cycle's packet can carry the previous cycle's hash-bound execution artifact,
+    so seed the new candidate attempt with those prior failures before writing
+    the refiner review.  Prompt-visible memory still goes through the compact
+    code/count/hash-only serializer.
+    """
+    payload = _packet_artifact_payload(packet, "operator_feedback_execution")
+    packet_sha = str(packet.get("manuscript_sha256") or "")
+    payloads: list[dict[str, Any]] = []
+    if isinstance(payload, dict) and _operator_execution_matches_packet_manuscript(payload, packet_sha):
+        payloads.append(payload)
+    if isinstance(payload, dict):
+        candidate_result = payload.get("candidate_result")
+        source_execution = candidate_result.get("source_execution") if isinstance(candidate_result, dict) else None
+        if isinstance(source_execution, dict) and _operator_execution_matches_packet_manuscript(source_execution, packet_sha):
+            payloads.append(source_execution)
+    attempts: list[dict[str, Any]] = []
+    for payload_item in payloads:
+        for attempt in payload_item.get("attempts") or []:
+            if isinstance(attempt, dict) and attempt.get("gate_passed") is not True:
+                attempts.append(attempt)
+    return attempts
 
 def _candidate_approval_source_role(imported: dict[str, Any]) -> str | None:
     roles = {
@@ -1695,6 +1731,7 @@ def apply_operator_feedback(
     if current_sha != imported.get("manuscript_sha256"):
         raise ContractError("imported operator feedback is stale for the current manuscript")
     base_quality_eval = _packet_artifact_payload(packet, "quality_eval")
+    packet_prior_attempts = _packet_prior_operator_attempts(packet)
     base_tier2_failures = set(_tier_failing_codes(base_quality_eval, "tier_2_claim_safety"))
     base_active_failures = set(_quality_failing_codes(base_quality_eval or {}))
 
@@ -1736,6 +1773,7 @@ def apply_operator_feedback(
                 candidate_text = _stage_candidate_text_for_verification(cwd, candidate_result["candidate_path"])
                 require_issue_progress = False
             elif intent == "generate_new_operator_candidate":
+                prior_attempts_for_candidate = [*packet_prior_attempts, *(execution.get("attempts") or [])]
                 try:
                     candidate_result = _generate_operator_candidate(
                         cwd,
@@ -1744,7 +1782,7 @@ def apply_operator_feedback(
                         require_compile=require_compile,
                         runtime_mode=runtime_mode,
                         quality_mode=quality_mode,
-                        prior_attempts=execution.get("attempts") or [],
+                        prior_attempts=prior_attempts_for_candidate,
                     )
                 except Exception as exc:
                     _restore_session_snapshot(cwd, snapshot)
@@ -1801,7 +1839,7 @@ def apply_operator_feedback(
                 allow_human_reviewable_new_tier2=intent == "approve_existing_candidate",
             )
             candidate_sha_for_attempt = _sha256_prefixed(_sha256_digest(str(candidate_result.get("candidate_sha256") or "")) or _file_sha256(candidate_result.get("candidate_path")))
-            if not ok and _repeats_non_promotable_candidate(execution.get("attempts") or [], candidate_sha_for_attempt):
+            if not ok and _repeats_non_promotable_candidate([*packet_prior_attempts, *(execution.get("attempts") or [])], candidate_sha_for_attempt):
                 gate_reasons = list(dict.fromkeys([*gate_reasons, "repeated_non_promotable_candidate"]))
                 ok = False
             attempt_record = {
