@@ -1,0 +1,16 @@
+{
+  "bugs": [
+    {
+      "id": "final-audit-restricted-evidence-strict-scan",
+      "severity": "minor",
+      "status": "fixed",
+      "command": "scripts/fresh-full-live-smoke-loop.sh --max-operator-cycles 5 --max-iterations 8",
+      "phase": "final_audit",
+      "gate": "release_safety_scan_final",
+      "artifact_ref": "artifacts/release-safety-scan.final.json",
+      "expected": "Raw restricted QA evidence should keep source residue out of public reports while still blocking credential-like findings.",
+      "actual": "The first final audit run used strict public-release scan settings, so expected restricted-material residue in raw evidence blocked the final scan.",
+      "resolution": "Reran the same final smoke with the explicit restricted-QA residue allowance; final release safety scan passed with zero blocking findings, and the public report records only redacted counts."
+    }
+  ]
+}
