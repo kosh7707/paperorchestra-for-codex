@@ -107,6 +107,20 @@ For every failure found during final audit, record:
 - expected vs actual status;
 - fix commit, or explicit known limitation if intentionally deferred.
 
+Use the public-safe ledger surface to validate those records before relying on
+them:
+
+```bash
+paperorchestra final-audit-ledger --bugs docs/reports/<public-safe-bug-file>.json
+paperorchestra final-audit-ledger --bugs docs/reports/<public-safe-bug-file>.json --json
+```
+
+The bug file must contain a top-level `bugs` list.  Each bug requires a public
+traceable command label, phase, gate, artifact reference, expected status,
+actual status, and resolution for fixed/deferred/known-limitation entries.  Do
+not store raw prompts, private manuscript text, raw BibTeX, private material
+names, or raw `/tmp` paths in this ledger.
+
 ## 6. Required alpha evidence bundle
 
 The merge audit should leave a public-safe evidence bundle with:
@@ -117,7 +131,7 @@ The merge audit should leave a public-safe evidence bundle with:
 - MCP smoke result or documented active-session limitation;
 - mock/demo/compile/export evidence or pre-live coverage reference;
 - private leakage scan result;
-- final audit bug ledger;
+- final audit bug ledger validated by `paperorchestra final-audit-ledger`;
 - alpha limitations summary;
 - post-merge smoke plan.
 
@@ -126,11 +140,13 @@ The merge audit should leave a public-safe evidence bundle with:
 At drafting time, the latest completed slice has this evidence:
 
 - `tests/test_pipeline_quality_and_operator_feedback.py -q` -> `131 passed`;
-- `.venv/bin/python -m pytest -q` -> `1050 passed, 188 subtests passed`;
+- `tests/test_orchestra_acceptance_ledger.py -q` -> `20 passed, 29 subtests`;
+- `.venv/bin/python -m pytest -q` -> `1056 passed, 202 subtests passed`;
 - `scripts/pre-live-check.sh --all` -> PASS at
-  `review/pre-live-check-20260519T091648Z`;
+  `review/pre-live-check-20260519T092748Z`;
 - Critic re-review -> APPROVE after stale packet-carried execution negative
   test;
+- Critic review -> APPROVE for the final-audit bug ledger validator;
 - final fresh full live smoke after this slice -> **not yet run**.
 
 ## 8. Merge decision rule

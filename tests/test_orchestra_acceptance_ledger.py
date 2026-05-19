@@ -12,7 +12,9 @@ from paperorchestra.cli import main
 from paperorchestra.orchestra_acceptance import (
     ACCEPTANCE_GATE_IDS,
     AcceptanceLedger,
+    build_final_audit_bug_ledger,
     build_acceptance_ledger,
+    render_final_audit_bug_ledger_summary,
     render_acceptance_ledger_summary,
 )
 
@@ -231,6 +233,147 @@ class OrchestraAcceptanceLedgerTests(unittest.TestCase):
                 self.assertNotEqual(exit_code, 0)
                 self.assertEqual(stdout.getvalue(), "")
                 self.assertNotIn('"overall_status": "pass"', stderr.getvalue())
+
+    def test_final_audit_bug_ledger_requires_traceability_fields(self) -> None:
+        required = {
+            "id": "audit-bug-001",
+            "severity": "major",
+            "status": "open",
+            "command": "scripts/pre-live-check.sh --all",
+            "phase": "pre_live",
+            "gate": "controlled_quality_gate_smoke",
+            "artifact_ref": "review/pre-live-check-20260519T091648Z/summary.json",
+            "expected": "pre-live passes",
+            "actual": "controlled smoke failed",
+        }
+
+        ledger = build_final_audit_bug_ledger({"bugs": [required]})
+
+        self.assertEqual(ledger["schema_version"], "orchestrator-final-audit-bug-ledger/1")
+        self.assertEqual(ledger["overall_status"], "failed")
+        self.assertEqual(ledger["bug_count"], 1)
+        self.assertEqual(ledger["bugs"][0]["id"], "audit-bug-001")
+
+        for field in required:
+            bad = dict(required)
+            bad.pop(field)
+            with self.subTest(missing=field):
+                with self.assertRaises(ValueError):
+                    build_final_audit_bug_ledger({"bugs": [bad]})
+
+    def test_final_audit_bug_ledger_rejects_missing_bugs_key(self) -> None:
+        self.assertEqual(build_final_audit_bug_ledger(None)["bug_count"], 0)
+        with self.assertRaises(ValueError):
+            build_final_audit_bug_ledger({})
+
+    def test_final_audit_bug_ledger_status_rollup_and_summary(self) -> None:
+        payload = {
+            "bugs": [
+                {
+                    "id": "audit-bug-fixed",
+                    "severity": "major",
+                    "status": "fixed",
+                    "command": "scripts/pre-live-check.sh --all",
+                    "phase": "pre_live",
+                    "gate": "controlled_quality_gate_smoke",
+                    "artifact_ref": "review/pre-live-check-20260519T091648Z/summary.json",
+                    "expected": "pre-live passes",
+                    "actual": "controlled smoke failed",
+                    "resolution": "Fixed by commit abc1234",
+                },
+                {
+                    "id": "audit-bug-known",
+                    "severity": "minor",
+                    "status": "known_limitation",
+                    "command": "final fresh full live smoke",
+                    "phase": "final_live_smoke",
+                    "gate": "critic_consensus_near_ready_or_better",
+                    "artifact_ref": "docs/reports/orchestrator-v1-redacted-final-smoke-20260519.summary.json",
+                    "expected": "manuscript readiness remains explicitly not_ready",
+                    "actual": "manuscript readiness remained not_ready",
+                    "resolution": "Tracked as alpha limitation",
+                },
+            ]
+        }
+
+        ledger = build_final_audit_bug_ledger(payload)
+        summary = render_final_audit_bug_ledger_summary(ledger)
+
+        self.assertEqual(ledger["overall_status"], "pass")
+        self.assertIn("Final audit bug ledger", summary)
+        self.assertIn("overall: pass", summary)
+        self.assertIn("known_limitation: 1", summary)
+
+    def test_final_audit_bug_ledger_rejects_unsafe_or_unresolved_records(self) -> None:
+        safe = {
+            "id": "audit-bug-001",
+            "severity": "major",
+            "status": "fixed",
+            "command": "scripts/pre-live-check.sh --all",
+            "phase": "pre_live",
+            "gate": "controlled_quality_gate_smoke",
+            "artifact_ref": "review/pre-live-check-20260519T091648Z/summary.json",
+            "expected": "pre-live passes",
+            "actual": "controlled smoke failed",
+            "resolution": "Fixed by commit abc1234",
+        }
+        invalid = [
+            {**safe, "status": "fixed", "resolution": ""},
+            {**safe, "status": "surprise"},
+            {**safe, "artifact_ref": "/tmp/private-evidence.json"},
+            {**safe, "actual": "PRIVATE manuscript content"},
+            {**safe, "raw_prompt": "do not store raw prompts"},
+        ]
+        for record in invalid:
+            with self.subTest(record=record):
+                with self.assertRaises(ValueError):
+                    build_final_audit_bug_ledger({"bugs": [record]})
+
+    def test_cli_final_audit_ledger_json_reflects_bug_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, _chdir(tmp):
+            bug_path = Path(tmp) / "bugs.json"
+            bug_path.write_text(
+                json.dumps(
+                    {
+                        "bugs": [
+                            {
+                                "id": "audit-bug-001",
+                                "severity": "major",
+                                "status": "open",
+                                "command": "scripts/pre-live-check.sh --all",
+                                "phase": "pre_live",
+                                "gate": "controlled_quality_gate_smoke",
+                                "artifact_ref": "review/pre-live-check-20260519T091648Z/summary.json",
+                                "expected": "pre-live passes",
+                                "actual": "controlled smoke failed",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = main(["final-audit-ledger", "--bugs", str(bug_path), "--json"])
+            payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["overall_status"], "failed")
+        self.assertEqual(payload["bug_count"], 1)
+        self.assertEqual(payload["bugs"][0]["id"], "audit-bug-001")
+
+    def test_cli_final_audit_ledger_rejects_malformed_bug_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, _chdir(tmp):
+            bug_path = Path(tmp) / "bugs.json"
+            bug_path.write_text("{}", encoding="utf-8")
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                exit_code = main(["final-audit-ledger", "--bugs", str(bug_path), "--json"])
+
+        self.assertNotEqual(exit_code, 0)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("bugs", stderr.getvalue())
 
 
 if __name__ == "__main__":

@@ -49,7 +49,12 @@ from .models import InputBundle
 from .omx_bridge import cleanup_omx_tmp
 from .omx_diagnostics import export_omx_evidence, write_omx_review_handoff
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
-from .orchestra_acceptance import build_acceptance_ledger, render_acceptance_ledger_summary
+from .orchestra_acceptance import (
+    build_acceptance_ledger,
+    build_final_audit_bug_ledger,
+    render_acceptance_ledger_summary,
+    render_final_audit_bug_ledger_summary,
+)
 from .orchestra_evidence import write_orchestrator_evidence_bundle
 from .orchestra_executor import LocalActionExecutor
 from .orchestra_figures import write_figure_gate_report
@@ -147,6 +152,10 @@ def build_parser() -> argparse.ArgumentParser:
     acceptance_parser = sub.add_parser("acceptance-ledger", help="Render the v1 acceptance/completion-audit ledger")
     acceptance_parser.add_argument("--evidence", help="JSON evidence object keyed by acceptance gate id")
     acceptance_parser.add_argument("--json", action="store_true")
+
+    final_audit_parser = sub.add_parser("final-audit-ledger", help="Render a public-safe final-audit bug traceability ledger")
+    final_audit_parser.add_argument("--bugs", help="JSON object with a bugs list")
+    final_audit_parser.add_argument("--json", action="store_true")
 
     verifier_parser = sub.add_parser("verify-evidence-checklist", help="Build the v1 verifier evidence checklist without running live critic/model work")
     verifier_parser.add_argument("--output")
@@ -892,6 +901,17 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(ledger.to_dict(), indent=2, ensure_ascii=False))
             else:
                 print(render_acceptance_ledger_summary(ledger))
+            return 0
+
+        if args.command == "final-audit-ledger":
+            bugs = None
+            if args.bugs:
+                bugs = json.loads(Path(args.bugs).read_text(encoding="utf-8"))
+            ledger = build_final_audit_bug_ledger(bugs)
+            if args.json:
+                print(json.dumps(ledger, indent=2, ensure_ascii=False))
+            else:
+                print(render_final_audit_bug_ledger_summary(ledger))
             return 0
 
         if args.command == "verify-evidence-checklist":
