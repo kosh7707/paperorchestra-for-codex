@@ -143,9 +143,12 @@ At drafting time, the latest completed slice has this evidence:
 - `tests/test_orchestra_acceptance_ledger.py -q` -> `20 passed, 29 subtests`;
 - `tests/test_paperorchestra_skill_guidance.py tests/test_docs_grounding_contracts.py -q`
   -> `14 passed`;
-- `.venv/bin/python -m pytest -q` -> `1057 passed, 202 subtests passed`;
+- `tests/test_pre_live_check_script.py -q` -> `51 passed`;
+- `.venv/bin/python -m pytest -q` -> `1058 passed, 202 subtests passed`;
 - `scripts/pre-live-check.sh --all` -> PASS at
-  `review/pre-live-check-20260519T093346Z`;
+  `review/pre-live-check-20260519T094020Z`;
+- `paperorchestra final-audit-ledger --bugs docs/reports/orchestrator-v1-alpha-audit-bugs-20260519.json --json`
+  -> `overall_status=pass`, `bug_count=1`;
 - Critic re-review -> APPROVE after stale packet-carried execution negative
   test;
 - Critic review -> APPROVE for the final-audit bug ledger validator;

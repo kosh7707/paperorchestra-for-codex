@@ -307,6 +307,24 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             self.assertFalse(marker.exists())
             self.assertTrue((workdir / ".paper-orchestra" / "current_session.txt").exists())
 
+    def test_demo_mock_accepts_relative_nested_workdir_from_other_cwd(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script = Path.cwd() / "scripts" / "demo-mock.sh"
+
+            result = subprocess.run(
+                ["bash", str(script), "--workdir", "relative-demo/nested"],
+                cwd=root,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr[-2000:])
+            self.assertTrue((root / "relative-demo" / "nested" / "demo-mock.log").exists())
+            self.assertTrue((root / "relative-demo" / "nested" / ".paper-orchestra" / "current_session.txt").exists())
+
     def test_register_codex_mcp_script_updates_toml_idempotently(self) -> None:
         path = Path("scripts/register-codex-mcp.sh")
         self.assertTrue(path.exists())

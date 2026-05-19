@@ -64,6 +64,7 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$WORKDIR"
+WORKDIR="$(cd "$WORKDIR" && pwd -P)"
 cd "$WORKDIR"
 LOG_PATH="$WORKDIR/demo-mock.log"
 : > "$LOG_PATH"

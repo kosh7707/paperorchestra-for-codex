@@ -1,0 +1,16 @@
+{
+  "bugs": [
+    {
+      "id": "audit-bug-demo-relative-workdir",
+      "severity": "major",
+      "status": "fixed",
+      "command": "scripts/demo-mock.sh --workdir relative-demo/nested",
+      "phase": "mock_demo",
+      "gate": "mock_demo",
+      "artifact_ref": "scripts/demo-mock.sh",
+      "expected": "explicit relative nested workdir creates demo-mock.log and session artifacts",
+      "actual": "demo failed before initialization because demo-mock.log path was evaluated relative to the new workdir twice",
+      "resolution": "Canonicalize explicit demo workdir to an absolute path before cd and log creation; regression test added"
+    }
+  ]
+}
