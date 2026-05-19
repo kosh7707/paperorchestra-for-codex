@@ -141,12 +141,15 @@ At drafting time, the latest completed slice has this evidence:
 
 - `tests/test_pipeline_quality_and_operator_feedback.py -q` -> `131 passed`;
 - `tests/test_orchestra_acceptance_ledger.py -q` -> `20 passed, 29 subtests`;
-- `.venv/bin/python -m pytest -q` -> `1056 passed, 202 subtests passed`;
+- `tests/test_paperorchestra_skill_guidance.py tests/test_docs_grounding_contracts.py -q`
+  -> `14 passed`;
+- `.venv/bin/python -m pytest -q` -> `1057 passed, 202 subtests passed`;
 - `scripts/pre-live-check.sh --all` -> PASS at
-  `review/pre-live-check-20260519T092748Z`;
+  `review/pre-live-check-20260519T093346Z`;
 - Critic re-review -> APPROVE after stale packet-carried execution negative
   test;
 - Critic review -> APPROVE for the final-audit bug ledger validator;
+- Critic review -> APPROVE for v1-alpha README/ENVIRONMENT/Skill disclosure;
 - final fresh full live smoke after this slice -> **not yet run**.
 
 ## 8. Merge decision rule

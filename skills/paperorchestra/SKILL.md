@@ -1,6 +1,6 @@
 ---
 name: paperorchestra
-description: Use the deployed PaperOrchestra package/MCP server to turn raw research materials into a grounded paper draft or submission-ready package.
+description: Use the deployed PaperOrchestra package/MCP server to turn raw research materials into a grounded paper draft or evidence package; v1-alpha outputs are not submission-ready without human review.
 ---
 
 # PaperOrchestra
@@ -12,10 +12,16 @@ The skill assumes a deployed install of:
 - the `paperorchestra-mcp` stdio server (primary surface)
 - optionally the `paperorchestra` CLI for operator/debug/help/audit use
 
+Current posture: PaperOrchestra's orchestrated runtime is **v1-alpha**.  Treat a
+successful run as an auditable draft/evidence result, **not submission-ready**
+approval.  The known limitations remain around citation/claim quality, figure
+finalization, and operator repair convergence.  Never convert `BLOCK`,
+`not_ready`, `human_needed`, or quality-gate warnings into false readiness.
+
 ## Use when
 - you already have `idea.md`, `experimental_log.md`, `template.tex`, and `conference_guidelines.md`
 - or you want the system to collect those inputs through guided intake first
-- you want to generate a paper draft or submission-ready package
+- you want to generate a paper draft or evidence package that a human author can finish
 - you want artifact-first execution with validation/fidelity reports
 - you want to drive the system primarily through OMX + MCP, with the CLI available as a manual fallback
 
@@ -117,7 +123,7 @@ For environment discovery specifically, prefer:
 - `paperorchestra doctor` for machine-specific missing requirements
 
 ## Compile path
-To push all the way to a submission-ready PDF:
+To compile the current draft into a reviewable PDF artifact:
 
 ```bash
 paperorchestra check-compile-env

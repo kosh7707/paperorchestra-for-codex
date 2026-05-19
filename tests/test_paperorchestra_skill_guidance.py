@@ -71,3 +71,16 @@ class PaperOrchestraSkillGuidanceTests(unittest.TestCase):
         self.assertIn("paperorchestra first-use", text)
         self.assertIn("바로 써줘", text)
         self.assertIn("reject unsafe drafting", text)
+
+    def test_readme_environment_and_skill_disclose_v1_alpha_limitations(self) -> None:
+        combined = self._readme() + "\n" + self._environment() + "\n" + self._skill()
+        for phrase in [
+            "v1-alpha",
+            "not submission-ready",
+            "known limitations",
+            "citation/claim quality",
+            "figure finalization",
+            "operator repair convergence",
+            "false readiness",
+        ]:
+            self.assertIn(phrase, combined)

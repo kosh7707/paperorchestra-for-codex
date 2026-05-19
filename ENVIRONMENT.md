@@ -12,6 +12,14 @@ explains the packages, env vars, and readiness profiles behind those paths.
 For claim-safe state meanings such as `human_needed` and
 `ready_for_human_finalization`, see `docs/quality-gate-state-machine.md`.
 
+Current release posture: the v1 orchestrator surfaces are **v1-alpha**.  The
+environment checks can show that the runtime, MCP/CLI surfaces, compile/export,
+and audit tools are operable, but that is **not submission-ready** manuscript
+approval.  Known limitations remain around citation/claim quality, figure
+finalization, and operator repair convergence; those limitations should surface
+as `human_needed`, `not_ready`, `BLOCK`, warnings, or final-audit ledger entries
+rather than false readiness.
+
 If you only remember two commands, remember these:
 
 ```bash

@@ -40,6 +40,23 @@ Repository evidence currently checked in:
 - smoke scripts for a safe reference path and a live-ish OMX/Codex path
 - test coverage evolves with the repo; verify the current suite locally instead of relying on a hard-coded count in this README
 
+### Current v1-alpha status
+
+The v1 orchestrator/runtime is currently treated as **v1-alpha**.  That means
+the CLI/MCP/Skill/orchestration surfaces are intended to be usable and
+auditable, but a generated paper is **not submission-ready** merely because the
+runtime completed.
+
+The known limitations for this alpha include:
+
+- citation/claim quality can still block or require manual author judgment;
+- figure finalization is drafting-oriented and may require human-authored final
+  artwork;
+- operator repair convergence is still being hardened, so repeated repair loops
+  may end in `human_needed` or `not_ready`;
+- quality failures must remain visible as `BLOCK`, `not_ready`, warnings, or
+  explicit audit records; hiding them as success is a false readiness bug.
+
 ### If you are using Codex
 
 A good first prompt after opening Codex is:
