@@ -653,6 +653,51 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
 
             self.assertNotIn("citation_density_issues", context)
 
+    def test_operator_issue_context_includes_bounded_prior_rejection_memory(self) -> None:
+        from paperorchestra.operator_feedback import _operator_issue_context
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\documentclass{article}\n\\begin{document}\nDraft.\\end{document}\n", encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            self._write_terminal_human_needed_plan(root)
+            packet_path, _ = build_operator_review_packet(root, review_scope="tex_only")
+            prior_attempts = [
+                {
+                    "attempt_index": 1,
+                    "candidate_path": "/tmp/should-not-leak.tex",
+                    "candidate_sha256": "sha256:abc",
+                    "gate_passed": False,
+                    "gate_reasons": ["active_tier2_metric_regression"],
+                    "base_active_failures": ["citation_support_manual_check"],
+                    "candidate_active_failures": ["citation_support_manual_check"],
+                    "resolved_active_failures": ["citation_support_weak"],
+                    "new_tier2_failures": [],
+                    "active_tier2_metric_delta": {
+                        "regressions": [{"code": "citation_support_manual_check", "before": 3, "after": 4, "delta": 1}],
+                        "improvements": [{"code": "citation_support_weak", "before": 5, "after": 2, "delta": -3}],
+                        "base_total": 8,
+                        "candidate_total": 6,
+                    },
+                },
+                {"attempt_index": 2, "gate_passed": True, "candidate_sha256": "sha256:promoted"},
+            ]
+
+            context = _operator_issue_context({"packet_path": str(packet_path)}, prior_attempts=prior_attempts)
+
+            memory = context["prior_rejected_attempts"]
+            self.assertEqual(len(memory), 1)
+            self.assertEqual(memory[0]["attempt_index"], 1)
+            self.assertEqual(memory[0]["candidate_sha256"], "sha256:abc")
+            self.assertEqual(memory[0]["gate_reasons"], ["active_tier2_metric_regression"])
+            self.assertEqual(memory[0]["metric_regressions"][0]["code"], "citation_support_manual_check")
+            self.assertEqual(memory[0]["metric_improvements"][0]["code"], "citation_support_weak")
+            self.assertNotIn("candidate_path", memory[0])
+            self.assertIn("do not repeat", context["prior_rejection_instruction"].lower())
+
     def test_qa_loop_plan_supervised_handoff_uses_canonical_packet_sha(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -3776,6 +3821,151 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(history[-1]["event_type"], "operator_feedback_cycle")
             self.assertFalse(history[-1]["consumes_budget"])
             self.assertEqual(history[-1]["supervised_max_iterations"], 1)
+
+    def test_operator_feedback_second_attempt_receives_rejection_memory_and_repeated_candidate_is_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nDraft claim.\n\\end{document}\n",
+                encoding="utf-8",
+            )
+            review = review_path(root, "review.latest.json")
+            review.write_text(json.dumps({"overall_score": 50, "axis_scores": {}, "summary": {}}), encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.latest_review_json = str(review)
+            save_session(root, state)
+            self._write_terminal_human_needed_plan(root)
+            base_quality_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "tiers": {
+                    "tier_2_claim_safety": {
+                        "status": "fail",
+                        "failing_codes": ["citation_support_manual_check", "citation_support_weak"],
+                        "checks": {
+                            "citation_support_critic": {
+                                "needs_manual_check_count": 3,
+                                "weakly_supported_count": 5,
+                            }
+                        },
+                    }
+                },
+            }
+            artifact_path(root, "quality-eval.json").write_text(json.dumps(base_quality_eval), encoding="utf-8")
+            packet_path, packet = build_operator_review_packet(root, review_scope="tex_only")
+            issue_id = derive_operator_issue_id(
+                packet["packet_sha256"],
+                source_artifact_role="paper_full_tex",
+                source_item_key="Intro:p1",
+                target_section="Intro",
+                rationale="The introduction needs claim-safe citation repair.",
+                suggested_action="Repair citation support without increasing manual-check burden.",
+            )
+            feedback_path = root / "operator-feedback.json"
+            feedback_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-feedback/1",
+                        "source": "codex_operator",
+                        "not_independent_human_review": True,
+                        "intent": "generate_new_operator_candidate",
+                        "packet_sha256": packet["packet_sha256"],
+                        "manuscript_sha256": packet["manuscript_sha256"],
+                        "issues": [
+                            {
+                                "id": issue_id,
+                                "source_artifact_role": "paper_full_tex",
+                                "source_item_key": "Intro:p1",
+                                "target_section": "Intro",
+                                "severity": "major",
+                                "rationale": "The introduction needs claim-safe citation repair.",
+                                "suggested_action": "Repair citation support without increasing manual-check burden.",
+                                "authority_class": "citation_repair",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            imported_path, _ = import_operator_feedback(root, packet_path=packet_path, feedback_path=feedback_path)
+            reviews_seen: list[dict[str, Any]] = []
+
+            def fake_refine(cwd, provider, **kwargs):
+                review_payload = json.loads(Path(load_session(cwd).artifacts.latest_review_json).read_text(encoding="utf-8"))
+                reviews_seen.append(review_payload)
+                target = Path(load_session(cwd).artifacts.paper_full_tex)
+                target.write_text(
+                    "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nRepeated candidate repair.\n\\end{document}\n",
+                    encoding="utf-8",
+                )
+                return [{"iteration": 1, "accepted": True, "reason": "test"}]
+
+            candidate_quality_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "tiers": {
+                    "tier_2_claim_safety": {
+                        "status": "fail",
+                        "failing_codes": ["citation_support_manual_check"],
+                        "checks": {
+                            "citation_support_critic": {
+                                "needs_manual_check_count": 4,
+                                "weakly_supported_count": 2,
+                            }
+                        },
+                    }
+                },
+            }
+            quality_side_effects = [
+                (root / "quality-attempt-1.json", candidate_quality_eval),
+                (root / "quality-attempt-2.json", candidate_quality_eval),
+                (root / "quality-rollback.json", base_quality_eval),
+            ]
+            for path, payload in quality_side_effects:
+                path.write_text(json.dumps(payload), encoding="utf-8")
+
+            with patch("paperorchestra.operator_feedback.refine_current_paper", side_effect=fake_refine):
+                with patch("paperorchestra.operator_feedback.record_current_validation_report", return_value=(root / "validation.json", {"ok": True})):
+                    with patch("paperorchestra.operator_feedback.write_section_review", return_value=root / "section.json"):
+                        with patch("paperorchestra.operator_feedback.write_figure_placement_review", return_value=(root / "figure.json", {"manuscript_sha256": "sha256:test"})):
+                            with patch("paperorchestra.operator_feedback.write_citation_support_review", return_value=root / "citation.json"):
+                                with patch("paperorchestra.operator_feedback.review_current_paper", return_value=root / "review.json"):
+                                    with patch("paperorchestra.operator_feedback.write_rendered_reference_audit", return_value=root / "rendered.json"):
+                                        with patch("paperorchestra.operator_feedback.write_citation_integrity_audit", return_value=root / "integrity.json"):
+                                            with patch("paperorchestra.operator_feedback.write_citation_integrity_critic", return_value=root / "critic.json"):
+                                                with patch("paperorchestra.operator_feedback.write_quality_eval", side_effect=quality_side_effects):
+                                                    with patch("paperorchestra.operator_feedback.write_quality_loop_plan", return_value=(root / "plan.json", {"verdict": "human_needed"})):
+                                                        _, execution = apply_operator_feedback(
+                                                            root,
+                                                            MockProvider(),
+                                                            imported_feedback_path=imported_path,
+                                                            max_supervised_iterations=2,
+                                                        )
+
+            self.assertEqual(len(reviews_seen), 2)
+            self.assertNotIn("prior_rejected_attempts", reviews_seen[0]["issue_context"])
+            prior_memory = reviews_seen[1]["issue_context"]["prior_rejected_attempts"]
+            self.assertEqual(prior_memory[0]["gate_reasons"], ["active_tier2_metric_regression"])
+            self.assertEqual(prior_memory[0]["metric_regressions"][0]["code"], "citation_support_manual_check")
+            self.assertEqual(execution["promotion_status"], "rolled_back")
+            self.assertEqual(len(execution["attempts"]), 2)
+            self.assertIn("repeated_non_promotable_candidate", execution["attempts"][1]["gate_reasons"])
+            self.assertNotIn("candidate_approval", execution)
+
+    def test_repeated_non_promotable_reason_is_not_human_reviewable(self) -> None:
+        from paperorchestra.operator_feedback import _candidate_attempt_ready_for_human_review
+
+        with tempfile.NamedTemporaryFile(suffix=".tex") as candidate:
+            attempt = {
+                "candidate_path": candidate.name,
+                "resolved_active_failures": ["citation_support_weak"],
+                "new_tier2_failures": [],
+                "gate_reasons": ["repeated_non_promotable_candidate"],
+            }
+
+            self.assertFalse(_candidate_attempt_ready_for_human_review(attempt))
 
     def test_operator_feedback_candidate_verification_refreshes_citation_integrity_for_staged_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

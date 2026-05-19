@@ -416,7 +416,7 @@ def _load_imported_feedback(imported_feedback_path: str | Path) -> dict[str, Any
         raise ContractError("imported operator feedback packet hash is stale")
     return payload
 
-def _operator_review_payload(imported: dict[str, Any]) -> dict[str, Any]:
+def _operator_review_payload(imported: dict[str, Any], *, prior_attempts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     issues = imported.get("issues") or []
     top_improvements = [
         f"[{issue.get('id')}] "
@@ -428,7 +428,7 @@ def _operator_review_payload(imported: dict[str, Any]) -> dict[str, Any]:
         + sanitize_author_facing_text(issue.get("rationale"), fallback="The target section needs ordinary scholarly revision.")
         for issue in issues
     ]
-    issue_context = _operator_issue_context(imported)
+    issue_context = _operator_issue_context(imported, prior_attempts=prior_attempts)
     return {
         "schema_version": "operator-feedback-review/1",
         "source": OPERATOR_SOURCE,
@@ -593,6 +593,66 @@ def _operator_refinement_constraints(
     }
 
 
+def _compact_metric_delta_records(records: Any, *, limit: int = 8) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    if not isinstance(records, list):
+        return result
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        compact = {
+            "code": str(record.get("code") or ""),
+            "before": record.get("before"),
+            "after": record.get("after"),
+            "delta": record.get("delta"),
+        }
+        if compact["code"]:
+            result.append(compact)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _compact_prior_rejected_attempts(
+    attempts: list[dict[str, Any]] | None,
+    *,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Return bounded code/count/hash-only memory for failed operator candidates.
+
+    This memory is fed back into the next supervised operator attempt so the
+    refiner can avoid repeating a repair shape that strict gates already
+    rejected.  It intentionally omits candidate text, artifact paths, reviewer
+    prose, and raw private source locations.
+    """
+    result: list[dict[str, Any]] = []
+    for attempt in attempts or []:
+        if not isinstance(attempt, dict):
+            continue
+        if attempt.get("gate_passed") is True:
+            continue
+        gate_reasons = sorted(dict.fromkeys(str(reason) for reason in attempt.get("gate_reasons") or [] if str(reason).strip()))
+        if not gate_reasons:
+            continue
+        metric_delta = attempt.get("active_tier2_metric_delta") if isinstance(attempt.get("active_tier2_metric_delta"), dict) else {}
+        compact: dict[str, Any] = {
+            "attempt_index": attempt.get("attempt_index"),
+            "candidate_sha256": str(attempt.get("candidate_sha256") or ""),
+            "gate_reasons": gate_reasons,
+            "resolved_active_failures": sorted(dict.fromkeys(str(code) for code in attempt.get("resolved_active_failures") or [] if str(code).strip())),
+            "new_tier2_failures": sorted(dict.fromkeys(str(code) for code in attempt.get("new_tier2_failures") or [] if str(code).strip())),
+            "candidate_active_failures": sorted(dict.fromkeys(str(code) for code in attempt.get("candidate_active_failures") or [] if str(code).strip())),
+            "base_active_failures": sorted(dict.fromkeys(str(code) for code in attempt.get("base_active_failures") or [] if str(code).strip())),
+        }
+        if isinstance(metric_delta, dict):
+            compact["metric_regressions"] = _compact_metric_delta_records(metric_delta.get("regressions"))
+            compact["metric_improvements"] = _compact_metric_delta_records(metric_delta.get("improvements"))
+            compact["base_total"] = metric_delta.get("base_total")
+            compact["candidate_total"] = metric_delta.get("candidate_total")
+        result.append(compact)
+    return result[-limit:]
+
+
 def _citation_density_context(payload: dict[str, Any] | None, *, limit: int = 16) -> list[dict[str, Any]]:
     if not isinstance(payload, dict):
         return []
@@ -632,7 +692,7 @@ def _citation_density_context(payload: dict[str, Any] | None, *, limit: int = 16
             break
     return result
 
-def _operator_issue_context(imported: dict[str, Any]) -> dict[str, Any]:
+def _operator_issue_context(imported: dict[str, Any], *, prior_attempts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Attach concrete failing claim context to operator feedback for the writer.
 
     Human/operator feedback enters the refiner through the review JSON surface.
@@ -650,6 +710,7 @@ def _operator_issue_context(imported: dict[str, Any]) -> dict[str, Any]:
     citation_review = _packet_payload_by_role(packet, "citation_support_review")
     quality_eval = _packet_payload_by_role(packet, "quality_eval")
     citation_integrity_audit = _packet_payload_by_role(packet, "citation_integrity_audit")
+    prior_rejected_attempts = _compact_prior_rejected_attempts(prior_attempts)
     context = {
         "problematic_citation_items": _problematic_citation_context(citation_review),
         "high_risk_uncited_claims": _high_risk_claim_context(quality_eval),
@@ -662,11 +723,22 @@ def _operator_issue_context(imported: dict[str, Any]) -> dict[str, Any]:
             "A candidate that introduces new citation bombs, weak citation support, duplicate support, or high-risk uncited claims will be rejected."
         ),
     }
+    if prior_rejected_attempts:
+        context["prior_rejected_attempts"] = prior_rejected_attempts
+        context["prior_rejection_instruction"] = (
+            "Do not repeat prior rejected repair shapes. If a prior attempt regressed active Tier-2 metrics, "
+            "the next candidate must either reduce those active metrics without new regressions or leave the issue for human_needed."
+        )
     return {key: value for key, value in context.items() if value}
 
-def _write_operator_review_for_refiner(cwd: str | Path | None, imported: dict[str, Any]) -> Path:
+def _write_operator_review_for_refiner(
+    cwd: str | Path | None,
+    imported: dict[str, Any],
+    *,
+    prior_attempts: list[dict[str, Any]] | None = None,
+) -> Path:
     path = artifact_path(cwd, "operator_feedback.redacted_review.json")
-    write_json(path, _operator_review_payload(imported))
+    write_json(path, _operator_review_payload(imported, prior_attempts=prior_attempts))
     return path
 
 def _session_snapshot(cwd: str | Path | None) -> dict[str, Any]:
@@ -1014,7 +1086,9 @@ def _candidate_attempt_ready_for_human_review(attempt: dict[str, Any]) -> bool:
         "tier1_failed",
         "active_blocker_metric_progress_missing",
         "active_blocker_progress_missing",
+        "active_tier2_metric_regression",
         "issue_progress_missing",
+        "repeated_non_promotable_candidate",
         "reviewer_catastrophic_regression",
     }
     reasons = {str(reason) for reason in attempt.get("gate_reasons") or []}
@@ -1173,6 +1247,25 @@ def _compact_operator_attempt_failure(attempts: list[dict[str, Any]]) -> dict[st
     if executor_failure:
         payload["executor_failure_category"] = executor_failure
     return payload
+
+
+def _repeats_non_promotable_candidate(
+    prior_attempts: list[dict[str, Any]],
+    candidate_sha256: str | None,
+) -> bool:
+    candidate_sha = str(candidate_sha256 or "").strip()
+    if not candidate_sha:
+        return False
+    for prior in prior_attempts:
+        if not isinstance(prior, dict):
+            continue
+        if prior.get("gate_passed") is True:
+            continue
+        prior_sha = str(prior.get("candidate_sha256") or "").strip()
+        prior_reasons = [str(reason) for reason in prior.get("gate_reasons") or [] if str(reason).strip()]
+        if prior_sha and prior_sha == candidate_sha and prior_reasons:
+            return True
+    return False
 
 
 def _operator_actionable_failure(
@@ -1490,8 +1583,9 @@ def _generate_operator_candidate(
     require_compile: bool,
     runtime_mode: str,
     quality_mode: str,
+    prior_attempts: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    redacted_review_path = _write_operator_review_for_refiner(cwd, imported)
+    redacted_review_path = _write_operator_review_for_refiner(cwd, imported, prior_attempts=prior_attempts)
     state = load_session(cwd)
     previous_review = state.artifacts.latest_review_json
     state.artifacts.latest_review_json = str(redacted_review_path)
@@ -1650,6 +1744,7 @@ def apply_operator_feedback(
                         require_compile=require_compile,
                         runtime_mode=runtime_mode,
                         quality_mode=quality_mode,
+                        prior_attempts=execution.get("attempts") or [],
                     )
                 except Exception as exc:
                     _restore_session_snapshot(cwd, snapshot)
@@ -1705,11 +1800,15 @@ def apply_operator_feedback(
                 resolved_active_failures=resolved_active_failures,
                 allow_human_reviewable_new_tier2=intent == "approve_existing_candidate",
             )
+            candidate_sha_for_attempt = _sha256_prefixed(_sha256_digest(str(candidate_result.get("candidate_sha256") or "")) or _file_sha256(candidate_result.get("candidate_path")))
+            if not ok and _repeats_non_promotable_candidate(execution.get("attempts") or [], candidate_sha_for_attempt):
+                gate_reasons = list(dict.fromkeys([*gate_reasons, "repeated_non_promotable_candidate"]))
+                ok = False
             attempt_record = {
                 "attempt_index": attempt_index,
                 "candidate_branch": intent,
                 "candidate_path": candidate_result.get("candidate_path"),
-                "candidate_sha256": _sha256_prefixed(_sha256_digest(str(candidate_result.get("candidate_sha256") or "")) or _file_sha256(candidate_result.get("candidate_path"))),
+                "candidate_sha256": candidate_sha_for_attempt,
                 "gate_passed": ok,
                 "gate_reasons": gate_reasons,
                 "base_tier2_failures": sorted(base_tier2_failures),
