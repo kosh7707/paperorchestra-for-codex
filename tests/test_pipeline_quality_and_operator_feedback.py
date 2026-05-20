@@ -6426,7 +6426,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(result.payload["verdict"], "execution_error")
             self.assertEqual(paper.read_text(encoding="utf-8"), original)
 
-    def test_qa_loop_step_exposes_forward_progress_candidate_with_human_reviewable_residuals(self) -> None:
+    def test_qa_loop_step_commits_forward_progress_candidate_with_human_reviewable_residuals(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             state = self._init_session_with_minimal_inputs(root)
@@ -6513,29 +6513,27 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
                             with patch("paperorchestra.ralph_bridge.write_citation_support_review", side_effect=overwrite_citation_review):
                                 result = run_qa_loop_step(root, MockProvider(), citation_evidence_mode="heuristic")
 
-            self.assertEqual(result.exit_code, 20)
-            self.assertEqual(result.payload["verdict"], "human_needed")
-            self.assertEqual(result.payload["candidate_approval"]["status"], "human_needed_candidate_ready")
-            approved_candidate_path = Path(result.payload["candidate_approval"]["candidate_path"])
-            self.assertNotEqual(approved_candidate_path.resolve(), Path(repair_result["candidate_path"]).resolve())
+            self.assertEqual(result.exit_code, 10)
+            self.assertEqual(result.payload["verdict"], "continue")
+            self.assertNotIn("candidate_approval", result.payload)
+            committed_candidate_path = Path(result.payload["candidate_auto_commit"]["candidate_path"])
+            self.assertNotEqual(committed_candidate_path.resolve(), Path(repair_result["candidate_path"]).resolve())
             self.assertEqual(
-                result.payload["candidate_approval"]["candidate_sha256"],
-                "sha256:" + hashlib.sha256(approved_candidate_path.read_bytes()).hexdigest(),
+                result.payload["candidate_auto_commit"]["candidate_sha256"],
+                "sha256:" + hashlib.sha256(committed_candidate_path.read_bytes()).hexdigest(),
             )
             Path(repair_result["candidate_path"]).write_text("mutated volatile candidate", encoding="utf-8")
-            self.assertEqual(approved_candidate_path.read_text(encoding="utf-8"), candidate)
-            self.assertEqual(
-                result.payload["candidate_handoff"]["status"],
-                "human_needed_candidate_ready_with_residual_citation_support",
-            )
-            self.assertEqual(result.payload["candidate_handoff"]["residual_citation_failures"], ["citation_support_weak"])
+            self.assertEqual(committed_candidate_path.read_text(encoding="utf-8"), candidate)
+            self.assertEqual(result.payload["candidate_auto_commit"]["status"], "committed_for_continued_qa")
+            self.assertEqual(result.payload["candidate_auto_commit"]["residual_citation_failures"], ["citation_support_weak"])
             self.assertEqual(result.payload["candidate_progress"]["resolved_codes"], ["citation_support_insufficient_evidence"])
             self.assertTrue(result.payload["candidate_progress"]["forward_progress"])
             self.assertEqual(result.payload["candidate_state"]["after"]["failing_codes"], ["citation_support_weak"])
-            self.assertEqual(result.payload["after"]["failing_codes"], ["citation_support_insufficient_evidence", "citation_support_weak"])
-            self.assertEqual(paper.read_text(encoding="utf-8"), original)
+            self.assertEqual(result.payload["after"]["failing_codes"], ["citation_support_weak"])
+            self.assertNotIn("restored_current_state", result.payload)
+            self.assertEqual(paper.read_text(encoding="utf-8"), candidate)
 
-    def test_qa_loop_step_keeps_approved_semi_auto_candidate_uncommitted(self) -> None:
+    def test_qa_loop_step_commits_safe_semi_auto_candidate_when_ready(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             state = self._init_session_with_minimal_inputs(root)
@@ -6607,24 +6605,186 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
                             with patch("paperorchestra.ralph_bridge.write_citation_support_review", side_effect=overwrite_citation_review):
                                 result = run_qa_loop_step(root, MockProvider(), citation_evidence_mode="heuristic")
 
-            self.assertEqual(result.exit_code, 20)
-            self.assertEqual(result.payload["verdict"], "human_needed")
-            self.assertEqual(result.payload["candidate_approval"]["status"], "human_needed_candidate_ready")
+            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.payload["verdict"], "ready_for_human_finalization")
+            self.assertNotIn("candidate_approval", result.payload)
+            self.assertEqual(result.payload["candidate_auto_commit"]["status"], "committed_for_continued_qa")
             self.assertEqual(result.payload["candidate_progress"]["resolved_codes"], ["citation_support_weak"])
             self.assertTrue(result.payload["candidate_progress"]["forward_progress"])
             self.assertEqual(result.payload["candidate_state"]["qa_loop_plan_verdict"], "ready_for_human_finalization")
             self.assertEqual(result.payload["candidate_state"]["after"]["failing_codes"], [])
             self.assertEqual(result.payload["candidate_state"]["progress"]["resolved_codes"], ["citation_support_weak"])
+            self.assertEqual(result.payload["after"]["failing_codes"], [])
+            self.assertTrue(result.payload["progress"]["forward_progress"])
+            self.assertEqual(result.payload["verification"]["quality_eval"]["path"], str(root / "candidate-q.json"))
+            self.assertEqual(result.payload["verification"]["qa_loop_plan"]["path"], str(root / "candidate-p.json"))
+            self.assertNotIn("restored_current_verification", result.payload)
+            self.assertEqual(json.loads(citation_trace_path.read_text(encoding="utf-8")), {"manuscript_sha256": "candidate-hash"})
+            self.assertEqual(paper.read_text(encoding="utf-8"), candidate)
+
+    def test_qa_loop_step_rolls_back_candidate_with_new_duplicate_support_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            original = "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nOriginal.\\end{document}\n"
+            candidate = "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nCandidate.\\end{document}\n"
+            paper.write_text(original, encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            before_eval = {
+                "session_id": "po-test",
+                "mode": "claim_safe",
+                "manuscript_hash": "sha256:original",
+                "tiers": {"tier_2_claim_safety": {"status": "fail", "failing_codes": ["citation_support_weak"]}},
+            }
+            candidate_eval = {
+                "session_id": "po-test",
+                "mode": "claim_safe",
+                "manuscript_hash": "sha256:candidate",
+                "tiers": {
+                    "tier_2_claim_safety": {
+                        "status": "fail",
+                        "failing_codes": ["citation_duplicate_support"],
+                        "checks": {
+                            "citation_quality_gate": {
+                                "counts": {
+                                    "duplicate_reference_count": 1,
+                                    "citation_bomb_count": 0,
+                                }
+                            }
+                        },
+                    }
+                },
+            }
+            restored_eval = before_eval
+            before_plan = {
+                "verdict": "continue",
+                "repair_actions": [{"code": "citation_support_critic_failed", "automation": "semi_auto"}],
+            }
+            candidate_plan = {
+                "verdict": "continue",
+                "repair_actions": [{"code": "citation_density_policy_failed", "automation": "semi_auto"}],
+            }
+            restored_plan = before_plan
+            repair_result = {"accepted": True, "candidate_path": str(root / "candidate.tex")}
+            Path(repair_result["candidate_path"]).write_text(candidate, encoding="utf-8")
+            artifact_dir = artifact_path(root, "paper.full.tex").parent
+            citation_review_path = artifact_dir / "citation_support_review.json"
+            citation_review_path.write_text(json.dumps({"summary": {"weakly_supported": 1}}), encoding="utf-8")
+
+            def overwrite_citation_review(*args, **kwargs):
+                citation_review_path.write_text(json.dumps({"summary": {"supported": 1}}), encoding="utf-8")
+                return citation_review_path
+
+            with patch(
+                "paperorchestra.ralph_bridge.write_quality_eval",
+                side_effect=[
+                    (root / "before-q.json", before_eval),
+                    (root / "candidate-q.json", candidate_eval),
+                    (root / "restored-q.json", restored_eval),
+                ],
+            ):
+                with patch(
+                    "paperorchestra.ralph_bridge.write_quality_loop_plan",
+                    side_effect=[
+                        (root / "before-p.json", before_plan),
+                        (root / "candidate-p.json", candidate_plan),
+                        (root / "restored-p.json", restored_plan),
+                    ],
+                ):
+                    with patch(
+                        "paperorchestra.ralph_bridge._citation_summary",
+                        side_effect=[{"weakly_supported": 1}, {"supported": 1}, {"weakly_supported": 1}],
+                    ):
+                        with patch("paperorchestra.ralph_bridge.repair_citation_claims", return_value=repair_result):
+                            with patch("paperorchestra.ralph_bridge.write_citation_support_review", side_effect=overwrite_citation_review):
+                                result = run_qa_loop_step(root, MockProvider(), citation_evidence_mode="heuristic")
+
+            self.assertEqual(result.exit_code, 20)
+            self.assertEqual(result.payload["verdict"], "human_needed")
+            self.assertNotIn("candidate_approval", result.payload)
+            self.assertEqual(result.payload["candidate_rollback"]["auto_commit_blocked_reason"], "new_failure_codes")
+            self.assertEqual(
+                result.payload["candidate_handoff"]["status"],
+                "human_needed_candidate_rejected_by_auto_commit_gate",
+            )
             self.assertEqual(result.payload["restored_current_state"]["after"]["failing_codes"], ["citation_support_weak"])
-            self.assertEqual(result.payload["after"]["failing_codes"], ["citation_support_weak"])
-            self.assertFalse(result.payload["progress"]["forward_progress"])
-            self.assertEqual(result.payload["progress"], result.payload["restored_current_state"]["progress"])
-            self.assertEqual(result.payload["verification"]["quality_eval"]["path"], str(root / "restored-q.json"))
-            self.assertEqual(result.payload["verification"]["qa_loop_plan"]["path"], str(root / "restored-p.json"))
-            self.assertEqual(result.payload["restored_current_verification"]["quality_eval"]["path"], str(root / "restored-q.json"))
-            self.assertEqual(json.loads(citation_trace_path.read_text(encoding="utf-8")), original_trace)
-            self.assertTrue(result.payload["restored_current_verification"]["citation_support_trace_restored"]["restored"])
             self.assertEqual(paper.read_text(encoding="utf-8"), original)
+
+    def test_auto_commit_gate_rejects_metric_regression_and_structural_failure(self) -> None:
+        from paperorchestra.ralph_bridge import _auto_commit_progressive_citation_candidate
+
+        before_eval = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "status": "fail",
+                    "checks": {
+                        "citation_support_critic": {
+                            "weakly_supported_count": 1,
+                        },
+                        "citation_quality_gate": {
+                            "counts": {
+                                "duplicate_reference_count": 1,
+                            }
+                        },
+                    },
+                }
+            }
+        }
+        after_regression = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "status": "fail",
+                    "checks": {
+                        "citation_support_critic": {
+                            "weakly_supported_count": 0,
+                        },
+                        "citation_quality_gate": {
+                            "counts": {
+                                "duplicate_reference_count": 2,
+                            }
+                        },
+                    },
+                }
+            }
+        }
+
+        allowed, reason = _auto_commit_progressive_citation_candidate(
+            progress={
+                "forward_progress": True,
+                "new_codes": [],
+                "before_failing_codes": ["citation_support_weak", "citation_duplicate_support"],
+            },
+            validation_payload={"ok": True},
+            compile_payload={"ok": True},
+            require_compile=True,
+            before_quality_eval=before_eval,
+            after_quality_eval=after_regression,
+            after_codes={"citation_duplicate_support"},
+            residual_citation_failures=[],
+        )
+        self.assertFalse(allowed)
+        self.assertEqual(reason, "active_tier2_metric_regression")
+
+        after_structural = {
+            "tiers": {
+                "tier_1_structural": {"status": "fail", "failing_codes": ["compile_not_clean"]},
+                "tier_2_claim_safety": {"status": "pass", "failing_codes": []},
+            }
+        }
+        allowed, reason = _auto_commit_progressive_citation_candidate(
+            progress={"forward_progress": True, "new_codes": [], "before_failing_codes": ["citation_support_weak"]},
+            validation_payload={"ok": True},
+            compile_payload={"ok": True},
+            require_compile=True,
+            before_quality_eval=before_eval,
+            after_quality_eval=after_structural,
+            after_codes=set(),
+            residual_citation_failures=[],
+        )
+        self.assertFalse(allowed)
+        self.assertEqual(reason, "tier1_failed")
 
     def test_qa_loop_step_refreshes_figure_review_for_uncommitted_citation_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -6697,7 +6857,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
                             with patch("paperorchestra.ralph_bridge.write_citation_support_review", side_effect=overwrite_citation_review):
                                 result = run_qa_loop_step(root, MockProvider(), citation_evidence_mode="heuristic")
 
-            self.assertEqual(result.exit_code, 20)
+            self.assertEqual(result.exit_code, 0)
             candidate_figure = result.payload["candidate_state"]["verification"]["figure_placement_review"]
             self.assertEqual(Path(candidate_figure["path"]).resolve(), stale_figure_path.resolve())
             self.assertEqual(candidate_figure["manuscript_sha256"], candidate_hash)
@@ -6705,9 +6865,8 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
                 result.payload["candidate_progress"]["after_failing_codes"],
                 [],
             )
-            self.assertEqual(paper.read_text(encoding="utf-8"), original)
-            restored_figure = result.payload["restored_current_verification"]["figure_placement_review"]
-            self.assertEqual(restored_figure["manuscript_sha256"], hashlib.sha256(original.encode("utf-8")).hexdigest())
+            self.assertEqual(paper.read_text(encoding="utf-8"), candidate)
+            self.assertNotIn("restored_current_verification", result.payload)
 
     def test_section_review_scores_are_not_flat_when_section_shapes_differ(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
