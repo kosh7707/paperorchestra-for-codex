@@ -28,7 +28,7 @@ from .ralph_bridge_state import (
     recover_pending_manuscript_write,
 )
 from .session import artifact_path, load_session, save_session
-from .source_obligations import evaluate_source_obligations
+from .source_obligations import evaluate_source_obligations, source_obligations_path
 from .validator import extract_citation_keys
 
 
@@ -170,6 +170,58 @@ def _high_risk_repair_issues(cwd: str | Path | None, *, limit: int = 16) -> list
 
 def _claim_safety_repair_issues(cwd: str | Path | None) -> list[dict[str, Any]]:
     return _citation_density_repair_issues(cwd) + _duplicate_support_repair_issues(cwd) + _high_risk_repair_issues(cwd)
+
+def _source_obligation_repair_context(cwd: str | Path | None, *, limit: int = 48) -> dict[str, Any]:
+    try:
+        trust_report = evaluate_source_obligations(cwd)
+    except Exception as exc:
+        return {"available": False, "reason": "source_obligation_trust_check_error", "error_type": type(exc).__name__}
+    trust_failing_codes = {
+        str(code)
+        for code in trust_report.get("failing_codes") or []
+        if str(code).strip()
+    } if isinstance(trust_report, dict) else {"source_obligations_missing"}
+    untrusted_codes = {
+        "source_obligations_missing",
+        "source_obligations_stale",
+        "source_obligations_legacy_untrusted",
+    }
+    if trust_failing_codes & untrusted_codes:
+        return {
+            "available": False,
+            "reason": sorted(trust_failing_codes & untrusted_codes)[0],
+            "failing_codes": sorted(trust_failing_codes),
+        }
+    try:
+        path = source_obligations_path(cwd)
+        payload = _read_json(path)
+    except Exception:
+        return {"available": False}
+    if not isinstance(payload, dict):
+        return {"available": False}
+    obligations: list[dict[str, Any]] = []
+    for obligation in payload.get("obligations") or []:
+        if not isinstance(obligation, dict):
+            continue
+        obligations.append(
+            {
+                "id": obligation.get("id"),
+                "type": obligation.get("type"),
+                "expected_manuscript_area": obligation.get("expected_manuscript_area"),
+                "required_terms": obligation.get("required_terms") or [],
+                "numeric_tokens": obligation.get("numeric_tokens") or [],
+                "excerpt_preview": _truncate_issue_text(obligation.get("excerpt_preview"), limit=360),
+            }
+        )
+        if len(obligations) >= limit:
+            break
+    return {
+        "available": True,
+        "path": str(path),
+        "obligation_count": len(payload.get("obligations") or []),
+        "included_obligation_count": len(obligations),
+        "obligations": obligations,
+    }
 
 def _file_sha256(path: str | Path | None) -> str | None:
     if not path:
@@ -339,6 +391,7 @@ def _repair_prompt(
     citation_map: dict[str, Any],
     issues: list[dict[str, Any]],
     claim_safety_issues: list[dict[str, Any]] | None = None,
+    source_obligation_context: dict[str, Any] | None = None,
 ) -> tuple[str, str]:
     system_prompt = """
 You are a bounded PaperOrchestra citation-claim repair writer.
@@ -365,11 +418,16 @@ Return the full revised LaTeX manuscript only.
 {json.dumps(claim_safety_issues or [], indent=2, ensure_ascii=False)}
 </DATA_BLOCK>
 
+<DATA_BLOCK name="source_obligations_context.json">
+{json.dumps(source_obligation_context or {"available": False}, indent=2, ensure_ascii=False)}
+</DATA_BLOCK>
+
 Rules:
 - Preserve unrelated sections.
 - Preserve existing labels, figure paths, and bibliography hook.
 - Use only citation keys already present in citation_map.json.
 - Do not include reviewer numeric scores.
+- Preserve author-material obligations in source_obligations_context.json. If a citation repair removes, weakens, or rewrites an author-material claim, keep the required terms/numeric tokens represented elsewhere with scoped wording instead of deleting the obligation silently.
 - For citation-density issues, split dense citation bundles, remove redundant references, or place citations on the exact supported sentence.
 - For duplicate-support issues, keep a repeated citation only where it directly supports a distinct claim; otherwise remove, redistribute, or merge the redundant support.
 - For weakly_supported issues, apply the issue's suggested_fix narrowly. If the cited source supports only a weaker wording, rewrite the sentence to that weaker wording instead of adding citations.
@@ -416,7 +474,13 @@ def repair_citation_claims(
     citation_map = _read_json(state.artifacts.citation_map_json) if state.artifacts.citation_map_json else {}
     if not isinstance(citation_map, dict):
         citation_map = {}
-    system_prompt, user_prompt = _repair_prompt(original, citation_map, issues, claim_safety_issues)
+    system_prompt, user_prompt = _repair_prompt(
+        original,
+        citation_map,
+        issues,
+        claim_safety_issues,
+        _source_obligation_repair_context(cwd),
+    )
     response, lane_type, fallback_used, lane_notes = _complete_with_runtime_mode(
         _build_completion_request(system_prompt=system_prompt, user_prompt=user_prompt),
         provider=provider,

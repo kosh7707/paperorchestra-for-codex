@@ -839,6 +839,94 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
         self.assertEqual(sweep["status"], "pass")
         self.assertEqual(sweep["items"], [])
 
+    def test_high_risk_claim_sweep_uses_current_partial_source_obligations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Security}\n"
+                "Our construction proves invariant security under the stated theorem.\n"
+                "The system reports a 9.9x benchmark improvement over every prior method.\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            obligations = artifact_path(root, "source-obligations.json")
+            obligations.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "source-obligations/1",
+                        "obligations": [
+                            {
+                                "id": "obl-001-theorem_or_bound",
+                                "type": "theorem_or_bound",
+                                "required_terms": ["construction", "proves", "invariant", "security"],
+                                "numeric_tokens": [],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            sweep = _high_risk_claim_sweep(
+                state,
+                {
+                    "status": "fail",
+                    "path": str(obligations),
+                    "failing_codes": ["source_obligation_missing", "source_obligation_anchor_missing"],
+                },
+            )
+
+        self.assertEqual(sweep["status"], "fail")
+        self.assertEqual(sweep["failing_codes"], ["high_risk_uncited_claim"])
+        rendered = json.dumps(sweep)
+        self.assertNotIn("invariant security", rendered)
+        self.assertIn("9.9x benchmark improvement", rendered)
+
+    def test_high_risk_claim_sweep_rejects_untrusted_source_obligation_matrix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Security}\n"
+                "Our construction proves invariant security under the stated theorem.\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            obligations = artifact_path(root, "source-obligations.json")
+            obligations.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "source-obligations/1",
+                        "obligations": [
+                            {
+                                "id": "obl-001-theorem_or_bound",
+                                "type": "theorem_or_bound",
+                                "required_terms": ["construction", "proves", "invariant", "security"],
+                                "numeric_tokens": [],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            sweep = _high_risk_claim_sweep(
+                state,
+                {
+                    "status": "fail",
+                    "path": str(obligations),
+                    "failing_codes": ["source_obligations_stale"],
+                },
+            )
+
+        self.assertEqual(sweep["status"], "fail")
+        self.assertEqual(sweep["failing_codes"], ["high_risk_uncited_claim"])
+
     def test_citation_support_check_carries_review_hash_and_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

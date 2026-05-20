@@ -188,18 +188,37 @@ def _sentence_supported_by_obligation(sentence: str, obligation: dict[str, Any])
         return bool(sentence_numbers & obligation_numbers)
     return True
 
+def _load_source_obligations_for_claim_sweep(source_obligations: dict[str, Any]) -> list[dict[str, Any]]:
+    """Load usable source obligations even when the coverage check is partially failing.
+
+    ``evaluate_source_obligations`` can fail because one obligation is missing
+    from a candidate manuscript.  Treating that as an all-or-nothing signal made
+    the high-risk sweep discard every other still-valid author-material
+    obligation, causing one local repair regression to cascade into dozens of
+    spurious ``high_risk_uncited_claim`` findings.  The sweep only needs the
+    obligation matrix to decide whether a sentence is grounded in supplied
+    material, so it may use the current, schema-valid matrix unless the matrix
+    itself is missing, stale, or legacy/untrusted.
+    """
+    if not isinstance(source_obligations, dict):
+        return []
+    failing_codes = {str(code) for code in source_obligations.get("failing_codes") or []}
+    if failing_codes & {
+        "source_obligations_missing",
+        "source_obligations_stale",
+        "source_obligations_legacy_untrusted",
+    }:
+        return []
+    payload = _read_json_if_exists(source_obligations.get("path"))
+    if not isinstance(payload, dict):
+        return []
+    return [obligation for obligation in payload.get("obligations") or [] if isinstance(obligation, dict)]
+
 def _high_risk_claim_sweep(state, source_obligations: dict[str, Any]) -> dict[str, Any]:
     if not state.artifacts.paper_full_tex or not Path(state.artifacts.paper_full_tex).exists():
         return {"status": "skipped", "failing_codes": [], "reason": "paper_full_tex_missing", "items": []}
     latex = Path(state.artifacts.paper_full_tex).read_text(encoding="utf-8", errors="replace")
-    satisfied_obligations: list[dict[str, Any]] = []
-    if isinstance(source_obligations, dict):
-        if source_obligations.get("status") == "pass":
-            payload = _read_json_if_exists(source_obligations.get("path"))
-            if isinstance(payload, dict):
-                for obligation in payload.get("obligations") or []:
-                    if isinstance(obligation, dict):
-                        satisfied_obligations.append(obligation)
+    satisfied_obligations = _load_source_obligations_for_claim_sweep(source_obligations)
     items: list[dict[str, Any]] = []
     for line, raw_sentence, sentence in _plainish_sentences(latex):
         if len(sentence) < 35:

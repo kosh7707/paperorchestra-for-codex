@@ -1730,6 +1730,30 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             paper.write_text(original, encoding="utf-8")
             state = load_session(root)
             state.artifacts.paper_full_tex = str(paper)
+            obligations_path = artifact_path(root, "source_obligations.json")
+            from paperorchestra.source_obligations import build_source_obligations
+
+            packet_sha = build_source_obligations(root)["source_packet_sha256"]
+            obligations_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "source-obligations/1",
+                        "source_packet_sha256": packet_sha,
+                        "obligations": [
+                            {
+                                "id": "obl-001-theorem_or_bound",
+                                "type": "theorem_or_bound",
+                                "expected_manuscript_area": "security_analysis",
+                                "required_terms": ["construction", "proves", "invariant-safety", "security"],
+                                "numeric_tokens": ["2.5x"],
+                                "excerpt_preview": "The author-provided material claims invariant-safety security and a 2.5x result.",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.artifacts.source_obligations_json = str(obligations_path)
             save_session(root, state)
             review_path = artifact_path(root, "citation_support_review.json")
             review_path.write_text(json.dumps({"items": [], "summary": {}}), encoding="utf-8")
@@ -1757,10 +1781,62 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             repair_citation_claims(root, provider, citation_review_path=review_path)
 
             self.assertIn("claim_safety_repair_issues.json", provider.prompt)
+            self.assertIn("source_obligations_context.json", provider.prompt)
+            self.assertIn("invariant-safety", provider.prompt)
+            self.assertIn("2.5x", provider.prompt)
             self.assertIn("citation_bomb_sentence", provider.prompt)
             self.assertIn("high_risk_uncited_claim", provider.prompt)
             self.assertIn("invariant-safety security", provider.prompt)
             self.assertIn("required_action", provider.prompt)
+
+    def test_source_obligation_repair_context_rejects_stale_or_legacy_matrices(self) -> None:
+        from paperorchestra.ralph_bridge_repair import _source_obligation_repair_context
+        from paperorchestra.source_obligations import build_source_obligations
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n\\begin{document}\n"
+                "The method reports a 2.5x benchmark result.\n"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            obligations_path = artifact_path(root, "source_obligations.json")
+            stale_payload = {
+                "schema_version": "source-obligations/1",
+                "source_packet_sha256": "stale",
+                "obligations": [
+                    {
+                        "id": "obl-stale",
+                        "type": "benchmark_result",
+                        "required_terms": ["stale-private-term"],
+                        "numeric_tokens": ["2.5x"],
+                        "excerpt_preview": "stale-private-term must never be injected",
+                    }
+                ],
+            }
+            obligations_path.write_text(json.dumps(stale_payload), encoding="utf-8")
+            state.artifacts.source_obligations_json = str(obligations_path)
+            save_session(root, state)
+
+            stale_context = _source_obligation_repair_context(root)
+            self.assertFalse(stale_context["available"])
+            self.assertEqual(stale_context["reason"], "source_obligations_stale")
+            self.assertNotIn("stale-private-term", json.dumps(stale_context))
+
+            current_packet_sha = build_source_obligations(root)["source_packet_sha256"]
+            legacy_payload = dict(stale_payload)
+            legacy_payload["schema_version"] = "legacy"
+            legacy_payload["source_packet_sha256"] = current_packet_sha
+            obligations_path.write_text(json.dumps(legacy_payload), encoding="utf-8")
+
+            legacy_context = _source_obligation_repair_context(root)
+            self.assertFalse(legacy_context["available"])
+            self.assertEqual(legacy_context["reason"], "source_obligations_legacy_untrusted")
+            self.assertNotIn("stale-private-term", json.dumps(legacy_context))
 
     def test_repair_citation_claims_prompt_includes_duplicate_support_issue_context(self) -> None:
         class RepairProvider(MockProvider):
