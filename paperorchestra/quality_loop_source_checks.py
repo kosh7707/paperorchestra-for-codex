@@ -20,7 +20,9 @@ LIMITATION_SCOPE_RE = re.compile(
     r"reports no (?:standard )?(?:benchmark|metric|runtime|comparison)|"
     r"no standard benchmark|no optimizer setting|no model-architecture comparison|no reported runtime profile|"
     r"outside (?:the )?(?:present )?scope|beyond (?:the )?(?:present )?scope|"
-    r"remain(?:s)? within the stated assumptions|bounded by the stated assumptions"
+    r"remain(?:s)? within the stated assumptions|bounded by the stated assumptions|"
+    r"stronger analytical claims require|separate argument beyond|"
+    r"should therefore be read within"
     r")\b",
     re.IGNORECASE,
 )
@@ -143,13 +145,19 @@ def _clean_latex_sentence_for_claim_sweep(text: str) -> str:
 
 
 def _plainish_sentences(latex: str) -> list[tuple[int, str, str]]:
-    without_comments = re.sub(r"(?m)%.*$", "", latex)
+    document_start = re.search(r"\\begin\{document\}", latex)
+    base_line_offset = 0
+    body = latex
+    if document_start:
+        base_line_offset = latex[: document_start.end()].count("\n")
+        body = latex[document_start.end() :]
+    without_comments = re.sub(r"(?m)%.*$", "", body)
     rough = re.split(r"(?<=[.!?])\s+|\n\s*\n", without_comments)
     result: list[tuple[int, str, str]] = []
     offset = 0
     for part in rough:
         offset = without_comments.find(part, offset)
-        line = without_comments[: max(offset, 0)].count("\n") + 1
+        line = base_line_offset + without_comments[: max(offset, 0)].count("\n") + 1
         raw_text = part.strip()
         text = _clean_latex_sentence_for_claim_sweep(part)
         if len(text) >= 35 and re.search(r"[A-Za-z]{3,}", text):

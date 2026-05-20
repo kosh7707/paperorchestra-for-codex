@@ -69,7 +69,7 @@ from paperorchestra.operator_feedback import (
     derive_operator_issue_id,
     import_operator_feedback,
 )
-from paperorchestra.models import InputBundle
+from paperorchestra.models import InputBundle, VerifiedPaper
 from paperorchestra.plot_assets import render_plot_assets
 from paperorchestra.pipeline import (
     CANDIDATE_SCHEMA,
@@ -92,6 +92,7 @@ from paperorchestra.pipeline import (
     _normalize_source_figure_paths,
     _prompt_compact_text,
     _provider_identity_payload,
+    _merge_verified_entry_with_prior_keys,
     _repair_inline_math_surplus_closing_brace,
     _restore_missing_referenced_labels,
     _source_critical_context_for_prompt,
@@ -2030,6 +2031,54 @@ class PipelineTests(unittest.TestCase):
             citation_map = json.loads(Path(result["citation_map_json"]).read_text(encoding="utf-8"))
             self.assertIn("RFC8446", citation_map)
             self.assertEqual(citation_map["RFC8446"]["url"], "https://www.rfc-editor.org/info/rfc8446")
+
+    def test_authoritative_standard_seed_metadata_survives_live_search_enrichment(self) -> None:
+        prior = VerifiedPaper(
+            paper_id="RFC Editor:8446",
+            title="The Transport Layer Security (TLS) Protocol Version 1.3",
+            year=2018,
+            publication_date=None,
+            venue="RFC 8446",
+            abstract="Curated prior-work seed imported from RFC Editor.",
+            authors=["Eric Rescorla"],
+            citation_count=None,
+            external_ids={"DOI": "10.17487/RFC8446"},
+            url="https://www.rfc-editor.org/rfc/rfc8446.html",
+            bibtex_key="rescorla2018TheTransportLayer",
+            origin="RFC Editor",
+            matched_query="The Transport Layer Security (TLS) Protocol Version 1.3",
+            title_match_ratio=100.0,
+        )
+        verified = VerifiedPaper(
+            paper_id="semantic-scholar:bad-rfc8446",
+            title="The Transport Layer Security (TLS) Protocol Version 1.3",
+            year=2008,
+            publication_date="2008-08-01",
+            venue="Request for Comments",
+            abstract="This document specifies Version 1.2 of TLS.",
+            authors=["E. Rescorla"],
+            citation_count=2682,
+            external_ids={"DOI": "10.9999/WRONG", "CorpusId": "16836676"},
+            url="https://www.semanticscholar.org/paper/bad-rfc8446",
+            bibtex_key="rescorla2008TheTransportLayer",
+            origin="macro_candidates",
+            matched_query="The Transport Layer Security (TLS) Protocol Version 1.3",
+            title_match_ratio=100.0,
+        )
+
+        merged = _merge_verified_entry_with_prior_keys(prior, verified)
+
+        self.assertEqual(merged.bibtex_key, "rescorla2018TheTransportLayer")
+        self.assertEqual(merged.year, 2018)
+        self.assertEqual(merged.venue, "RFC 8446")
+        self.assertEqual(merged.url, "https://www.rfc-editor.org/rfc/rfc8446.html")
+        self.assertEqual(merged.authors, ["Eric Rescorla"])
+        self.assertEqual(merged.citation_count, 2682)
+        self.assertIn("rescorla2008TheTransportLayer", merged.alias_bibtex_keys)
+        self.assertEqual(merged.external_ids["DOI"], "10.17487/RFC8446")
+        self.assertEqual(merged.external_ids["VerifiedDOI"], "10.9999/WRONG")
+        self.assertEqual(merged.external_ids["CorpusId"], "16836676")
+        self.assertEqual(merged.external_ids["VerifiedPaperId"], "semantic-scholar:bad-rfc8446")
 
     def test_import_prior_work_merges_research_seed_without_dropping_source_bibtex_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -372,6 +372,9 @@ Rules:
 - Do not include reviewer numeric scores.
 - For citation-density issues, split dense citation bundles, remove redundant references, or place citations on the exact supported sentence.
 - For duplicate-support issues, keep a repeated citation only where it directly supports a distinct claim; otherwise remove, redistribute, or merge the redundant support.
+- For weakly_supported issues, apply the issue's suggested_fix narrowly. If the cited source supports only a weaker wording, rewrite the sentence to that weaker wording instead of adding citations.
+- If a citation is attached to a paper-internal claim such as what this manuscript evaluates, instantiates, proves, or reports, remove the external citation from that internal claim unless citation_map evidence directly supports the external background portion.
+- If an issue is only a bibliography-metadata correction and the cited evidence supports the sentence, do not change unrelated prose; leave bibliographic repair to the citation registry/metadata lane.
 - For high-risk uncited claims, ground with existing verified evidence, scope as a limitation/author-material claim, or delete the claim.
 """.strip()
     return system_prompt, user_prompt

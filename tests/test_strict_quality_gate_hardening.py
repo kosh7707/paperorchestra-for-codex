@@ -744,6 +744,80 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
         self.assertEqual(sweep["status"], "pass")
         self.assertEqual(sweep["items"], [])
 
+    def test_high_risk_claim_sweep_skips_scope_boundary_phrasings_from_live_smoke(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n"
+                "\\newtheorem{theorem}{Theorem}\n"
+                "\\begin{document}\n"
+                "\\section{Limitations}\n"
+                "Stronger analytical claims require a separate argument beyond the stated assumptions and proof obligations.\n"
+                "The conclusions should therefore be read within the paper's stated assumptions: secret per-direction masks, "
+                "no sequence-number wraparound, the PRP and random-oracle idealizations used in the proof, and the fixed benchmark environment used in the evaluation.\n"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            obligations = artifact_path(root, "source-obligations.json")
+            obligations.write_text(json.dumps({"obligations": []}), encoding="utf-8")
+
+            sweep = _high_risk_claim_sweep(state, {"status": "pass", "path": str(obligations)})
+
+        self.assertEqual(sweep["status"], "pass")
+        self.assertEqual(sweep["items"], [])
+
+    def test_high_risk_claim_sweep_flags_positive_claims_even_with_stated_assumptions_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Security}\n"
+                "Our construction proves security within the paper's stated assumptions and reports a 2.5x benchmark improvement.\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            obligations = artifact_path(root, "source-obligations.json")
+            obligations.write_text(json.dumps({"obligations": []}), encoding="utf-8")
+
+            sweep = _high_risk_claim_sweep(state, {"status": "pass", "path": str(obligations)})
+
+        self.assertEqual(sweep["status"], "fail")
+        self.assertEqual(sweep["failing_codes"], ["high_risk_uncited_claim"])
+        self.assertIn("2.5x benchmark improvement", sweep["items"][0]["sentence"])
+
+    def test_high_risk_claim_sweep_ignores_preamble_when_rechecking_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n"
+                "\\DeclareMathOperator{\\Enc}{Enc}\n"
+                "\\newtheorem{theorem}{Theorem}\n"
+                "\\begin{document}\n"
+                "\\section{Proof}\n"
+                "We now examine an arbitrary decryption evaluation in this conditioned game.\n"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            obligations = artifact_path(root, "source-obligations.json")
+            obligations.write_text(json.dumps({"obligations": []}), encoding="utf-8")
+
+            sweep = _high_risk_claim_sweep(state, {"status": "pass", "path": str(obligations)})
+
+        self.assertEqual(sweep["status"], "pass")
+        rendered = json.dumps(sweep)
+        self.assertNotIn("Enc", rendered)
+        self.assertNotIn("Theorem", rendered)
+
     def test_high_risk_claim_sweep_skips_proof_internal_transition_sentences(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
