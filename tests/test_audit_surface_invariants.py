@@ -2415,6 +2415,40 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             self.assertIn("theorem_or_bound", types)
             self.assertIn("benchmark_result", types)
 
+    def test_source_obligations_ignore_control_template_and_guideline_prose(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            Path(state.inputs.idea_path).write_text(
+                "% Fresh PaperOrchestra smoke input: deterministic author brief.\n"
+                "\\section{Author Intent} Draft a conservative manuscript around registered evidence.\n"
+                "\\section{Methodology Core Source} The method pipeline validates invariants and proves a routing guarantee.\n",
+                encoding="utf-8",
+            )
+            Path(state.inputs.experimental_log_path).write_text(
+                "The benchmark reports 12.7 ms latency and 4.2 jobs/s throughput on the demo workload.\n",
+                encoding="utf-8",
+            )
+            Path(state.inputs.template_path).write_text(
+                "\\documentclass{article}\n\\newtheorem{theorem}{Theorem}\n\\begin{document}\n",
+                encoding="utf-8",
+            )
+            Path(state.inputs.guidelines_path).write_text(
+                "Writing contract: theorem and benchmark claims must come from registered evidence only.\n",
+                encoding="utf-8",
+            )
+
+            payload = build_source_obligations(root)
+
+            previews = "\n".join(item["excerpt_preview"] for item in payload["obligations"])
+            self.assertNotIn("Author Intent", previews)
+            self.assertNotIn("documentclass", previews)
+            self.assertNotIn("Writing contract", previews)
+            labels = {item["source_label"] for item in payload["obligations"]}
+            self.assertLessEqual(labels, {"idea", "experimental_log"})
+            self.assertIn("method_core", {item["type"] for item in payload["obligations"]})
+            self.assertIn("benchmark_result", {item["type"] for item in payload["obligations"]})
+
     def test_quality_eval_claim_safe_routes_uncited_numeric_security_claim_to_repair(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -12,7 +12,7 @@ from .validator import check_citation_placement, check_claim_map_coverage, check
 HIGH_RISK_CLAIM_RE = get_domain().high_risk_claim_re
 LIMITATION_SCOPE_RE = re.compile(
     r"\b("
-    r"do not claim|does not claim|not claim|limited to|only|scope|limitation|we do not|we leave|future work|"
+    r"do not claim|does not claim|does not make (?:stronger )?(?:analytical )?claims?|not claim|limited to|only|scope|limitations?|omits?|not end-to-end|we do not|we leave|future work|"
     r"do not support claims?|does not support claims?|do not support (?:any )?claim|does not support (?:any )?claim|"
     r"does not guarantee|do not guarantee|no guarantee|cannot guarantee|"
     r"contains no (?:external )?(?:dataset|benchmark|evaluation|experiment)|"
@@ -26,6 +26,10 @@ LIMITATION_SCOPE_RE = re.compile(
 )
 SECURITY_CLAIM_RE = get_domain().security_claim_re
 BENCHMARK_CLAIM_RE = get_domain().benchmark_claim_re
+PROOF_INTERNAL_SCOPE_RE = re.compile(
+    r"\b(we now examine|conditioned game|proof proceeds|combining the game hops|union bound over|the proof proceeds)\b",
+    re.IGNORECASE,
+)
 PAPER_SPECIFIC_SELF_CLAIM_RE = re.compile(
     r"\b("
     r"this\s+paper|we\s+(?:prove|show|construct|propose|implement|measure|report)|"
@@ -106,17 +110,50 @@ def _planning_satisfaction_check(state, planning_status: dict[str, Any]) -> dict
         "issues": [issue.to_dict() for issue in issues],
     }
 
-def _plainish_sentences(latex: str) -> list[tuple[int, str]]:
+def _preserve_text_macro_arguments(text: str) -> str:
+    text_macros = {
+        "emph",
+        "textbf",
+        "textit",
+        "textrm",
+        "textsf",
+        "texttt",
+        "underline",
+        "mbox",
+        "paragraph",
+        "subparagraph",
+    }
+    pattern = re.compile(r"\\([A-Za-z]+)\*?(?:\[[^]]*\])?\{([^{}]*)\}")
+    previous = None
+    while previous != text:
+        previous = text
+        text = pattern.sub(lambda match: match.group(2) if match.group(1) in text_macros else " ", text)
+    return text
+
+
+def _clean_latex_sentence_for_claim_sweep(text: str) -> str:
+    text = re.sub(r"(?m)%.*$", " ", text)
+    text = re.sub(r"\\(?:label|ref|eqref|cite)\{[^}]*\}", " ", text)
+    text = re.sub(r"\\(?:begin|end)\{[^}]*\}", " ", text)
+    text = re.sub(r"\\(?:section|subsection|subsubsection)\*?\{([^}]*)\}", r"\1. ", text)
+    text = _preserve_text_macro_arguments(text)
+    text = re.sub(r"\\[A-Za-z]+\*?(?:\[[^]]*\])?(?:\{[^}]*\})?", " ", text)
+    text = re.sub(r"[$^_{}&]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _plainish_sentences(latex: str) -> list[tuple[int, str, str]]:
     without_comments = re.sub(r"(?m)%.*$", "", latex)
     rough = re.split(r"(?<=[.!?])\s+|\n\s*\n", without_comments)
-    result: list[tuple[int, str]] = []
+    result: list[tuple[int, str, str]] = []
     offset = 0
     for part in rough:
         offset = without_comments.find(part, offset)
         line = without_comments[: max(offset, 0)].count("\n") + 1
-        text = part.strip()
-        if len(text) >= 35:
-            result.append((line, text))
+        raw_text = part.strip()
+        text = _clean_latex_sentence_for_claim_sweep(part)
+        if len(text) >= 35 and re.search(r"[A-Za-z]{3,}", text):
+            result.append((line, raw_text, text))
         offset += max(len(part), 1)
     return result
 
@@ -156,17 +193,18 @@ def _high_risk_claim_sweep(state, source_obligations: dict[str, Any]) -> dict[st
                     if isinstance(obligation, dict):
                         satisfied_obligations.append(obligation)
     items: list[dict[str, Any]] = []
-    for line, sentence in _plainish_sentences(latex):
-        sentence = re.sub(r"^\s*\\(?:section|subsection|subsubsection|paragraph)\*?\{[^}]*\}\s*", "", sentence).strip()
+    for line, raw_sentence, sentence in _plainish_sentences(latex):
         if len(sentence) < 35:
             continue
-        if "\\bibliography" in sentence or "\\bibitem" in sentence:
+        if "\\bibliography" in raw_sentence or "\\bibitem" in raw_sentence:
             continue
-        if "\\cite" in sentence and not PAPER_SPECIFIC_SELF_CLAIM_RE.search(sentence):
+        if "\\cite" in raw_sentence and not PAPER_SPECIFIC_SELF_CLAIM_RE.search(sentence):
             continue
         if re.match(r"\s*\\(?:section|subsection|paragraph)\b", sentence):
             continue
         if LIMITATION_SCOPE_RE.search(sentence):
+            continue
+        if PROOF_INTERNAL_SCOPE_RE.search(sentence):
             continue
         if not HIGH_RISK_CLAIM_RE.search(sentence):
             continue

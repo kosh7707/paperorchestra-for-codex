@@ -600,6 +600,26 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
         )
         self.assertTrue(any(item.get("support_status") == "unsupported" for item in review["items"]), review["items"])
 
+    def test_high_risk_claim_sweep_skips_pure_cited_background_claims(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Background}\n"
+                "Previous work provides a proof of security for the protocol~\\cite{TLS13}.\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            obligations = artifact_path(root, "source-obligations.json")
+            obligations.write_text(json.dumps({"obligations": []}), encoding="utf-8")
+
+            sweep = _high_risk_claim_sweep(state, {"status": "pass", "path": str(obligations)})
+
+        self.assertEqual(sweep["status"], "pass")
+        self.assertEqual(sweep["items"], [])
+
     def test_high_risk_claim_sweep_does_not_skip_mixed_cited_claims(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -609,6 +629,27 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
                 "\\section{Security}\n"
                 "Prior systems motivate the design, and our construction proves invariant-safety security "
                 "with a 2.5x improvement~\\cite{TLS13}.\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            obligations = artifact_path(root, "source-obligations.json")
+            obligations.write_text(json.dumps({"obligations": []}), encoding="utf-8")
+
+            sweep = _high_risk_claim_sweep(state, {"status": "pass", "path": str(obligations)})
+
+        self.assertEqual(sweep["status"], "fail")
+        self.assertEqual(sweep["failing_codes"], ["high_risk_uncited_claim"])
+
+    def test_high_risk_claim_sweep_preserves_text_macro_claim_content(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Security}\n"
+                "Prior systems motivate the design, and \\emph{our construction} proves "
+                "\\textbf{security with a 2.5x improvement}~\\cite{TLS13}.\n",
                 encoding="utf-8",
             )
             state.artifacts.paper_full_tex = str(paper)
@@ -634,6 +675,84 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
                 "throughput, or comparison with prior systems.\n\n"
                 "It does not guarantee scientific correctness, complete literature coverage, valid "
                 "experimental design, or acceptance by any venue.\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            obligations = artifact_path(root, "source-obligations.json")
+            obligations.write_text(json.dumps({"obligations": []}), encoding="utf-8")
+
+            sweep = _high_risk_claim_sweep(state, {"status": "pass", "path": str(obligations)})
+
+        self.assertEqual(sweep["status"], "pass")
+        self.assertEqual(sweep["items"], [])
+
+    def test_high_risk_claim_sweep_cleans_latex_environment_fragments(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Security}\n"
+                "\\begin{theorem}\n"
+                "\\end{aligned}\n\\end{equation}\n\\end{theorem}\n"
+                "\\begin{proof}\n"
+                "The proof proceeds by applying the stated invariant analysis to all encryption computations.\n"
+                "\\end{proof}\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            obligations = artifact_path(root, "source-obligations.json")
+            obligations.write_text(
+                json.dumps(
+                    {
+                        "obligations": [
+                            {
+                                "type": "proof_step",
+                                "required_terms": ["proof", "invariant", "analysis"],
+                                "numeric_tokens": [],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            sweep = _high_risk_claim_sweep(state, {"status": "pass", "path": str(obligations)})
+
+        self.assertEqual(sweep["status"], "pass")
+        self.assertEqual(sweep["items"], [])
+
+    def test_high_risk_claim_sweep_skips_claims_that_do_not_make_stronger_claims(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Limitations}\n"
+                "This paper does not make stronger analytical claims beyond the stated assumptions and proof obligations.\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            obligations = artifact_path(root, "source-obligations.json")
+            obligations.write_text(json.dumps({"obligations": []}), encoding="utf-8")
+
+            sweep = _high_risk_claim_sweep(state, {"status": "pass", "path": str(obligations)})
+
+        self.assertEqual(sweep["status"], "pass")
+        self.assertEqual(sweep["items"], [])
+
+    def test_high_risk_claim_sweep_skips_proof_internal_transition_sentences(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Proof}\n"
+                "We now examine an arbitrary decryption evaluation in this conditioned game.\n"
+                "A union bound over the queries yields the stated theorem.\n",
                 encoding="utf-8",
             )
             state.artifacts.paper_full_tex = str(paper)

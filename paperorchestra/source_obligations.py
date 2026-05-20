@@ -21,6 +21,16 @@ SOURCE_FIELDS = (
     ("guidelines", "guidelines_path"),
 )
 
+# Only author-provided research material should become source obligations.
+# Template and guideline files are still included in the packet digest for
+# freshness/staleness checks, but they are not evidence for manuscript claims.
+OBLIGATION_SOURCE_LABELS = {"idea", "experimental_log"}
+
+SOURCE_OBLIGATION_META_SECTION_RE = re.compile(
+    r"^(?:author intent|non-negotiable claim boundaries|author positioning notes|writing contract|fresh paperorchestra smoke input)\b",
+    re.IGNORECASE,
+)
+
 OBLIGATION_PATTERNS: tuple[tuple[str, str, tuple[str, ...]], ...] = get_domain().obligation_patterns
 
 TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9+_.-]{2,}|\d+(?:\.\d+)?\s*[x×%]?")
@@ -68,24 +78,57 @@ def _source_packet(cwd: str | Path | None) -> tuple[list[dict[str, Any]], str, d
     return entries, digest, texts
 
 
+def _strip_latex_heading_prefix(text: str) -> str:
+    return re.sub(r"^\s*\\(?:sub)*section\*?\{([^}]*)\}\s*", r"\1. ", text).strip()
+
+
 def _sentences(text: str) -> list[str]:
-    normalized = re.sub(r"\s+", " ", text).strip()
-    if not normalized:
-        return []
+    normalized = re.sub(r"(?m)^%.*$", " ", text)
+    normalized = re.sub(r"\\label\{[^}]*\}", " ", normalized)
     parts = re.split(r"(?<=[.!?])\s+|\n{2,}", normalized)
-    return [part.strip() for part in parts if len(part.strip()) >= 20]
+    result: list[str] = []
+    for part in parts:
+        part = re.sub(r"\s+", " ", _strip_latex_heading_prefix(part)).strip()
+        if len(part) >= 20:
+            result.append(part)
+    return result
 
 
-def _best_excerpt(text: str, pattern: re.Pattern[str]) -> str:
+def _is_meta_or_template_excerpt(label: str, excerpt: str) -> bool:
+    lowered = excerpt.strip().lower()
+    if label not in OBLIGATION_SOURCE_LABELS:
+        return True
+    if SOURCE_OBLIGATION_META_SECTION_RE.search(lowered):
+        return True
+    if "documentclass" in lowered or "usepackage" in lowered or "begin{document}" in lowered:
+        return True
+    if "fresh paperorchestra smoke input" in lowered:
+        return True
+    return False
+
+
+def _candidate_excerpts(label: str, text: str, pattern: re.Pattern[str]) -> list[str]:
+    excerpts: list[str] = []
+    seen: set[str] = set()
     for sentence in _sentences(text):
-        if pattern.search(sentence):
-            return sentence[:700]
+        if not pattern.search(sentence):
+            continue
+        excerpt = sentence[:700]
+        if _is_meta_or_template_excerpt(label, excerpt):
+            continue
+        key = _sha256_text(excerpt)[:16]
+        if key not in seen:
+            excerpts.append(excerpt)
+            seen.add(key)
+    if excerpts:
+        return excerpts
     match = pattern.search(text)
     if not match:
-        return text[:300]
+        return []
     start = max(match.start() - 180, 0)
     end = min(match.end() + 420, len(text))
-    return re.sub(r"\s+", " ", text[start:end]).strip()
+    excerpt = re.sub(r"\s+", " ", text[start:end]).strip()
+    return [] if _is_meta_or_template_excerpt(label, excerpt) else [excerpt]
 
 
 def _substantive_word_count(text: str) -> int:
@@ -120,33 +163,33 @@ def build_source_obligations(cwd: str | Path | None) -> dict[str, Any]:
         if not text.strip():
             continue
         domain = detect_domain_for_text(text)
+        if label not in OBLIGATION_SOURCE_LABELS:
+            continue
         for obligation_type, raw_pattern, seed_terms in domain.obligation_patterns:
             pattern = re.compile(raw_pattern, re.IGNORECASE)
-            if not pattern.search(text):
-                continue
-            excerpt = _best_excerpt(text, pattern)
-            if label == "template" and _substantive_word_count(excerpt) < 8:
-                continue
-            key = (obligation_type, _sha256_text(excerpt)[:16])
-            if key in seen:
-                continue
-            seen.add(key)
-            numeric_tokens = sorted(extract_decimal_like_tokens(excerpt))
-            obligation_id = f"obl-{len(obligations)+1:03d}-{obligation_type}"
-            obligations.append(
-                {
-                    "id": obligation_id,
-                    "type": obligation_type,
-                    "source_label": label,
-                    "source_path": getattr(state.inputs, f"{label}_path", None) if label != "experimental_log" else state.inputs.experimental_log_path,
-                    "source_packet_sha256": packet_digest,
-                    "excerpt_sha256": _sha256_text(excerpt),
-                    "excerpt_preview": excerpt[:240],
-                    "required_terms": _terms(excerpt, seed_terms),
-                    "numeric_tokens": numeric_tokens,
-                    "expected_manuscript_area": _expected_area(obligation_type),
-                }
-            )
+            for excerpt in _candidate_excerpts(label, text, pattern):
+                if _substantive_word_count(excerpt) < 6:
+                    continue
+                key = (obligation_type, _sha256_text(excerpt)[:16])
+                if key in seen:
+                    continue
+                seen.add(key)
+                numeric_tokens = sorted(extract_decimal_like_tokens(excerpt))
+                obligation_id = f"obl-{len(obligations)+1:03d}-{obligation_type}"
+                obligations.append(
+                    {
+                        "id": obligation_id,
+                        "type": obligation_type,
+                        "source_label": label,
+                        "source_path": getattr(state.inputs, f"{label}_path", None) if label != "experimental_log" else state.inputs.experimental_log_path,
+                        "source_packet_sha256": packet_digest,
+                        "excerpt_sha256": _sha256_text(excerpt),
+                        "excerpt_preview": excerpt[:240],
+                        "required_terms": _terms(excerpt, seed_terms),
+                        "numeric_tokens": numeric_tokens,
+                        "expected_manuscript_area": _expected_area(obligation_type),
+                    }
+                )
     return {
         "schema_version": SOURCE_OBLIGATIONS_SCHEMA_VERSION,
         "generated_at": utc_now_iso(),
