@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import re
 import subprocess
 import tempfile
 import textwrap
@@ -95,6 +96,35 @@ class FreshSmokeInputDerivationTests(unittest.TestCase):
             entries = load_prior_work_seed(seed, source="test_seed")
             self.assertGreaterEqual(len(entries), 3)
             self.assertTrue(all(entry.get("title") for entry in entries))
+
+    def test_template_does_not_duplicate_theorem_declarations_from_macro_packet(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            materials = self._write_citation_free_material_packet(root)
+            (materials / "00_core_macros.tex").write_text(
+                textwrap.dedent(
+                    r"""
+                    \newtheorem{theorem}{Theorem}
+                    \newtheorem{lemma}[theorem]{Lemma}
+                    \newtheorem{corollary}[theorem]{Corollary}
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            subprocess.run(
+                ["python3", "scripts/derive-fresh-smoke-inputs.py", str(root)],
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+
+            template_text = (root / "workdir" / "inputs" / "template.tex").read_text(encoding="utf-8")
+            self.assertEqual(len(re.findall(r"\\newtheorem\{theorem\}", template_text)), 1)
+            self.assertEqual(len(re.findall(r"\\newtheorem\{lemma\}", template_text)), 1)
+            self.assertIn(r"\newtheorem{lemma}[theorem]{Lemma}", template_text)
+            self.assertNotIn(r"\newtheorem{lemma}{Lemma}", template_text)
 
     def test_material_heading_can_supply_non_meta_template_title(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

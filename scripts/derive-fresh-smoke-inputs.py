@@ -273,6 +273,17 @@ def drop_unseeded_citation_commands(text: str, allowed_keys: set[str]) -> tuple[
     return sanitized, dropped
 
 
+def template_fallback_theorems(existing_macros: str) -> str:
+    """Return only theorem declarations not already supplied by source macros."""
+
+    lines: list[str] = []
+    if not re.search(r"\\newtheorem\*?\s*\{\s*theorem\s*\}", existing_macros):
+        lines.append(r"\newtheorem{theorem}{Theorem}")
+    if not re.search(r"\\newtheorem\*?\s*\{\s*lemma\s*\}", existing_macros):
+        lines.append(r"\newtheorem{lemma}{Lemma}")
+    return "\n".join(lines)
+
+
 known_seed_entries: dict[str, dict[str, str]] = {
     "lewis2020retrievalaugmented": {
         "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks",
@@ -344,8 +355,7 @@ template = r"""\documentclass[11pt]{article}
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath,amssymb,amsthm,booktabs,tabularx,graphicx,url,hyperref}
 % CORE_MACROS_PLACEHOLDER
-\newtheorem{theorem}{Theorem}
-\newtheorem{lemma}{Lemma}
+% FALLBACK_THEOREMS_PLACEHOLDER
 \title{TEMPLATE_TITLE_PLACEHOLDER}
 \author{Anonymous Author}
 \date{}
@@ -363,7 +373,7 @@ template = r"""\documentclass[11pt]{article}
 \bibliographystyle{plain}
 \bibliography{references}
 \end{document}
-""".replace("% CORE_MACROS_PLACEHOLDER", template_macros).replace("TEMPLATE_TITLE_PLACEHOLDER", template_title)
+""".replace("% CORE_MACROS_PLACEHOLDER", template_macros).replace("% FALLBACK_THEOREMS_PLACEHOLDER", template_fallback_theorems(template_macros)).replace("TEMPLATE_TITLE_PLACEHOLDER", template_title)
 
 idea, dropped_idea_citations = drop_unseeded_citation_commands(idea, allowed_prompt_citation_keys)
 experimental, dropped_experimental_citations = drop_unseeded_citation_commands(
