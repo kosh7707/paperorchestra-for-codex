@@ -72,6 +72,7 @@ from .teach import prepare_teach_bundle
 from .fidelity import write_reproducibility_audit
 from .first_user_guide import build_first_user_guide
 from .fresh_smoke_acceptance import write_fresh_smoke_acceptance_summary
+from .human_needed import record_human_needed_answer
 
 JSON = dict[str, Any]
 
@@ -153,8 +154,39 @@ TOOLS: list[JSON] = [
     },
     {
         "name": "answer_human_needed",
-        "description": "Provide a bounded answer for a human_needed stop and request re-adjudication.",
-        "inputSchema": {"type": "object", "properties": {"cwd": {"type": "string"}, "answer": {"type": "string"}}, "required": ["answer"]},
+        "description": "Provide a bounded, hash-bound answer for a human_needed stop and optionally run the operator-feedback loop.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "cwd": {"type": "string"},
+                "answer": {"type": "string"},
+                "packet_path": {"type": "string"},
+                "review_scope": {"type": "string", "enum": ["pdf_and_tex", "tex_only"]},
+                "intent": {
+                    "type": "string",
+                    "enum": ["approve_existing_candidate", "generate_new_operator_candidate", "reject_candidate_with_reason"],
+                },
+                "action_id": {"type": "string"},
+                "output_answer": {"type": "string"},
+                "output_feedback": {"type": "string"},
+                "redacted_answer_only": {"type": "boolean"},
+                "apply": {"type": "boolean"},
+                "imported_feedback_output": {"type": "string"},
+                "provider": {"type": "string"},
+                "provider_command": {"type": "string"},
+                "citation_provider": {"type": "string"},
+                "citation_provider_command": {"type": "string"},
+                "max_supervised_iterations": {"type": "integer"},
+                "quality_mode": {"type": "string"},
+                "max_iterations": {"type": "integer"},
+                "require_live_verification": {"type": "boolean"},
+                "accept_mixed_provenance": {"type": "boolean"},
+                "require_compile": {"type": "boolean"},
+                "runtime_mode": {"type": "string"},
+                "citation_evidence_mode": {"type": "string", "enum": ["heuristic", "model", "web"]},
+            },
+            "required": ["answer"],
+        },
     },
     {
         "name": "export_results",
@@ -1105,14 +1137,32 @@ def tool_continue_project(arguments: JSON) -> JSON:
 
 def tool_answer_human_needed(arguments: JSON) -> JSON:
     cwd = _default_cwd(arguments)
-    answer = arguments.get("answer")
-    state = orchestrator_inspect_state(cwd)
-    return _ok({
-        "execution": "answer_recorded_for_re_adjudication",
-        "answer": "redacted" if answer else "missing",
-        "state": state.to_public_dict(),
-        "next_actions": [{"action_type": "re_adjudicate", "reason": "human_needed_answer_received"}],
-    })
+    provider = _provider_from_args(arguments) if arguments.get("apply") else None
+    payload = record_human_needed_answer(
+        cwd,
+        str(arguments.get("answer") or ""),
+        packet_path=arguments.get("packet_path"),
+        review_scope=arguments.get("review_scope"),
+        intent=arguments.get("intent"),
+        action_id=arguments.get("action_id"),
+        output_answer=arguments.get("output_answer"),
+        output_feedback=arguments.get("output_feedback"),
+        redacted_answer_only=bool(arguments.get("redacted_answer_only", False)),
+        apply=bool(arguments.get("apply", False)),
+        imported_feedback_output=arguments.get("imported_feedback_output"),
+        provider=provider,
+        max_supervised_iterations=int(arguments.get("max_supervised_iterations", 1)),
+        require_compile=bool(arguments.get("require_compile", False)),
+        quality_mode=arguments.get("quality_mode", "claim_safe"),
+        max_iterations=int(arguments.get("max_iterations", 10)),
+        require_live_verification=bool(arguments.get("require_live_verification", False)),
+        accept_mixed_provenance=bool(arguments.get("accept_mixed_provenance", False)),
+        runtime_mode=arguments.get("runtime_mode", "compatibility"),
+        citation_evidence_mode=arguments.get("citation_evidence_mode", "web"),
+        citation_provider_name=arguments.get("citation_provider"),
+        citation_provider_command=arguments.get("citation_provider_command"),
+    )
+    return _ok(payload)
 
 
 def tool_export_results(arguments: JSON) -> JSON:

@@ -23,6 +23,7 @@ from .environment import build_environment_inventory
 from .fidelity import write_reproducibility_audit
 from .first_user_guide import build_first_user_guide, render_first_user_guide_summary
 from .fresh_smoke_acceptance import write_fresh_smoke_acceptance_summary
+from .human_needed import record_human_needed_answer
 from .io_utils import write_json
 from .eval import (
     write_review_gate_comparison,
@@ -179,8 +180,27 @@ def build_parser() -> argparse.ArgumentParser:
     first_use_parser.add_argument("--mcp-attached", default="unknown", choices=["yes", "no", "unknown"], help="Whether the current Codex session exposes native PaperOrchestra MCP tools")
     first_use_parser.add_argument("--json", action="store_true")
 
-    answer_human_needed_parser = sub.add_parser("answer-human-needed", help="Record a bounded answer for a human_needed stop (skeleton)")
+    answer_human_needed_parser = sub.add_parser("answer-human-needed", help="Record a bounded, hash-bound answer for a human_needed stop")
     answer_human_needed_parser.add_argument("--answer", required=True)
+    answer_human_needed_parser.add_argument("--packet")
+    answer_human_needed_parser.add_argument("--review-scope", choices=["pdf_and_tex", "tex_only"])
+    answer_human_needed_parser.add_argument("--intent", choices=["approve_existing_candidate", "generate_new_operator_candidate", "reject_candidate_with_reason"])
+    answer_human_needed_parser.add_argument("--action-id")
+    answer_human_needed_parser.add_argument("--output-answer")
+    answer_human_needed_parser.add_argument("--output-feedback")
+    answer_human_needed_parser.add_argument("--redacted-answer-only", action="store_true")
+    answer_human_needed_parser.add_argument("--apply", action="store_true")
+    answer_human_needed_parser.add_argument("--imported-feedback-output")
+    answer_human_needed_parser.add_argument("--max-supervised-iterations", type=int, default=1)
+    answer_human_needed_parser.add_argument("--quality-mode", default="claim_safe", choices=["draft", "ralph", "claim_safe"])
+    answer_human_needed_parser.add_argument("--max-iterations", type=int, default=10)
+    answer_human_needed_parser.add_argument("--require-live-verification", action="store_true")
+    answer_human_needed_parser.add_argument("--accept-mixed-provenance", action="store_true")
+    answer_human_needed_parser.add_argument("--require-compile", action="store_true")
+    answer_human_needed_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web"])
+    _runtime_mode_args(answer_human_needed_parser, strict_flag=True)
+    _common_provider_args(answer_human_needed_parser)
+    _citation_provider_args(answer_human_needed_parser)
     answer_human_needed_parser.add_argument("--json", action="store_true")
 
     export_parser = sub.add_parser("export-artifacts", help="Copy the current session's main outputs to an easy-to-share directory")
@@ -968,13 +988,32 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "answer-human-needed":
-            state = orchestrator_inspect_state(cwd)
-            payload = {
-                "execution": "answer_recorded_for_re_adjudication",
-                "answer": "redacted" if args.answer else "missing",
-                "state": state.to_public_dict(),
-                "next_actions": [{"action_type": "re_adjudicate", "reason": "human_needed_answer_received"}],
-            }
+            provider = _provider_from_args(args) if args.apply else None
+            with _strict_omx_env(args.strict_omx_native):
+                payload = record_human_needed_answer(
+                    cwd,
+                    args.answer,
+                    packet_path=args.packet,
+                    review_scope=args.review_scope,
+                    intent=args.intent,
+                    action_id=args.action_id,
+                    output_answer=args.output_answer,
+                    output_feedback=args.output_feedback,
+                    redacted_answer_only=args.redacted_answer_only,
+                    apply=args.apply,
+                    imported_feedback_output=args.imported_feedback_output,
+                    provider=provider,
+                    max_supervised_iterations=args.max_supervised_iterations,
+                    require_compile=args.require_compile,
+                    quality_mode=args.quality_mode,
+                    max_iterations=args.max_iterations,
+                    require_live_verification=args.require_live_verification,
+                    accept_mixed_provenance=args.accept_mixed_provenance,
+                    runtime_mode=args.runtime_mode,
+                    citation_evidence_mode=args.citation_evidence_mode,
+                    citation_provider_name=args.citation_provider,
+                    citation_provider_command=args.citation_provider_command,
+                )
             _print_orchestrator_payload(payload, json_output=args.json)
             return 0
 
