@@ -93,6 +93,41 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
 
             self.assertEqual(actionable_candidate_approval_role(packet), "operator_feedback_execution")
 
+    def test_actionable_candidate_approval_ignores_nested_rolled_back_hard_gate_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            execution_path = root / "operator_feedback.execution.json"
+            execution_path.write_text(
+                json.dumps(
+                    {
+                        "promotion_status": "rolled_back",
+                        "attempts": [
+                            {
+                                "gate_reasons": [
+                                    "tier2_claim_safety_new_failures",
+                                    "active_tier2_metric_regression",
+                                ],
+                                "new_tier2_failures": ["citation_duplicate_support"],
+                            }
+                        ],
+                        "candidate_result": {
+                            "candidate_approval": {
+                                "status": "human_needed_candidate_ready",
+                                "candidate_sha256": "sha256:candidate456",
+                            },
+                            "candidate_progress": {"forward_progress": True},
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            packet = {
+                "manuscript_sha256": "base123",
+                "artifacts": [{"role": "operator_feedback_execution", "path": str(execution_path)}],
+            }
+
+            self.assertIsNone(actionable_candidate_approval_role(packet))
+
     def test_actionable_candidate_approval_detects_unpromoted_qa_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
