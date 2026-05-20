@@ -84,6 +84,7 @@ from paperorchestra.pipeline import (
     _compact_citation_map_for_prompt,
     _drop_unknown_citation_keys,
     _ensure_bibliography_hook,
+    _filter_plot_context_for_latex,
     _ensure_generated_plot_usage,
     _ensure_minimum_citation_coverage,
     _remove_material_packet_sections,
@@ -214,4 +215,3 @@ class PipelineTestCase(unittest.TestCase):
 
 
 __all__ = [name for name in globals() if not name.startswith("__")]
-

@@ -64,6 +64,114 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
         self.assertEqual(density_actions[0]["approval_required_from"], "citation_integrity_critic")
         self.assertIn("repeated support", density_actions[0]["ralph_instruction"])
 
+    def test_qa_loop_plan_surfaces_figure_grounding_failures_as_human_needed(self) -> None:
+        quality_eval = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "status": "fail",
+                    "checks": {
+                        "figure_grounding": {
+                            "status": "fail",
+                            "path": "/tmp/figure-placement-review.json",
+                            "failing_codes": [
+                                "nontechnical_visual_asset_in_body",
+                                "figure_caption_plot_purpose_mismatch",
+                            ],
+                            "figures": [
+                                {
+                                    "label": "fig:latency",
+                                    "section_title": "Results",
+                                    "failing_codes": ["figure_caption_plot_purpose_mismatch"],
+                                    "included_assets": ["fig_latency_breakdown.tex"],
+                                    "nearby_reference_context": "Figure compares latency across workloads.",
+                                    "plot_manifest_match": {"title": "Latency breakdown", "purpose": "Compare latency."},
+                                },
+                                {
+                                    "label": "fig:bio",
+                                    "section_title": "Background",
+                                    "failing_codes": ["nontechnical_visual_asset_in_body"],
+                                },
+                            ],
+                        }
+                    },
+                }
+            }
+        }
+
+        actions = _quality_eval_actions(quality_eval)
+
+        figure_actions = [action for action in actions if str(action.get("code")).startswith("figure_") or action.get("code") == "nontechnical_visual_asset_in_body"]
+        self.assertEqual({action["code"] for action in figure_actions}, {"nontechnical_visual_asset_in_body", "figure_caption_plot_purpose_mismatch"})
+        self.assertTrue(all(action["automation"] == "human_needed" for action in figure_actions))
+        self.assertTrue(all(action["approval_required_from"] == "figure_placement_review_critic" for action in figure_actions))
+        latency_action = next(action for action in figure_actions if action["code"] == "figure_caption_plot_purpose_mismatch")
+        self.assertIn("fig:latency", latency_action["target"])
+        self.assertIn("fig_latency_breakdown.tex", latency_action["reason"])
+        self.assertIn("Compare latency", latency_action["reason"])
+        verdict, reason = _plan_verdict(quality_eval, actions, accept_mixed_provenance=False)
+        self.assertEqual(verdict, "human_needed")
+        self.assertIn("human", reason)
+
+    def test_unsafe_figure_codes_are_not_supported_automatic_handlers(self) -> None:
+        from paperorchestra.quality_loop_policy import QA_LOOP_SUPPORTED_HANDLER_CODES
+
+        unsafe_codes = {
+            "nontechnical_visual_asset_in_body",
+            "figure_caption_process_or_placeholder",
+            "figure_reference_context_missing",
+            "figure_caption_plot_purpose_mismatch",
+        }
+
+        self.assertTrue(unsafe_codes.isdisjoint(QA_LOOP_SUPPORTED_HANDLER_CODES))
+
+    def test_selected_section_plot_context_filter_preserves_referenced_figures(self) -> None:
+        section_text = (
+            "\\section{Results}\n"
+            "Figure~\\cref{fig:latency} compares latency across workloads.\n"
+            "\\begin{figure}[t]\n"
+            "\\input{fig_latency_breakdown.tex}\n"
+            "\\caption{Latency breakdown across workloads.}\n"
+            "\\label{fig:latency}\n"
+            "\\end{figure}\n"
+        )
+        manifest = {
+            "figures": [
+                {"figure_id": "fig:latency", "title": "Latency breakdown"},
+                {"figure_id": "fig:memory", "title": "Memory footprint"},
+            ]
+        }
+        assets = {
+            "assets": [
+                {"figure_id": "fig:latency", "latex_snippet_path": "fig_latency_breakdown.tex"},
+                {"figure_id": "fig:memory", "latex_snippet_path": "fig_memory.tex"},
+            ]
+        }
+
+        scoped_manifest, scoped_assets = _filter_plot_context_for_latex(section_text, manifest, assets)
+
+        self.assertEqual([item["figure_id"] for item in scoped_manifest["figures"]], ["fig:latency"])
+        self.assertEqual([item["figure_id"] for item in scoped_assets["assets"]], ["fig:latency"])
+
+    def test_selected_section_plot_context_filter_handles_multi_cref_and_normalized_ids(self) -> None:
+        section_text = "\\section{Results}\nFigure~\\cref{fig:latency-breakdown,fig:memory} compares both views.\n"
+        manifest = {
+            "figures": [
+                {"figure_id": "fig_latency_breakdown", "title": "Latency breakdown"},
+                {"figure_id": "fig:memory", "title": "Memory footprint"},
+            ]
+        }
+        assets = {
+            "assets": [
+                {"figure_id": "fig_latency_breakdown", "latex_snippet_path": "fig_latency_breakdown.tex"},
+                {"figure_id": "fig:memory", "latex_snippet_path": "fig_memory.tex"},
+            ]
+        }
+
+        scoped_manifest, scoped_assets = _filter_plot_context_for_latex(section_text, manifest, assets)
+
+        self.assertEqual({item["figure_id"] for item in scoped_manifest["figures"]}, {"fig_latency_breakdown", "fig:memory"})
+        self.assertEqual({item["figure_id"] for item in scoped_assets["assets"]}, {"fig_latency_breakdown", "fig:memory"})
+
     def test_qa_loop_plan_continues_for_supported_citation_density_repair(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

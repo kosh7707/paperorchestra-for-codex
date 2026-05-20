@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from paperorchestra.fresh_smoke import normalize_operator_feedback_draft
+from paperorchestra.fidelity import _strict_content_gate_issues
 from paperorchestra.models import InputBundle
 from paperorchestra.narrative import write_planning_artifacts
 from paperorchestra.operator_feedback import (
@@ -93,6 +94,35 @@ def test_figure_issue_context_exposes_atomic_caption_and_asset_failures() -> Non
     assert "Remove or quarantine" in context[0]["suggested_fix"]
 
 
+def test_figure_issue_context_exposes_asset_reference_and_manifest_context() -> None:
+    payload = {
+        "schema_version": "figure-placement-review/1",
+        "status": "fail",
+        "figures": [
+            {
+                "label": "fig:latency",
+                "section_title": "Results",
+                "caption": "Author biography profile photograph.",
+                "included_assets": ["fig_latency_breakdown.tex"],
+                "nearby_reference_context": "Figure~\\cref{fig:latency} compares latency across workloads.",
+                "plot_manifest_match": {
+                    "figure_id": "fig:latency",
+                    "title": "Latency breakdown",
+                    "purpose": "Compare request latency across workload stages.",
+                },
+                "failing_codes": ["figure_caption_plot_purpose_mismatch"],
+                "warning_codes": [],
+            }
+        ],
+    }
+
+    context = _figure_issue_context(payload)
+
+    assert context[0]["included_assets"] == ["fig_latency_breakdown.tex"]
+    assert "compares latency" in context[0]["nearby_reference_context"]
+    assert context[0]["plot_manifest_match"]["purpose"] == "Compare request latency across workload stages."
+
+
 def _init_packet_session(root: Path, latex: str):
     for name, content in {
         "idea.md": "# Idea\n",
@@ -156,6 +186,41 @@ def test_operator_review_packet_includes_current_bound_figure_placement_review()
         assert figure_records[0]["sha256"] == hashlib.sha256(figure_path.read_bytes()).hexdigest()
         frozen_payload = json.loads(Path(figure_records[0]["path"]).read_text(encoding="utf-8"))
         assert frozen_payload["manuscript_sha256"] == figure_payload["manuscript_sha256"]
+
+
+def test_strict_content_gate_surfaces_figure_failures() -> None:
+    latex = "\\documentclass{article}\n\\begin{document}\nBody.\n\\end{document}\n"
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        state = _init_packet_session(root, latex)
+        paper = Path(state.artifacts.paper_full_tex)
+        figure_path = artifact_path(root, "figure-placement-review.json")
+        figure_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "figure-placement-review/1",
+                    "status": "fail",
+                    "manuscript_sha256": hashlib.sha256(paper.read_bytes()).hexdigest(),
+                    "failures": [
+                        {
+                            "code": "figure_caption_process_or_placeholder",
+                            "message": "fig:bad: Caption contains process text.",
+                        }
+                    ],
+                    "warnings": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        state.artifacts.latest_figure_placement_review_json = str(figure_path)
+        save_session(root, state)
+
+        issues = _strict_content_gate_issues(load_session(root), artifact_path(root, "x").parent)
+
+    figure_issues = [issue for issue in issues if issue.get("kind") == "figure_placement_failure"]
+    assert figure_issues
+    assert figure_issues[0]["code"] == "figure_caption_process_or_placeholder"
+    assert figure_issues[0]["severity"] == "error"
 
 
 def test_operator_review_packet_omits_unbound_or_stale_figure_placement_review() -> None:

@@ -411,12 +411,26 @@ def _figure_grounding_check(state: Any) -> dict[str, Any]:
     status = str(payload.get("status") or "pass").strip().lower()
     failing_codes = sorted(dict.fromkeys(str(code) for code in payload.get("failing_codes") or [] if str(code).strip()))
     warning_codes = sorted(dict.fromkeys(str(code) for code in payload.get("warning_codes") or [] if str(code).strip()))
+    issue_figures = [
+        {
+            "label": str(item.get("label") or ""),
+            "section_title": str(item.get("section_title") or ""),
+            "failing_codes": [str(code) for code in item.get("failing_codes") or [] if str(code).strip()],
+            "warning_codes": [str(code) for code in item.get("warning_codes") or [] if str(code).strip()],
+            "included_assets": [str(asset) for asset in item.get("included_assets") or [] if str(asset).strip()],
+            "nearby_reference_context": str(item.get("nearby_reference_context") or "")[:500],
+            "plot_manifest_match": item.get("plot_manifest_match") if isinstance(item.get("plot_manifest_match"), dict) else None,
+        }
+        for item in payload.get("figures") or []
+        if isinstance(item, dict) and (item.get("failing_codes") or item.get("warning_codes"))
+    ]
     return {
         "status": "fail" if failing_codes or status in {"fail", "failed", "block", "blocked"} else "warn" if warning_codes or status in {"warn", "warning"} else "pass",
         "failing_codes": failing_codes,
         "warning_codes": warning_codes,
         "path": path,
         "artifact_status": status,
+        "figures": issue_figures,
     }
 
 

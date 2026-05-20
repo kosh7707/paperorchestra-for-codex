@@ -1041,6 +1041,22 @@ def _strict_content_gate_issues(state, session_artifact_dir: Path | None) -> lis
                 }
             )
             continue
+        for failure in payload.get("failures") or []:
+            if not isinstance(failure, dict):
+                continue
+            code = failure.get("code")
+            if not code:
+                continue
+            issues.append(
+                {
+                    "source": str(path),
+                    "stage": "figure_placement",
+                    "kind": "figure_placement_failure",
+                    "code": code,
+                    "message": failure.get("message"),
+                    "severity": "error",
+                }
+            )
         for warning in payload.get("warnings") or []:
             if not isinstance(warning, dict):
                 continue

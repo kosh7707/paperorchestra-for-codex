@@ -74,6 +74,13 @@ from .providers import CompletionRequest, BaseProvider, ShellProvider
 from .session import artifact_path, build_path, load_session, review_path, runtime_root, save_session
 
 
+def _normalize_plot_context_key(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    text = re.sub(r"^fig(?:ure)?[:_\-\s]+", "", text)
+    text = Path(text).stem if "/" in text or "\\" in text or "." in Path(text).name else text
+    return re.sub(r"[^a-z0-9]+", "", text)
+
+
 class ContractError(ValueError):
     pass
 
@@ -801,6 +808,48 @@ def _reviewable_plot_manifest(plot_manifest: dict[str, Any] | None, plot_assets_
             if not (isinstance(figure, dict) and str(figure.get("figure_id") or "") in placeholder_ids)
         ],
     }
+
+
+def _filter_plot_context_for_latex(
+    latex: str | None,
+    plot_manifest: dict[str, Any],
+    plot_assets_index: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if not latex:
+        return {"figures": []}, {"assets": []}
+    raw_refs: set[str] = set()
+    for group in re.findall(r"\\(?:ref|autoref|cref|Cref|prettyref)\*?(?:\[[^\]]*\]){0,2}\{([^}]+)\}", latex):
+        raw_refs.update(part.strip() for part in group.split(",") if part.strip())
+    raw_refs.update(token for token in re.findall(r"\\label\{([^}]+)\}", latex))
+    referenced_tokens = {_normalize_plot_context_key(token) for token in raw_refs}
+    included_raw = re.findall(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}", latex)
+    included_raw.extend(re.findall(r"\\input\{([^}]+)\}", latex))
+    included = {_normalize_plot_context_key(token) for token in included_raw}
+    asset_matches: list[dict[str, Any]] = []
+    figure_ids: set[str] = set()
+    for asset in plot_assets_index.get("assets", []) if isinstance(plot_assets_index, dict) else []:
+        if not isinstance(asset, dict):
+            continue
+        asset_names = {
+            _normalize_plot_context_key(asset.get(field))
+            for field in ("filename", "latex_path", "latex_snippet_path")
+            if asset.get(field)
+        }
+        fid = str(asset.get("figure_id") or "")
+        fid_key = _normalize_plot_context_key(fid)
+        if included & asset_names or (fid_key and fid_key in referenced_tokens):
+            asset_matches.append(asset)
+            if fid:
+                figure_ids.add(fid_key)
+    figure_matches = []
+    for figure in plot_manifest.get("figures", []) if isinstance(plot_manifest, dict) else []:
+        if not isinstance(figure, dict):
+            continue
+        fid = str(figure.get("figure_id") or "")
+        fid_key = _normalize_plot_context_key(fid)
+        if fid and (fid_key in figure_ids or fid_key in referenced_tokens or fid.lower() in latex.lower()):
+            figure_matches.append(figure)
+    return {**plot_manifest, "figures": figure_matches}, {**plot_assets_index, "assets": asset_matches}
 
 
 def _ensure_generated_plot_usage(latex: str, plot_assets_index: dict[str, Any]) -> str:
@@ -2067,11 +2116,17 @@ def write_figure_placement_review(
         raise ContractError("Need paper.full.tex before figure-placement review.")
     manuscript_path = Path(state.artifacts.paper_full_tex).resolve()
     source_latex = read_text(state.inputs.template_path) if state.inputs.template_path and Path(state.inputs.template_path).exists() else None
+    raw_plot_manifest = read_json(state.artifacts.plot_manifest_json) if state.artifacts.plot_manifest_json else {"figures": []}
+    raw_plot_assets_index = read_json(state.artifacts.plot_assets_json) if state.artifacts.plot_assets_json else {"assets": []}
+    plot_manifest = _reviewable_plot_manifest(raw_plot_manifest, raw_plot_assets_index)
+    plot_assets_index = _reviewable_plot_assets_index(raw_plot_assets_index)
     payload = build_figure_placement_review(
         manuscript_path.read_text(encoding="utf-8"),
         source_latex=source_latex,
         manuscript_path=str(manuscript_path),
         pdf_path=state.artifacts.compiled_pdf,
+        plot_manifest=plot_manifest,
+        plot_assets_index=plot_assets_index,
     )
     payload["generated_at"] = utc_now_iso()
     payload["manuscript_sha256"] = hashlib.sha256(manuscript_path.read_bytes()).hexdigest()
@@ -3276,8 +3331,14 @@ def write_sections(
     raw_plot_assets_index = read_json(state.artifacts.plot_assets_json) if state.artifacts.plot_assets_json else {"assets": []}
     plot_assets_index = _reviewable_plot_assets_index(raw_plot_assets_index)
     plot_manifest = _reviewable_plot_manifest(raw_plot_manifest, raw_plot_assets_index)
-    prompt_plot_manifest = {"figures": []} if selected_sections else _compact_plot_manifest_for_prompt(plot_manifest)
-    prompt_plot_assets_index = {"assets": []} if selected_sections else _compact_plot_assets_for_prompt(plot_assets_index)
+    selected_section_source = _selected_section_template(current_source, selected_sections) if selected_sections and current_source is not None else None
+    scoped_plot_manifest, scoped_plot_assets_index = (
+        _filter_plot_context_for_latex(selected_section_source, plot_manifest, plot_assets_index)
+        if selected_sections
+        else (plot_manifest, plot_assets_index)
+    )
+    prompt_plot_manifest = _compact_plot_manifest_for_prompt(scoped_plot_manifest)
+    prompt_plot_assets_index = _compact_plot_assets_for_prompt(scoped_plot_assets_index)
     expected_section_titles = (
         selected_sections
         if selected_sections
@@ -3409,8 +3470,8 @@ def write_sections(
         validation_subject,
         citation_map=citation_map,
         figures_dir=state.inputs.figures_dir,
-        plot_manifest=None if selected_sections else plot_manifest,
-        plot_assets_index=plot_assets_index,
+        plot_manifest=scoped_plot_manifest if selected_sections else plot_manifest,
+        plot_assets_index=scoped_plot_assets_index if selected_sections else plot_assets_index,
         experimental_log_text=_source_grounding_text(inputs),
         expected_section_titles=expected_section_titles,
         narrative_plan=narrative_plan,
@@ -3493,8 +3554,8 @@ Repair Instructions:
             retry_validation_subject,
             citation_map=citation_map,
             figures_dir=state.inputs.figures_dir,
-            plot_manifest=None if selected_sections else plot_manifest,
-            plot_assets_index=plot_assets_index,
+            plot_manifest=scoped_plot_manifest if selected_sections else plot_manifest,
+            plot_assets_index=scoped_plot_assets_index if selected_sections else plot_assets_index,
             experimental_log_text=_source_grounding_text(inputs),
             expected_section_titles=expected_section_titles,
             narrative_plan=narrative_plan,
@@ -3520,8 +3581,8 @@ Repair Instructions:
                     retry_validation_subject,
                     citation_map=citation_map,
                     figures_dir=state.inputs.figures_dir,
-                    plot_manifest=None if selected_sections else plot_manifest,
-                    plot_assets_index=plot_assets_index,
+                    plot_manifest=scoped_plot_manifest if selected_sections else plot_manifest,
+                    plot_assets_index=scoped_plot_assets_index if selected_sections else plot_assets_index,
                     experimental_log_text=_source_grounding_text(inputs),
                     expected_section_titles=expected_section_titles,
                     narrative_plan=narrative_plan,
@@ -3565,8 +3626,8 @@ Repair Instructions:
                 retry_validation_subject,
                 citation_map=citation_map,
                 figures_dir=state.inputs.figures_dir,
-                plot_manifest=None if selected_sections else plot_manifest,
-                plot_assets_index=plot_assets_index,
+                plot_manifest=scoped_plot_manifest if selected_sections else plot_manifest,
+                plot_assets_index=scoped_plot_assets_index if selected_sections else plot_assets_index,
                 experimental_log_text=_source_grounding_text(inputs),
                 expected_section_titles=expected_section_titles,
                 narrative_plan=narrative_plan,

@@ -553,6 +553,201 @@ class OutlineValidationTests(unittest.TestCase):
         self.assertEqual(payload["failing_codes"], [])
         self.assertNotIn("nontechnical_visual_asset_in_body", payload["failing_codes"])
 
+    def test_build_figure_placement_review_blocks_author_biography_visuals(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Results}\n"
+            "Figure~\\autoref{fig:bio} introduces the paper context.\n"
+            "\\begin{figure}[t]\n"
+            "\\includegraphics[width=0.6\\linewidth]{team_profile_photo.png}\n"
+            "\\caption{Author biography profile photograph for the project team.}\n"
+            "\\label{fig:bio}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+
+        payload = build_figure_placement_review(latex)
+
+        self.assertEqual(payload["status"], "fail")
+        self.assertIn("nontechnical_visual_asset_in_body", payload["failing_codes"])
+        self.assertIn("figure_caption_process_or_placeholder", payload["failing_codes"])
+
+    def test_build_figure_placement_review_matches_plot_manifest_and_blocks_unrelated_caption(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Results}\n"
+            "Figure~\\cref{fig:latency} compares latency across workloads.\n"
+            "\\begin{figure}[t]\n"
+            "\\input{fig_latency_breakdown.tex}\n"
+            "\\caption{Author biography profile photograph for the project team.}\n"
+            "\\label{fig:latency}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+        manifest = {
+            "figures": [
+                {
+                    "figure_id": "fig:latency",
+                    "title": "Latency breakdown",
+                    "purpose": "Compare request latency across workload stages.",
+                    "caption": "Latency breakdown across workloads.",
+                }
+            ]
+        }
+        assets = {"assets": [{"figure_id": "fig:latency", "latex_snippet_path": "fig_latency_breakdown.tex"}]}
+
+        payload = build_figure_placement_review(latex, plot_manifest=manifest, plot_assets_index=assets)
+
+        self.assertIn("figure_caption_plot_purpose_mismatch", payload["failing_codes"])
+        figure = payload["figures"][0]
+        self.assertEqual(figure["plot_manifest_match"]["figure_id"], "fig:latency")
+        self.assertIn("compares latency", figure["nearby_reference_context"])
+        self.assertEqual(figure["included_assets"], ["fig_latency_breakdown.tex"])
+
+    def test_build_figure_placement_review_prefers_asset_match_over_conflicting_label(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Results}\n"
+            "Figure~\\cref{fig:wrong} compares latency across workloads.\n"
+            "\\begin{figure}[t]\n"
+            "\\input{fig_latency_breakdown.tex}\n"
+            "\\caption{Latency breakdown across workloads.}\n"
+            "\\label{fig:wrong}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+        manifest = {"figures": [{"figure_id": "fig:latency"}, {"figure_id": "fig:wrong"}]}
+        assets = {"assets": [{"figure_id": "fig:latency", "latex_snippet_path": "fig_latency_breakdown.tex"}]}
+
+        payload = build_figure_placement_review(latex, plot_manifest=manifest, plot_assets_index=assets)
+
+        self.assertEqual(payload["figures"][0]["plot_manifest_match"]["status"], "matched")
+        self.assertEqual(payload["figures"][0]["plot_manifest_match"]["figure_id"], "fig:latency")
+        self.assertNotIn("figure_plot_manifest_match_ambiguous", payload["warning_codes"])
+
+    def test_build_figure_placement_review_blocks_workflow_process_caption_for_manifest_plot(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Results}\n"
+            "Figure~\\cref{fig:latency} compares latency across workloads.\n"
+            "\\begin{figure}[t]\n"
+            "\\input{fig_latency_breakdown.tex}\n"
+            "\\caption{Workflow diagram for the orchestration process.}\n"
+            "\\label{fig:latency}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+        manifest = {"figures": [{"figure_id": "fig:latency", "title": "Latency breakdown", "purpose": "Compare request latency across workload stages."}]}
+        assets = {"assets": [{"figure_id": "fig:latency", "latex_snippet_path": "fig_latency_breakdown.tex"}]}
+
+        payload = build_figure_placement_review(latex, plot_manifest=manifest, plot_assets_index=assets)
+
+        self.assertIn("figure_caption_plot_purpose_mismatch", payload["failing_codes"])
+
+    def test_build_figure_placement_review_blocks_process_caption_even_with_one_topic_overlap(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Results}\n"
+            "Figure~\\cref{fig:latency} compares latency across workloads.\n"
+            "\\begin{figure}[t]\n"
+            "\\input{fig_latency_breakdown.tex}\n"
+            "\\caption{Latency workflow diagram for the orchestration process.}\n"
+            "\\label{fig:latency}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+        manifest = {"figures": [{"figure_id": "fig:latency", "title": "Latency breakdown", "purpose": "Compare request latency across workload stages."}]}
+        assets = {"assets": [{"figure_id": "fig:latency", "latex_snippet_path": "fig_latency_breakdown.tex"}]}
+
+        payload = build_figure_placement_review(latex, plot_manifest=manifest, plot_assets_index=assets)
+
+        self.assertIn("figure_caption_plot_purpose_mismatch", payload["failing_codes"])
+
+    def test_build_figure_placement_review_blocks_short_process_caption_with_topic_overlap(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Results}\n"
+            "Figure~\\cref{fig:latency} compares latency across workloads.\n"
+            "\\begin{figure}[t]\n"
+            "\\input{fig_latency_breakdown.tex}\n"
+            "\\caption{Latency workflow.}\n"
+            "\\label{fig:latency}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+        manifest = {"figures": [{"figure_id": "fig:latency", "title": "Latency breakdown", "purpose": "Compare request latency across workload stages."}]}
+        assets = {"assets": [{"figure_id": "fig:latency", "latex_snippet_path": "fig_latency_breakdown.tex"}]}
+
+        payload = build_figure_placement_review(latex, plot_manifest=manifest, plot_assets_index=assets)
+
+        self.assertIn("figure_caption_plot_purpose_mismatch", payload["failing_codes"])
+
+    def test_build_figure_placement_review_handles_multi_label_cref(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Results}\n"
+            "Figure~\\cref{fig:latency,fig:memory} compares latency and memory behavior.\n"
+            "\\begin{figure}[t]\n"
+            "\\input{fig_latency_breakdown.tex}\n"
+            "\\caption{Latency breakdown across workloads.}\n"
+            "\\label{fig:latency}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+
+        payload = build_figure_placement_review(latex)
+
+        self.assertNotIn("figure_unreferenced", payload["warning_codes"])
+        self.assertIn("latency and memory", payload["figures"][0]["nearby_reference_context"])
+
+    def test_build_figure_placement_review_does_not_fail_synonym_only_technical_caption(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Results}\n"
+            "Figure~\\Cref{fig:throughput} reports service capacity trends.\n"
+            "\\begin{figure}[t]\n"
+            "\\input{fig_throughput.tex}\n"
+            "\\caption{Service capacity trends under increasing load.}\n"
+            "\\label{fig:throughput}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+        manifest = {
+            "figures": [
+                {
+                    "figure_id": "fig:throughput",
+                    "title": "Request rate curve",
+                    "purpose": "Show transaction volume scaling as clients increase.",
+                    "caption": "Transaction volume scaling curve.",
+                }
+            ]
+        }
+        assets = {"assets": [{"figure_id": "fig:throughput", "latex_snippet_path": "fig_throughput.tex"}]}
+
+        payload = build_figure_placement_review(latex, plot_manifest=manifest, plot_assets_index=assets)
+
+        self.assertNotIn("figure_caption_plot_purpose_mismatch", payload["failing_codes"])
+
+    def test_build_figure_placement_review_warns_for_ambiguous_manifest_match(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Results}\n"
+            "Figure~\\prettyref{fig:shared} summarizes the evaluation.\n"
+            "\\begin{figure}[t]\n"
+            "\\input{fig_shared.tex}\n"
+            "\\caption{Evaluation summary.}\n"
+            "\\label{fig:shared}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+        manifest = {"figures": [{"figure_id": "fig:shared"}, {"figure_id": "figure-shared"}]}
+        assets = {"assets": [{"figure_id": "fig:shared", "latex_snippet_path": "fig_shared.tex"}]}
+
+        payload = build_figure_placement_review(latex, plot_manifest=manifest, plot_assets_index=assets)
+
+        self.assertNotIn("figure_caption_plot_purpose_mismatch", payload["failing_codes"])
+        self.assertIn("figure_plot_manifest_match_ambiguous", payload["warning_codes"])
+
 
 if __name__ == "__main__":
     unittest.main()

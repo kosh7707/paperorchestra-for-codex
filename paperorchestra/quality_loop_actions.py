@@ -201,7 +201,7 @@ def _strict_content_actions(reproducibility: dict[str, Any]) -> list[dict[str, A
             instruction = (
                 "Regenerate figure-placement review for the current manuscript before moving figures or rewriting figure references."
             )
-        elif kind == "figure_placement_warning":
+        elif kind in {"figure_placement_warning", "figure_placement_failure"}:
             automation = "human_needed"
             commands = [
                 "paperorchestra review-figure-placement",
@@ -209,9 +209,9 @@ def _strict_content_actions(reproducibility: dict[str, Any]) -> list[dict[str, A
                 "paperorchestra audit-reproducibility",
             ]
             instruction = (
-                "Prepare a targeted figure-layout decision for a human reviewer; do not auto-edit figure placement from the quality loop."
+                "Prepare a targeted figure-grounding decision for a human reviewer; do not auto-edit figure placement, captions, or visual evidence from the quality loop."
             )
-            why = "Figure placement changes affect narrative flow and layout taste; PaperOrchestra can flag them but cannot safely auto-commit final placement."
+            why = "Figure placement/caption changes affect narrative flow, visual evidence, and claim meaning; PaperOrchestra can flag them but cannot safely auto-commit final placement."
             approval = "figure_placement_review_critic"
         else:
             automation = _automation_for_issue(code)
@@ -430,13 +430,20 @@ def _figure_review_actions(state) -> list[dict[str, Any]]:
     for figure in payload.get("figures") or []:
         if not isinstance(figure, dict):
             continue
+        failing_codes = [str(code) for code in figure.get("failing_codes") or []]
         warning_codes = [str(code) for code in figure.get("warning_codes") or []]
-        actionable = [code for code in warning_codes if code in FIGURE_REPAIR_CODES or code in MANUAL_REVIEW_CODES]
+        actionable_failures = [code for code in failing_codes if code.strip()]
+        actionable_warnings = [code for code in warning_codes if code in FIGURE_REPAIR_CODES or code in MANUAL_REVIEW_CODES]
+        actionable = actionable_failures + actionable_warnings
         if not actionable:
             continue
         label = str(figure.get("label") or "unknown")
         section = figure.get("section_title") if isinstance(figure.get("section_title"), str) else None
+        included_assets = ", ".join(str(item) for item in figure.get("included_assets") or [] if str(item).strip())
+        manifest = figure.get("plot_manifest_match") if isinstance(figure.get("plot_manifest_match"), dict) else {}
+        context = str(figure.get("nearby_reference_context") or "").strip()
         for code in actionable:
+            is_failure = code in actionable_failures
             actions.append(
                 _action(
                     action_id=f"figure:{len(actions)+1}",
@@ -444,14 +451,25 @@ def _figure_review_actions(state) -> list[dict[str, Any]]:
                     source=state.artifacts.latest_figure_placement_review_json,
                     target=label,
                     automation="human_needed",
-                    reason=f"Figure {label} has placement warning {code}." + (f" Section: {section}." if section else ""),
+                    reason=(
+                        f"Figure {label} has {'grounding failure' if is_failure else 'placement warning'} {code}."
+                        + (f" Section: {section}." if section else "")
+                        + (f" Assets: {included_assets}." if included_assets else "")
+                        + (f" Nearby context: {context[:180]}." if context else "")
+                        + (f" Manifest purpose/title: {manifest.get('purpose') or manifest.get('title')}." if manifest else "")
+                    ),
                     suggested_commands=[
                         "paperorchestra review-figure-placement",
                         f"paperorchestra write-sections --only-sections {shlex.quote(section or 'Implementation Results')}",
                         "paperorchestra audit-reproducibility",
                     ],
-                    ralph_instruction="Stop automatic figure-layout editing and request human/critic review for figure redistribution, removal, or final artwork placement.",
-                    why_not_automatic="Figure placement changes affect narrative flow and layout taste; PaperOrchestra can flag them but cannot safely auto-commit final placement.",
+                    ralph_instruction=(
+                        "Stop automatic figure editing. Prepare a bounded figure-grounding decision: remove/quarantine nontechnical figures, "
+                        "rewrite process captions into scholarly captions, or ask the operator to supply final artwork."
+                        if is_failure
+                        else "Stop automatic figure-layout editing and request human/critic review for figure redistribution, removal, or final artwork placement."
+                    ),
+                    why_not_automatic="Figure placement and caption grounding affect narrative meaning and visual evidence; PaperOrchestra can flag them but cannot safely auto-commit final placement.",
                     approval_required_from="figure_placement_review_critic",
                 )
             )

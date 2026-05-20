@@ -721,6 +721,11 @@ def _figure_issue_context(payload: dict[str, Any] | None, *, limit: int = 12) ->
                 "failing_codes": failing,
                 "warning_codes": warnings,
                 "caption": _truncate_context_text(item.get("caption"), limit=500),
+                "included_assets": [str(asset) for asset in item.get("included_assets") or [] if str(asset).strip()],
+                "nearby_reference_context": _truncate_context_text(item.get("nearby_reference_context"), limit=500),
+                "plot_manifest_match": item.get("plot_manifest_match")
+                if isinstance(item.get("plot_manifest_match"), dict)
+                else None,
                 "suggested_fix": (
                     "Remove or quarantine nontechnical/decorative assets, replace placeholder or process captions "
                     "with scholarly figure content, and keep only figures that are referenced near the claims they support."
