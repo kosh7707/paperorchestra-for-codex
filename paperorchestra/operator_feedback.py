@@ -81,7 +81,6 @@ HUMAN_REVIEWABLE_NEW_TIER2_CODES = {
     "citation_support_manual_check",
 }
 OPERATOR_REFINEMENT_FORBIDDEN_NEW_TIER2_CODES = {
-    "citation_bomb_detected",
     "citation_duplicate_support",
     "citation_integrity_failed",
     "citation_integrity_audit_fail",
@@ -184,6 +183,16 @@ def build_operator_review_packet(
         ("qa_loop_execution", qa_execution_path),
         ("operator_feedback_execution", operator_execution_path),
         ("source_obligations", _first_existing(state.artifacts.source_obligations_json, artifact_path(cwd, "source_obligations.json"))),
+        (
+            "figure_placement_review",
+            _first_current_bound_existing(
+                "figure_placement_review",
+                manuscript_sha256,
+                state.artifacts.latest_figure_placement_review_json,
+                artifact_path(cwd, "figure-placement-review.json"),
+                artifact_path(cwd, "figure_placement_review.json"),
+            ),
+        ),
         ("ralph_brief", _first_existing(artifact_path(cwd, "ralph-brief.md"))),
         ("ralph_handoff", _first_existing(artifact_path(cwd, "ralph-handoff.json"))),
     ]:
@@ -585,10 +594,10 @@ def _operator_refinement_constraints(
         "forbidden_new_tier2_codes": sorted(OPERATOR_REFINEMENT_FORBIDDEN_NEW_TIER2_CODES),
         "hard_constraints": [
             "Use only bibliography keys already present in citation_map.json; do not add new bibliography keys.",
-            "Do not introduce new citation-bomb sentences or paragraphs.",
+            "Do not use dense citation bundles to hide weak support; split or role-clarify them when they obscure claim support.",
             "Do not introduce weak, unsupported, manual-check, metadata-only, or insufficient-evidence citation support.",
             "Do not introduce new high-risk uncited claims; scope, delete, or ground existing high-risk claims instead.",
-            "Reduce duplicate-support and citation-density issues; never make their counts worse.",
+            "Reduce duplicate-support and claim-support issues; never make their counts worse.",
         ],
     }
 
@@ -692,6 +701,36 @@ def _citation_density_context(payload: dict[str, Any] | None, *, limit: int = 16
             break
     return result
 
+
+def _figure_issue_context(payload: dict[str, Any] | None, *, limit: int = 12) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    result: list[dict[str, Any]] = []
+    for item in payload.get("figures") or []:
+        if not isinstance(item, dict):
+            continue
+        failing = [str(code) for code in item.get("failing_codes") or [] if str(code).strip()]
+        warnings = [str(code) for code in item.get("warning_codes") or [] if str(code).strip()]
+        if not failing and not warnings:
+            continue
+        result.append(
+            {
+                "issue_type": "figure_grounding",
+                "label": str(item.get("label") or ""),
+                "section_title": str(item.get("section_title") or ""),
+                "failing_codes": failing,
+                "warning_codes": warnings,
+                "caption": _truncate_context_text(item.get("caption"), limit=500),
+                "suggested_fix": (
+                    "Remove or quarantine nontechnical/decorative assets, replace placeholder or process captions "
+                    "with scholarly figure content, and keep only figures that are referenced near the claims they support."
+                ),
+            }
+        )
+        if len(result) >= limit:
+            break
+    return result
+
 def _operator_issue_context(imported: dict[str, Any], *, prior_attempts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """Attach concrete failing claim context to operator feedback for the writer.
 
@@ -710,17 +749,19 @@ def _operator_issue_context(imported: dict[str, Any], *, prior_attempts: list[di
     citation_review = _packet_payload_by_role(packet, "citation_support_review")
     quality_eval = _packet_payload_by_role(packet, "quality_eval")
     citation_integrity_audit = _packet_payload_by_role(packet, "citation_integrity_audit")
+    figure_placement_review = _packet_payload_by_role(packet, "figure_placement_review")
     prior_rejected_attempts = _compact_prior_rejected_attempts(prior_attempts)
     context = {
         "problematic_citation_items": _problematic_citation_context(citation_review),
         "high_risk_uncited_claims": _high_risk_claim_context(quality_eval),
         "citation_density_issues": _citation_density_context(citation_integrity_audit),
         "citation_duplicate_support_issues": _duplicate_support_context(citation_integrity_audit, citation_review),
+        "figure_placement_issues": _figure_issue_context(figure_placement_review),
         "refinement_constraints": _operator_refinement_constraints(quality_eval, citation_integrity_audit),
         "writer_instruction": (
             "Use these concrete sentences as the primary repair targets. Do not add new bibliography keys; "
             "either ground each sentence with existing directly supporting evidence, soften it into scoped author-material prose, or remove it. "
-            "A candidate that introduces new citation bombs, weak citation support, duplicate support, or high-risk uncited claims will be rejected."
+            "A candidate that uses dense citation bundles to hide weak support, weak citation support, duplicate support, or high-risk uncited claims will be rejected."
         ),
     }
     if prior_rejected_attempts:

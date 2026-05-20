@@ -66,6 +66,7 @@ FIGURE_ENV_RE = re.compile(r"\\begin\{(figure\*?)\}(?:\[([^\]]*)\])?(.*?)\\end\{
 CAPTION_RE = re.compile(r"\\caption\{([^}]*)\}")
 REF_RE = re.compile(r"\\ref\{([^}]+)\}")
 LABEL_RE = re.compile(r"\\label\{([^}]+)\}")
+INCLUDE_GRAPHICS_RE = re.compile(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}")
 CITE_COMMAND_RE = re.compile(
     r"(\\(?!nocite\b)(?:[A-Za-z]*cite[A-Za-z]*)\*?(?:\[[^\]]*\]){0,2})\{([^}]+)\}",
     re.IGNORECASE,
@@ -400,6 +401,48 @@ def _figure_warning(
     return FigurePlacementWarning(code=code, message=f"{subject}: {detail}")
 
 
+_NONTECHNICAL_VISUAL_STRONG_RE = re.compile(
+    r"\b(?:headshot|author[_\s-]*photo)\b",
+    re.IGNORECASE,
+)
+_NONTECHNICAL_VISUAL_CONTEXT_RE = re.compile(
+    r"\b(?:author|biograph(?:y|ical)|profile)\b.*\b(?:portrait|headshot|photo|avatar)\b|"
+    r"\b(?:portrait|headshot|photo|avatar)\b.*\b(?:author|biograph(?:y|ical)|profile)\b",
+    re.IGNORECASE,
+)
+_DECORATIVE_VISUAL_RE = re.compile(
+    r"\b(?:decorative|ornamental|visual\s+divider)\b",
+    re.IGNORECASE,
+)
+_PROCESS_CAPTION_RE = re.compile(
+    r"\b(?:supplied\s+visual\s+asset|not\s+evidence\s+for\s+(?:any\s+)?technical\s+claim|"
+    r"placeholder\s+(?:figure|image|asset|caption)|caption\s+intent|figure\s+prompt|"
+    r"rendering[_\s-]*brief|source[_\s-]*fidelity|author\s+biograph(?:y|ical)|author\s+photo)\b",
+    re.IGNORECASE,
+)
+
+
+def _included_asset_names(body: str) -> list[str]:
+    names = [match.group(1).strip() for match in INCLUDE_GRAPHICS_RE.finditer(body)]
+    names.extend(match.group(1).strip() for match in re.finditer(r"\\input\{([^}]+)\}", body))
+    return names
+
+
+def _body_figure_has_nontechnical_asset(body: str, caption: str) -> bool:
+    haystacks = [Path(name).stem.replace("-", " ").replace("_", " ") for name in _included_asset_names(body)]
+    haystacks.append(caption)
+    text = " ".join(haystacks)
+    return bool(
+        _NONTECHNICAL_VISUAL_STRONG_RE.search(text)
+        or _NONTECHNICAL_VISUAL_CONTEXT_RE.search(text)
+        or _DECORATIVE_VISUAL_RE.search(text)
+    )
+
+
+def _caption_has_process_or_placeholder_text(caption: str) -> bool:
+    return bool(_PROCESS_CAPTION_RE.search(caption or ""))
+
+
 def build_figure_placement_review(
     latex: str,
     *,
@@ -418,6 +461,7 @@ def build_figure_placement_review(
         bibliography_start = latex.find(r"\bibliography")
     figures: list[dict[str, Any]] = []
     warnings: list[FigurePlacementWarning] = []
+    failures: list[FigurePlacementWarning] = []
     tail_figures: list[int] = []
 
     for idx, match in enumerate(FIGURE_ENV_RE.finditer(latex), start=1):
@@ -442,6 +486,7 @@ def build_figure_placement_review(
         first_ref_line = _line_number(latex, first_ref.start()) if first_ref else None
         first_ref_distance_lines = start_line - first_ref_line if first_ref_line is not None else None
         figure_warnings: list[FigurePlacementWarning] = []
+        figure_failures: list[FigurePlacementWarning] = []
 
         if conclusion_start is not None and start >= conclusion_start:
             figure_warnings.append(
@@ -465,6 +510,26 @@ def build_figure_placement_review(
             figure_warnings.append(
                 _figure_warning("placement_hint_missing", label=label, detail="Figure environment has no placement specifier.")
             )
+        if label and not refs:
+            figure_warnings.append(
+                _figure_warning("figure_unreferenced", label=label, detail="Figure has a label but no textual reference.")
+            )
+        if _body_figure_has_nontechnical_asset(body, caption):
+            figure_failures.append(
+                _figure_warning(
+                    "nontechnical_visual_asset_in_body",
+                    label=label,
+                    detail="Figure appears to use an author/portrait/decorative asset in the manuscript body.",
+                )
+            )
+        if _caption_has_process_or_placeholder_text(caption):
+            figure_failures.append(
+                _figure_warning(
+                    "figure_caption_process_or_placeholder",
+                    label=label,
+                    detail="Caption contains process, placeholder, or non-evidence wording rather than scholarly figure content.",
+                )
+            )
         include_line = next((line for line in body.splitlines() if "\\includegraphics" in line or "\\input{" in line), "")
         if env == "figure*" and ("\\columnwidth" in include_line or "\\linewidth" in include_line):
             figure_warnings.append(
@@ -484,6 +549,7 @@ def build_figure_placement_review(
             )
 
         warnings.extend(figure_warnings)
+        failures.extend(figure_failures)
         figures.append(
             {
                 "label": label or f"unnamed_{idx}",
@@ -504,6 +570,7 @@ def build_figure_placement_review(
                     source_labels,
                     prefix=latex[max(0, start - 120) : start],
                 ),
+                "failing_codes": [failure.code for failure in figure_failures],
                 "warning_codes": [warning.code for warning in figure_warnings],
             }
         )
@@ -518,16 +585,24 @@ def build_figure_placement_review(
             warnings.append(warning)
             figures[index]["warning_codes"].append("tail_clump")
 
+    warning_codes = sorted({warning.code for warning in warnings})
+    failing_codes = sorted({failure.code for failure in failures})
     return {
+        "schema_version": "figure-placement-review/1",
+        "status": "fail" if failing_codes else "warn" if warning_codes else "pass",
+        "failing_codes": failing_codes,
+        "warning_codes": warning_codes,
         "manuscript_path": manuscript_path,
         "pdf_path": pdf_path,
         "generated_at": None,
         "figures": figures,
         "warnings": [warning.to_dict() for warning in warnings],
+        "failures": [failure.to_dict() for failure in failures],
         "summary": {
             "figure_count": len(figures),
             "warning_count": len(warnings),
             "warning_codes": sorted({warning.code for warning in warnings}),
+            "failing_codes": failing_codes,
         },
     }
 

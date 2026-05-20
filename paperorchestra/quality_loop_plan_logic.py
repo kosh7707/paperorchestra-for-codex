@@ -423,7 +423,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                         "paperorchestra review-citations --evidence-mode web",
                         "paperorchestra quality-eval --quality-mode claim_safe",
                     ],
-                    ralph_instruction="Produce a bounded citation-integrity repair candidate: split citation-bomb sentences, remove redundant repeated support, or scope claims while preserving citation-support critic approval.",
+                    ralph_instruction="Produce a bounded citation-integrity repair candidate: split dense citation bundles, remove redundant repeated support, or scope claims while preserving citation-support critic approval.",
                     why_not_automatic="Changing citation placement can alter claim support boundaries; the candidate must remain uncommitted until citation-integrity critic approval.",
                     approval_required_from="citation_integrity_critic",
                 )

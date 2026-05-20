@@ -375,6 +375,51 @@ def _ralph_evidence_check(cwd: str | Path | None, *, quality_mode: str = "ralph"
         "qa_loop_history_sha256": _file_sha256(history_path),
     }
 
+def _figure_grounding_check(state: Any) -> dict[str, Any]:
+    path = state.artifacts.latest_figure_placement_review_json
+    payload = _read_json_if_exists(path)
+    if not isinstance(payload, dict):
+        return {
+            "status": "skipped",
+            "reason": "figure_placement_review_missing_or_unreadable",
+            "failing_codes": [],
+            "warning_codes": [],
+        }
+    expected_manuscript_sha = _file_sha256(getattr(state.artifacts, "paper_full_tex", None))
+    actual_manuscript_sha = str(payload.get("manuscript_sha256") or payload.get("paper_full_tex_sha256") or "").strip()
+    if actual_manuscript_sha.startswith("sha256:"):
+        actual_manuscript_sha = actual_manuscript_sha.split("sha256:", 1)[1]
+    if expected_manuscript_sha and not actual_manuscript_sha:
+        return {
+            "status": "fail",
+            "failing_codes": ["figure_placement_review_unbound"],
+            "warning_codes": [],
+            "path": path,
+            "expected_manuscript_sha256": expected_manuscript_sha,
+            "artifact_status": str(payload.get("status") or "unknown").strip().lower(),
+        }
+    if expected_manuscript_sha and actual_manuscript_sha != expected_manuscript_sha:
+        return {
+            "status": "fail",
+            "failing_codes": ["figure_placement_review_stale"],
+            "warning_codes": [],
+            "path": path,
+            "expected_manuscript_sha256": expected_manuscript_sha,
+            "actual_manuscript_sha256": actual_manuscript_sha,
+            "artifact_status": str(payload.get("status") or "unknown").strip().lower(),
+        }
+    status = str(payload.get("status") or "pass").strip().lower()
+    failing_codes = sorted(dict.fromkeys(str(code) for code in payload.get("failing_codes") or [] if str(code).strip()))
+    warning_codes = sorted(dict.fromkeys(str(code) for code in payload.get("warning_codes") or [] if str(code).strip()))
+    return {
+        "status": "fail" if failing_codes or status in {"fail", "failed", "block", "blocked"} else "warn" if warning_codes or status in {"warn", "warning"} else "pass",
+        "failing_codes": failing_codes,
+        "warning_codes": warning_codes,
+        "path": path,
+        "artifact_status": status,
+    }
+
+
 def build_quality_eval(
     cwd: str | Path | None,
     *,
@@ -558,6 +603,7 @@ def build_quality_eval(
             citation_integrity = citation_integrity_check(cwd, state, quality_mode=mode)
             citation_quality = build_citation_quality_gate(cwd, quality_mode=mode)
             source_material = _source_material_fidelity_check(state)
+            figure_grounding = _figure_grounding_check(state)
             source_obligations = evaluate_source_obligations(cwd)
             high_risk_claims = _high_risk_claim_sweep(state, source_obligations)
             planning_satisfaction = _planning_satisfaction_check(state, planning_status)
@@ -568,6 +614,7 @@ def build_quality_eval(
             tier2_failing.extend(citation_support.get("failing_codes") or [])
             tier2_failing.extend(citation_integrity.get("failing_codes") or [])
             tier2_failing.extend(citation_quality.get("hard_gate_failures") or [])
+            tier2_failing.extend(figure_grounding.get("failing_codes") or [])
             tier2_failing.extend(ralph_evidence.get("failing_codes") or [])
             tier2_failing.extend(source_material.get("failing_codes") or [])
             tier2_failing.extend(source_obligations.get("failing_codes") or [])
@@ -592,6 +639,7 @@ def build_quality_eval(
                     "citation_support_critic": citation_support,
                     "citation_integrity_gate": citation_integrity,
                     "citation_quality_gate": citation_quality,
+                    "figure_grounding": figure_grounding,
                     "ralph_evidence": ralph_evidence,
                     "source_material_fidelity": source_material,
                     "source_obligations": source_obligations,

@@ -37,7 +37,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
         self.assertEqual(len(density_actions), 1)
         self.assertEqual(density_actions[0]["automation"], "semi_auto")
         self.assertEqual(density_actions[0]["approval_required_from"], "citation_integrity_critic")
-        self.assertIn("citation-bomb", density_actions[0]["ralph_instruction"])
+        self.assertIn("dense citation bundles", density_actions[0]["ralph_instruction"])
 
     def test_qa_loop_plan_surfaces_duplicate_support_as_executable_repair(self) -> None:
         quality_eval = {
@@ -634,7 +634,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertIn("citation_support_manual_check", constraints["forbidden_new_tier2_codes"])
             self.assertIn("citation_support_unsupported", constraints["forbidden_new_tier2_codes"])
             self.assertIn("citation_support_insufficient_evidence", constraints["forbidden_new_tier2_codes"])
-            self.assertTrue(any("Do not introduce new citation-bomb" in item for item in constraints["hard_constraints"]))
+            self.assertTrue(any("Do not use dense citation bundles to hide weak support" in item for item in constraints["hard_constraints"]))
 
     def test_operator_issue_context_ignores_missing_citation_density_artifact(self) -> None:
         from paperorchestra.operator_feedback import _operator_issue_context
@@ -3548,9 +3548,10 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
 
         self.assertIn("issue_context.citation_density_issues", prompt)
         self.assertIn("issue_context.citation_duplicate_support_issues", prompt)
+        self.assertIn("issue_context.figure_placement_issues", prompt)
         self.assertIn("issue_context.refinement_constraints", prompt)
         self.assertIn("do not add new bibliography keys", prompt.lower())
-        self.assertIn("do not introduce new citation bombs", prompt.lower())
+        self.assertIn("do not introduce new dense citation bundles", prompt.lower())
 
     def test_operator_feedback_cli_trio_smoke_runs_explicit_supervised_flow(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

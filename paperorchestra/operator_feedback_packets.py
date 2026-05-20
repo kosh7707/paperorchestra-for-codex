@@ -217,6 +217,8 @@ def _current_bound_execution_path(path: Path | None, *, role: str, current_manus
     if not isinstance(payload, dict):
         return path
     bound_sha = _artifact_bound_manuscript_sha(role, payload)
+    if role == "figure_placement_review" and bound_sha is None:
+        return None
     if bound_sha is not None and bound_sha != current_manuscript_sha256:
         return None
     return path
@@ -327,7 +329,13 @@ def _artifact_payload(record: dict[str, Any]) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 def _artifact_bound_manuscript_sha(role: str, payload: dict[str, Any]) -> str | None:
-    if role in {"citation_support_review", "section_review", "citation_integrity_audit", "citation_integrity_critic"}:
+    if role in {
+        "citation_support_review",
+        "section_review",
+        "citation_integrity_audit",
+        "citation_integrity_critic",
+        "figure_placement_review",
+    }:
         return _normalized_sha(payload.get("manuscript_sha256"))
     if role == "quality_eval":
         return _normalized_sha(payload.get("manuscript_hash"))
@@ -435,6 +443,7 @@ def _validate_operator_packet_artifact_bindings(
         "citation_support_review",
         "citation_integrity_audit",
         "citation_integrity_critic",
+        "figure_placement_review",
         "section_review",
     }:
         record = records_by_role.get(role)
@@ -445,7 +454,7 @@ def _validate_operator_packet_artifact_bindings(
             raise ContractError(f"operator review packet artifact is unreadable: {role}")
         bound_sha = _artifact_bound_manuscript_sha(role, payload)
         if bound_sha is None:
-            if role == "qa_loop_plan":
+            if role in {"qa_loop_plan", "figure_placement_review"}:
                 raise ContractError(f"operator review packet artifact lacks manuscript hash binding: {role}")
             continue
         if (

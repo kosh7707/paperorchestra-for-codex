@@ -115,6 +115,56 @@ def _entry_unknown_fields(entry: dict[str, Any]) -> list[str]:
     return fields
 
 
+_STABLE_REFERENCE_IDENTITY_FIELDS = {
+    "doi",
+    "url",
+    "eprint",
+    "archiveprefix",
+    "arxiv",
+    "pmid",
+    "pmcid",
+    "isbn",
+    "issn",
+    "howpublished",
+    "number",
+    "reportnumber",
+}
+_REFERENCE_IDENTITY_FALLBACK_FIELDS = {
+    "journal",
+    "booktitle",
+    "venue",
+    "publisher",
+    "institution",
+    "organization",
+    "school",
+    "series",
+}
+
+
+def _has_known_field(entry: dict[str, Any], fields: set[str]) -> bool:
+    for field in fields:
+        value = entry.get(field)
+        if value is not None and not _is_unknown_value(str(value)):
+            return True
+    return False
+
+
+def _entry_has_stable_identity(entry: dict[str, Any]) -> bool:
+    """Return whether a visible reference has enough identity to be auditable.
+
+    This is deliberately generic: DOI/URL/eprint-like fields are strongest,
+    while venue/publisher/organization/institution fields are acceptable
+    fallback identity for standards, books, reports, and proceedings.  The
+    rendered-reference audit records weak identity; citation-quality decides
+    whether that weakness is load-bearing for a critical claim.
+    """
+
+    return _has_known_field(entry, _STABLE_REFERENCE_IDENTITY_FIELDS) or _has_known_field(
+        entry,
+        _REFERENCE_IDENTITY_FALLBACK_FIELDS,
+    )
+
+
 def build_rendered_reference_audit(cwd: str | Path | None, *, quality_mode: str = "ralph") -> dict[str, Any]:
     from .session import load_session
 
@@ -129,6 +179,7 @@ def build_rendered_reference_audit(cwd: str | Path | None, *, quality_mode: str 
     cited_key_set = set(cited_keys)
     missing_bib = sorted(visible_key_set - bib_keys)
     unknown: list[str] = []
+    weak_identity: list[str] = []
     malformed: dict[str, list[str]] = {}
     for key in visible_keys:
         entry = entries.get(key)
@@ -138,6 +189,9 @@ def build_rendered_reference_audit(cwd: str | Path | None, *, quality_mode: str 
         if fields:
             unknown.append(key)
             malformed[key] = fields
+            continue
+        if not _entry_has_stable_identity(entry):
+            weak_identity.append(key)
     unused = sorted(bib_keys - cited_key_set)
     failing: list[str] = []
     if missing_bib:
@@ -161,6 +215,7 @@ def build_rendered_reference_audit(cwd: str | Path | None, *, quality_mode: str 
         "unused_bib_keys": unused,
         "missing_bib_keys_for_cites": missing_bib,
         "unknown_metadata_keys": sorted(unknown),
+        "weak_identity_keys": sorted(weak_identity),
         "malformed_bibtex_keys": malformed,
         "failing_codes": sorted(dict.fromkeys(failing)),
     }
@@ -255,7 +310,7 @@ def _critic_review_artifact(
         failing.append(f"{name}_stale")
 
     artifact_status = _payload_status(payload)
-    if artifact_status not in {"pass", "ok"}:
+    if artifact_status not in {"pass", "ok", "warn", "warning"}:
         failing.append(f"{name}_{artifact_status or 'unknown'}")
     for code in payload.get("failing_codes") or []:
         if isinstance(code, str) and code:
@@ -734,8 +789,9 @@ def build_citation_integrity_audit(cwd: str | Path | None, *, quality_mode: str 
     ]
     context_violations = _claim_map_context_violations(state)
     failing: list[str] = []
+    warnings: list[str] = []
     if citation_bomb_sentences or citation_bomb_paragraphs:
-        failing.append("citation_bomb_detected")
+        warnings.append("dense_citation_bundle_requires_role_check")
     if duplicate_keys:
         failing.append("citation_duplicate_support")
     if mismatch_items:
@@ -748,10 +804,11 @@ def build_citation_integrity_audit(cwd: str | Path | None, *, quality_mode: str 
     support_path = _citation_support_review_path(cwd, state)
     return {
         "schema_version": "citation-integrity-audit/1",
-        "status": "fail" if failing else "pass",
+        "status": "fail" if failing else "warn" if warnings else "pass",
         "manuscript_sha256": manuscript_sha,
         "paper_full_tex_sha256": manuscript_sha,
         "failing_codes": sorted(dict.fromkeys(failing)),
+        "warning_codes": sorted(dict.fromkeys(warnings)),
         "source_artifacts": {
             "citation_intent_plan": str(intent_path),
             "citation_intent_plan_sha256": _file_sha256(intent_path),
@@ -764,11 +821,14 @@ def build_citation_integrity_audit(cwd: str | Path | None, *, quality_mode: str 
         },
         "checks": {
             "citation_density": {
-                "status": "fail" if citation_bomb_sentences or citation_bomb_paragraphs else "pass",
+                "status": "warn" if citation_bomb_sentences or citation_bomb_paragraphs else "pass",
                 "bomb_sentences": citation_bomb_sentences,
                 "bomb_paragraph_key_sets": citation_bomb_paragraphs,
                 "max_keys_per_sentence": 3,
                 "max_keys_per_paragraph": 5,
+                "warning_codes": ["dense_citation_bundle_requires_role_check"]
+                if citation_bomb_sentences or citation_bomb_paragraphs
+                else [],
             },
             "duplicate_support": {
                 "status": "fail" if duplicate_keys else "pass",

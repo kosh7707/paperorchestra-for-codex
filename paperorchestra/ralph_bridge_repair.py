@@ -370,7 +370,7 @@ Rules:
 - Preserve existing labels, figure paths, and bibliography hook.
 - Use only citation keys already present in citation_map.json.
 - Do not include reviewer numeric scores.
-- For citation-density issues, split citation-bomb sentences, remove redundant references, or place citations on the exact supported sentence.
+- For citation-density issues, split dense citation bundles, remove redundant references, or place citations on the exact supported sentence.
 - For duplicate-support issues, keep a repeated citation only where it directly supports a distinct claim; otherwise remove, redistribute, or merge the redundant support.
 - For high-risk uncited claims, ground with existing verified evidence, scope as a limitation/author-material claim, or delete the claim.
 """.strip()

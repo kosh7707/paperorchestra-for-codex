@@ -16,6 +16,23 @@ from .operator_feedback import (
     derive_operator_issue_id,
 )
 
+_MAX_GENERATED_OPERATOR_ISSUES = 3
+_OPERATOR_ISSUE_SEVERITY_RANK = {
+    "blocker": 0,
+    "critical": 0,
+    "major": 1,
+    "minor": 2,
+}
+_OPERATOR_ISSUE_ROLE_RANK = {
+    "citation_support_review": 0,
+    "figure_placement_review": 1,
+    "quality_eval": 2,
+    "citation_integrity_audit": 3,
+    "qa_loop_execution": 4,
+    "operator_feedback_execution": 5,
+    "qa_loop_plan": 6,
+}
+
 SMOKE_VERDICT_SCHEMA_VERSION = "fresh-smoke-verdict/1"
 ALLOWED_SMOKE_VERDICTS = {
     "pass_loop_verified",
@@ -180,6 +197,17 @@ def normalize_operator_feedback_draft(packet: dict[str, Any], draft: dict[str, A
                     "owner_category": "author",
                 }
             ]
+
+    if intent == "generate_new_operator_candidate" and len(issues) > _MAX_GENERATED_OPERATOR_ISSUES:
+        indexed = list(enumerate(issues))
+        indexed.sort(
+            key=lambda pair: (
+                _OPERATOR_ISSUE_SEVERITY_RANK.get(pair[1].get("severity", "").lower(), 3),
+                _OPERATOR_ISSUE_ROLE_RANK.get(pair[1].get("source_artifact_role", ""), 9),
+                pair[0],
+            )
+        )
+        issues = [issue for _index, issue in indexed[:_MAX_GENERATED_OPERATOR_ISSUES]]
 
     if not issues:
         issues = [

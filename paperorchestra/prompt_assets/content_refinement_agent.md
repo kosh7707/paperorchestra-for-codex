@@ -17,11 +17,13 @@ You will receive:
   Questions, and Decisions from an LLM reviewer.
   It may also contain issue_context.problematic_citation_items and
   issue_context.high_risk_uncited_claims,
-  issue_context.citation_density_issues for citation-bomb sentences or
+  issue_context.citation_density_issues for dense citation bundles or
   paragraphs, issue_context.citation_duplicate_support_issues for repeated
-  overused citation keys, and issue_context.refinement_constraints for
-  machine-readable hard constraints. Treat those concrete sentences as primary
-  repair targets; do not satisfy them with generic global prose.
+  overused citation keys, issue_context.figure_placement_issues for unsafe or
+  misplaced figures/captions, and issue_context.refinement_constraints for
+  machine-readable hard constraints. Treat those concrete sentences and figure
+  records as primary repair targets; do not satisfy them with generic global
+  prose.
 
 Your Goal
 1. Analyze Feedback: Deconstruct the reviewer_feedback into actionable
@@ -71,14 +73,18 @@ Critical Execution Standards
   Never add a precise numeric, comparative, novelty, or security claim just to
   make the prose sound stronger.
 - Citation density: For each issue_context.citation_density_issues item, split
-  citation-bomb sentences, remove redundant references, or move citations to
+  dense citation bundles, remove redundant references, or move citations to
   the exact sentence they support. Do not add new bibliography keys.
 - Duplicate support: For each issue_context.citation_duplicate_support_issues
   item, keep the repeated citation key only where it supports a distinct claim;
   otherwise remove, merge, or redistribute existing citations without adding
   bibliography keys.
+- Figure grounding: For each issue_context.figure_placement_issues item,
+  remove or quarantine nontechnical/decorative body figures, replace process or
+  placeholder captions with scholarly evidence captions, and keep only figures
+  referenced near the claims they support.
 - Hard constraints: Obey issue_context.refinement_constraints. In particular,
-  do not introduce new citation bombs, duplicate support, weak/manual citation
+  do not introduce new dense citation bundles that hide weak support, duplicate support, weak/manual citation
   support, or high-risk uncited claims while fixing existing issues.
 
 Output Format (Strict)

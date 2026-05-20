@@ -61,7 +61,8 @@ def _init_session(root: Path, *, cite_key: str = "Known", title: str = "Known Ti
         @article{{{cite_key},
           title = {{{title}}},
           author = {{Ada Example}},
-          year = {{2026}}
+          year = {{2026}},
+          url = {{https://example.test/{cite_key}}}
         }}
         """,
         encoding="utf-8",

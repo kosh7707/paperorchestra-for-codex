@@ -445,6 +445,114 @@ class OutlineValidationTests(unittest.TestCase):
         self.assertEqual(origins["fig:source"], "source_preserved")
         self.assertEqual(origins["fig:auto"], "auto_repaired")
 
+    def test_build_figure_placement_review_blocks_portrait_asset_in_body(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Background}\n"
+            "\\begin{figure}[t]\n"
+            "\\includegraphics[width=0.45\\textwidth]{author_portrait.png}\n"
+            "\\caption{Portrait-style supplied visual asset included without using it as evidence for any technical claim.}\n"
+            "\\label{fig:portrait}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+
+        payload = build_figure_placement_review(latex)
+
+        self.assertEqual(payload["status"], "fail")
+        self.assertIn("nontechnical_visual_asset_in_body", payload["failing_codes"])
+        self.assertIn("figure_caption_process_or_placeholder", payload["failing_codes"])
+        self.assertIn("nontechnical_visual_asset_in_body", payload["figures"][0]["failing_codes"])
+
+    def test_build_figure_placement_review_blocks_decorative_asset_in_body(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Background}\n"
+            "\\begin{figure}[t]\n"
+            "\\includegraphics[width=0.8\\linewidth]{decorative_banner.png}\n"
+            "\\caption{Decorative visual divider.}\n"
+            "\\label{fig:decorative}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+
+        payload = build_figure_placement_review(latex)
+
+        self.assertEqual(payload["status"], "fail")
+        self.assertIn("nontechnical_visual_asset_in_body", payload["failing_codes"])
+
+    def test_build_figure_placement_review_warns_for_unreferenced_technical_figure(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Method}\n"
+            "\\begin{figure}[t]\n"
+            "\\includegraphics[width=0.9\\linewidth]{architecture_overview.pdf}\n"
+            "\\caption{Architecture overview of the system components.}\n"
+            "\\label{fig:architecture}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+
+        payload = build_figure_placement_review(latex)
+
+        self.assertEqual(payload["status"], "warn")
+        self.assertIn("figure_unreferenced", payload["warning_codes"])
+        self.assertNotIn("nontechnical_visual_asset_in_body", payload["failing_codes"])
+
+    def test_build_figure_placement_review_passes_referenced_technical_figure(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Method}\n"
+            "Figure~\\ref{fig:architecture} summarizes the method.\n"
+            "\\begin{figure}[t]\n"
+            "\\includegraphics[width=0.9\\linewidth]{architecture_overview.pdf}\n"
+            "\\caption{Architecture overview of the system components.}\n"
+            "\\label{fig:architecture}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+
+        payload = build_figure_placement_review(latex)
+
+        self.assertEqual(payload["status"], "pass")
+        self.assertEqual(payload["failing_codes"], [])
+
+    def test_build_figure_placement_review_does_not_block_performance_profile_asset(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Results}\n"
+            "Figure~\\ref{fig:profile} summarizes the performance profile.\n"
+            "\\begin{figure}[t]\n"
+            "\\includegraphics[width=0.9\\linewidth]{figures/performance_profile_latency.pdf}\n"
+            "\\caption{Latency profile across benchmark stages.}\n"
+            "\\label{fig:profile}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+
+        payload = build_figure_placement_review(latex)
+
+        self.assertEqual(payload["failing_codes"], [])
+        self.assertNotIn("nontechnical_visual_asset_in_body", payload["failing_codes"])
+
+    def test_build_figure_placement_review_does_not_block_technical_portrait_vision_plot(self) -> None:
+        latex = (
+            "\\documentclass{article}\n\\begin{document}\n"
+            "\\section{Results}\n"
+            "Figure~\\ref{fig:portrait-benchmark} summarizes the vision benchmark.\n"
+            "\\begin{figure}[t]\n"
+            "\\includegraphics[width=0.9\\linewidth]{portrait_segmentation_results.pdf}\n"
+            "\\caption{Portrait segmentation benchmark accuracy across lighting conditions.}\n"
+            "\\label{fig:portrait-benchmark}\n"
+            "\\end{figure}\n"
+            "\\end{document}\n"
+        )
+
+        payload = build_figure_placement_review(latex)
+
+        self.assertEqual(payload["failing_codes"], [])
+        self.assertNotIn("nontechnical_visual_asset_in_body", payload["failing_codes"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -23,6 +23,7 @@ from paperorchestra.citation_integrity import (
 )
 from paperorchestra.cli import main as cli_main
 from paperorchestra.models import InputBundle
+from paperorchestra.orchestra_citation_quality import build_citation_quality_gate
 from paperorchestra.session import artifact_path, create_session, load_session, save_session
 
 
@@ -174,9 +175,213 @@ def test_citation_semantics_detects_bombs_duplicates_and_claim_source_mismatch()
         _, audit = write_citation_integrity_audit(root, quality_mode="claim_safe")
 
         assert audit["status"] == "fail"
-        assert "citation_bomb_detected" in audit["failing_codes"]
+        assert "citation_bomb_detected" not in audit["failing_codes"]
+        assert "dense_citation_bundle_requires_role_check" in audit["warning_codes"]
         assert "citation_duplicate_support" in audit["failing_codes"]
         assert "claim_source_mismatch" in audit["failing_codes"]
+
+
+def test_dense_citation_bundle_warns_without_hard_failing_integrity() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        state = _init_session(root)
+        paper = artifact_path(root, "paper.full.tex")
+        paper.write_text(
+            "Standards and foundations are commonly summarized together~\\cite{A,B,C,D,E}.\n",
+            encoding="utf-8",
+        )
+        refs = artifact_path(root, "references.bib")
+        refs.write_text(
+            "\n".join(_bib_entry(key, title=f"Reference {key}") for key in ["A", "B", "C", "D", "E"]),
+            encoding="utf-8",
+        )
+        artifact_path(root, "paper.full.bbl").write_text(
+            "\n".join(f"\\bibitem{{{key}}} Reference {key}." for key in ["A", "B", "C", "D", "E"]),
+            encoding="utf-8",
+        )
+        state.artifacts.paper_full_tex = str(paper)
+        state.artifacts.references_bib = str(refs)
+        save_session(root, state)
+        (paper.parent / "citation_support_review.json").write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "dense-background",
+                            "sentence": "Standards and foundations are commonly summarized together~\\cite{A,B,C,D,E}.",
+                            "citation_keys": ["A", "B", "C", "D", "E"],
+                            "support_status": "supported",
+                            "claim_type": "background",
+                            "citation_role": "standard",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        write_rendered_reference_audit(root, quality_mode="claim_safe")
+        _, audit = write_citation_integrity_audit(root, quality_mode="claim_safe")
+        write_citation_integrity_critic(root, quality_mode="claim_safe")
+        result = citation_integrity_check(root, load_session(root), quality_mode="claim_safe")
+
+        assert audit["status"] == "warn"
+        assert "citation_bomb_detected" not in audit["failing_codes"]
+        assert "dense_citation_bundle_requires_role_check" in audit["warning_codes"]
+        assert audit["checks"]["citation_density"]["status"] == "warn"
+        assert result["status"] == "pass"
+        assert build_citation_integrity_critic(root, quality_mode="claim_safe")["status"] == "pass"
+
+
+def test_stable_report_reference_identity_does_not_trigger_weak_identity_gate() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        state = _init_session(root)
+        paper = artifact_path(root, "paper.full.tex")
+        paper.write_text("A stable technical report describes the protocol~\\cite{StableReport}.\n", encoding="utf-8")
+        refs = artifact_path(root, "references.bib")
+        refs.write_text(
+            """@techreport{StableReport,
+  title = {Stable Technical Report},
+  author = {Alice Example},
+  year = {2024},
+  organization = {Example Standards Body},
+  number = {TR-2024-001},
+  url = {https://example.test/TR-2024-001}
+}
+""",
+            encoding="utf-8",
+        )
+        artifact_path(root, "paper.full.bbl").write_text("\\bibitem{StableReport} Stable Technical Report.\n", encoding="utf-8")
+        support = paper.parent / "citation_support_review.json"
+        support.write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "stable-report",
+                            "sentence": "A stable technical report describes the protocol~\\cite{StableReport}.",
+                            "citation_keys": ["StableReport"],
+                            "support_status": "supported",
+                            "claim_type": "background",
+                            "evidence": [{"url": "https://example.test/TR-2024-001"}],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        state.artifacts.paper_full_tex = str(paper)
+        state.artifacts.references_bib = str(refs)
+        save_session(root, state)
+
+        rendered = build_rendered_reference_audit(root, quality_mode="claim_safe")
+        write_rendered_reference_audit(root, quality_mode="claim_safe")
+        write_citation_integrity_audit(root, quality_mode="claim_safe")
+        report = build_citation_quality_gate(root, quality_mode="claim_safe")
+
+        assert "StableReport" not in rendered["weak_identity_keys"]
+        assert "critical_weak_reference_identity" not in report["hard_gate_failures"]
+        assert "noncritical_weak_reference_identity" not in report["warning_codes"]
+
+
+def test_critical_weak_reference_identity_blocks_citation_quality_gate() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        state = _init_session(root)
+        paper = artifact_path(root, "paper.full.tex")
+        paper.write_text("Prior result motivates the claim~\\cite{WeakIdentity}.\n", encoding="utf-8")
+        refs = artifact_path(root, "references.bib")
+        refs.write_text(_bib_entry("WeakIdentity", title="Plausible But Unlocated Prior Result"), encoding="utf-8")
+        artifact_path(root, "paper.full.bbl").write_text("\\bibitem{WeakIdentity} Plausible.\n", encoding="utf-8")
+        claim_map = artifact_path(root, "claim_map.json")
+        claim_map.write_text(
+            json.dumps(
+                {
+                    "claims": [
+                        {
+                            "id": "critical-prior",
+                            "claim_type": "prior_work",
+                            "citation_required": True,
+                            "required_source_type": "prior_work",
+                            "citation_keys": ["WeakIdentity"],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        support = paper.parent / "citation_support_review.json"
+        support.write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "s1",
+                            "sentence": "Prior result motivates the claim~\\cite{WeakIdentity}.",
+                            "citation_keys": ["WeakIdentity"],
+                            "support_status": "supported",
+                            "claim_type": "prior_work",
+                            "evidence": [{"url": "https://example.test/prior"}],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        state.artifacts.paper_full_tex = str(paper)
+        state.artifacts.references_bib = str(refs)
+        state.artifacts.claim_map_json = str(claim_map)
+        save_session(root, state)
+
+        rendered = build_rendered_reference_audit(root, quality_mode="claim_safe")
+        write_rendered_reference_audit(root, quality_mode="claim_safe")
+        write_citation_integrity_audit(root, quality_mode="claim_safe")
+        report = build_citation_quality_gate(root, quality_mode="claim_safe")
+
+        assert "WeakIdentity" in rendered["weak_identity_keys"]
+        assert report["status"] == "fail"
+        assert "critical_weak_reference_identity" in report["hard_gate_failures"]
+
+
+def test_noncritical_weak_reference_identity_is_warning_not_blocker() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        state = _init_session(root)
+        paper = artifact_path(root, "paper.full.tex")
+        paper.write_text("Optional background note~\\cite{WeakBackground}.\n", encoding="utf-8")
+        refs = artifact_path(root, "references.bib")
+        refs.write_text(_bib_entry("WeakBackground", title="Background Pointer"), encoding="utf-8")
+        artifact_path(root, "paper.full.bbl").write_text("\\bibitem{WeakBackground} Background.\n", encoding="utf-8")
+        support = paper.parent / "citation_support_review.json"
+        support.write_text(
+            json.dumps(
+                {
+                    "items": [
+                        {
+                            "id": "s1",
+                            "sentence": "Optional background note~\\cite{WeakBackground}.",
+                            "citation_keys": ["WeakBackground"],
+                            "support_status": "supported",
+                            "claim_type": "background",
+                            "citation_role": "background",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        state.artifacts.paper_full_tex = str(paper)
+        state.artifacts.references_bib = str(refs)
+        save_session(root, state)
+
+        write_rendered_reference_audit(root, quality_mode="claim_safe")
+        write_citation_integrity_audit(root, quality_mode="claim_safe")
+        report = build_citation_quality_gate(root, quality_mode="claim_safe")
+
+        assert report["status"] == "warn"
+        assert "critical_weak_reference_identity" not in report["hard_gate_failures"]
+        assert "noncritical_weak_reference_identity" in report["warning_codes"]
 
 
 def test_citation_semantics_positive_roles_and_context_policy_pass() -> None:

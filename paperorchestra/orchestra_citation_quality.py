@@ -39,7 +39,11 @@ _EXTERNAL_REQUIRED_SOURCE_TYPES = {
 }
 _NONCRITICAL_TOKENS = {"background", "local", "optional", "low"}
 _UNSUPPORTED_STATUSES = {"unsupported", "contradicted", "metadata_only", "insufficient_evidence"}
-_WARNING_INTEGRITY_CODES = {"citation_duplicate_support", "citation_bomb_detected"}
+_WARNING_INTEGRITY_CODES = {
+    "citation_duplicate_support",
+    "citation_bomb_detected",
+    "dense_citation_bundle_requires_role_check",
+}
 _PRIVATE_MARKERS = ("PRIVATE", "SECRET", "TOKEN")
 
 
@@ -155,12 +159,13 @@ def build_citation_quality_gate(cwd: str | Path | None, *, quality_mode: str = "
     rendered_missing = not isinstance(rendered, dict)
     unknown_keys = _string_set(rendered.get("unknown_metadata_keys") if isinstance(rendered, dict) else [])
     missing_keys = _string_set(rendered.get("missing_bib_keys_for_cites") if isinstance(rendered, dict) else [])
+    weak_identity_keys = _string_set(rendered.get("weak_identity_keys") if isinstance(rendered, dict) else [])
     visible_keys = _string_set(rendered.get("visible_reference_keys") if isinstance(rendered, dict) else [])
     support_items = _support_items(support)
     support_by_key = _support_by_key(support_items)
     claims_by_key = _claims_by_key(claim_map)
     roles_by_key = _roles_by_key(placement)
-    all_keys = sorted(visible_keys | set(support_by_key) | set(claims_by_key) | unknown_keys | missing_keys)
+    all_keys = sorted(visible_keys | set(support_by_key) | set(claims_by_key) | unknown_keys | missing_keys | weak_identity_keys)
 
     items: list[CitationQualityItem] = []
     for key in all_keys:
@@ -174,6 +179,7 @@ def build_citation_quality_gate(cwd: str | Path | None, *, quality_mode: str = "
         )
         explicit_noncritical = _is_explicitly_noncritical(claims_by_key.get(key, []), roles_by_key.get(key, set()))
         metadata_status = "missing" if key in missing_keys else "unknown" if rendered_missing or key in unknown_keys else "known"
+        weak_identity = key in weak_identity_keys
         support_status = _worst_support_status(support_by_key.get(key, []))
         support_missing = key not in support_by_key
         key_failures: list[str] = []
@@ -185,6 +191,8 @@ def build_citation_quality_gate(cwd: str | Path | None, *, quality_mode: str = "
                 key_failures.append("critical_missing_bib_entry")
             elif metadata_status == "unknown":
                 key_failures.append("critical_unknown_reference")
+            if weak_identity:
+                key_failures.append("critical_weak_reference_identity")
             if support_missing and mode == "claim_safe":
                 key_failures.append("critical_citation_support_missing")
             elif support_status in _UNSUPPORTED_STATUSES:
@@ -194,6 +202,8 @@ def build_citation_quality_gate(cwd: str | Path | None, *, quality_mode: str = "
         elif metadata_status == "unknown" or explicit_noncritical:
             if metadata_status == "unknown":
                 key_warnings.append("noncritical_unknown_reference")
+        if weak_identity and not critical:
+            key_warnings.append("noncritical_weak_reference_identity")
         severity = "blocker" if key_failures else "warning" if key_warnings else "info"
         hard.extend(key_failures)
         warnings.extend(key_warnings)
@@ -258,6 +268,8 @@ def _empty_counts() -> dict[str, int]:
         "critical_need_count": 0,
         "critical_unknown_reference_count": 0,
         "critical_unsupported_count": 0,
+        "critical_weak_identity_count": 0,
+        "noncritical_weak_identity_count": 0,
         "citation_bomb_count": 0,
         "duplicate_reference_count": 0,
     }
@@ -383,7 +395,11 @@ def _worst_support_status(items: list[dict[str, Any]]) -> str:
 def _integrity_warning_codes(payload: Any) -> list[str]:
     if not isinstance(payload, dict):
         return []
-    return sorted(code for code in _string_set(payload.get("failing_codes")) if code in _WARNING_INTEGRITY_CODES)
+    codes = _string_set(payload.get("failing_codes")) | _string_set(payload.get("warning_codes"))
+    checks = payload.get("checks") if isinstance(payload.get("checks"), dict) else {}
+    density = checks.get("citation_density") if isinstance(checks.get("citation_density"), dict) else {}
+    codes |= _string_set(density.get("warning_codes"))
+    return sorted(code for code in codes if code in _WARNING_INTEGRITY_CODES)
 
 
 def _counts(items: list[CitationQualityItem], integrity: Any) -> dict[str, int]:
@@ -393,6 +409,8 @@ def _counts(items: list[CitationQualityItem], integrity: Any) -> dict[str, int]:
         1 for item in items if "critical_unknown_reference" in item.failing_codes or "critical_missing_bib_entry" in item.failing_codes
     )
     counts["critical_unsupported_count"] = sum(1 for item in items if "critical_unsupported_citation" in item.failing_codes)
+    counts["critical_weak_identity_count"] = sum(1 for item in items if "critical_weak_reference_identity" in item.failing_codes)
+    counts["noncritical_weak_identity_count"] = sum(1 for item in items if "noncritical_weak_reference_identity" in item.warning_codes)
     if isinstance(integrity, dict):
         checks = integrity.get("checks") if isinstance(integrity.get("checks"), dict) else {}
         density = checks.get("citation_density") if isinstance(checks.get("citation_density"), dict) else {}
