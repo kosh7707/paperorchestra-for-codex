@@ -1088,15 +1088,48 @@ def _coverage_term_position(section_text: str, term: str) -> int:
     return min(found) if found else -1
 
 
-def _terms_nearby(section_text: str, terms: list[str], *, window: int = 360) -> bool:
+def _coverage_term_positions(section_text: str, term: str) -> tuple[int, ...]:
     lowered = section_text.lower()
-    positions = []
-    for term in terms:
-        idx = _coverage_term_position(lowered, str(term))
-        if idx < 0:
+    found: set[int] = set()
+    for variant in _coverage_term_variants(term):
+        if not variant:
+            continue
+        parts = [part for part in re.split(r"[\s-]+", variant) if part]
+        if not parts:
+            continue
+        separator = r"(?:\s+|-)"
+        pattern = re.compile(r"(?<![a-z0-9])" + separator.join(re.escape(part) for part in parts) + r"(?![a-z0-9])")
+        found.update(match.start() for match in pattern.finditer(lowered))
+    return tuple(sorted(found))
+
+
+def _terms_nearby(section_text: str, terms: list[str], *, window: int = 360) -> bool:
+    positioned_terms: list[tuple[int, int]] = []
+    for term_index, term in enumerate(terms):
+        positions = _coverage_term_positions(section_text, str(term))
+        if not positions:
             return False
-        positions.append(idx)
-    return max(positions) - min(positions) <= window
+        positioned_terms.extend((position, term_index) for position in positions)
+    positioned_terms.sort()
+    required_count = len(terms)
+    counts = [0] * required_count
+    covered = 0
+    left = 0
+    for right, (right_position, right_term) in enumerate(positioned_terms):
+        if counts[right_term] == 0:
+            covered += 1
+        counts[right_term] += 1
+        while left <= right and right_position - positioned_terms[left][0] > window:
+            _, left_term = positioned_terms[left]
+            counts[left_term] -= 1
+            if counts[left_term] == 0:
+                covered -= 1
+            left += 1
+        if covered == required_count:
+            return True
+    return False
+
+
 
 
 def check_claim_map_coverage(latex: str, claim_map: dict[str, Any] | None) -> list[ValidationIssue]:
@@ -1146,7 +1179,7 @@ def check_claim_map_coverage(latex: str, claim_map: dict[str, Any] | None) -> li
             terms = [str(term) for term in group if str(term).strip()]
             if not terms:
                 continue
-            if all(term.lower() in section_text.lower() for term in terms):
+            if all(_coverage_term_positions(section_text, term) for term in terms):
                 isolated_hits += 1
             if _terms_nearby(section_text, terms):
                 satisfied += 1

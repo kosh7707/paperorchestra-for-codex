@@ -242,6 +242,81 @@ class NarrativePlanningTests(unittest.TestCase):
         self.assertNotIn("required_claim_missing", complete_codes)
         self.assertNotIn("required_claim_keyword_stuffing", complete_codes)
 
+    def test_claim_coverage_uses_nearby_later_term_occurrences(self) -> None:
+        claim_map = {
+            "claims": [
+                {
+                    "id": "claim-003",
+                    "required": True,
+                    "target_section": "Evaluation",
+                    "evidence_anchors": [{"source_ref": "experimental_log.md"}],
+                    "coverage_groups": [
+                        ["benchmark", "measurement"],
+                        ["implementation", "profile"],
+                        ["message", "size"],
+                    ],
+                }
+            ]
+        }
+        latex = (
+            "\\section{Evaluation}\n"
+            "The implementation is introduced early while the benchmark context is still broad. "
+            + ("Filler prose. " * 35)
+            + "The measured implementation profiles are bounded to the reported rows. "
+            "The benchmark measurements and message-size settings are not extrapolated.\n"
+        )
+
+        codes = [issue.code for issue in check_claim_map_coverage(latex, claim_map)]
+
+        self.assertNotIn("required_claim_missing", codes)
+        self.assertNotIn("required_claim_keyword_stuffing", codes)
+
+    def test_claim_coverage_still_rejects_only_far_apart_repeated_terms(self) -> None:
+        claim_map = {
+            "claims": [
+                {
+                    "id": "claim-003",
+                    "required": True,
+                    "target_section": "Evaluation",
+                    "evidence_anchors": [{"source_ref": "experimental_log.md"}],
+                    "coverage_groups": [
+                        ["benchmark", "measurement"],
+                        ["implementation", "profile"],
+                    ],
+                }
+            ]
+        }
+        latex = (
+            "\\section{Evaluation}\n"
+            "The implementation is described here. "
+            + ("Filler prose. " * 40)
+            + "A profile appears only much later. "
+            + ("More filler. " * 40)
+            + "A benchmark is named at the end without a nearby measurement.\n"
+        )
+
+        codes = [issue.code for issue in check_claim_map_coverage(latex, claim_map)]
+
+        self.assertIn("required_claim_keyword_stuffing", codes)
+
+    def test_claim_coverage_does_not_match_terms_inside_longer_words(self) -> None:
+        claim_map = {
+            "claims": [
+                {
+                    "id": "claim-003",
+                    "required": True,
+                    "target_section": "Evaluation",
+                    "evidence_anchors": [{"source_ref": "experimental_log.md"}],
+                    "coverage_groups": [["profile"]],
+                }
+            ]
+        }
+        latex = "\\section{Evaluation}\nThe profiler output is discussed, but no implementation characterization is stated.\n"
+
+        codes = [issue.code for issue in check_claim_map_coverage(latex, claim_map)]
+
+        self.assertIn("required_claim_missing", codes)
+
     def test_mcp_plan_narrative_writes_three_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
