@@ -20,6 +20,7 @@ from .pipeline import (
     _build_completion_request,
     _complete_with_runtime_mode,
     compile_current_paper,
+    build_bib,
     plan_narrative_and_claims,
     refine_current_paper,
     record_current_validation_report,
@@ -301,6 +302,23 @@ def _refresh_citation_integrity_for_current_manuscript(
     }
 
 
+def _try_rebuild_bib_for_citation_quality(cwd: str | Path | None) -> dict[str, Any]:
+    """Best-effort bibliography regeneration before weak-reference re-audit.
+
+    Weak rendered-reference identity can be caused by stale `references.bib`
+    after the registry has better metadata.  Rebuilding is safe and reversible
+    because `build_bib()` derives from the session registry; if the registry is
+    absent or incomplete, keep the QA-loop action machine-owned and record the
+    failure instead of routing to `unsupported_handler`.
+    """
+
+    try:
+        path = build_bib(cwd)
+    except Exception as exc:
+        return {"ok": False, "error_type": exc.__class__.__name__, "error": str(exc)}
+    return {"ok": True, "path": str(path)}
+
+
 def _write_execution_artifact(cwd: str | Path | None, payload: dict[str, Any]) -> Path:
     reserved = payload.pop("_reserved_execution_path", None)
     path = Path(reserved) if reserved else _next_execution_path(cwd)[1]
@@ -475,17 +493,20 @@ def run_qa_loop_step(
             "critical_missing_bib_entry",
             "critical_unsupported_citation",
             "critical_citation_support_missing",
+            "critical_weak_reference_identity",
         }:
+            bibtex_rebuild = _try_rebuild_bib_for_citation_quality(cwd) if code == "critical_weak_reference_identity" else None
             review_path = write_citation_support_review(cwd, provider=citation_provider, evidence_mode=citation_evidence_mode)
             refreshed = _refresh_citation_integrity_for_current_manuscript(cwd, quality_mode=quality_mode)
-            execution["actions_attempted"].append(
-                {
-                    "code": code,
-                    "handler": "refresh_citation_quality",
-                    "citation_support_review": str(review_path),
-                    "citation_integrity": refreshed,
-                }
-            )
+            attempted = {
+                "code": code,
+                "handler": "refresh_citation_quality",
+                "citation_support_review": str(review_path),
+                "citation_integrity": refreshed,
+            }
+            if bibtex_rebuild is not None:
+                attempted["bibtex_rebuild"] = bibtex_rebuild
+            execution["actions_attempted"].append(attempted)
         elif code in {
             "rendered_reference_audit_missing",
             "rendered_reference_audit_stale",
@@ -546,7 +567,12 @@ def run_qa_loop_step(
             )
             if any(not item.get("accepted", False) for item in refine_result):
                 break
-        elif code in {"citation_support_critic_failed", "citation_density_policy_failed", "high_risk_uncited_claim"}:
+        elif code in {
+            "citation_support_critic_failed",
+            "citation_density_policy_failed",
+            "citation_coverage_insufficient",
+            "high_risk_uncited_claim",
+        }:
             repair = repair_citation_claims(cwd, provider, runtime_mode=runtime_mode, require_compile=require_compile, commit=False)
             if not repair.get("accepted"):
                 failure = _citation_repair_failure_payload(code, repair)

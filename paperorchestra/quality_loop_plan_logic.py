@@ -324,6 +324,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
             "critical_missing_bib_entry",
             "critical_unsupported_citation",
             "critical_citation_support_missing",
+            "critical_weak_reference_identity",
         }
         for code in sorted(quality_codes & refresh_codes):
             actions.append(

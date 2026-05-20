@@ -337,18 +337,31 @@ class CitationQualityGateTests(unittest.TestCase):
                     "checks": {
                         "citation_quality_gate": {
                             "status": "fail",
-                            "hard_gate_failures": ["critical_unknown_reference", "critical_unsupported_citation"],
+                            "hard_gate_failures": [
+                                "critical_unknown_reference",
+                                "critical_unsupported_citation",
+                                "critical_weak_reference_identity",
+                            ],
                         }
                     },
-                    "failing_codes": ["critical_unknown_reference", "critical_unsupported_citation"],
+                    "failing_codes": [
+                        "critical_unknown_reference",
+                        "critical_unsupported_citation",
+                        "critical_weak_reference_identity",
+                    ],
                 }
             }
         }
 
         actions = _quality_eval_actions(quality_eval)
-        citation_actions = [action for action in actions if str(action.get("code")) in {"critical_unknown_reference", "critical_unsupported_citation"}]
+        expected_codes = {
+            "critical_unknown_reference",
+            "critical_unsupported_citation",
+            "critical_weak_reference_identity",
+        }
+        citation_actions = [action for action in actions if str(action.get("code")) in expected_codes]
 
-        self.assertTrue(citation_actions)
+        self.assertEqual({action.get("code") for action in citation_actions}, expected_codes)
         self.assertTrue(all(action.get("automation") in {"automatic", "semi_auto"} for action in citation_actions))
         self.assertFalse(any(action.get("automation") == "human_needed" for action in citation_actions))
         self.assertTrue(
@@ -357,6 +370,7 @@ class CitationQualityGateTests(unittest.TestCase):
                 "critical_missing_bib_entry",
                 "critical_unsupported_citation",
                 "critical_citation_support_missing",
+                "critical_weak_reference_identity",
             }.issubset(QA_LOOP_SUPPORTED_HANDLER_CODES)
         )
 

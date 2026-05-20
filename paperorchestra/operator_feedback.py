@@ -966,6 +966,8 @@ def _claim_safe_tier2_metric_counts(quality_eval: dict[str, Any] | None) -> dict
         quality_fields = {
             "critical_unsupported_citation": "critical_unsupported_count",
             "critical_citation_support_missing": "critical_need_count",
+            "critical_weak_reference_identity": "critical_weak_identity_count",
+            "noncritical_weak_reference_identity": "noncritical_weak_identity_count",
             "citation_bomb_detected": "citation_bomb_count",
             "citation_duplicate_support": "duplicate_reference_count",
         }

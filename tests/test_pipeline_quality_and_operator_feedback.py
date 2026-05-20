@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipeline_test_support import *
 from paperorchestra.narrative import write_planning_artifacts
+from paperorchestra.operator_feedback import _claim_safe_tier2_metric_counts
 
 
 class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
@@ -126,6 +127,81 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(plan["quality_eval_summary"]["tier_statuses"]["tier_2_claim_safety"], "fail")
             self.assertNotEqual(plan["verdict"], "ready_for_human_finalization")
 
+    def test_qa_loop_plan_continues_for_supported_citation_coverage_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\documentclass{article}\n\\begin{document}\nSparse citation coverage.\\end{document}\n", encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            citation_support = artifact_path(root, "citation_support_review.json")
+            citation_support.write_text(json.dumps({"items": []}), encoding="utf-8")
+            validation_report = artifact_path(root, "validation.coverage.json")
+            validation_report.write_text(
+                json.dumps(
+                    {
+                        "stage": "refinement",
+                        "issues": [
+                            {
+                                "code": "citation_coverage_insufficient",
+                                "severity": "error",
+                                "message": "Insufficient citation coverage.",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            quality_eval_path = artifact_path(root, "quality-eval.coverage.json")
+            quality_eval_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "quality-eval/1",
+                        "session_id": state.session_id,
+                        "mode": "claim_safe",
+                        "manuscript_hash": "sha256:" + hashlib.sha256(paper.read_bytes()).hexdigest(),
+                        "cross_iteration": {
+                            "budget": {"remaining": 5, "current_attempt_consumes_budget": False},
+                            "regression": {"forward_progress": True},
+                        },
+                        "source_artifacts": {"citation_review_sha256": hashlib.sha256(citation_support.read_bytes()).hexdigest()},
+                        "tiers": {
+                            "tier_0_preconditions": {"status": "pass", "failing_codes": []},
+                            "tier_1_structural": {"status": "pass", "failing_codes": []},
+                            "tier_2_claim_safety": {
+                                "status": "fail",
+                                "failing_codes": ["citation_coverage_insufficient"],
+                                "checks": {},
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            reproducibility = {
+                "verdict": "PASS",
+                "citation_artifact_issues": [],
+                "strict_content_gate_issues": [],
+                "prompt_trace_file_count": 1,
+                "validation_warning_reports": [{"path": str(validation_report)}],
+            }
+            with patch("paperorchestra.quality_loop.run_fidelity_audit", return_value={"overall_status": "pass"}):
+                with patch("paperorchestra.quality_loop.write_reproducibility_audit", return_value=artifact_path(root, "reproducibility.audit.json")):
+                    with patch("paperorchestra.quality_loop.build_reproducibility_audit", return_value=reproducibility):
+                        _, plan = write_quality_loop_plan(
+                            root,
+                            quality_mode="claim_safe",
+                            quality_eval_input_path=quality_eval_path,
+                            append_history=False,
+                        )
+
+            coverage_actions = [action for action in plan["repair_actions"] if action.get("code") == "citation_coverage_insufficient"]
+            self.assertEqual(plan["verdict"], "continue")
+            self.assertEqual(len(coverage_actions), 1)
+            self.assertEqual(coverage_actions[0]["automation"], "semi_auto")
+            self.assertIn("executable action citation_coverage_insufficient", plan["next_ralph_instruction"])
+
     def test_qa_loop_plan_continues_for_high_risk_uncited_claim_repair(self) -> None:
         quality_eval = {
             "tiers": {
@@ -155,6 +231,27 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
         self.assertEqual(high_risk_actions[0]["automation"], "semi_auto")
         self.assertIn("existing verified evidence", high_risk_actions[0]["ralph_instruction"])
         self.assertEqual(high_risk_actions[0]["approval_required_from"], "claim_safety_critic")
+
+    def test_operator_tier2_metrics_include_weak_reference_identity_counts(self) -> None:
+        quality_eval = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "checks": {
+                        "citation_quality_gate": {
+                            "counts": {
+                                "critical_weak_identity_count": 2,
+                                "noncritical_weak_identity_count": 3,
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        metrics = _claim_safe_tier2_metric_counts(quality_eval)
+
+        self.assertEqual(metrics["critical_weak_reference_identity"], 2)
+        self.assertEqual(metrics["noncritical_weak_reference_identity"], 3)
 
     def test_qa_loop_step_attempts_citation_integrity_repair_handler(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -219,6 +316,61 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(result.payload["actionable_failure"]["category"], "citation_repair_failed")
             self.assertEqual(result.payload["actionable_failure"]["validation_failing_codes"], ["citation_coverage_insufficient"])
             self.assertNotEqual(result.payload["verdict"], "ready_for_human_finalization")
+
+    def test_qa_loop_step_attempts_citation_coverage_repair_handler(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\documentclass{article}\n\\begin{document}\nSparse citation coverage.\\end{document}\n", encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            before_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "manuscript_hash": "sha256:" + hashlib.sha256(paper.read_bytes()).hexdigest(),
+                "tiers": {"tier_2_claim_safety": {"status": "fail", "failing_codes": ["citation_coverage_insufficient"]}},
+            }
+            plan = {
+                "schema_version": "qa-loop-plan/2",
+                "session_id": state.session_id,
+                "verdict": "continue",
+                "repair_actions": [{"code": "citation_coverage_insufficient", "automation": "semi_auto"}],
+            }
+            plan_after = {**plan, "verdict": "human_needed"}
+            validation_path = root / "validation.citation-coverage.json"
+            validation_path.write_text(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "blocking_issue_count": 1,
+                        "issues": [{"code": "citation_coverage_insufficient"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            repair_payload = {
+                "accepted": False,
+                "reason": "validation_failed",
+                "issue_count": 1,
+                "validation": {"path": str(validation_path), "ok": False, "blocking_issue_count": 1},
+            }
+            with patch("paperorchestra.ralph_bridge.write_quality_eval", side_effect=[(root / "before.json", before_eval), (root / "after.json", before_eval)]):
+                with patch("paperorchestra.ralph_bridge.write_quality_loop_plan", side_effect=[(root / "plan-before.json", plan), (root / "plan-after.json", plan_after)]):
+                    with patch("paperorchestra.ralph_bridge._citation_summary", return_value={}):
+                        with patch("paperorchestra.ralph_bridge.repair_citation_claims", return_value=repair_payload) as repair:
+                            with patch("paperorchestra.ralph_bridge.record_current_validation_report", return_value=(root / "validation.json", {"ok": True})):
+                                with patch("paperorchestra.ralph_bridge.write_section_review", return_value=root / "section_review.json"):
+                                    with patch("paperorchestra.ralph_bridge.write_figure_placement_review", return_value=(root / "figure_review.json", {"manuscript_sha256": "x"})):
+                                        with patch("paperorchestra.ralph_bridge.write_citation_support_review", return_value=root / "citation_support_review.json"):
+                                            with patch("paperorchestra.ralph_bridge._refresh_citation_integrity_for_current_manuscript", return_value={"status": "fail"}):
+                                                result = run_qa_loop_step(root, MockProvider(), citation_evidence_mode="heuristic")
+
+            repair.assert_called_once()
+            attempted = result.payload.get("actions_attempted", [])
+            self.assertEqual(attempted[0]["code"], "citation_coverage_insufficient")
+            self.assertEqual(attempted[0]["handler"], "repair_citation_claims")
+            self.assertEqual(result.payload.get("actions_skipped"), [])
 
     def test_candidate_semantic_recheck_uses_bound_full_high_risk_baseline(self) -> None:
         from paperorchestra.ralph_bridge_repair import _candidate_semantic_recheck
@@ -456,6 +608,52 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             attempted = result.payload.get("actions_attempted", [])
             self.assertEqual(attempted[0]["code"], "critical_unsupported_citation")
             self.assertEqual(attempted[0]["handler"], "refresh_citation_quality")
+            self.assertEqual(result.payload.get("actions_skipped"), [])
+
+    def test_qa_loop_step_routes_weak_reference_identity_with_non_destructive_bib_rebuild_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n\\begin{document}\n"
+                "Critical source needs traceable metadata~\\cite{WeakIdentity}.\\end{document}\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            before_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "manuscript_hash": "sha256:" + hashlib.sha256(paper.read_bytes()).hexdigest(),
+                "tiers": {"tier_2_claim_safety": {"status": "fail", "failing_codes": ["critical_weak_reference_identity"]}},
+            }
+            plan = {
+                "schema_version": "qa-loop-plan/2",
+                "session_id": state.session_id,
+                "verdict": "continue",
+                "repair_actions": [{"code": "critical_weak_reference_identity", "automation": "semi_auto"}],
+            }
+            plan_after = {**plan, "verdict": "human_needed"}
+            with patch("paperorchestra.ralph_bridge.write_quality_eval", side_effect=[(root / "before.json", before_eval), (root / "after.json", before_eval)]):
+                with patch("paperorchestra.ralph_bridge.write_quality_loop_plan", side_effect=[(root / "plan-before.json", plan), (root / "plan-after.json", plan_after)]):
+                    with patch("paperorchestra.ralph_bridge._citation_summary", return_value={}):
+                        with patch("paperorchestra.ralph_bridge.build_bib", side_effect=ContractError("Run verify-papers before build-bib."), create=True) as rebuild:
+                            with patch("paperorchestra.ralph_bridge.write_citation_support_review", return_value=root / "citation_support_review.json") as review:
+                                with patch("paperorchestra.ralph_bridge._refresh_citation_integrity_for_current_manuscript", return_value={"status": "fail", "failing_codes": ["critical_weak_reference_identity"]}) as refresh:
+                                    with patch("paperorchestra.ralph_bridge.record_current_validation_report", return_value=(root / "validation.json", {"ok": True})):
+                                        with patch("paperorchestra.ralph_bridge.write_section_review", return_value=root / "section_review.json"):
+                                            with patch("paperorchestra.ralph_bridge.write_figure_placement_review", return_value=(root / "figure_review.json", {"manuscript_sha256": "x"})):
+                                                result = run_qa_loop_step(root, MockProvider(), citation_evidence_mode="heuristic")
+
+            rebuild.assert_called_once()
+            self.assertGreaterEqual(review.call_count, 1)
+            self.assertGreaterEqual(refresh.call_count, 1)
+            attempted = result.payload.get("actions_attempted", [])
+            self.assertEqual(attempted[0]["code"], "critical_weak_reference_identity")
+            self.assertEqual(attempted[0]["handler"], "refresh_citation_quality")
+            self.assertFalse(attempted[0]["bibtex_rebuild"]["ok"])
+            self.assertIn("Run verify-papers before build-bib", attempted[0]["bibtex_rebuild"]["error"])
             self.assertEqual(result.payload.get("actions_skipped"), [])
 
     def test_qa_loop_step_refreshes_unbound_citation_evidence_before_repair(self) -> None:
