@@ -96,6 +96,7 @@ from paperorchestra.pipeline import (
     _repair_inline_math_surplus_closing_brace,
     _restore_missing_referenced_labels,
     _source_critical_context_for_prompt,
+    _stabilize_figure_float_placement,
     build_bib,
     discover_papers,
     generate_outline,
@@ -152,6 +153,40 @@ from paperorchestra.validator import validate_manuscript
 
 
 class PipelineLatexRepairTests(unittest.TestCase):
+    def test_stabilize_figure_float_placement_expands_top_only_floats(self) -> None:
+        latex = (
+            "\\begin{figure}[t]\n"
+            "\\includegraphics[width=\\columnwidth]{inputs/figures/a.pdf}\n"
+            "\\caption{A}\\label{fig:a}\n"
+            "\\end{figure}\n"
+            "\\begin{figure*}[t]\n"
+            "\\includegraphics[width=\\textwidth]{inputs/figures/b.pdf}\n"
+            "\\caption{B}\\label{fig:b}\n"
+            "\\end{figure*}\n"
+            "\\begin{figure}[!t]\n"
+            "\\caption{Still top only}\\label{fig:top-only}\n"
+            "\\end{figure}\n"
+            "\\begin{figure}[!htbp]\n"
+            "\\caption{Already flexible}\\label{fig:c}\n"
+            "\\end{figure}\n"
+        )
+
+        stabilized = _stabilize_figure_float_placement(latex)
+
+        self.assertIn("\\begin{figure}[!htbp]", stabilized)
+        self.assertIn("\\begin{figure*}[!tbp]", stabilized)
+        self.assertEqual(stabilized.count("\\begin{figure}[!htbp]"), 3)
+        self.assertNotIn("\\begin{figure}[t]", stabilized)
+        self.assertNotIn("\\begin{figure}[!t]", stabilized)
+        self.assertNotIn("\\begin{figure*}[t]", stabilized)
+
+    def test_stabilize_figure_float_placement_adds_missing_float_hint(self) -> None:
+        latex = "\\begin{figure}\n\\caption{A}\\label{fig:a}\n\\end{figure}\n"
+
+        stabilized = _stabilize_figure_float_placement(latex)
+
+        self.assertIn("\\begin{figure}[!htbp]", stabilized)
+
     def test_repair_inline_math_surplus_closing_brace_from_advantage_expression(self) -> None:
         latex = r"incurring at most $\mathbf{Adv}^{\mathrm{prp}}_{E}(\mathcal{D})}$ by switching."
 
@@ -2581,7 +2616,7 @@ class PipelineTests(unittest.TestCase):
         }
         rendered = _ensure_generated_plot_usage(latex, plot_assets_index)
         self.assertIn("% PaperOrchestra:auto-repaired figure:fig_framework_overview", rendered)
-        self.assertIn("\\begin{figure}[t]", rendered)
+        self.assertIn("\\begin{figure}[!htbp]", rendered)
         self.assertLess(rendered.index("\\label{fig_framework_overview}"), rendered.index("\\section{Conclusion}"))
 
     def test_auto_inserted_plot_usage_skips_generated_placeholders(self) -> None:

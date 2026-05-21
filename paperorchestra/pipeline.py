@@ -876,7 +876,7 @@ def _ensure_generated_plot_usage(latex: str, plot_assets_index: dict[str, Any]) 
         include = f"\\input{{{snippet_path}}}" if isinstance(snippet_path, str) and snippet_path.endswith(".tex") else f"\\includegraphics[width=0.85\\linewidth]{{{snippet_path}}}"
         block = (
             f"\n% PaperOrchestra:auto-repaired figure:{figure_id}\n"
-            "\\begin{figure}[t]\n"
+            "\\begin{figure}[!htbp]\n"
             f"{include}\n"
             f"\\caption{{{_escape_latex_text(caption)}}}\n"
             f"\\label{{{figure_id}}}\n"
@@ -1003,6 +1003,33 @@ def _normalize_source_figure_paths(latex: str, figures_dir: str | None) -> str:
             latex,
         )
     return latex.replace("inputs/inputs/figures/", "inputs/figures/")
+
+
+def _stabilize_figure_float_placement(latex: str) -> str:
+    """Avoid top-only figure floats that LaTeX can defer to the manuscript tail.
+
+    The writer prompt asks for figures near their first textual mention, but
+    generated manuscripts commonly use ``[t]``.  Large technical figures can
+    exceed LaTeX's default top-float fraction, causing otherwise well-placed
+    source figure blocks to be dumped near the end of the rendered PDF.  Keep
+    already flexible/custom placements intact, but expand missing or top-only
+    hints to allow here/bottom/page placement as a fallback.
+    """
+
+    def replace(match: re.Match[str]) -> str:
+        env = match.group(1)
+        placement = match.group(2)
+        if placement is not None:
+            normalized = placement.replace(" ", "")
+            placement_flags = set(normalized.lower())
+            has_non_top_escape = bool(placement_flags & {"h", "b", "p"})
+            if has_non_top_escape or "H" in normalized:
+                return match.group(0)
+        stable = "!tbp" if env == "figure*" else "!htbp"
+        return f"\\begin{{{env}}}[{stable}]"
+
+    return re.sub(r"\\begin\{(figure\*?)\}(?:\[([^\]]*)\])?", replace, latex)
+
 
 def _figure_listing(figures_dir: str | None) -> str:
     if not figures_dir:
@@ -1757,7 +1784,7 @@ def _inject_missing_plot_assets(
         include = f"\\input{{{snippet_path}}}" if isinstance(snippet_path, str) and snippet_path.endswith(".tex") else f"\\includegraphics[width=0.85\\linewidth]{{{snippet_path}}}"
         block = (
             f"\n% PaperOrchestra:auto-repaired figure:{figure_id}\n"
-            "\\begin{figure}[t]\n"
+            "\\begin{figure}[!htbp]\n"
             f"{include}\n"
             f"\\caption{{{_escape_latex_text(caption)}}}\n"
             f"\\label{{{figure_id}}}\n"
@@ -3536,6 +3563,7 @@ def write_sections(
     latex = _normalize_generated_plot_paths(latex, plot_assets_index)
     latex = _normalize_source_figure_paths(latex, state.inputs.figures_dir)
     latex = _ensure_generated_plot_usage(latex, plot_assets_index)
+    latex = _stabilize_figure_float_placement(latex)
     latex = _remove_material_packet_sections(latex)
     latex = _ensure_discussion_section_for_claim_boundaries(latex, claim_map)
     latex = _ensure_required_claim_scope_notes(latex, claim_map)
@@ -3624,6 +3652,7 @@ Repair Instructions:
         retry_latex = _normalize_generated_plot_paths(retry_latex, plot_assets_index)
         retry_latex = _normalize_source_figure_paths(retry_latex, state.inputs.figures_dir)
         retry_latex = _ensure_generated_plot_usage(retry_latex, plot_assets_index)
+        retry_latex = _stabilize_figure_float_placement(retry_latex)
         retry_latex = _remove_material_packet_sections(retry_latex)
         retry_latex = _ensure_discussion_section_for_claim_boundaries(retry_latex, claim_map)
         retry_latex = _ensure_required_claim_scope_notes(retry_latex, claim_map)
@@ -3703,6 +3732,7 @@ Repair Instructions:
             repaired = False
             if any(issue.code == "plot_plan_not_reflected" for issue in retry_blocking):
                 repaired_retry_latex = _inject_missing_plot_assets(repaired_retry_latex, retry_blocking, plot_assets_index)
+                repaired_retry_latex = _stabilize_figure_float_placement(repaired_retry_latex)
                 repaired = True
             retry_validation_subject = _selected_section_template(repaired_retry_latex, selected_sections) if selected_sections else repaired_retry_latex
             sanitized_issues = collect_paper_contract_issues(
@@ -4071,6 +4101,7 @@ def refine_current_paper(
         latex = _normalize_generated_plot_paths(latex, plot_assets_index)
         latex = _normalize_source_figure_paths(latex, state.inputs.figures_dir)
         latex = _ensure_generated_plot_usage(latex, plot_assets_index)
+        latex = _stabilize_figure_float_placement(latex)
         latex = _remove_material_packet_sections(latex)
         latex = _ensure_discussion_section_for_claim_boundaries(latex, claim_map)
         latex = _ensure_required_claim_scope_notes(latex, claim_map)
