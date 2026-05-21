@@ -1322,26 +1322,93 @@ print(json.dumps(payload, sort_keys=True))
 PY_LIVE
 }
 
+write_operator_pdf_review_evidence() {
+  local cycle="$1"
+  local pdf="$ARTIFACTS/paper.full.pdf"
+  local pdf_text="$OPFB/rendered-pdf-review.cycle-${cycle}.txt"
+  local pdf_info="$OPFB/rendered-pdf-review.cycle-${cycle}.pdfinfo.txt"
+  local page_dir="$OPFB/rendered-pdf-pages.cycle-${cycle}"
+  local manifest="$OPFB/rendered-pdf-review.cycle-${cycle}.manifest.json"
+  mkdir -p "$page_dir"
+  if [[ ! -f "$pdf" ]]; then
+    printf 'compiled PDF missing; rendered PDF review evidence unavailable\n' > "$pdf_text"
+    printf 'compiled PDF missing\n' > "$pdf_info"
+  else
+    pdfinfo "$pdf" > "$pdf_info" 2> "$LOGS/rendered_pdf_review_cycle_${cycle}.pdfinfo.stderr.log" || true
+    pdftotext -layout "$pdf" "$pdf_text" 2> "$LOGS/rendered_pdf_review_cycle_${cycle}.pdftotext.stderr.log" || true
+    pdftoppm -png -r 110 "$pdf" "$page_dir/page" > "$LOGS/rendered_pdf_review_cycle_${cycle}.pdftoppm.stdout.log" 2> "$LOGS/rendered_pdf_review_cycle_${cycle}.pdftoppm.stderr.log" || true
+  fi
+  python3 - "$cycle" "$pdf" "$pdf_text" "$pdf_info" "$page_dir" "$manifest" "$EVIDENCE_ROOT" <<'PY_PDF_REVIEW_MANIFEST'
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+cycle, pdf, pdf_text, pdf_info, page_dir, manifest, root = sys.argv[1:]
+root_path = Path(root).resolve()
+
+def rel(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(root_path))
+    except Exception:
+        return path.name
+
+def sha(path: Path) -> str | None:
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() and path.is_file() else None
+
+page_root = Path(page_dir)
+pages = sorted(p for p in page_root.glob("*.png") if p.is_file())
+payload = {
+    "schema_version": "operator-rendered-pdf-review-evidence/1",
+    "cycle": int(cycle),
+    "compiled_pdf": rel(Path(pdf)),
+    "compiled_pdf_sha256": sha(Path(pdf)),
+    "pdf_text": rel(Path(pdf_text)),
+    "pdf_text_sha256": sha(Path(pdf_text)),
+    "pdf_info": rel(Path(pdf_info)),
+    "pdf_info_sha256": sha(Path(pdf_info)),
+    "page_images_dir": rel(page_root),
+    "page_image_count": len(pages),
+    "page_images": [{"path": rel(path), "sha256": sha(path), "size_bytes": path.stat().st_size} for path in pages],
+    "qa_requirement": "operator must inspect rendered PDF evidence for title, abstract, tables, figures, captions, overflow, page breaks, and overall readability before authoring feedback",
+}
+Path(manifest).write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+PY_PDF_REVIEW_MANIFEST
+}
+
 write_operator_feedback() {
   local cycle="$1"
   local packet="$OPFB/operator-review-packet.cycle-${cycle}.json"
   local feedback="$OPFB/operator-feedback.cycle-${cycle}.json"
   local prompt="$OPFB/operator-feedback-author.cycle-${cycle}.prompt.md"
   local response="$OPFB/operator-feedback-author.cycle-${cycle}.response.md"
+  local pdf_text="$OPFB/rendered-pdf-review.cycle-${cycle}.txt"
+  local pdf_info="$OPFB/rendered-pdf-review.cycle-${cycle}.pdfinfo.txt"
+  local page_dir="$OPFB/rendered-pdf-pages.cycle-${cycle}"
+  local pdf_manifest="$OPFB/rendered-pdf-review.cycle-${cycle}.manifest.json"
   if [[ -f "$ARTIFACTS/paper.full.pdf" ]]; then
     run_step "operator_packet_cycle_${cycle}" "${CLI[@]}" build-operator-review-packet --output "$packet" --review-scope pdf_and_tex --require-pdf || return 1
   else
     run_step "operator_packet_cycle_${cycle}" "${CLI[@]}" build-operator-review-packet --output "$packet" --review-scope tex_only || return 1
   fi
+  write_operator_pdf_review_evidence "$cycle"
   cat > "$prompt" <<PROMPT
 You are bounded Codex-as-operator feedback for a PaperOrchestra fresh smoke. Use only the packet and unchanged source-material context. Do not add new facts beyond the supplied material. Return strict JSON only.
 
+You MUST inspect the rendered PDF evidence before authoring feedback. Read the PDF page-by-page, slowly, as the user's QA delegate: flag things like an unsuitable title, weak abstract, tables protruding past margins, bad page breaks, misplaced figures/captions, figure dumps at the end, unreadable plots, and anything that would make a human say "this looks wrong." When a problem is visible only in the rendered paper, cite source_artifact_role=compiled_pdf and use a source_item_key such as "page 7 Figure 2" or "page 10 table overflow".
+
 Packet JSON: $packet
 Current TeX: $ARTIFACTS/paper.full.tex
+Rendered PDF layout text: $pdf_text
+Rendered PDF info: $pdf_info
+Rendered PDF page images: $page_dir
+Rendered PDF review manifest: $pdf_manifest
 Quality eval: $ARTIFACTS/quality-eval.json
 QA-loop plan: $ARTIFACTS/qa-loop.plan.json
 Citation critic: $ARTIFACTS/citation_support_review.json
 Meta leakage scan: $ARTIFACTS/meta-leakage-scan.json
+
+Rendered-PDF QA checklist: title, abstract, tables, figures, captions, overflow, page breaks, and overall readability. Do not approve or generate feedback from TeX/JSON alone when PDF evidence is available.
 
 Schema: {"intent":"approve_existing_candidate|generate_new_operator_candidate|reject_candidate_with_reason","issues":[{"source_artifact_role":"paper_full_tex|quality_eval|qa_loop_plan|qa_loop_execution|operator_feedback_execution|section_review|citation_support_review|compiled_pdf","source_item_key":"short locator","target_section":"Abstract|Introduction|Background and Related Work|Construction|Security Model and Proof|Evaluation|Discussion and Limitations|Conclusion|Whole manuscript","severity":"blocker|major|minor","rationale":"specific reason grounded in artifacts","suggested_action":"specific rewrite instruction","authority_class":"author_feedback|claim_safety|proof_preservation|benchmark_framing|citation_support|narrative_quality|meta_leakage","owner_category":"author|experiment|proof|bibliography|implementation"}]}
 If the packet contains an unpromoted qa_loop_execution/operator_feedback_execution candidate_approval with candidate_progress.forward_progress=true, choose intent=approve_existing_candidate and include issue(s) whose source_artifact_role targets only that candidate approval source. Do not include extra diagnostic issues from stale candidate sources when approving. A historical approval whose candidate_sha256 already equals the packet manuscript_sha256 is not actionable; in that case choose generate_new_operator_candidate unless rejecting is safer.

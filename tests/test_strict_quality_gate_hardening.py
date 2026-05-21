@@ -2365,6 +2365,89 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertIn("operator_cycle_command_sequence_incomplete", result["failing_codes"])
 
+    def test_evidence_completeness_requires_operator_rendered_pdf_review_for_pdf_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for subdir in ["readable", "logs", "artifacts", "inputs", "operator-feedback"]:
+                (root / subdir).mkdir()
+            (root / "README.md").write_text("operator_feedback_cycles: 1\n", encoding="utf-8")
+            (root / "inputs" / "provenance-ledger.json").write_text('{"items":[]}\n', encoding="utf-8")
+            (root / "inputs.sha256").write_text("abc inputs/idea.tex\n", encoding="utf-8")
+            (root / "artifacts" / "session-snapshot-final").mkdir()
+            for artifact in ["material-invariance.json", "fresh-smoke-lane-a-acceptance.json", "meta-leakage-scan.json"]:
+                (root / "artifacts" / artifact).write_text('{"status":"pass"}\n', encoding="utf-8")
+            (root / "artifact-manifest.json").write_text('{"missing_referenced_artifacts":[]}\n', encoding="utf-8")
+            (root / "readable" / "timeline.md").write_text("# Timeline\n", encoding="utf-8")
+            (root / "readable" / "commands.md").write_text(
+                "\n".join(
+                    [
+                        "# Command exit codes",
+                        "- `operator_packet_cycle_1`: `0`",
+                        "- `operator_import_cycle_1`: `0`",
+                        "- `operator_apply_cycle_1`: `0`",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / "readable" / "verdict.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "fresh-smoke-verdict/1",
+                        "smoke_verdict": "fail_loop_feedback_not_reflected",
+                        "qa_loop_terminal_verdict": "human_needed",
+                        "qa_loop_terminal_exit_code": 20,
+                        "first_failing_predicate": "operator_feedback",
+                        "first_failing_artifact": "operator-feedback/operator-feedback.cycle-1.json",
+                        "operator_feedback_cycles": 1,
+                        "material_invariance_status": "pass",
+                        "evidence_completeness_status": "fail",
+                        "lane_a_status": "pass",
+                        "critic_verdict": "not_run",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "final-smoke-status.txt").write_text("human_needed\n", encoding="utf-8")
+            (root / "final-smoke-exit-code.txt").write_text("20\n", encoding="utf-8")
+            for command_name in ["operator_packet_cycle_1", "operator_import_cycle_1", "operator_apply_cycle_1"]:
+                (root / "logs" / f"{command_name}.command").write_text("true\n", encoding="utf-8")
+                (root / "logs" / f"{command_name}.stdout.log").write_text("", encoding="utf-8")
+                (root / "logs" / f"{command_name}.stderr.log").write_text("", encoding="utf-8")
+                (root / "logs" / f"{command_name}.exitcode").write_text("0\n", encoding="utf-8")
+            (root / "operator-feedback" / "paper.full.pdf").write_bytes(b"%PDF-1.5\n")
+            pdf_sha = hashlib.sha256((root / "operator-feedback" / "paper.full.pdf").read_bytes()).hexdigest()
+            (root / "operator-feedback" / "operator-review-packet.cycle-1.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-review-packet/1",
+                        "review_scope": "pdf_and_tex",
+                        "artifacts": [
+                            {
+                                "role": "compiled_pdf",
+                                "path": "operator-feedback/paper.full.pdf",
+                                "sha256": pdf_sha,
+                                "size_bytes": (root / "operator-feedback" / "paper.full.pdf").stat().st_size,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            for name, content in [
+                ("operator-feedback-author.cycle-1.prompt.md", "No rendered PDF evidence requested.\n"),
+                ("operator-feedback-author.cycle-1.response.md", "{}\n"),
+                ("operator-feedback-author.cycle-1.exitcode", "0\n"),
+                ("operator-feedback.cycle-1.json", '{"issues":[]}\n'),
+                ("operator-feedback-imported.cycle-1.json", '{"issues":[]}\n'),
+            ]:
+                (root / "operator-feedback" / name).write_text(content, encoding="utf-8")
+
+            result = validate_evidence_completeness(root)
+
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("operator_rendered_pdf_review_missing", result["failing_codes"])
+
     def test_evidence_completeness_compares_operator_history_cycle_count(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -916,6 +916,47 @@ def _check_operator_cycle_artifacts(
                     failing_codes.add("operator_packet_artifact_snapshot_invalid")
                 else:
                     checked.append({"check": "operator_packet_artifact_snapshot_integrity", "cycle": n, "status": "pass"})
+                if packet.get("review_scope") == "pdf_and_tex":
+                    rendered_pdf_required = [
+                        f"operator-feedback/rendered-pdf-review.cycle-{n}.txt",
+                        f"operator-feedback/rendered-pdf-review.cycle-{n}.pdfinfo.txt",
+                        f"operator-feedback/rendered-pdf-review.cycle-{n}.manifest.json",
+                    ]
+                    missing_rendered_pdf = [rel for rel in rendered_pdf_required if not (root / rel).is_file()]
+                    page_dir = root / f"operator-feedback/rendered-pdf-pages.cycle-{n}"
+                    if not page_dir.is_dir() or not any(page_dir.glob("*.png")):
+                        missing_rendered_pdf.append(f"operator-feedback/rendered-pdf-pages.cycle-{n}/*.png")
+                    if missing_rendered_pdf:
+                        missing.append(
+                            {
+                                "check": "operator_rendered_pdf_review",
+                                "cycle": n,
+                                "missing": missing_rendered_pdf,
+                            }
+                        )
+                        failing_codes.add("operator_rendered_pdf_review_missing")
+                    else:
+                        checked.append({"check": "operator_rendered_pdf_review", "cycle": n, "status": "pass"})
+                    prompt_path = root / f"operator-feedback/operator-feedback-author.cycle-{n}.prompt.md"
+                    prompt_text = prompt_path.read_text(encoding="utf-8", errors="replace") if prompt_path.exists() else ""
+                    required_prompt_markers = [
+                        "You MUST inspect the rendered PDF evidence before authoring feedback.",
+                        "Rendered PDF layout text:",
+                        "Rendered PDF page images:",
+                        "source_artifact_role=compiled_pdf",
+                    ]
+                    missing_markers = [marker for marker in required_prompt_markers if marker not in prompt_text]
+                    if missing_markers:
+                        inconsistent.append(
+                            {
+                                "check": "operator_rendered_pdf_review_prompt",
+                                "cycle": n,
+                                "missing_markers": missing_markers,
+                            }
+                        )
+                        failing_codes.add("operator_rendered_pdf_review_missing")
+                    else:
+                        checked.append({"check": "operator_rendered_pdf_review_prompt", "cycle": n, "status": "pass"})
         for command_name in [f"operator_packet_cycle_{n}", f"operator_import_cycle_{n}", f"operator_apply_cycle_{n}"]:
             if command_name not in commands:
                 inconsistent.append({"check": "operator_cycle_command_sequence", "cycle": n, "missing_command": command_name})

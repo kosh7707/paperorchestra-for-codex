@@ -259,6 +259,25 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             text.index('preserve_iteration_pdf "final" "compile_final"'),
         )
 
+    def test_fresh_full_live_smoke_forces_operator_pdf_review_evidence(self) -> None:
+        text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+        subprocess.run(["bash", "-n", "scripts/fresh-full-live-smoke-loop.sh"], check=True)
+
+        self.assertIn("write_operator_pdf_review_evidence() {", text)
+        self.assertIn('pdftotext -layout "$pdf" "$pdf_text"', text)
+        self.assertIn('pdfinfo "$pdf" > "$pdf_info"', text)
+        self.assertIn('pdftoppm -png -r 110 "$pdf" "$page_dir/page"', text)
+        self.assertIn('rendered-pdf-review.cycle-${cycle}.txt', text)
+        self.assertIn('rendered-pdf-review.cycle-${cycle}.pdfinfo.txt', text)
+        self.assertIn('rendered-pdf-pages.cycle-${cycle}', text)
+        self.assertIn("You MUST inspect the rendered PDF evidence before authoring feedback.", text)
+        self.assertIn("Rendered PDF layout text:", text)
+        self.assertIn("Rendered PDF page images:", text)
+        self.assertIn("title, abstract, tables, figures, captions, overflow, page breaks, and overall readability", text)
+        self.assertIn("source_artifact_role=compiled_pdf", text)
+        self.assertLess(text.index("build-operator-review-packet"), text.index('write_operator_pdf_review_evidence "$cycle"'))
+        self.assertLess(text.index('write_operator_pdf_review_evidence "$cycle"'), text.index("cat > \"$prompt\" <<PROMPT"))
+
     def test_fresh_full_live_smoke_report_status_gate_fails_non_pass_reports(self) -> None:
         wrapper = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
         start = wrapper.index("require_report_status_pass() {")
