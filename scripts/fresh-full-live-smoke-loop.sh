@@ -41,10 +41,11 @@ EVIDENCE_ROOT="$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))'
 WORKDIR="$EVIDENCE_ROOT/workdir"
 LOGS="$EVIDENCE_ROOT/logs"
 ARTIFACTS="$EVIDENCE_ROOT/artifacts"
+PDF_SNAPSHOTS="$ARTIFACTS/pdfs"
 OPFB="$EVIDENCE_ROOT/operator-feedback"
 READABLE="$EVIDENCE_ROOT/readable"
 CRITIC="$EVIDENCE_ROOT/critic"
-mkdir -p "$LOGS" "$ARTIFACTS" "$OPFB" "$READABLE" "$CRITIC" "$WORKDIR" "$WORKDIR/inputs" "$EVIDENCE_ROOT/inputs-materials" "$EVIDENCE_ROOT/evidence-only" "$ARTIFACTS/prompts" "$EVIDENCE_ROOT/provider-traces"
+mkdir -p "$LOGS" "$ARTIFACTS" "$PDF_SNAPSHOTS" "$OPFB" "$READABLE" "$CRITIC" "$WORKDIR" "$WORKDIR/inputs" "$EVIDENCE_ROOT/inputs-materials" "$EVIDENCE_ROOT/evidence-only" "$ARTIFACTS/prompts" "$EVIDENCE_ROOT/provider-traces"
 
 if [[ -f "$REPO_ROOT/.env" ]]; then
   set -a
@@ -831,6 +832,100 @@ copy_session_artifacts() {
   fi
 }
 
+preserve_iteration_pdf() {
+  local label="$1"
+  local source_stage="$2"
+  mkdir -p "$PDF_SNAPSHOTS"
+  local source_pdf=""
+  source_pdf="$(python3 - "$WORKDIR" <<'PY_FIND_PDF'
+import sys
+from pathlib import Path
+
+workdir = Path(sys.argv[1])
+candidates: list[Path] = []
+
+current_session = workdir / ".paper-orchestra" / "current_session.txt"
+run_dirs: list[Path] = []
+if current_session.exists():
+    sid = current_session.read_text(encoding="utf-8", errors="replace").strip()
+    if sid:
+        run_dirs.append(workdir / ".paper-orchestra" / "runs" / sid)
+runs_root = workdir / ".paper-orchestra" / "runs"
+if runs_root.exists():
+    run_dirs.extend(sorted((p for p in runs_root.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime))
+
+seen: set[Path] = set()
+for run_dir in run_dirs:
+    for pattern in (
+        "build/compiled/*.pdf",
+        "build/compiled-iter-*/*.pdf",
+        "artifacts/*.pdf",
+    ):
+        for path in run_dir.glob(pattern):
+            resolved = path.resolve()
+            if resolved not in seen and path.is_file():
+                seen.add(resolved)
+                candidates.append(path)
+for path in (workdir / "paper.full.pdf",):
+    if path.is_file():
+        resolved = path.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            candidates.append(path)
+
+if not candidates:
+    raise SystemExit(0)
+latest = max(candidates, key=lambda p: p.stat().st_mtime_ns)
+print(latest)
+PY_FIND_PDF
+)"
+  if [[ -z "$source_pdf" || ! -f "$source_pdf" ]]; then
+    printf 'skip preserve_iteration_pdf: no compiled PDF found for %s (%s)\n' "$label" "$source_stage" > "$LOGS/preserve_pdf_${label//[^A-Za-z0-9_.-]/_}.log"
+    write_timeline "- $(date -u +%Y-%m-%dT%H:%M:%SZ) skip preserve_iteration_pdf label=${label} source_stage=${source_stage} reason=no_compiled_pdf"
+    return 0
+  fi
+
+  local safe_label
+  safe_label="$(python3 - "$label" <<'PY_SAFE_LABEL'
+import re, sys
+label = re.sub(r"[^A-Za-z0-9_.-]+", "-", sys.argv[1]).strip("-")
+print(label or "snapshot")
+PY_SAFE_LABEL
+)"
+  local dest="$PDF_SNAPSHOTS/${safe_label}.pdf"
+  cp "$source_pdf" "$dest"
+  python3 - "$PDF_SNAPSHOTS/pdf-snapshots.manifest.jsonl" "$label" "$source_stage" "$source_pdf" "$dest" "$EVIDENCE_ROOT" <<'PY_MANIFEST'
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+manifest = Path(sys.argv[1])
+label, source_stage = sys.argv[2], sys.argv[3]
+source_pdf, dest, evidence_root = Path(sys.argv[4]), Path(sys.argv[5]), Path(sys.argv[6])
+
+def rel_or_name(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(evidence_root.resolve()))
+    except Exception:
+        return path.name
+
+payload = {
+    "schema_version":"fresh-smoke-pdf-snapshot/1",
+    "label": label,
+    "source_stage": source_stage,
+    "source_pdf": rel_or_name(source_pdf),
+    "snapshot_pdf": rel_or_name(dest),
+    "sha256": hashlib.sha256(dest.read_bytes()).hexdigest(),
+    "size_bytes": dest.stat().st_size,
+}
+with manifest.open("a", encoding="utf-8") as handle:
+    handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n")
+PY_MANIFEST
+  printf 'preserved %s from %s\n' "$dest" "$source_pdf" > "$LOGS/preserve_pdf_${safe_label}.log"
+  write_timeline "- $(date -u +%Y-%m-%dT%H:%M:%SZ) preserve_iteration_pdf label=${label} source_stage=${source_stage} snapshot=artifacts/pdfs/${safe_label}.pdf"
+}
+
 refresh_citation_integrity_artifacts() {
   local label="$1"
   run_step "audit_rendered_references_${label}" "${CLI[@]}" audit-rendered-references --quality-mode claim_safe || fail_now fail_execution_error "\"audit_rendered_references_${label}\"" "\"logs/audit_rendered_references_${label}.stderr.log\"" 1
@@ -1278,6 +1373,7 @@ PY
   run_semantic_retryable_step "operator_apply_cycle_${cycle}" "${CLI[@]}" apply-operator-feedback --imported-feedback "$OPFB/operator-feedback-imported.cycle-${cycle}.json" --quality-mode claim_safe --citation-evidence-mode web --require-compile --require-live-verification --max-supervised-iterations 1 --max-iterations "$MAX_ITER" "${PROVIDER[@]}" "${CITATION_PROVIDER[@]}" "${RUNTIME[@]}"
   rc=$?
   set -e
+  preserve_iteration_pdf "cycle-${cycle}-operator-apply" "operator_apply_cycle_${cycle}" || true
   preserve_operator_feedback_execution_cycle "$cycle" "$rc" || true
   return "$rc"
 }
@@ -1373,6 +1469,7 @@ run_step plan_narrative "${CLI[@]}" plan-narrative "${PROVIDER[@]}" "${RUNTIME[@
 run_retryable_step write_intro_related "${CLI[@]}" write-intro-related "${PROVIDER[@]}" "${RUNTIME[@]}" --claim-safe --allow-recoverable-contract-issues || fail_now fail_execution_error '"write_intro_related"' '"logs/write_intro_related.step-retry.jsonl"' 1
 run_retryable_step write_sections "${CLI[@]}" write-sections "${PROVIDER[@]}" "${RUNTIME[@]}" --claim-safe || fail_now fail_execution_error '"write_sections"' '"logs/write_sections.step-retry.jsonl"' 1
 run_step compile_initial "${CLI[@]}" compile || { scan_meta_leakage || true; fail_now fail_execution_error '"compile_initial"' '"logs/compile_initial.stderr.log"' 1; }
+preserve_iteration_pdf "iter-00-initial" "compile_initial" || true
 scan_meta_leakage || fail_now fail_meta_leakage '"meta_leakage"' '"artifacts/meta-leakage-scan.json"' 1
 run_step audit_rendered_references_pre_citation "${CLI[@]}" audit-rendered-references --quality-mode claim_safe --output "$ARTIFACTS/rendered_reference_audit.pre_citation.json" || fail_now fail_execution_error '"audit_rendered_references_pre_citation"' '"logs/audit_rendered_references_pre_citation.stderr.log"' 1
 if ! require_report_status_pass "$ARTIFACTS/rendered_reference_audit.pre_citation.json" > "$LOGS/audit_rendered_references_pre_citation.status.stdout.log" 2> "$LOGS/audit_rendered_references_pre_citation.status.stderr.log"; then
@@ -1402,6 +1499,7 @@ for iter in $(seq 1 "$MAX_ITER"); do
   run_semantic_retryable_step "qa_loop_step_iter_${iter}" "${CLI[@]}" qa-loop-step --quality-mode claim_safe --max-iterations "$MAX_ITER" --require-compile --citation-evidence-mode web --require-live-verification "${PROVIDER[@]}" "${CITATION_PROVIDER[@]}" "${RUNTIME[@]}"
   STEP_RC=$?
   set -e
+  preserve_iteration_pdf "iter-${iter}-qa-loop-step" "qa_loop_step_iter_${iter}" || true
   case "$STEP_RC" in
     0) FINAL="ready_for_human_finalization"; LOOP_STOP_REASON="ready_for_human_finalization"; QA_LOOP_TERMINAL_VERDICT='"ready_for_human_finalization"'; QA_LOOP_TERMINAL_EXIT_CODE=0; break ;;
     10) FINAL="continue"; QA_LOOP_TERMINAL_VERDICT='"continue"'; QA_LOOP_TERMINAL_EXIT_CODE=10 ;;
@@ -1467,6 +1565,7 @@ case "$FINAL" in
 esac
 
 run_step compile_final "${CLI[@]}" compile || true
+preserve_iteration_pdf "final" "compile_final" || true
 run_step check_compile_env_final "${CLI[@]}" check-compile-env || true
 run_step record_runtime_parity_final "${CLI[@]}" record-runtime-parity --output "$ARTIFACTS/runtime-parity.final.json" || true
 run_step review_sections_final "${CLI[@]}" review-sections --output "$ARTIFACTS/section_review.final.json" || true

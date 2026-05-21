@@ -230,6 +230,35 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertIn('QUALITY_GATE_STATUS="fail_figure_gate"', text)
         self.assertIn('MANUSCRIPT_READINESS="blocked_figure_gate"', text)
 
+    def test_fresh_full_live_smoke_preserves_iteration_pdf_snapshots(self) -> None:
+        text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+        subprocess.run(["bash", "-n", "scripts/fresh-full-live-smoke-loop.sh"], check=True)
+
+        self.assertIn('PDF_SNAPSHOTS="$ARTIFACTS/pdfs"', text)
+        self.assertIn("preserve_iteration_pdf() {", text)
+        self.assertIn("pdf-snapshots.manifest.jsonl", text)
+        self.assertIn("schema_version\":\"fresh-smoke-pdf-snapshot/1", text)
+        self.assertIn('preserve_iteration_pdf "iter-00-initial" "compile_initial"', text)
+        self.assertIn('preserve_iteration_pdf "iter-${iter}-qa-loop-step" "qa_loop_step_iter_${iter}"', text)
+        self.assertIn('preserve_iteration_pdf "cycle-${cycle}-operator-apply" "operator_apply_cycle_${cycle}"', text)
+        self.assertIn('preserve_iteration_pdf "final" "compile_final"', text)
+        self.assertLess(
+            text.index('run_step compile_initial "${CLI[@]}" compile'),
+            text.index('preserve_iteration_pdf "iter-00-initial" "compile_initial"'),
+        )
+        self.assertLess(
+            text.index('run_semantic_retryable_step "qa_loop_step_iter_${iter}"'),
+            text.index('preserve_iteration_pdf "iter-${iter}-qa-loop-step" "qa_loop_step_iter_${iter}"'),
+        )
+        self.assertLess(
+            text.index('run_semantic_retryable_step "operator_apply_cycle_${cycle}"'),
+            text.index('preserve_iteration_pdf "cycle-${cycle}-operator-apply" "operator_apply_cycle_${cycle}"'),
+        )
+        self.assertLess(
+            text.index('run_step compile_final "${CLI[@]}" compile'),
+            text.index('preserve_iteration_pdf "final" "compile_final"'),
+        )
+
     def test_fresh_full_live_smoke_report_status_gate_fails_non_pass_reports(self) -> None:
         wrapper = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
         start = wrapper.index("require_report_status_pass() {")
