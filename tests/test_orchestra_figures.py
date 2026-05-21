@@ -207,6 +207,195 @@ class OrchestraFigureGateTests(unittest.TestCase):
         self.assertIn("figure_asset_missing", decision["reasons"])
         self.assertIn("placeholder_figure_unresolved", report["blocking_reasons"])
 
+    def test_figure_gate_recognizes_generated_asset_by_figure_id_without_calling_it_final_artwork(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            figures = root / "figures"
+            figures.mkdir()
+            (figures / "unrelated_supplied_figure.pdf").write_bytes(b"unrelated")
+            generated_dir = root / "build" / "plot-assets"
+            generated_dir.mkdir(parents=True)
+            (generated_dir / "fig_architecture.svg").write_text("<svg />", encoding="utf-8")
+            (generated_dir / "fig_architecture.tex").write_text("\\includegraphics{fig_architecture.svg}", encoding="utf-8")
+            plot_assets = root / "plot-assets.json"
+            plot_assets.write_text(
+                json.dumps(
+                    {
+                        "assets": [
+                            {
+                                "figure_id": "fig_architecture",
+                                "caption": "Architecture overview",
+                                "filename": "fig_architecture.svg",
+                                "path": "build/plot-assets/fig_architecture.svg",
+                                "latex_snippet_path": "build/plot-assets/fig_architecture.tex",
+                                "asset_kind": "generated_placeholder",
+                                "review_status": "human_final_artwork_required",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            plot_manifest = root / "plot-manifest.json"
+            plot_manifest.write_text(
+                json.dumps({"figures": [{"figure_id": "fig_architecture", "caption": "Architecture overview"}]}),
+                encoding="utf-8",
+            )
+
+            report = build_figure_gate_report(
+                root,
+                figures_dir=figures,
+                plot_assets_path=plot_assets,
+                plot_manifest_path=plot_manifest,
+            )
+
+        self.assertEqual(report["status"], "pass")
+        self.assertEqual(report["summary"]["generated_asset_available"], 1)
+        decision = report["decisions"][0]
+        self.assertEqual(decision["status"], "generated_asset_available")
+        self.assertFalse(decision["replacement_proposed"])
+        self.assertFalse(decision["replacement_applied"])
+        self.assertIn("generated_placeholder", decision["reasons"])
+        self.assertIn("human_final_artwork_required", decision["reasons"])
+        self.assertNotIn("asset_label", decision)
+        self.assertEqual(report["acceptance_gate_impacts"]["supplied_figures_inventoried_matched_or_blocked"], "pass")
+
+    def test_supplied_matching_asset_wins_over_generated_placeholder_availability(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            figures = root / "figures"
+            figures.mkdir()
+            (figures / "architecture_overview.pdf").write_bytes(b"final supplied")
+            generated_dir = root / "build" / "plot-assets"
+            generated_dir.mkdir(parents=True)
+            (generated_dir / "fig_architecture.svg").write_text("<svg />", encoding="utf-8")
+            plot_assets = root / "plot-assets.json"
+            plot_assets.write_text(
+                json.dumps(
+                    {
+                        "assets": [
+                            {
+                                "figure_id": "fig_architecture",
+                                "caption": "Architecture overview",
+                                "path": "build/plot-assets/fig_architecture.svg",
+                                "asset_kind": "generated_placeholder",
+                                "review_status": "human_final_artwork_required",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = build_figure_gate_report(root, figures_dir=figures, plot_assets_path=plot_assets)
+
+        self.assertEqual(report["status"], "pass")
+        self.assertEqual(report["summary"]["matched"], 1)
+        self.assertEqual(report["summary"]["generated_asset_available"], 0)
+        self.assertEqual(report["decisions"][0]["status"], "matched")
+
+    def test_ambiguous_supplied_matches_are_not_masked_by_generated_placeholder_availability(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            figures = root / "figures"
+            figures.mkdir()
+            (figures / "architecture_overview_left.pdf").write_bytes(b"left")
+            (figures / "architecture_overview_right.pdf").write_bytes(b"right")
+            generated_dir = root / "build" / "plot-assets"
+            generated_dir.mkdir(parents=True)
+            (generated_dir / "fig_architecture.svg").write_text("<svg />", encoding="utf-8")
+            plot_assets = root / "plot-assets.json"
+            plot_assets.write_text(
+                json.dumps(
+                    {
+                        "assets": [
+                            {
+                                "figure_id": "fig_architecture",
+                                "caption": "Architecture overview",
+                                "path": "build/plot-assets/fig_architecture.svg",
+                                "asset_kind": "generated_placeholder",
+                                "review_status": "human_final_artwork_required",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = build_figure_gate_report(root, figures_dir=figures, plot_assets_path=plot_assets)
+
+        self.assertEqual(report["status"], "blocked")
+        self.assertEqual(report["summary"]["ambiguous"], 1)
+        self.assertEqual(report["summary"]["generated_asset_available"], 0)
+        self.assertEqual(report["decisions"][0]["status"], "ambiguous")
+
+    def test_figure_gate_resolves_generated_asset_paths_relative_to_plot_assets_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            figures = root / "figures"
+            figures.mkdir()
+            metadata = root / "metadata"
+            metadata.mkdir()
+            (metadata / "fig_architecture.svg").write_text("<svg />", encoding="utf-8")
+            plot_assets = metadata / "plot-assets.json"
+            plot_assets.write_text(
+                json.dumps(
+                    {
+                        "assets": [
+                            {
+                                "figure_id": "fig_architecture",
+                                "caption": "Architecture overview",
+                                "path": "fig_architecture.svg",
+                                "asset_kind": "generated_placeholder",
+                                "review_status": "human_final_artwork_required",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = build_figure_gate_report(root, figures_dir=figures, plot_assets_path=plot_assets)
+
+        self.assertEqual(report["status"], "pass")
+        self.assertEqual(report["decisions"][0]["status"], "generated_asset_available")
+
+    def test_generated_asset_availability_reasons_do_not_leak_private_metadata_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            figures = root / "figures"
+            figures.mkdir()
+            generated_dir = root / "build" / "plot-assets"
+            generated_dir.mkdir(parents=True)
+            (generated_dir / "fig_architecture.svg").write_text("<svg />", encoding="utf-8")
+            plot_assets = root / "plot-assets.json"
+            plot_assets.write_text(
+                json.dumps(
+                    {
+                        "assets": [
+                            {
+                                "figure_id": "fig_architecture",
+                                "caption": "Architecture overview",
+                                "path": "build/plot-assets/fig_architecture.svg",
+                                "asset_kind": "generated_placeholder",
+                                "review_status": "PRIVATE_SECRET_REVIEW",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            report = build_figure_gate_report(root, figures_dir=figures, plot_assets_path=plot_assets)
+            rendered = json.dumps(report, ensure_ascii=False)
+
+        self.assertEqual(report["status"], "pass")
+        self.assertEqual(report["decisions"][0]["status"], "generated_asset_available")
+        self.assertIn("generated_placeholder", report["decisions"][0]["reasons"])
+        self.assertNotIn("PRIVATE_SECRET_REVIEW", rendered)
+        self.assertNotIn("PRIVATE", rendered)
+        self.assertNotIn("SECRET", rendered)
+
     def test_figure_gate_public_report_redacts_private_slot_filename_and_caption(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

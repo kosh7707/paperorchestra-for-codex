@@ -77,6 +77,13 @@ class FigureSlot:
 
 
 @dataclass(frozen=True)
+class GeneratedFigureAvailability:
+    figure_id: str
+    sha256: str
+    reasons: tuple[str, ...] = ("generated_asset_available", "generated_placeholder", "human_final_artwork_required")
+
+
+@dataclass(frozen=True)
 class FigureMatchDecision:
     slot_id: str
     status: str
@@ -165,7 +172,13 @@ def _read_json_if_exists(path: str | Path | None) -> Any:
 
 
 def _decision_summary(decisions: list[FigureMatchDecision]) -> dict[str, int]:
-    summary = {"matched": 0, "ambiguous": 0, "missing": 0, "human_finalization_needed": 0}
+    summary = {
+        "matched": 0,
+        "generated_asset_available": 0,
+        "ambiguous": 0,
+        "missing": 0,
+        "human_finalization_needed": 0,
+    }
     for decision in decisions:
         if decision.status in summary:
             summary[decision.status] += 1
@@ -190,11 +203,31 @@ def inventory_figure_assets(root: str | Path) -> FigureInventory:
 
 
 class FigureGatePolicy:
-    def match_slot(self, slot: FigureSlot, assets: list[FigureAsset]) -> FigureMatchDecision:
+    def match_slot(
+        self,
+        slot: FigureSlot,
+        assets: list[FigureAsset],
+        generated_assets: dict[str, GeneratedFigureAvailability] | None = None,
+    ) -> FigureMatchDecision:
         purpose_tokens = self._tokens(slot.purpose)
         if not slot.placeholder:
             return FigureMatchDecision(slot_id=slot.slot_id, status="already_realized", reasons=["slot_is_not_placeholder"])
+        generated_asset = (generated_assets or {}).get(slot.slot_id)
+        generated_decision = (
+            FigureMatchDecision(
+                slot_id=slot.slot_id,
+                status="generated_asset_available",
+                reasons=list(generated_asset.reasons),
+                selected_asset_sha256=generated_asset.sha256,
+                replacement_proposed=False,
+                replacement_applied=False,
+            )
+            if generated_asset is not None
+            else None
+        )
         if not purpose_tokens:
+            if generated_decision is not None:
+                return generated_decision
             return FigureMatchDecision(
                 slot_id=slot.slot_id,
                 status="missing",
@@ -207,6 +240,8 @@ class FigureGatePolicy:
             if score > 0:
                 scored.append((score, asset))
         if not scored:
+            if generated_decision is not None:
+                return generated_decision
             return FigureMatchDecision(
                 slot_id=slot.slot_id,
                 status="missing",
@@ -216,6 +251,8 @@ class FigureGatePolicy:
         best_score = max(score for score, _asset in scored)
         candidates = [asset for score, asset in scored if score == best_score and score >= threshold]
         if not candidates:
+            if generated_decision is not None:
+                return generated_decision
             return FigureMatchDecision(
                 slot_id=slot.slot_id,
                 status="missing",
@@ -267,6 +304,70 @@ def _slot_from_mapping(item: dict[str, Any], *, fallback_index: int, default_pla
     if not isinstance(identifier, str) or not isinstance(purpose, str):
         return None
     return FigureSlot(slot_id=identifier, purpose=purpose, placeholder=placeholder)
+
+
+def _resolve_existing_plot_asset_path(raw_value: Any, *, bases: list[Path]) -> Path | None:
+    if not isinstance(raw_value, str) or not raw_value.strip():
+        return None
+    candidate = Path(raw_value)
+    if candidate.is_absolute():
+        return candidate if candidate.exists() else None
+    for base in bases:
+        resolved = (base / candidate).resolve()
+        if resolved.exists():
+            return resolved
+    return None
+
+
+def _generated_figure_availability_from_plot_assets(
+    *,
+    cwd: str | Path | None = None,
+    plot_assets_path: str | Path | None = None,
+) -> dict[str, GeneratedFigureAvailability]:
+    payload = _read_json_if_exists(plot_assets_path)
+    if not isinstance(payload, dict) or not plot_assets_path:
+        return {}
+
+    plot_assets_file = Path(plot_assets_path).resolve()
+    bases = [plot_assets_file.parent]
+    if cwd is not None:
+        bases.insert(0, Path(cwd).resolve())
+
+    available: dict[str, GeneratedFigureAvailability] = {}
+    for item in payload.get("assets") or []:
+        if not isinstance(item, dict):
+            continue
+        figure_id = item.get("figure_id") or item.get("id") or item.get("label")
+        if not isinstance(figure_id, str) or not figure_id:
+            continue
+        asset_kind = item.get("asset_kind")
+        review_status = item.get("review_status")
+        if asset_kind != "generated_placeholder" and review_status != "human_final_artwork_required":
+            continue
+        existing_paths: list[Path] = []
+        for key in ("path", "tex_path", "latex_path", "latex_snippet_path"):
+            resolved = _resolve_existing_plot_asset_path(item.get(key), bases=bases)
+            if resolved is not None:
+                existing_paths.append(resolved)
+        if not existing_paths:
+            continue
+        digest = hashlib.sha256()
+        for path in sorted({path.resolve() for path in existing_paths}):
+            digest.update(path.name.encode("utf-8", errors="replace"))
+            digest.update(b"\0")
+            digest.update(_sha256(path).encode("ascii"))
+            digest.update(b"\0")
+        reasons = ["generated_asset_available"]
+        if asset_kind == "generated_placeholder":
+            reasons.append("generated_placeholder")
+        if review_status == "human_final_artwork_required":
+            reasons.append("human_final_artwork_required")
+        available[figure_id] = GeneratedFigureAvailability(
+            figure_id=figure_id,
+            sha256=digest.hexdigest(),
+            reasons=tuple(dict.fromkeys(reasons)),
+        )
+    return available
 
 
 def derive_figure_slots(
@@ -367,8 +468,9 @@ def build_figure_gate_report(
         return payload
 
     inventory = inventory_figure_assets(figures_dir) if figures_dir else FigureInventory()
+    generated_assets = _generated_figure_availability_from_plot_assets(cwd=cwd, plot_assets_path=plot_assets_path)
     policy = FigureGatePolicy()
-    decisions = [policy.match_slot(slot, inventory.assets) for slot in slots]
+    decisions = [policy.match_slot(slot, inventory.assets, generated_assets) for slot in slots]
     blocking_reasons: list[str] = []
     for decision in decisions:
         if decision.status == "missing":
