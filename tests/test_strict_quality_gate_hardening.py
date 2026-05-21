@@ -338,6 +338,46 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             self.assertEqual(normalized["intent"], "approve_existing_candidate")
             self.assertEqual([issue["source_artifact_role"] for issue in normalized["issues"]], ["qa_loop_execution"])
 
+    def test_operator_feedback_draft_does_not_default_ready_candidate_to_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            execution_path = root / "qa-loop-execution.iter-01.json"
+            execution_path.write_text(
+                json.dumps(
+                    {
+                        "candidate_approval": {
+                            "status": "human_needed_candidate_ready",
+                            "candidate_sha256": "sha256:candidate456",
+                        },
+                        "candidate_progress": {"forward_progress": True},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            packet = {
+                "packet_sha256": "packet456",
+                "manuscript_sha256": "sha256:base123",
+                "artifacts": [{"role": "qa_loop_execution", "path": str(execution_path)}],
+            }
+            draft = {
+                "issues": [
+                    {
+                        "source_artifact_role": "qa_loop_execution",
+                        "source_item_key": "candidate_approval",
+                        "target_section": "Whole manuscript",
+                        "severity": "major",
+                        "rationale": "Ready candidate is present, but no explicit approval intent was supplied.",
+                        "suggested_action": "Continue supervised repair.",
+                        "authority_class": "author_feedback",
+                        "owner_category": "author",
+                    },
+                ],
+            }
+
+            normalized = normalize_operator_feedback_draft(packet, draft)
+
+            self.assertEqual(normalized["intent"], "generate_new_operator_candidate")
+
     def test_operator_feedback_fallback_issue_is_domain_neutral(self) -> None:
         packet = {"packet_sha256": "packet-neutral", "manuscript_sha256": "sha256:paper", "artifacts": []}
         normalized = normalize_operator_feedback_draft(
@@ -1777,12 +1817,14 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
                 "rendered_reference_audit.json",
                 "citation_intent_plan.json",
                 "citation_source_match.json",
-                "citation_integrity.audit.json",
-                "citation_integrity.critic.json",
-                "omx-review-handoff.json",
-                "omx-evidence-summary.json",
-            ]:
-                (root / "artifacts" / artifact).write_text('{"status":"pass"}\n', encoding="utf-8")
+	                "citation_integrity.audit.json",
+	                "citation_integrity.critic.json",
+	                "figure_gate.report.initial.json",
+	                "figure_gate.report.final.json",
+	                "omx-review-handoff.json",
+	                "omx-evidence-summary.json",
+	            ]:
+	                (root / "artifacts" / artifact).write_text('{"status":"pass"}\n', encoding="utf-8")
             (root / "artifacts" / "qa-loop.plan.json").write_text(
                 json.dumps(
                     {

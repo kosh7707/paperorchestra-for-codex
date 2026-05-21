@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 from .io_utils import read_json, write_json
@@ -118,15 +119,44 @@ def _classify_action(action: dict[str, Any] | None, *, candidate_role: str | Non
 
 def _explicit_reject(answer: str) -> bool:
     lowered = answer.lower()
-    return any(token in lowered for token in ("reject", "do not", "don't", "rollback", "거절", "반려", "하지마", "하지 마"))
+    return any(
+        token in lowered
+        for token in (
+            "reject",
+            "do not",
+            "don't",
+            "rollback",
+            "거절",
+            "반려",
+            "하지마",
+            "하지 마",
+            "승인하지",
+            "approve하지",
+        )
+    )
 
 
 def _explicit_approve(answer: str) -> bool:
     lowered = answer.lower()
-    return any(token in lowered for token in ("approve", "accept", "promote", "좋아", "승인", "반영", "진행"))
+    # Candidate promotion is a stronger act than "continue the loop".  Avoid
+    # broad conversational/proceed tokens such as "좋아", "반영", or "진행";
+    # those should generate a new bounded operator candidate unless the caller
+    # supplies --intent approve_existing_candidate.
+    approval_patterns = (
+        r"\bapprove_existing_candidate\b",
+        r"\bapprove\s+(?:the\s+)?(?:existing\s+|ready\s+)?candidate\b",
+        r"\bpromote\s+(?:the\s+)?(?:existing\s+|ready\s+)?candidate\b",
+        r"\baccept\s+(?:the\s+)?(?:existing\s+|ready\s+)?candidate\b",
+        r"후보(?:를)?\s*승인",
+        r"후보(?:를)?\s*채택",
+        r"candidate(?:를)?\s*승인",
+    )
+    return any(re.search(pattern, lowered) for pattern in approval_patterns)
 
 
 def _resolve_decision_kind(answer: str, intent: str | None, *, candidate_role: str | None) -> str:
+    if _explicit_reject(answer):
+        return "reject_candidate_with_reason"
     if intent:
         if intent not in HUMAN_NEEDED_DECISION_KINDS:
             raise ContractError(f"unsupported human_needed intent: {intent}")
@@ -135,8 +165,6 @@ def _resolve_decision_kind(answer: str, intent: str | None, *, candidate_role: s
         return intent
     if candidate_role and _explicit_approve(answer):
         return "approve_existing_candidate"
-    if _explicit_reject(answer):
-        return "reject_candidate_with_reason"
     return "generate_new_operator_candidate"
 
 

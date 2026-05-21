@@ -136,6 +136,8 @@ def _write_evidence_root(
         "citation_source_match.json",
         "citation_integrity.audit.json",
         "citation_integrity.critic.json",
+        "figure_gate.report.initial.json",
+        "figure_gate.report.final.json",
         "omx-review-handoff.json",
         "omx-evidence-summary.json",
     ]:

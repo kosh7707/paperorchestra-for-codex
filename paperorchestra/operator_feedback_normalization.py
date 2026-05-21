@@ -136,7 +136,11 @@ def normalize_operator_feedback_draft(packet: dict[str, Any], draft: dict[str, A
         if isinstance(raw_intents, list):
             intent = next((str(item).strip() for item in raw_intents if str(item or "").strip()), "")
     if not intent:
-        intent = "approve_existing_candidate" if approval_role else "generate_new_operator_candidate"
+        # A ready candidate in the packet is evidence that approval is possible,
+        # not authority to approve it.  Missing intent must continue through a
+        # bounded operator-feedback candidate so conversational "proceed" style
+        # responses cannot silently promote a manuscript.
+        intent = "generate_new_operator_candidate"
     if intent not in OPERATOR_FEEDBACK_INTENTS:
         raise ValueError(f"unsupported operator feedback intent: {intent}")
 

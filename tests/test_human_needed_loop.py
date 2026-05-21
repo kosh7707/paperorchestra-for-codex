@@ -52,6 +52,38 @@ class HumanNeededLoopTests(PipelineTestCase):
         plan_path.write_text(json.dumps(plan), encoding="utf-8")
         return state, paper, plan_path
 
+    def _write_ready_candidate_execution(self, root: Path, paper: Path, candidate_text: str = "Approved candidate.") -> Path:
+        candidate = root / "candidate.tex"
+        candidate.write_text(
+            "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\n"
+            + candidate_text
+            + "\n\\end{document}\n",
+            encoding="utf-8",
+        )
+        candidate_sha = hashlib.sha256(candidate.read_bytes()).hexdigest()
+        execution_path = root / ".paper-orchestra" / "qa-loop-execution.iter-001.json"
+        execution_payload = {
+            "schema_version": "qa-loop-execution/1",
+            "verdict": "human_needed",
+            "candidate_approval": {
+                "status": "human_needed_candidate_ready",
+                "candidate_path": str(candidate),
+                "candidate_sha256": "sha256:" + candidate_sha,
+                "base_manuscript_sha256": "sha256:" + hashlib.sha256(paper.read_bytes()).hexdigest(),
+                "source_execution_path": str(execution_path),
+                "source_execution_sha256": "pending",
+                "created_at": "2026-05-20T00:00:00+00:00",
+            },
+            "candidate_progress": {
+                "forward_progress": True,
+                "before_failing_codes": ["citation_support_manual_check"],
+                "after_failing_codes": [],
+            },
+        }
+        execution_payload["candidate_approval"]["source_execution_sha256"] = self._execution_source_sha(execution_payload)
+        execution_path.write_text(json.dumps(execution_payload), encoding="utf-8")
+        return execution_path
+
     def test_answer_human_needed_records_private_raw_and_public_redacted_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -185,33 +217,7 @@ class HumanNeededLoopTests(PipelineTestCase):
             plan["verdict"] = "continue"
             plan_path.write_text(json.dumps(plan), encoding="utf-8")
 
-            candidate = root / "candidate.tex"
-            candidate.write_text(
-                "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nApproved candidate.\n\\end{document}\n",
-                encoding="utf-8",
-            )
-            candidate_sha = hashlib.sha256(candidate.read_bytes()).hexdigest()
-            execution_path = root / ".paper-orchestra" / "qa-loop-execution.iter-001.json"
-            execution_payload = {
-                "schema_version": "qa-loop-execution/1",
-                "verdict": "human_needed",
-                "candidate_approval": {
-                    "status": "human_needed_candidate_ready",
-                    "candidate_path": str(candidate),
-                    "candidate_sha256": "sha256:" + candidate_sha,
-                    "base_manuscript_sha256": "sha256:" + hashlib.sha256(paper.read_bytes()).hexdigest(),
-                    "source_execution_path": str(execution_path),
-                    "source_execution_sha256": "pending",
-                    "created_at": "2026-05-20T00:00:00+00:00",
-                },
-                "candidate_progress": {
-                    "forward_progress": True,
-                    "before_failing_codes": ["citation_support_manual_check"],
-                    "after_failing_codes": [],
-                },
-            }
-            execution_payload["candidate_approval"]["source_execution_sha256"] = self._execution_source_sha(execution_payload)
-            execution_path.write_text(json.dumps(execution_payload), encoding="utf-8")
+            self._write_ready_candidate_execution(root, paper)
 
             result = record_human_needed_answer(
                 root,
@@ -226,6 +232,52 @@ class HumanNeededLoopTests(PipelineTestCase):
             self.assertIn("packet-bound candidate_approval", feedback["issues"][0]["suggested_action"])
             self.assertIn("operator-feedback hard gate", feedback["issues"][0]["suggested_action"])
             self.assertEqual(result["handoff_type"], "candidate_approval")
+
+    def test_answer_human_needed_generic_proceed_words_do_not_approve_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _state, paper, plan_path = self._session_with_human_plan(root)
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+            plan["verdict"] = "continue"
+            plan_path.write_text(json.dumps(plan), encoding="utf-8")
+            self._write_ready_candidate_execution(root, paper)
+
+            for answer in ["좋아, 계속 진행해.", "반영해서 진행해.", "Looks good, continue."]:
+                result = record_human_needed_answer(root, answer=answer, review_scope="tex_only")
+                self.assertEqual(result["decision_kind"], "generate_new_operator_candidate")
+
+    def test_answer_human_needed_reject_phrase_wins_over_candidate_approval_terms(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _state, paper, plan_path = self._session_with_human_plan(root)
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+            plan["verdict"] = "continue"
+            plan_path.write_text(json.dumps(plan), encoding="utf-8")
+            self._write_ready_candidate_execution(root, paper)
+
+            for answer in ["Do not approve the candidate.", "후보 승인하지 마."]:
+                result = record_human_needed_answer(root, answer=answer, review_scope="tex_only")
+                self.assertEqual(result["decision_kind"], "reject_candidate_with_reason")
+
+    def test_answer_human_needed_reject_phrase_wins_even_with_explicit_approval_intent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _state, paper, plan_path = self._session_with_human_plan(root)
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+            plan["verdict"] = "continue"
+            plan_path.write_text(json.dumps(plan), encoding="utf-8")
+            self._write_ready_candidate_execution(root, paper)
+
+            result = record_human_needed_answer(
+                root,
+                answer="Do not approve the candidate; generate a safer revision instead.",
+                intent="approve_existing_candidate",
+                review_scope="tex_only",
+            )
+
+            self.assertEqual(result["decision_kind"], "reject_candidate_with_reason")
+            feedback = read_json(result["feedback_path"])
+            self.assertEqual(feedback["intent"], "reject_candidate_with_reason")
 
     def test_import_and_apply_preserve_answer_metadata_without_raw_answer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

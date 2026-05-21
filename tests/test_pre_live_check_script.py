@@ -138,6 +138,16 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertLess(prepare_index, smoke_export_index)
         self.assertLess(smoke_export_index, codex_export_index)
 
+    def test_fresh_full_live_smoke_preflights_codex_and_omx_before_live_budget(self) -> None:
+        text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+
+        self.assertIn("run_codex_auth_preflight()", text)
+        self.assertIn("codex_auth_preflight", text)
+        self.assertIn("omx_control_preflight", text)
+        self.assertLess(text.index("run_codex_auth_preflight"), text.index("run_step material_invariance"))
+        self.assertLess(text.index("run_step omx_control_preflight"), text.index("run_step material_invariance"))
+        self.assertLess(text.index("run_step omx_control_preflight"), text.index("run_retryable_step research_prior_work"))
+
     def test_fresh_full_live_smoke_checks_rendered_references_before_web_citation_review(self) -> None:
         text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
         subprocess.run(["bash", "-n", "scripts/fresh-full-live-smoke-loop.sh"], check=True)
@@ -155,14 +165,30 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             text.index("rendered_reference_pre_citation_gate"),
             text.index("run_retryable_step review_citations_web_initial"),
         )
-        self.assertLess(text.index("refresh_citation_integrity_artifacts final"), text.index("quality_eval_final"))
+        self.assertLess(
+            text.index("refresh_citation_integrity_artifacts final"),
+            text.index("run_step quality_eval_final"),
+        )
         self.assertIn("write-intro-related", text)
         self.assertIn("--allow-recoverable-contract-issues", text)
+
+    def test_fresh_full_live_smoke_checks_figure_gate_before_acceptance(self) -> None:
+        text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+
+        self.assertIn("require_figure_gate_pass() {", text)
+        self.assertIn("audit_figure_gate_initial", text)
+        self.assertIn("figure_gate.report.initial.json", text)
+        self.assertIn("audit_figure_gate_final", text)
+        self.assertIn("figure_gate.report.final.json", text)
+        self.assertLess(text.index("run_retryable_step generate_plots"), text.index("run_step audit_figure_gate_initial"))
+        self.assertLess(text.index("run_step audit_figure_gate_final"), text.index("run_step quality_eval_final"))
+        self.assertIn('QUALITY_GATE_STATUS="fail_figure_gate"', text)
+        self.assertIn('MANUSCRIPT_READINESS="blocked_figure_gate"', text)
 
     def test_fresh_full_live_smoke_report_status_gate_fails_non_pass_reports(self) -> None:
         wrapper = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
         start = wrapper.index("require_report_status_pass() {")
-        end = wrapper.index("\n}\n\nsmoke_retry_sleep", start) + 3
+        end = wrapper.index("\n}\n\nrequire_figure_gate_pass", start) + 3
         function_text = wrapper[start:end]
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -705,6 +731,11 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertIn('PAPERO_CODEX_CLI_PREFIX', wrapper_text)
         self.assertIn('codex_cli_prefix_words()', wrapper_text)
         self.assertIn('CODEX_HOME="$SMOKE_CODEX_HOME" "${codex_prefix[@]}" exec', wrapper_text)
+        self.assertIn('"codex_auth_preflight"', wrapper_text)
+        self.assertIn('"audit_figure_gate_initial"', wrapper_text)
+        self.assertIn('"audit_figure_gate_final"', wrapper_text)
+        self.assertIn('"q1_loop_critic"', wrapper_text)
+        self.assertIn('"figure_gate_status_must_pass":True', wrapper_text)
         self.assertIn('if [[ -f "$candidate_artifact" ]]; then', text)
         self.assertIn('printf \'%s\\n\' "$STEP_RC" >"$EVIDENCE_ROOT/final-exit-code.txt"', text)
         self.assertIn('cp "${current_artifacts}/${artifact}" "$EVIDENCE_ROOT/artifacts/${artifact}"', text)
@@ -1486,17 +1517,19 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             "review_citations_web_initial",
         ]:
             self.assertIn(f"run_retryable_step {name}", wrapper_text)
+        self.assertIn('run_semantic_retryable_step "qa_loop_step_iter_${iter}"', wrapper_text)
+        self.assertIn('run_semantic_retryable_step "operator_apply_cycle_${cycle}"', wrapper_text)
 
         for name in [
             "plan_narrative",
             "compile_initial",
             "material_invariance",
             "validate_current",
-            "quality_eval_iter_",
             "qa_loop_plan_iter_",
             "build_source_obligations",
         ]:
             self.assertNotIn(f"run_retryable_step {name}", wrapper_text)
+            self.assertNotIn(f"run_semantic_retryable_step {name}", wrapper_text)
 
     def test_fresh_smoke_operator_feedback_author_failure_is_diagnosable(self) -> None:
         wrapper_text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")

@@ -1358,8 +1358,12 @@ def _attach_candidate_approval_from_attempt(
     citation_block = verification.get("citation_support_review") if isinstance(verification, dict) else None
     if isinstance(citation_block, dict):
         citation_summary = citation_block.get("summary")
-    before_issue_count = None
-    after_issue_count = _citation_issue_count_from_summary(citation_summary)
+    active_metric_delta = attempt.get("active_tier2_metric_delta") if isinstance(attempt.get("active_tier2_metric_delta"), dict) else {}
+    before_issue_count = active_metric_delta.get("base_total")
+    after_issue_count = active_metric_delta.get("candidate_total")
+    if not isinstance(before_issue_count, int) or not isinstance(after_issue_count, int):
+        before_issue_count = None
+        after_issue_count = _citation_issue_count_from_summary(citation_summary)
     progress = {
         "resolved_codes": [str(code) for code in attempt.get("resolved_active_failures") or []],
         "new_codes": [str(code) for code in attempt.get("candidate_active_failures") or [] if code not in before_codes],
@@ -1372,6 +1376,7 @@ def _attach_candidate_approval_from_attempt(
         "before_citation_issue_count": before_issue_count,
         "after_citation_issue_count": after_issue_count,
         "citation_issue_delta": (after_issue_count - before_issue_count) if isinstance(before_issue_count, int) and isinstance(after_issue_count, int) else None,
+        "active_tier2_metric_delta": active_metric_delta,
         "forward_progress": True,
     }
     approval = {

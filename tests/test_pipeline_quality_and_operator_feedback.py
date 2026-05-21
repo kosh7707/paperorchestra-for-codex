@@ -6,11 +6,40 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipeline_test_support import *
 from paperorchestra.narrative import write_planning_artifacts
-from paperorchestra.operator_feedback import _claim_safe_tier2_metric_counts
+from paperorchestra.operator_feedback import _attach_candidate_approval_from_attempt, _claim_safe_tier2_metric_counts
 
 
 class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
     """Quality-loop, operator-feedback, Ralph bridge, and critic-stack regression tests split out of the former PipelineTests monolith."""
+
+    def test_operator_candidate_approval_progress_carries_metric_issue_delta(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = root / "candidate.tex"
+            candidate.write_text("\\documentclass{article}\n\\begin{document}\nImproved.\n\\end{document}\n", encoding="utf-8")
+            execution = {"manuscript_sha256_before": "sha256:" + ("0" * 64)}
+            attempt = {
+                "candidate_path": str(candidate),
+                "candidate_sha256": "sha256:" + hashlib.sha256(candidate.read_bytes()).hexdigest(),
+                "base_active_failures": ["citation_support_manual_check"],
+                "candidate_active_failures": ["citation_support_manual_check"],
+                "resolved_active_failures": ["high_risk_uncited_claim"],
+                "active_tier2_metric_delta": {
+                    "base_total": 9,
+                    "candidate_total": 4,
+                    "total_improved": True,
+                    "improvements": [{"code": "citation_support_manual_check", "before": 9, "after": 4, "delta": -5}],
+                },
+                "verification": {"quality_eval": {"path": str(root / "quality.json")}},
+            }
+
+            _attach_candidate_approval_from_attempt(execution, attempt, execution_path=root / "operator-feedback.execution.json")
+
+            progress = execution["candidate_progress"]
+            self.assertEqual(progress["before_citation_issue_count"], 9)
+            self.assertEqual(progress["after_citation_issue_count"], 4)
+            self.assertEqual(progress["citation_issue_delta"], -5)
+            self.assertEqual(progress["active_tier2_metric_delta"]["base_total"], 9)
 
     def test_qa_loop_plan_surfaces_citation_integrity_density_failures(self) -> None:
         quality_eval = {

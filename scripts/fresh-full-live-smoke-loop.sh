@@ -390,6 +390,39 @@ raise SystemExit(1)
 PY_REQUIRE_REPORT_PASS
 }
 
+require_figure_gate_pass() {
+  local report_path="$1"
+  python3 - "$report_path" <<'PY_REQUIRE_FIGURE_GATE_PASS'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+except Exception as exc:
+    print(f"Could not parse figure gate report {path}: {exc}", file=sys.stderr)
+    raise SystemExit(2)
+status = str(payload.get("status") or "").strip().lower()
+if status == "pass":
+    raise SystemExit(0)
+print(
+    json.dumps(
+        {
+            "path": str(path),
+            "status": status or "missing",
+            "blocking_reasons": payload.get("blocking_reasons", []),
+            "summary": payload.get("summary", {}),
+        },
+        indent=2,
+        ensure_ascii=False,
+    ),
+    file=sys.stderr,
+)
+raise SystemExit(1)
+PY_REQUIRE_FIGURE_GATE_PASS
+}
+
 smoke_retry_sleep() {
   local base="${1:-0}"; local spread="${2:-0}"
   python3 - "$base" "$spread" <<'PY_SLEEP'
@@ -441,6 +474,34 @@ run_retryable_step() {
     return "$rc"
   done
   if [[ "$caller_errexit" == "1" ]]; then set -e; else set +e; fi
+  return "$rc"
+}
+
+run_semantic_retryable_step() {
+  # Like run_retryable_step, but intended for commands whose non-zero exit codes
+  # can be semantic loop states.  It replays only when the command produced
+  # explicit retryable transport/auth evidence.
+  run_retryable_step "$@"
+}
+
+run_codex_auth_preflight() {
+  local prompt="$LOGS/codex_auth_preflight.prompt.md"
+  local response="$LOGS/codex_auth_preflight.response.md"
+  cat > "$prompt" <<'PROMPT'
+Return exactly OK if this Codex authentication context can execute a minimal prompt.
+PROMPT
+  local prefix_words=()
+  mapfile -t prefix_words < <(codex_cli_prefix_words)
+  {
+    printf '%q ' "${prefix_words[@]}" exec --skip-git-repo-check -C "$REPO_ROOT" -m "${PAPERO_GEN_MODEL:-gpt-5.5}" -c 'model_reasoning_effort="low"' --output-last-message "$response" -
+    printf '\n'
+  } | redact > "$LOGS/codex_auth_preflight.command"
+  set +e
+  run_codex_last_message "codex_auth_preflight" "$prompt" "$response" "$LOGS/codex_auth_preflight.stdout.log" "$LOGS/codex_auth_preflight.stderr.log" "$LOGS/codex_auth_preflight.exitcode" "${PAPERO_GEN_MODEL:-gpt-5.5}" "low"
+  local rc=$?
+  set -e
+  COMMAND_ROWS+=("codex_auth_preflight|${rc}")
+  record_command_markdown
   return "$rc"
 }
 
@@ -731,6 +792,7 @@ copy_session_artifacts() {
       "$run_artifacts"/citation_integrity.critic.json \
       "$run_artifacts"/section_review.json \
       "$run_artifacts"/figure_placement_review.json \
+      "$run_artifacts"/figure_gate.report.json \
       "$run_artifacts"/review.latest.json \
       "$run_artifacts"/source_obligations.json \
       "$run_artifacts"/ralph-brief.md \
@@ -1055,17 +1117,34 @@ print(json.dumps({
   },
   "provider_wrapper_contract":sidecar,
   "stage_contracts":[
+    {"name":"codex_auth_preflight","class":"mandatory_auth_preflight","fail_policy":"fail_preflight"},
+    {"name":"omx_control_preflight","class":"mandatory_runtime_preflight","fail_policy":"fail_preflight"},
     {"name":"research_prior_work","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},
     {"name":"outline","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},
     {"name":"generate_plots","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},
+    {"name":"audit_figure_gate_initial","class":"mandatory_figure_gate","fail_policy":"status_must_pass"},
     {"name":"write_intro_related","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},
     {"name":"write_sections","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},
     {"name":"compile_initial","class":"mandatory","fail_policy":"fail_now"},
     {"name":"review","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},
     {"name":"review_citations_web_initial","class":"mandatory_provider_backed","fail_policy":"retry_transport_then_fail_now"},
     {"name":"meta_leakage","class":"mandatory","fail_policy":"fail_now"},
+    {"name":"qa_loop_step_iter","class":"mandatory_semantic_loop","fail_policy":"retry_transport_only_then_semantic_exit"},
+    {"name":"operator_feedback_cycle","class":"bounded_human_needed_operator_loop","fail_policy":"retry_transport_only_then_fail_now"},
+    {"name":"audit_figure_gate_final","class":"mandatory_figure_gate","fail_policy":"status_must_pass"},
+    {"name":"quality_eval_final","class":"mandatory_final_quality","fail_policy":"record_and_gate"},
+    {"name":"evidence_completeness","class":"mandatory_acceptance_evidence","fail_policy":"status_must_pass"},
+    {"name":"validate_fresh_smoke_lane_a","class":"mandatory_acceptance_lane","fail_policy":"status_must_pass"},
+    {"name":"q1_loop_critic","class":"mandatory_critic","fail_policy":"critic_must_pass"},
   ],
-  "evidence_contracts":{"provider_prompt_response_required":True,"meta_leakage_scan_after_write_sections":True,"live_verification_provenance_required":True},
+  "evidence_contracts":{
+    "provider_prompt_response_required":True,
+    "meta_leakage_scan_after_write_sections":True,
+    "live_verification_provenance_required":True,
+    "figure_gate_initial_required":True,
+    "figure_gate_final_required":True,
+    "figure_gate_status_must_pass":True
+  },
 }, indent=2, ensure_ascii=False))
 PY_DRY
 }
@@ -1177,7 +1256,7 @@ output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False)+'\n', e
 PY
   run_step "operator_import_cycle_${cycle}" "${CLI[@]}" import-operator-feedback --packet "$packet" --feedback "$feedback" --output "$OPFB/operator-feedback-imported.cycle-${cycle}.json" || return 1
   set +e
-  run_step "operator_apply_cycle_${cycle}" "${CLI[@]}" apply-operator-feedback --imported-feedback "$OPFB/operator-feedback-imported.cycle-${cycle}.json" --quality-mode claim_safe --citation-evidence-mode web --require-compile --require-live-verification --max-supervised-iterations 1 --max-iterations "$MAX_ITER" "${PROVIDER[@]}" "${CITATION_PROVIDER[@]}" "${RUNTIME[@]}"
+  run_semantic_retryable_step "operator_apply_cycle_${cycle}" "${CLI[@]}" apply-operator-feedback --imported-feedback "$OPFB/operator-feedback-imported.cycle-${cycle}.json" --quality-mode claim_safe --citation-evidence-mode web --require-compile --require-live-verification --max-supervised-iterations 1 --max-iterations "$MAX_ITER" "${PROVIDER[@]}" "${CITATION_PROVIDER[@]}" "${RUNTIME[@]}"
   rc=$?
   set -e
   preserve_operator_feedback_execution_cycle "$cycle" "$rc" || true
@@ -1202,6 +1281,8 @@ run_step smoke_script_syntax bash -n scripts/live-smoke-claim-safe.sh scripts/pr
 run_step unittest bash -c 'run_without_papero_env "$@"' bash "$REPO_ROOT" python3 -m unittest discover -s tests -q || fail_now fail_preflight '"unittest"' '"logs/unittest.stderr.log"' 1
 run_step pre_live_all bash -c 'run_without_papero_env "$@"' bash "$REPO_ROOT" env PAPERO_PRE_LIVE_DIFF_CHECK_IGNORE_MATERIAL_ROOT=1 bash scripts/pre-live-check.sh --all || fail_now fail_preflight '"pre_live_all"' '"logs/pre_live_all.stderr.log"' 1
 run_step release_safety_scan_preflight run_release_safety_scan "$EVIDENCE_ROOT" "$ARTIFACTS/release-safety-scan.preflight.json" || fail_now fail_preflight '"release_safety_scan_preflight"' '"artifacts/release-safety-scan.preflight.json"' 1
+run_codex_auth_preflight || fail_now fail_preflight '"codex_auth_preflight"' '"logs/codex_auth_preflight.stderr.log"' 1
+run_step omx_control_preflight omx explore --prompt "Return exactly OK if the OMX control surface can run in this repository." || fail_now fail_preflight '"omx_control_preflight"' '"logs/omx_control_preflight.stderr.log"' 1
 
 # Material invariance.
 mkdir -p .omx/state
@@ -1263,6 +1344,12 @@ record_command_markdown
 run_step build_bib "${CLI[@]}" build-bib || fail_now fail_execution_error '"build_bib"' '"logs/build_bib.stderr.log"' 1
 run_retryable_step outline "${CLI[@]}" outline "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"outline"' '"logs/outline.step-retry.jsonl"' 1
 run_retryable_step generate_plots "${CLI[@]}" generate-plots "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"generate_plots"' '"logs/generate_plots.step-retry.jsonl"' 1
+run_step audit_figure_gate_initial "${CLI[@]}" audit-figure-gate --output "$ARTIFACTS/figure_gate.report.initial.json" || fail_now fail_execution_error '"audit_figure_gate_initial"' '"logs/audit_figure_gate_initial.stderr.log"' 1
+if ! require_figure_gate_pass "$ARTIFACTS/figure_gate.report.initial.json" > "$LOGS/audit_figure_gate_initial.status.stdout.log" 2> "$LOGS/audit_figure_gate_initial.status.stderr.log"; then
+  QUALITY_GATE_STATUS="fail_figure_gate"
+  MANUSCRIPT_READINESS="blocked_figure_gate"
+  fail_now fail_execution_error '"figure_gate_initial"' '"artifacts/figure_gate.report.initial.json"' 1
+fi
 run_step plan_narrative "${CLI[@]}" plan-narrative "${PROVIDER[@]}" "${RUNTIME[@]}" || fail_now fail_execution_error '"plan_narrative"' '"logs/plan_narrative.stderr.log"' 1
 run_retryable_step write_intro_related "${CLI[@]}" write-intro-related "${PROVIDER[@]}" "${RUNTIME[@]}" --claim-safe --allow-recoverable-contract-issues || fail_now fail_execution_error '"write_intro_related"' '"logs/write_intro_related.step-retry.jsonl"' 1
 run_retryable_step write_sections "${CLI[@]}" write-sections "${PROVIDER[@]}" "${RUNTIME[@]}" --claim-safe || fail_now fail_execution_error '"write_sections"' '"logs/write_sections.step-retry.jsonl"' 1
@@ -1293,7 +1380,7 @@ for iter in $(seq 1 "$MAX_ITER"); do
   run_step "qa_loop_plan_iter_${iter}" "${CLI[@]}" qa-loop-plan --quality-mode claim_safe --max-iterations "$MAX_ITER" --require-live-verification --quality-eval "$ARTIFACTS/quality-eval.iter-${iter}.json" --output "$ARTIFACTS/qa-loop.plan.iter-${iter}.json" || fail_now fail_execution_error '"qa_loop_plan"' '"logs/qa_loop_plan.stderr.log"' 1
   cp "$ARTIFACTS/qa-loop.plan.iter-${iter}.json" "$ARTIFACTS/qa-loop.plan.json"
   set +e
-  run_step "qa_loop_step_iter_${iter}" "${CLI[@]}" qa-loop-step --quality-mode claim_safe --max-iterations "$MAX_ITER" --require-compile --citation-evidence-mode web --require-live-verification "${PROVIDER[@]}" "${CITATION_PROVIDER[@]}" "${RUNTIME[@]}"
+  run_semantic_retryable_step "qa_loop_step_iter_${iter}" "${CLI[@]}" qa-loop-step --quality-mode claim_safe --max-iterations "$MAX_ITER" --require-compile --citation-evidence-mode web --require-live-verification "${PROVIDER[@]}" "${CITATION_PROVIDER[@]}" "${RUNTIME[@]}"
   STEP_RC=$?
   set -e
   case "$STEP_RC" in
@@ -1368,6 +1455,12 @@ run_step review_citations_web_final_session "${CLI[@]}" review-citations --evide
 run_step review_citations_web_final "${CLI[@]}" review-citations --evidence-mode web "${WEB_PROVIDER[@]}" --output "$ARTIFACTS/citation_support_review.final.json" || true
 refresh_citation_integrity_artifacts final
 run_step review_figure_placement_final "${CLI[@]}" review-figure-placement --output "$ARTIFACTS/figure_placement_review.final.json" || true
+run_step audit_figure_gate_final "${CLI[@]}" audit-figure-gate --output "$ARTIFACTS/figure_gate.report.final.json" || fail_now fail_execution_error '"audit_figure_gate_final"' '"logs/audit_figure_gate_final.stderr.log"' 1
+if ! require_figure_gate_pass "$ARTIFACTS/figure_gate.report.final.json" > "$LOGS/audit_figure_gate_final.status.stdout.log" 2> "$LOGS/audit_figure_gate_final.status.stderr.log"; then
+  QUALITY_GATE_STATUS="fail_figure_gate"
+  MANUSCRIPT_READINESS="blocked_figure_gate"
+  fail_now fail_execution_error '"figure_gate_final"' '"artifacts/figure_gate.report.final.json"' 1
+fi
 run_step quality_eval_final "${CLI[@]}" quality-eval --quality-mode claim_safe --max-iterations "$MAX_ITER" --require-live-verification --output "$ARTIFACTS/quality-eval.final.json" --record-history || true
 derive_final_quality_status
 run_step qa_loop_plan_final "${CLI[@]}" qa-loop-plan --quality-mode claim_safe --max-iterations "$MAX_ITER" --require-live-verification --quality-eval "$ARTIFACTS/quality-eval.final.json" --output "$ARTIFACTS/qa-loop.plan.final.json" || true

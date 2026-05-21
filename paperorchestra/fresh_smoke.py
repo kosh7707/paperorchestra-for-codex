@@ -494,6 +494,8 @@ def validate_evidence_completeness(evidence_root: str | Path) -> dict[str, Any]:
                 "artifacts/citation_source_match.json",
                 "artifacts/citation_integrity.audit.json",
                 "artifacts/citation_integrity.critic.json",
+                "artifacts/figure_gate.report.initial.json",
+                "artifacts/figure_gate.report.final.json",
                 "artifacts/omx-review-handoff.json",
                 "artifacts/omx-evidence-summary.json",
             ]:
@@ -503,6 +505,29 @@ def validate_evidence_completeness(evidence_root: str | Path) -> dict[str, Any]:
                 else:
                     missing.append({"check": "final_pass_artifact", "path": rel})
                     failing_codes.add("final_pass_evidence_missing")
+            for rel in ["artifacts/figure_gate.report.initial.json", "artifacts/figure_gate.report.final.json"]:
+                path = root / rel
+                if not path.exists():
+                    continue
+                try:
+                    figure_gate = _json(path)
+                except Exception as exc:
+                    inconsistent.append({"check": "figure_gate_report_json", "path": rel, "reason": repr(exc)})
+                    failing_codes.add("figure_gate_evidence_invalid")
+                    continue
+                status = str(figure_gate.get("status") or "").strip().lower()
+                if status == "pass":
+                    checked.append({"check": "figure_gate_status", "path": rel, "status": status})
+                else:
+                    inconsistent.append(
+                        {
+                            "check": "figure_gate_status",
+                            "path": rel,
+                            "status": status or "missing",
+                            "blocking_reasons": figure_gate.get("blocking_reasons", []),
+                        }
+                    )
+                    failing_codes.add("figure_gate_status_not_pass")
             _check_final_plan_terminal_consistency(root, verdict_payload, checked, inconsistent, failing_codes)
 
     provider_prompts = sorted((root / "provider-traces").glob("*.prompt.md")) if (root / "provider-traces").exists() else []
