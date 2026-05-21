@@ -19,6 +19,8 @@ TRANSIENT_TRANSPORT_PATTERNS: tuple[str, ...] = (
     r"\brate limit(?:ed)?\b",
     r"\btoo many requests\b",
     r"\bquota exceeded\b",
+    r"codex_login::auth::manager[^\n\r]{0,240}failed to refresh token",
+    r"failed to refresh token[^\n\r]{0,160}\b401 unauthorized\b",
 )
 
 _TRANSIENT_TRANSPORT_REGEXES = tuple(re.compile(pattern, re.IGNORECASE) for pattern in TRANSIENT_TRANSPORT_PATTERNS)

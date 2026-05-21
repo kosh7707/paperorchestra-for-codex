@@ -743,6 +743,8 @@ class MockProviderTests(unittest.TestCase):
             "429 rate limited by upstream provider",
             "Too many requests; retry later.",
             "quota exceeded for this billing window",
+            "ERROR codex_login::auth::manager: Failed to refresh token: 401 Unauthorized",
+            "omx exec returned 1: stderr=2026-05-21 ERROR codex_login::auth::manager: Failed to refresh token",
         ]
         negatives = [
             "model rejected request",
