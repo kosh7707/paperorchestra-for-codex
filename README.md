@@ -451,6 +451,37 @@ scripts/fresh-qa.sh --skip-compile
 python -m pytest -q
 ```
 
+Container entry must refresh Codex CLI and OMX before any PaperOrchestra QA.
+Use the repo wrapper when possible; it enters through
+`scripts/container-entrypoint.sh`, which runs `scripts/update-container-ai-clis.sh`
+on every new container start before handing you a shell or command:
+
+```bash
+# interactive shell; add --with-codex-auth when you need model-backed omx explore
+scripts/container-run.sh --privileged --with-codex-auth
+
+# one-shot proof that the container can operate OMX after the mandatory update
+scripts/container-run.sh --privileged --with-codex-auth -- \
+  omx explore --prompt 'Return exactly OK_CONTAINER_OMX'
+
+# one-shot PaperOrchestra smoke; the wrapper updates codex/omx first
+scripts/container-run.sh -- scripts/fresh-qa.sh --skip-tests --skip-compile
+```
+
+If you must write a raw `docker run`, use the same entrypoint pattern so updates
+are not skipped:
+
+```bash
+docker run --rm --privileged \
+  -v "$PWD:/repo:rw" -w /repo \
+  --entrypoint /repo/scripts/container-entrypoint.sh \
+  paperorchestra-ubuntu-tools:24.04 bash -l
+```
+
+Set `PAPERO_UPDATE_CONTAINER_AI_CLIS=0` only for an intentional offline/debug
+exception. `scripts/fresh-qa.sh` and `scripts/fresh-full-live-smoke-loop.sh` also
+run the same updater automatically when they detect they are inside a container.
+
 Minimal containers may need extra system packages for the tool surfaces used by
 developers:
 

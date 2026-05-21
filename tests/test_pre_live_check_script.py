@@ -60,6 +60,51 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertNotIn("s2" "k-", text)
         self.assertNotRegex(text, r"echo .*\$\{?SEMANTIC_SCHOLAR_API_KEY")
 
+    def test_container_entry_updates_codex_and_omx_before_qa(self) -> None:
+        scripts = [
+            Path("scripts/update-container-ai-clis.sh"),
+            Path("scripts/container-entrypoint.sh"),
+            Path("scripts/container-run.sh"),
+            Path("scripts/fresh-qa.sh"),
+            Path("scripts/fresh-full-live-smoke-loop.sh"),
+        ]
+        for path in scripts:
+            self.assertTrue(path.exists(), path)
+            self.assertTrue(path.stat().st_mode & 0o111, path)
+            subprocess.run(["bash", "-n", str(path)], check=True)
+
+        updater = Path("scripts/update-container-ai-clis.sh").read_text(encoding="utf-8")
+        self.assertIn("~/helper/update-ai-clis.sh", updater)
+        self.assertIn("oh-my-codex", updater)
+        self.assertIn("@openai/codex", updater)
+        self.assertIn("xz-utils", updater)
+        self.assertIn("bubblewrap", updater)
+        self.assertIn("refusing to update host AI CLIs without --allow-host", updater)
+        self.assertIn("PAPERO_UPDATE_CONTAINER_AI_CLIS", updater)
+        self.assertIn("PAPERO_CONTAINER_AI_CLI_INSTALL_PREREQS", updater)
+        self.assertNotIn("oh-my-claude-sisyphus", updater)
+        self.assertNotIn("claude update", updater)
+
+        entrypoint = Path("scripts/container-entrypoint.sh").read_text(encoding="utf-8")
+        self.assertIn("scripts/update-container-ai-clis.sh", entrypoint)
+        self.assertIn("safe.directory", entrypoint)
+        self.assertLess(entrypoint.index("update-container-ai-clis.sh"), entrypoint.index('exec "$@"'))
+
+        runner = Path("scripts/container-run.sh").read_text(encoding="utf-8")
+        self.assertIn("--entrypoint /repo/scripts/container-entrypoint.sh", runner)
+        self.assertIn("--with-codex-auth", runner)
+        self.assertIn("auth.json config.toml AGENTS.md", runner)
+
+        fresh_qa = Path("scripts/fresh-qa.sh").read_text(encoding="utf-8")
+        self.assertIn("maybe_update_container_ai_clis", fresh_qa)
+        self.assertIn("container_ai_cli_update", fresh_qa)
+        self.assertLess(fresh_qa.index("maybe_update_container_ai_clis || exit $?"), fresh_qa.index("run_step venv"))
+
+        fresh_full = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+        self.assertIn("maybe_update_container_ai_clis()", fresh_full)
+        self.assertIn("container_ai_cli_update.log", fresh_full)
+        self.assertLess(fresh_full.index("maybe_update_container_ai_clis"), fresh_full.index("run_codex_auth_preflight"))
+
 
     def test_demo_mock_uses_throwaway_workdir_without_deleting_repo_session(self) -> None:
         text = Path("scripts/demo-mock.sh").read_text(encoding="utf-8")

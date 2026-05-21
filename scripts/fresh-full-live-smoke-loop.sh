@@ -53,6 +53,25 @@ if [[ -f "$REPO_ROOT/.env" ]]; then
   set +a
 fi
 
+container_runtime_detected() {
+  [[ -f /.dockerenv || -f /run/.containerenv ]] && return 0
+  grep -qaE '/docker/|/kubepods/|/containerd/' /proc/1/cgroup 2>/dev/null
+}
+
+maybe_update_container_ai_clis() {
+  if [[ "${PAPERO_UPDATE_CONTAINER_AI_CLIS:-1}" == "0" ]]; then
+    printf '%s\n' "container_ai_cli_update skipped: disabled" > "$LOGS/container_ai_cli_update.log"
+    return 0
+  fi
+  if ! container_runtime_detected; then
+    printf '%s\n' "container_ai_cli_update skipped: not-container" > "$LOGS/container_ai_cli_update.log"
+    return 0
+  fi
+  "$REPO_ROOT/scripts/update-container-ai-clis.sh" > "$LOGS/container_ai_cli_update.log" 2>&1
+}
+
+maybe_update_container_ai_clis
+
 export PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 export PAPERO_SMOKE_EVIDENCE_ROOT="$EVIDENCE_ROOT"
 export PAPERO_ALLOW_TEX_COMPILE=1

@@ -93,6 +93,21 @@ run_in_workdir() {
 
 cd "$ROOT"
 
+maybe_update_container_ai_clis() {
+  if [[ "${PAPERO_UPDATE_CONTAINER_AI_CLIS:-1}" == "0" ]]; then
+    echo "[fresh-qa] container_ai_cli_update: skipped:disabled" >&2
+    STATUS["container_ai_cli_update"]="skipped:disabled"
+    return 0
+  fi
+  if [[ ! -f /.dockerenv && ! -f /run/.containerenv ]] && ! grep -qaE '/docker/|/kubepods/|/containerd/' /proc/1/cgroup 2>/dev/null; then
+    STATUS["container_ai_cli_update"]="skipped:not-container"
+    return 0
+  fi
+  run_step container_ai_cli_update "$ROOT/scripts/update-container-ai-clis.sh"
+}
+
+maybe_update_container_ai_clis || exit $?
+
 run_step venv python3 -m venv .venv || true
 # shellcheck disable=SC1091
 source "$ROOT/.venv/bin/activate"

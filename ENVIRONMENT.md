@@ -272,12 +272,29 @@ installation and trust the runtime probe result more than package-install noise.
 `nsjail` is also supported when available.
 
 For OMX control surfaces in very small containers, `omx explore` may also need
-`xz-utils` to unpack its harness archive:
+`xz-utils` to unpack its harness archive. PaperOrchestra container entry should
+also update Codex CLI and OMX every time a new container starts. Prefer the repo
+wrapper/entrypoint so this is automatic:
 
 ```bash
+scripts/container-run.sh --privileged --with-codex-auth
+scripts/container-run.sh --privileged --with-codex-auth -- omx explore --prompt 'Return exactly OK_CONTAINER_OMX'
+
+# Raw docker equivalent: the entrypoint updates @openai/codex and oh-my-codex
+# before starting the requested shell/command.
+docker run --rm --privileged \
+  -v "$PWD:/repo:rw" -w /repo \
+  --entrypoint /repo/scripts/container-entrypoint.sh \
+  paperorchestra-ubuntu-tools:24.04 bash -l
+
 apt-get install -y xz-utils        # root container
 sudo apt-get install -y xz-utils   # normal sudo user
 ```
+
+`scripts/fresh-qa.sh` and `scripts/fresh-full-live-smoke-loop.sh` run
+`scripts/update-container-ai-clis.sh` automatically when they detect Docker or a
+container runtime. Set `PAPERO_UPDATE_CONTAINER_AI_CLIS=0` only for an explicit
+offline/debug exception.
 
 If `doctor` reports an `omx_control_surface_probe` warning, the `detail` and
 `next_steps` fields distinguish common causes such as missing `xz-utils` and
