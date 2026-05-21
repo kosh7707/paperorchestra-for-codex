@@ -64,7 +64,9 @@ OPERATOR_PUBLIC_ENTRYPOINTS = {
 }
 ACTIONABLE_FAILURE_OWNER_CATEGORIES = {
     "author",
+    "evidence",
     "experiment",
+    "layout",
     "proof",
     "bibliography",
     "implementation",

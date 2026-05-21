@@ -33,11 +33,11 @@ class NarrativePlanningTests(unittest.TestCase):
     def _init_session(self, root: Path):
         files = {
             "idea.md": (
-                "MethodX separates streaming-mode encryption from replaceable authentication. "
-                "The proof uses a hidden-state game sequence and analysis bound. "
+                "WorkflowAlpha separates streaming-mode scheduling from replaceable validation. "
+                "The proof uses a staged-state trace sequence and analysis bound. "
                 "Limitations are restricted to the stated deployment-scope assumptions.\n"
             ),
-            "experimental_log.md": "BenchHarness benchmark measurements compare Baseline-X with 2.54x at 16 bytes.\n",
+            "experimental_log.md": "EvalHarness benchmark measurements compare Reference-X with 2.54x at 16 bytes.\n",
             "template.tex": (
                 "\\documentclass{article}\n\\begin{document}\n"
                 "\\section{Introduction}\n\\section{Related Work}\n\\section{Method}\n"
@@ -122,7 +122,7 @@ class NarrativePlanningTests(unittest.TestCase):
             with self.assertRaisesRegex(ContractError, "paperorchestra plan-narrative"):
                 write_sections(root, MockProvider())
 
-    def test_domain_neutral_method_planning_does_not_invent_streaming_authentication(self) -> None:
+    def test_domain_neutral_method_planning_does_not_invent_streaming_validation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             state = self._init_session(root)
@@ -139,12 +139,12 @@ class NarrativePlanningTests(unittest.TestCase):
             self.assertTrue(method_claims)
             rendered = json.dumps(method_claims, ensure_ascii=False)
             self.assertNotIn("streaming-mode", rendered)
-            self.assertNotIn("replaceable authentication", rendered)
-            self.assertNotIn("authentication", rendered.lower())
+            self.assertNotIn("replaceable validation", rendered)
+            self.assertNotIn("validation", rendered.lower())
             coverage_terms = {term for claim in method_claims for group in claim.get("coverage_groups", []) for term in group}
             self.assertIn("run-specific", coverage_terms)
             self.assertNotIn("counter", coverage_terms)
-            self.assertNotIn("authentication", coverage_terms)
+            self.assertNotIn("validation", coverage_terms)
 
     def test_domain_neutral_benchmark_planning_does_not_invent_baseline_codec(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -162,13 +162,13 @@ class NarrativePlanningTests(unittest.TestCase):
 
             self.assertTrue(benchmark_claims)
             rendered = json.dumps(benchmark_claims, ensure_ascii=False)
-            self.assertNotIn("AES", rendered)
-            self.assertNotIn("GCM", rendered)
+            self.assertNotIn("codec-alpha", rendered)
+            self.assertNotIn("codec-beta", rendered)
             coverage_terms = {term for claim in benchmark_claims for group in claim.get("coverage_groups", []) for term in group}
             self.assertIn("benchmark", coverage_terms)
             self.assertIn("measurement", coverage_terms)
-            self.assertNotIn("AES", coverage_terms)
-            self.assertNotIn("GCM", coverage_terms)
+            self.assertNotIn("codec-alpha", coverage_terms)
+            self.assertNotIn("codec-beta", coverage_terms)
 
     def test_benchmark_claim_coverage_ignores_generated_source_comments(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -337,12 +337,12 @@ class NarrativePlanningTests(unittest.TestCase):
                     "required": True,
                     "target_section": "Method",
                     "evidence_anchors": [{"source_ref": "idea.md"}],
-                    "coverage_groups": [["counter", "mode"], ["authentication"]],
+                    "coverage_groups": [["counter", "mode"], ["validation"]],
                 }
             ]
         }
-        commented = "\\section{Method}\n% streaming mode authentication\nVisible prose only.\n"
-        wrong_section = "\\section{Introduction}\nStreaming schedule authentication.\n\\section{Method}\nEmpty.\n"
+        commented = "\\section{Method}\n% streaming mode validation\nVisible prose only.\n"
+        wrong_section = "\\section{Introduction}\nStreaming schedule validation.\n\\section{Method}\nEmpty.\n"
 
         self.assertTrue(check_claim_map_coverage(commented, claim_map))
         wrong_codes = [issue.code for issue in check_claim_map_coverage(wrong_section, claim_map)]
@@ -897,12 +897,12 @@ class NarrativePlanningTests(unittest.TestCase):
     def test_manuscript_control_prose_sanitizer_replays_20260502_failed_smoke_excerpt(self) -> None:
         latex = (
             "\\section{Background}\n"
-            "The evaluated baselines are precisely the protected-channel algorithms standardized for the TLS~1.3 "
-            "setting studied in the benchmark packet: Baseline-128-X, Baseline-256-X, AES-128-CCM, "
-            "and ChaCha20-Poly1305.\n"
+            "The evaluated baselines are precisely the workflow algorithms standardized for the TLS~1.3 "
+            "setting studied in the benchmark packet: Reference-128-X, Reference-256-X, Reference-128-Mode, "
+            "and Reference-Stream-Mode.\n"
             "\\section{Conclusion}\n"
             "Three extensions are directly suggested by the supplied materials. The first is a "
-            "stronger concrete analysis of the authentication component.\n"
+            "stronger concrete analysis of the consistency component.\n"
         )
         self.assertTrue(check_prompt_meta_leakage(latex))
 
@@ -1031,7 +1031,7 @@ class NarrativePlanningTests(unittest.TestCase):
                         "grounding": "source_material",
                         "source_sha256": "sha256:secret",
                         "evidence_anchors": [{"source_ref": "proof.tex"}],
-                        "excerpt": "Game 0 is real.",
+                        "excerpt": "Stage 0 is real.",
                         "coverage_groups": [["game"]],
                     }
                 ]
@@ -1079,7 +1079,7 @@ class NarrativePlanningTests(unittest.TestCase):
 
         self.assertIn("method description", projection["authorial_claim"])
         self.assertNotIn("streaming-mode", projection["authorial_claim"])
-        self.assertNotIn("authentication", projection["authorial_claim"])
+        self.assertNotIn("validation", projection["authorial_claim"])
 
     def test_writer_brief_purity_gate_rewrites_control_claims(self) -> None:
         brief = _writer_brief_from_planning(
@@ -1204,7 +1204,7 @@ class NarrativePlanningTests(unittest.TestCase):
             "grounding": "experimental_log",
             "required": True,
             "evidence_anchors": [{"source_ref": "log.md"}],
-            "coverage_groups": [["benchmark"], ["measurement"], ["AES", "GCM"]],
+            "coverage_groups": [["benchmark"], ["measurement"], ["scheduler", "queue"]],
         }
         narrative_plan = {
             "thesis": "Benchmark evidence is scoped.",
@@ -1239,7 +1239,7 @@ class NarrativePlanningTests(unittest.TestCase):
         claim = {
             "id": "claim-011",
             "target_section": "Method",
-            "text": "The method uses streaming-mode encryption with replaceable authentication.",
+            "text": "The method uses streaming-mode scheduling with replaceable validation.",
             "claim_type": "method",
             "grounding": "source_material",
             "required": True,
@@ -1252,7 +1252,7 @@ class NarrativePlanningTests(unittest.TestCase):
                     "line_end": 14,
                 }
             ],
-            "coverage_groups": [["streaming-mode"], ["authentication"]],
+            "coverage_groups": [["streaming-mode"], ["validation"]],
         }
         brief = _writer_brief_from_planning(
             {"thesis": "Method evidence is scoped.", "contribution_boundary": [], "section_roles": [{"section_title": "Method", "role": "Describe the construction.", "must_cover": [], "must_not_claim": []}]},
@@ -1288,7 +1288,7 @@ class NarrativePlanningTests(unittest.TestCase):
     def test_text_safe_math_macros_wrap_bare_mathsf_definitions(self) -> None:
         latex = (
             "\\documentclass{article}\n"
-            "\\newcommand{\\METHODX}{\\mathsf{MethodX}}\n"
+            "\\newcommand{\\METHODX}{\\mathsf{WorkflowAlpha}}\n"
             "\\newcommand{\\Enc}{\\mathsf{Enc}}\n"
             "\\begin{document}\n"
             "\\METHODX{} uses \\Enc{} in prose.\n"
@@ -1297,7 +1297,7 @@ class NarrativePlanningTests(unittest.TestCase):
 
         rendered = _ensure_text_safe_math_macros(latex)
 
-        self.assertIn("\\newcommand{\\METHODX}{\\ensuremath{\\mathsf{MethodX}}}", rendered)
+        self.assertIn("\\newcommand{\\METHODX}{\\ensuremath{\\mathsf{WorkflowAlpha}}}", rendered)
         self.assertIn("\\newcommand{\\Enc}{\\ensuremath{\\mathsf{Enc}}}", rendered)
 
     def test_current_validation_ignores_human_final_artwork_placeholders(self) -> None:

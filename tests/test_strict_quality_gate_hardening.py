@@ -387,12 +387,12 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
 
         fallback_text = json.dumps(normalized["issues"], ensure_ascii=False)
         self.assertIn("paper-specific claims", fallback_text)
-        self.assertNotIn("MethodX", fallback_text)
+        self.assertNotIn("WorkflowAlpha", fallback_text)
 
     def test_generated_section_aliases_do_not_hard_code_project_specific_title(self) -> None:
         source = Path("paperorchestra/pipeline.py").read_text(encoding="utf-8")
 
-        self.assertNotIn("hidden-state model and project-specific construction", source.lower())
+        self.assertNotIn("staged-state model and project-specific construction", source.lower())
 
     def test_meta_leakage_rule_name_is_domain_neutral(self) -> None:
         source = Path("paperorchestra/quality_loop_policy.py").read_text(encoding="utf-8")
@@ -493,7 +493,7 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             f"The analysis is limited to the theorem assumptions and benchmark setting {idx}."
             for idx in range(10)
         ] + [
-            f"Related work establishes background for protected-channel design {idx}."
+            f"Related work establishes background for workflow design {idx}."
             for idx in range(10)
         ] + [
             f"The paper does not include figures because the argument is algebraic {idx}."
@@ -575,8 +575,8 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             paper = artifact_path(root, "paper.full.tex")
             paper.write_text(
                 "\\section{Method}\n"
-                "Prior deployment-scope systems motivate the design, and our construction proves invariant-safety security "
-                "with a 2.5x benchmark improvement~\\cite{TLS13}.\n",
+                "Prior deployment-scope systems motivate the design, and our method demonstrates invariant-preservation claim "
+                "with a 2.5x measured improvement~\\cite{TLS13}.\n",
                 encoding="utf-8",
             )
             citation_map = artifact_path(root, "citation_map.json")
@@ -623,7 +623,7 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             paper = artifact_path(root, "paper.full.tex")
             paper.write_text(
                 "\\section{Security}\n"
-                "Our construction proves invariant-safety security with the stated theorem~\\cite{TLS13}.\n",
+                "Our method demonstrates invariant-preservation claim with the stated theorem~\\cite{TLS13}.\n",
                 encoding="utf-8",
             )
             citation_map = artifact_path(root, "citation_map.json")
@@ -667,8 +667,8 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             paper = artifact_path(root, "paper.full.tex")
             paper.write_text(
                 "\\section{Security}\n"
-                "Prior systems motivate the design, and our construction proves invariant-safety security "
-                "with a 2.5x improvement~\\cite{TLS13}.\n",
+                "Prior systems motivate the design, and our method demonstrates invariant-preservation claim "
+                "with a 2.5x measured improvement~\\cite{TLS13}.\n",
                 encoding="utf-8",
             )
             state.artifacts.paper_full_tex = str(paper)
@@ -689,7 +689,7 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             paper.write_text(
                 "\\section{Security}\n"
                 "Prior systems motivate the design, and \\emph{our construction} proves "
-                "\\textbf{security with a 2.5x improvement}~\\cite{TLS13}.\n",
+                "\\textbf{security with a 2.5x measured improvement}~\\cite{TLS13}.\n",
                 encoding="utf-8",
             )
             state.artifacts.paper_full_tex = str(paper)
@@ -795,8 +795,8 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
                 "\\begin{document}\n"
                 "\\section{Limitations}\n"
                 "Stronger analytical claims require a separate argument beyond the stated assumptions and proof obligations.\n"
-                "The conclusions should therefore be read within the paper's stated assumptions: secret per-direction masks, "
-                "no sequence-number wraparound, the PRP and random-oracle idealizations used in the proof, and the fixed benchmark environment used in the evaluation.\n"
+                "The conclusions should therefore be read within the paper's stated assumptions: per-worker scheduling assumptions, "
+                "no counter exhaustion, the staged-model idealizations used in the analysis, and the fixed evaluation environment used in the evaluation.\n"
                 "\\end{document}\n",
                 encoding="utf-8",
             )
@@ -817,7 +817,7 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             paper = artifact_path(root, "paper.full.tex")
             paper.write_text(
                 "\\section{Security}\n"
-                "Our construction proves security within the paper's stated assumptions and reports a 2.5x benchmark improvement.\n",
+                "Our method demonstrates security within the paper's stated assumptions and reports a 2.5x measured improvement.\n",
                 encoding="utf-8",
             )
             state.artifacts.paper_full_tex = str(paper)
@@ -829,7 +829,7 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
 
         self.assertEqual(sweep["status"], "fail")
         self.assertEqual(sweep["failing_codes"], ["high_risk_uncited_claim"])
-        self.assertIn("2.5x benchmark improvement", sweep["items"][0]["sentence"])
+        self.assertIn("2.5x measured improvement", sweep["items"][0]["sentence"])
 
     def test_high_risk_claim_sweep_ignores_preamble_when_rechecking_candidates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -886,7 +886,7 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             paper = artifact_path(root, "paper.full.tex")
             paper.write_text(
                 "\\section{Security}\n"
-                "Our construction proves invariant security under the stated theorem.\n"
+                "Our method demonstrates invariant security under the stated theorem.\n"
                 "The system reports a 9.9x benchmark improvement over every prior method.\n",
                 encoding="utf-8",
             )
@@ -932,7 +932,7 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             paper = artifact_path(root, "paper.full.tex")
             paper.write_text(
                 "\\section{Security}\n"
-                "Our construction proves invariant security under the stated theorem.\n",
+                "Our method demonstrates invariant security under the stated theorem.\n",
                 encoding="utf-8",
             )
             state.artifacts.paper_full_tex = str(paper)
@@ -1296,7 +1296,7 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             root = Path(tmp)
             state = self._init_session(root)
             canonical = artifact_path(root, "paper.full.tex")
-            original = "\\newcommand{\\METHODX}{\\mathsf{MethodX}}\n\\section{Intro}\n\\METHODX text.\n"
+            original = "\\newcommand{\\METHODX}{\\mathsf{WorkflowAlpha}}\n\\section{Intro}\n\\METHODX text.\n"
             canonical.write_text(original, encoding="utf-8")
             state.artifacts.paper_full_tex = str(canonical)
             state.current_phase = "draft_complete"
@@ -1737,6 +1737,48 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             self.assertEqual(failed["status"], "fail")
             self.assertIn("material_manifest_entry_mismatch", failed["failing_codes"])
             self.assertIn("material_ledger_entry_mismatch", failed["failing_codes"])
+
+    def test_material_invariance_accepts_redacted_pointer_hash_without_raw_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            material = root / "examples" / "fresh-smoke-materials"
+            pointer_dir = root / ".omx" / "state"
+            pointer_dir.mkdir(parents=True)
+            for sub in ["inputs", "materials", "policy", "review"]:
+                (material / sub).mkdir(parents=True, exist_ok=True)
+            (material / "materials" / "core.tex").write_text("Core material\n", encoding="utf-8")
+            (material / "policy" / "material-boundary.md").write_text("Boundary\n", encoding="utf-8")
+            core_sha = hashlib.sha256((material / "materials" / "core.tex").read_bytes()).hexdigest()
+            boundary_sha = hashlib.sha256((material / "policy" / "material-boundary.md").read_bytes()).hexdigest()
+            (material / "inputs" / "material-manifest.json").write_text(
+                json.dumps({"materials": [{"path": "materials/core.tex", "sha256": f"sha256:{core_sha}", "bytes": 14}]}),
+                encoding="utf-8",
+            )
+            (material / "review" / "all-files.sha256").write_text(
+                f"{core_sha}  ./materials/core.tex\n{boundary_sha}  ./policy/material-boundary.md\n"
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./review/all-files.sha256\n",
+                encoding="utf-8",
+            )
+            expected = material.resolve()
+            pointer_payload = {
+                "schema_version": "fresh-smoke-material-pointer/1",
+                "material_root_label": "redacted-material-root:test",
+                "material_root_sha256": hashlib.sha256(str(expected).encode("utf-8", errors="replace")).hexdigest(),
+            }
+            pointer_path = pointer_dir / "current-fresh-smoke-materials-root"
+            pointer_path.write_text(json.dumps(pointer_payload), encoding="utf-8")
+
+            passed = validate_material_invariance(material, repo_root=root, expected_material_root="examples/fresh-smoke-materials")
+
+            self.assertEqual(passed["status"], "pass")
+            self.assertNotIn(str(expected), passed["pointer_value"])
+            self.assertEqual(passed["checked"][0]["check"], "material_pointer_hash")
+
+            pointer_payload["material_root_sha256"] = "0" * 64
+            pointer_path.write_text(json.dumps(pointer_payload), encoding="utf-8")
+            failed = validate_material_invariance(material, repo_root=root, expected_material_root="examples/fresh-smoke-materials")
+            self.assertEqual(failed["status"], "fail")
+            self.assertIn("material_pointer_hash_mismatch", failed["failing_codes"])
 
     def test_evidence_completeness_checks_command_logs_schema_and_cycle_counter(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

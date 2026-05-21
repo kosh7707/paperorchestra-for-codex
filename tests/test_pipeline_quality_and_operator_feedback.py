@@ -1752,7 +1752,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
                 "\\documentclass{article}\n\\begin{document}\n"
                 "\\section{Intro}\n"
                 "Background context is over-cited~\\cite{RefA,RefB,RefC,RefD}.\n"
-                "The construction proves invariant-safety security with a 2.5x improvement.\n"
+                "The method demonstrates invariant-preservation claim with a 2.5x measured improvement.\n"
                 "\\bibliographystyle{plain}\n\\bibliography{references}\n"
                 "\\end{document}\n"
             )
@@ -1773,9 +1773,9 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
                                 "id": "obl-001-theorem_or_bound",
                                 "type": "theorem_or_bound",
                                 "expected_manuscript_area": "security_analysis",
-                                "required_terms": ["construction", "proves", "invariant-safety", "security"],
+                                "required_terms": ["construction", "proves", "invariant-preservation", "security"],
                                 "numeric_tokens": ["2.5x"],
-                                "excerpt_preview": "The author-provided material claims invariant-safety security and a 2.5x result.",
+                                "excerpt_preview": "The author-provided material claims invariant-preservation claim and a 2.5x result.",
                             }
                         ],
                     }
@@ -1811,11 +1811,11 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
 
             self.assertIn("claim_safety_repair_issues.json", provider.prompt)
             self.assertIn("source_obligations_context.json", provider.prompt)
-            self.assertIn("invariant-safety", provider.prompt)
+            self.assertIn("invariant-preservation", provider.prompt)
             self.assertIn("2.5x", provider.prompt)
             self.assertIn("citation_bomb_sentence", provider.prompt)
             self.assertIn("high_risk_uncited_claim", provider.prompt)
-            self.assertIn("invariant-safety security", provider.prompt)
+            self.assertIn("invariant-preservation claim", provider.prompt)
             self.assertIn("required_action", provider.prompt)
 
     def test_source_obligation_repair_context_rejects_stale_or_legacy_matrices(self) -> None:
@@ -1968,7 +1968,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
                 "\\documentclass{article}\n\\begin{document}\n"
                 "\\section{Intro}\n"
                 "Background context is over-cited~\\cite{RefA,RefB,RefC,RefD}.\n"
-                "The construction proves invariant-safety security with a 2.5x improvement.\n"
+                "The method demonstrates invariant-preservation claim with a 2.5x measured improvement.\n"
                 "\\bibliographystyle{plain}\n\\bibliography{references}\n"
                 "\\end{document}\n"
             )
@@ -2049,7 +2049,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
                 "\\documentclass{article}\n\\begin{document}\n"
                 "\\section{Intro}\n"
                 "Background context is over-cited~\\cite{RefA,RefB,RefC,RefD}.\n"
-                "The construction proves invariant-safety security with a 2.5x improvement.\n"
+                "The method demonstrates invariant-preservation claim with a 2.5x measured improvement.\n"
                 "\\bibliographystyle{plain}\n\\bibliography{references}\n"
                 "\\end{document}\n"
             )
@@ -3140,7 +3140,7 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertIsNotNone(state.artifacts.latest_validation_json)
             self.assertIsNotNone(state.artifacts.latest_figure_placement_review_json)
 
-    def test_qa_loop_step_runs_new_review_authentication_refresh_handler(self) -> None:
+    def test_qa_loop_step_runs_new_review_validation_refresh_handler(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self._init_session_with_minimal_inputs(root)
@@ -6998,13 +6998,13 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             review = root / "review.json"
             review.write_text(json.dumps({
                 "overall_score": 58,
-                "summary": {"weaknesses": ["The integrity proof needs a concrete tamper-detection bound."], "top_improvements": ["Clarify evaluation scope."]},
+                "summary": {"weaknesses": ["The integrity proof needs a concrete consistency-check bound."], "top_improvements": ["Clarify evaluation scope."]},
                 "questions": []
             }), encoding="utf-8")
             section_review = root / "section_review.json"
             section_review.write_text(json.dumps({"sections": [{"section_title": "Security Analysis", "required_fixes": ["Add theorem resources."]}]}), encoding="utf-8")
             citation_review = root / "citation_review.json"
-            citation_review.write_text(json.dumps({"items": [{"id": "cite-001", "sentence": "Baseline-X is faster \\cite{gcm}.", "support_status": "weakly_supported", "risk": "medium", "suggested_fix": "Narrow the comparative claim."}]}), encoding="utf-8")
+            citation_review.write_text(json.dumps({"items": [{"id": "cite-001", "sentence": "Reference-X is faster \\cite{prior}.", "support_status": "weakly_supported", "risk": "medium", "suggested_fix": "Narrow the comparative claim."}]}), encoding="utf-8")
             suggestions = build_revision_suggestions(main, review, section_review_json=section_review, citation_review_json=citation_review)
             self.assertEqual(suggestions["action_count"], 4)
             self.assertEqual(suggestions["actions"][0]["target_area"], "security_analysis")

@@ -34,10 +34,53 @@ done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
+
+if [[ -f "$REPO_ROOT/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$REPO_ROOT/.env"
+  set +a
+fi
+
 EXPECTED_MATERIAL_ROOT="${EXPECTED_MATERIAL_ROOT:-examples/fresh-smoke-materials}"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 EVIDENCE_ROOT="${EVIDENCE_ROOT:-review/fresh-full-live-smoke-loop-${TS}}"
 EVIDENCE_ROOT="$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "$EVIDENCE_ROOT")"
+
+evidence_root_repo_relative() {
+  python3 - "$REPO_ROOT" "$EVIDENCE_ROOT" <<'PY'
+import os, sys
+repo = os.path.abspath(sys.argv[1])
+root = os.path.abspath(sys.argv[2])
+try:
+    common = os.path.commonpath([repo, root])
+except ValueError:
+    raise SystemExit(1)
+if common != repo:
+    raise SystemExit(1)
+print(os.path.relpath(root, repo))
+PY
+}
+
+ensure_evidence_root_is_release_safe() {
+  local rel
+  if ! rel="$(evidence_root_repo_relative)"; then
+    return 0
+  fi
+  case "${PAPERO_ALLOW_TRACKED_EVIDENCE_ROOT:-}" in
+    1|true|TRUE|yes|YES|on|ON)
+      return 0
+      ;;
+  esac
+  if git -C "$REPO_ROOT" check-ignore -q -- "$rel" || git -C "$REPO_ROOT" check-ignore -q -- "$rel/"; then
+    return 0
+  fi
+  echo "tracked evidence root is not allowed inside repository unless git-ignored or PAPERO_ALLOW_TRACKED_EVIDENCE_ROOT=1: $rel" >&2
+  exit 2
+}
+
+ensure_evidence_root_is_release_safe
+
 WORKDIR="$EVIDENCE_ROOT/workdir"
 LOGS="$EVIDENCE_ROOT/logs"
 ARTIFACTS="$EVIDENCE_ROOT/artifacts"
@@ -46,13 +89,6 @@ OPFB="$EVIDENCE_ROOT/operator-feedback"
 READABLE="$EVIDENCE_ROOT/readable"
 CRITIC="$EVIDENCE_ROOT/critic"
 mkdir -p "$LOGS" "$ARTIFACTS" "$PDF_SNAPSHOTS" "$OPFB" "$READABLE" "$CRITIC" "$WORKDIR" "$WORKDIR/inputs" "$EVIDENCE_ROOT/inputs-materials" "$EVIDENCE_ROOT/evidence-only" "$ARTIFACTS/prompts" "$EVIDENCE_ROOT/provider-traces"
-
-if [[ -f "$REPO_ROOT/.env" ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "$REPO_ROOT/.env"
-  set +a
-fi
 
 container_runtime_detected() {
   [[ -f /.dockerenv || -f /run/.containerenv ]] && return 0
@@ -201,6 +237,9 @@ run_release_safety_scan() {
   local args=(python3 "$REPO_ROOT/scripts/release-safety-scan.py" "$scan_root" "$output")
   if release_safety_scan_allow_private_residue_enabled; then
     args+=("--allow-private-residue")
+  fi
+  if [[ -n "${PAPERO_RELEASE_SAFETY_RESIDUE_DENYLIST:-}" ]]; then
+    args+=("--residue-denylist" "$PAPERO_RELEASE_SAFETY_RESIDUE_DENYLIST")
   fi
   "${args[@]}"
 }
@@ -1410,7 +1449,7 @@ Meta leakage scan: $ARTIFACTS/meta-leakage-scan.json
 
 Rendered-PDF QA checklist: title, abstract, tables, figures, captions, overflow, page breaks, and overall readability. Do not approve or generate feedback from TeX/JSON alone when PDF evidence is available.
 
-Schema: {"intent":"approve_existing_candidate|generate_new_operator_candidate|reject_candidate_with_reason","issues":[{"source_artifact_role":"paper_full_tex|quality_eval|qa_loop_plan|qa_loop_execution|operator_feedback_execution|section_review|citation_support_review|compiled_pdf","source_item_key":"short locator","target_section":"Abstract|Introduction|Background and Related Work|Construction|Security Model and Proof|Evaluation|Discussion and Limitations|Conclusion|Whole manuscript","severity":"blocker|major|minor","rationale":"specific reason grounded in artifacts","suggested_action":"specific rewrite instruction","authority_class":"author_feedback|claim_safety|proof_preservation|benchmark_framing|citation_support|narrative_quality|meta_leakage","owner_category":"author|experiment|proof|bibliography|implementation"}]}
+Schema: {"intent":"approve_existing_candidate|generate_new_operator_candidate|reject_candidate_with_reason","issues":[{"source_artifact_role":"paper_full_tex|quality_eval|qa_loop_plan|qa_loop_execution|operator_feedback_execution|section_review|citation_support_review|compiled_pdf","source_item_key":"short locator","target_section":"Abstract|current_manuscript_section_title|Whole manuscript","severity":"blocker|major|minor","rationale":"specific reason grounded in artifacts","suggested_action":"specific rewrite instruction","authority_class":"author_feedback|claim_safety|evidence_alignment|layout_quality|citation_support|narrative_quality|meta_leakage","owner_category":"author|evidence|bibliography|implementation|layout"}]}
 If the packet contains an unpromoted qa_loop_execution/operator_feedback_execution candidate_approval with candidate_progress.forward_progress=true, choose intent=approve_existing_candidate and include issue(s) whose source_artifact_role targets only that candidate approval source. Do not include extra diagnostic issues from stale candidate sources when approving. A historical approval whose candidate_sha256 already equals the packet manuscript_sha256 is not actionable; in that case choose generate_new_operator_candidate unless rejecting is safer.
 PROMPT
   run_codex_last_message "operator_feedback_author_cycle_${cycle}" "$prompt" "$response" "$OPFB/operator-feedback-author.cycle-${cycle}.jsonl" "$OPFB/operator-feedback-author.cycle-${cycle}.stderr.log" "$OPFB/operator-feedback-author.cycle-${cycle}.exitcode" "gpt-5.5" "high"
@@ -1468,7 +1507,16 @@ run_step omx_control_preflight omx explore --prompt "Return exactly OK if the OM
 
 # Material invariance.
 mkdir -p .omx/state
-printf '%s' "$MATERIAL_ROOT" > .omx/state/current-fresh-smoke-materials-root
+python3 - "$MATERIAL_ROOT" > .omx/state/current-fresh-smoke-materials-root <<'PY_MATERIAL_POINTER'
+import hashlib, json, os, sys
+material_root = os.path.abspath(sys.argv[1])
+digest = hashlib.sha256(material_root.encode("utf-8", errors="replace")).hexdigest()
+print(json.dumps({
+    "schema_version": "fresh-smoke-material-pointer/1",
+    "material_root_label": f"redacted-material-root:{digest[:12]}",
+    "material_root_sha256": digest,
+}, sort_keys=True))
+PY_MATERIAL_POINTER
 run_step material_invariance python3 scripts/validate-fresh-smoke-materials.py "$MATERIAL_ROOT" --expected-material-root "$EXPECTED_MATERIAL_ROOT" --output "$ARTIFACTS/material-invariance.json" || {
   MATERIAL_INVARIANCE_STATUS="fail"
   fail_now fail_material_invariance '"material_invariance"' '"artifacts/material-invariance.json"' 1

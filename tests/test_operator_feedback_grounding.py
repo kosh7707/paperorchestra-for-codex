@@ -61,6 +61,21 @@ def test_normalized_operator_feedback_caps_generated_candidate_issues_to_atomic_
     assert [issue["source_item_key"] for issue in normalized["issues"]] == ["item-2", "item-3", "item-4"]
 
 
+def test_operator_feedback_accepts_generic_evidence_and_layout_owner_categories() -> None:
+    packet = _packet()
+    evidence_issue = _issue(1, role="section_review")
+    evidence_issue["owner_category"] = "evidence"
+    evidence_issue["authority_class"] = "evidence_alignment"
+    layout_issue = _issue(2, role="compiled_pdf")
+    layout_issue["owner_category"] = "layout"
+    layout_issue["authority_class"] = "layout_quality"
+    draft = {"intent": "generate_new_operator_candidate", "issues": [evidence_issue, layout_issue]}
+
+    normalized = normalize_operator_feedback_draft(packet, draft)
+
+    assert [issue["owner_category"] for issue in normalized["issues"]] == ["evidence", "layout"]
+
+
 def test_operator_refinement_constraints_do_not_treat_dense_citations_as_forbidden_new_failure() -> None:
     constraints = _operator_refinement_constraints(
         {"tiers": {"tier_2_claim_safety": {"failing_codes": ["citation_bomb_detected"]}}},

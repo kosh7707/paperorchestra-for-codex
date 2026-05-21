@@ -149,6 +149,10 @@ def _sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def _sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()
+
+
 def _strip_sha_prefix(value: Any) -> str:
     text = str(value or "")
     return text.split("sha256:", 1)[1] if text.startswith("sha256:") else text
@@ -184,18 +188,45 @@ def validate_material_invariance(
     pointer_value: str | None = None
     if pointer.exists():
         pointer_value = pointer.read_text(encoding="utf-8").strip()
-        pointer_resolved = _resolve_repo_relative(repo, pointer_value)
-        checked.append({"check": "material_pointer", "path": str(pointer), "value": pointer_value})
-        if pointer_resolved != expected:
-            failing_codes.append("material_pointer_mismatch")
-            mismatches.append(
+        try:
+            pointer_payload = json.loads(pointer_value)
+        except json.JSONDecodeError:
+            pointer_payload = None
+        if isinstance(pointer_payload, dict) and pointer_payload.get("schema_version") == "fresh-smoke-material-pointer/1":
+            pointer_hash = str(pointer_payload.get("material_root_sha256") or "")
+            expected_hash = _sha256_text(str(expected))
+            checked.append(
                 {
-                    "check": "material_pointer",
-                    "expected": str(expected),
-                    "actual": str(pointer_resolved),
-                    "pointer_value": pointer_value,
+                    "check": "material_pointer_hash",
+                    "path": str(pointer),
+                    "material_root_label": pointer_payload.get("material_root_label"),
+                    "expected_sha256": expected_hash,
+                    "actual_sha256": pointer_hash,
                 }
             )
+            if pointer_hash != expected_hash:
+                failing_codes.append("material_pointer_hash_mismatch")
+                mismatches.append(
+                    {
+                        "check": "material_pointer_hash",
+                        "expected_sha256": expected_hash,
+                        "actual_sha256": pointer_hash,
+                        "material_root_label": pointer_payload.get("material_root_label"),
+                    }
+                )
+        else:
+            pointer_resolved = _resolve_repo_relative(repo, pointer_value)
+            checked.append({"check": "material_pointer", "path": str(pointer), "value": pointer_value})
+            if pointer_resolved != expected:
+                failing_codes.append("material_pointer_mismatch")
+                mismatches.append(
+                    {
+                        "check": "material_pointer",
+                        "expected": str(expected),
+                        "actual": str(pointer_resolved),
+                        "pointer_value": pointer_value,
+                    }
+                )
     else:
         failing_codes.append("material_pointer_missing")
         mismatches.append({"check": "material_pointer", "path": str(pointer), "reason": "missing"})

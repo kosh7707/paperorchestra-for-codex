@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -362,6 +363,77 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertNotIn("TD" + "SC", text)
         self.assertNotIn("An_" + "AEAD", text)
         self.assertNotIn("C" + "CI", text)
+
+    def test_fresh_full_live_smoke_rejects_unignored_in_repo_evidence_root_before_creation(self) -> None:
+        target = Path("tmp-tracked-evidence-root-for-test")
+        shutil.rmtree(target, ignore_errors=True)
+        try:
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/fresh-full-live-smoke-loop.sh",
+                    "--dry-run-contract",
+                    "--evidence-root",
+                    str(target),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("tracked evidence root is not allowed", result.stderr)
+            self.assertFalse(target.exists())
+        finally:
+            shutil.rmtree(target, ignore_errors=True)
+
+    def test_fresh_full_live_smoke_allows_unignored_in_repo_evidence_root_only_with_override(self) -> None:
+        target = Path("tmp-tracked-evidence-root-for-test")
+        shutil.rmtree(target, ignore_errors=True)
+        env = os.environ.copy()
+        env["PAPERO_ALLOW_TRACKED_EVIDENCE_ROOT"] = "1"
+        try:
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/fresh-full-live-smoke-loop.sh",
+                    "--dry-run-contract",
+                    "--evidence-root",
+                    str(target),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            payload = json.loads(result.stdout)
+            self.assertIn("provider_wrapper_contract", payload)
+        finally:
+            shutil.rmtree(target, ignore_errors=True)
+
+    def test_fresh_smoke_operator_prompt_schema_is_domain_generic(self) -> None:
+        text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+
+        self.assertNotIn("Security Model and Proof", text)
+        self.assertNotIn("proof_preservation", text)
+        self.assertNotIn("benchmark_framing", text)
+        self.assertIn("current_manuscript_section_title", text)
+        self.assertIn("evidence_alignment", text)
+        self.assertIn("layout_quality", text)
+
+    def test_derive_fresh_smoke_template_is_domain_generic(self) -> None:
+        text = Path("scripts/derive-fresh-smoke-inputs.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("Security Proof Core Source", text)
+        self.assertNotIn("Benchmark Headline", text)
+        self.assertNotIn("Security Model and Proof", text)
+        self.assertIn("\\section{Method}", text)
+        self.assertIn("\\section{Evidence and Analysis}", text)
+        self.assertIn("\\section{Results}", text)
 
     def test_fresh_full_live_smoke_skips_empty_reference_metadata_seed(self) -> None:
         text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
@@ -884,26 +956,22 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertIn("Commands: readable/commands.md", wrapper_text)
         self.assertNotIn('set -e\n  printf \'%s\\n\' "$rc"', live_text)
 
-    def test_fresh_smoke_release_safety_scan_detects_domain_residue_tokens(self) -> None:
+    def test_fresh_smoke_release_safety_scan_detects_external_residue_tokens(self) -> None:
         scanner = Path("scripts/release-safety-scan.py")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             scan_root = root / "scan"
             output = root / "release-safety-scan.json"
+            denylist = root / "denylist.txt"
+            denylist.write_text("private-project-token\nregex:/synthetic-[a-z]+-residue/\n", encoding="utf-8")
             scan_root.mkdir()
             (scan_root / "leak.txt").write_text(
-                (
-                    "A public bundle must not retain "
-                    + ("c" + "ci")
-                    + " or "
-                    + ("non" + "ce")
-                    + " domain residue.\n"
-                ),
+                "A public bundle must not retain private-project-token or synthetic-alpha-residue.\n",
                 encoding="utf-8",
             )
 
             proc = subprocess.run(
-                [sys.executable, str(scanner), str(scan_root), str(output)],
+                [sys.executable, str(scanner), str(scan_root), str(output), "--residue-denylist", str(denylist)],
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -913,8 +981,8 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 1, proc.stderr + proc.stdout)
             payload = json.loads(output.read_text(encoding="utf-8"))
             codes = {finding["code"] for finding in payload["findings"]}
-            self.assertIn("domain_specific_token", codes)
-            self.assertIn("domain_nonce_token", codes)
+            self.assertIn("external_residue_1", codes)
+            self.assertIn("external_residue_2", codes)
 
     def test_fresh_smoke_release_safety_scan_does_not_flag_residue_substrings(self) -> None:
         scanner = Path("scripts/release-safety-scan.py")
@@ -1144,24 +1212,23 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             self.assertNotIn("custom-codex", rendered)
             self.assertIn("provider-wrap.sh", (evidence / "logs" / "synthetic_wrapped_provider_command.command").read_text(encoding="utf-8"))
 
-    def test_fresh_smoke_release_safety_private_residue_requires_explicit_private_qa_flag(self) -> None:
+    def test_fresh_smoke_release_safety_private_residue_requires_external_denylist_and_private_qa_flag(self) -> None:
         wrapper_text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
         helper_start = wrapper_text.index("release_safety_scan_allow_private_residue_enabled() {")
         helper_end = wrapper_text.index("\n}\nrecord_command_markdown", helper_start) + 3
         helpers = wrapper_text[helper_start:helper_end]
         self.assertIn('--allow-private-residue', helpers)
+        self.assertIn('--residue-denylist', helpers)
         self.assertNotIn("paperorchestra-private", helpers)
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            denylist = root / "denylist.txt"
+            denylist.write_text("private-project-token\n", encoding="utf-8")
             scan_root = root / "scan"
             scan_root.mkdir()
             (scan_root / "raw-private-evidence.txt").write_text(
-                "Raw private QA evidence may mention "
-                + ("c" + "ci")
-                + " and "
-                + ("AES" + "-GCM")
-                + " only when explicitly allowed.\n",
+                "Raw private QA evidence may mention private-project-token only when explicitly allowed.\n",
                 encoding="utf-8",
             )
             harness = root / "release-safety-harness.sh"
@@ -1183,6 +1250,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
                 text=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                env={"PAPERO_RELEASE_SAFETY_RESIDUE_DENYLIST": str(denylist)},
                 check=False,
             )
             self.assertNotEqual(strict.returncode, 0)
@@ -1194,6 +1262,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             allowed_out = root / "allowed.json"
             env = os.environ.copy()
             env["PAPERO_RELEASE_SAFETY_ALLOW_PRIVATE_RESIDUE"] = "1"
+            env["PAPERO_RELEASE_SAFETY_RESIDUE_DENYLIST"] = str(denylist)
             allowed = subprocess.run(
                 ["bash", str(harness), str(scan_root), str(allowed_out)],
                 text=True,

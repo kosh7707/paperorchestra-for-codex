@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Pattern
 
@@ -25,23 +26,8 @@ SECRET_PATTERNS: dict[str, Pattern[str]] = {
 }
 
 PRIVATE_MARKER = "paperorchestra-" + "private"
-DOMAIN_MARKER = "c" + "ci"
-N_MARKER = "non" + "ce"
-AEAD_PATTERN = "|".join(
-    [
-        "AES" + "-?GCM",
-        "SU" + "PERCOP",
-        "IND" + "-CPA",
-        "INT" + "-CTXT",
-        "secret-" + N_MARKER,
-        "hidden-" + N_MARKER,
-    ]
-)
 RESIDUE_PATTERNS: dict[str, Pattern[str]] = {
     "private_artifact_path": re.compile(PRIVATE_MARKER, re.I),
-    "domain_specific_token": re.compile(r"\b" + re.escape(DOMAIN_MARKER) + r"\b", re.I),
-    "domain_nonce_token": re.compile(r"\b" + re.escape(N_MARKER) + r"\b", re.I),
-    "aead_baseline": re.compile(AEAD_PATTERN, re.I),
 }
 
 
@@ -49,8 +35,54 @@ def _env_flag(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def scan_tree(root: Path, *, allow_private_residue: bool = False) -> dict[str, object]:
+def _env_paths(name: str) -> list[Path]:
+    raw = os.environ.get(name, "")
+    if not raw.strip():
+        return []
+    return [Path(item) for item in raw.split(os.pathsep) if item.strip()]
+
+
+def _parse_regex_literal(raw: str, *, path: Path, line_no: int) -> Pattern[str]:
+    if not raw.startswith("regex:/") or not raw.endswith("/"):
+        raise ValueError(f"{path}:{line_no}: regex entries must use regex:/.../ form")
+    try:
+        return re.compile(raw[len("regex:/") : -1], re.I)
+    except re.error as exc:
+        raise ValueError(f"{path}:{line_no}: invalid regex: {exc}") from exc
+
+
+def load_external_residue_patterns(paths: list[Path]) -> dict[str, Pattern[str]]:
+    patterns: dict[str, Pattern[str]] = {}
+    counter = 0
+    for path in paths:
+        if not path.exists() or not path.is_file():
+            raise ValueError(f"{path}: denylist file is not readable")
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError as exc:
+            raise ValueError(f"{path}: denylist file is not readable: {exc}") from exc
+        for line_no, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            counter += 1
+            code = f"external_residue_{counter}"
+            if stripped.startswith("regex:"):
+                patterns[code] = _parse_regex_literal(stripped, path=path, line_no=line_no)
+            else:
+                patterns[code] = re.compile(re.escape(stripped), re.I)
+    return patterns
+
+
+def scan_tree(
+    root: Path,
+    *,
+    allow_private_residue: bool = False,
+    residue_patterns: dict[str, Pattern[str]] | None = None,
+) -> dict[str, object]:
     findings: list[dict[str, object]] = []
+    combined_residue_patterns = dict(RESIDUE_PATTERNS)
+    combined_residue_patterns.update(residue_patterns or {})
     for path in sorted(root.rglob("*")):
         if not path.is_file() or path.name in {".counter"}:
             continue
@@ -59,7 +91,7 @@ def scan_tree(root: Path, *, allow_private_residue: bool = False) -> dict[str, o
         except Exception:
             continue
         rel = str(path.relative_to(root))
-        for family, patterns in (("secret", SECRET_PATTERNS), ("private_or_domain_residue", RESIDUE_PATTERNS)):
+        for family, patterns in (("secret", SECRET_PATTERNS), ("private_or_domain_residue", combined_residue_patterns)):
             for code, pattern in patterns.items():
                 for match in pattern.finditer(text):
                     start = max(0, match.start() - 80)
@@ -83,6 +115,7 @@ def scan_tree(root: Path, *, allow_private_residue: bool = False) -> dict[str, o
         "finding_count": len(findings),
         "blocking_finding_count": len(blocking),
         "allowed_private_residue_count": len(allowed),
+        "external_residue_pattern_count": len(residue_patterns or {}),
         "findings": findings,
     }
 
@@ -97,9 +130,41 @@ def main() -> int:
         default=_env_flag("PAPERO_RELEASE_SAFETY_ALLOW_PRIVATE_RESIDUE"),
         help="Keep secret findings blocking but allow private/domain residue in private QA evidence.",
     )
+    parser.add_argument(
+        "--residue-denylist",
+        action="append",
+        default=[],
+        help="External private/domain residue denylist. Lines are literal tokens or regex:/.../ entries.",
+    )
     args = parser.parse_args()
-    payload = scan_tree(Path(args.scan_root), allow_private_residue=args.allow_private_residue)
     out = Path(args.output)
+    residue_denylist_paths = [Path(item) for item in args.residue_denylist] + _env_paths(
+        "PAPERO_RELEASE_SAFETY_RESIDUE_DENYLIST"
+    )
+    try:
+        external_residue_patterns = load_external_residue_patterns(residue_denylist_paths)
+        payload = scan_tree(
+            Path(args.scan_root),
+            allow_private_residue=args.allow_private_residue,
+            residue_patterns=external_residue_patterns,
+        )
+    except ValueError as exc:
+        payload = {
+            "schema_version": "release-safety-scan/1",
+            "status": "fail",
+            "allow_private_residue": args.allow_private_residue,
+            "finding_count": 0,
+            "blocking_finding_count": 1,
+            "allowed_private_residue_count": 0,
+            "external_residue_pattern_count": 0,
+            "findings": [],
+            "error": "invalid residue denylist",
+            "detail": str(exc),
+        }
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"invalid residue denylist: {exc}", file=sys.stderr)
+        return 2
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(

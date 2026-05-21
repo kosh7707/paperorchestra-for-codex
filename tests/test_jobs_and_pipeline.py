@@ -2031,7 +2031,7 @@ class PipelineTests(unittest.TestCase):
             self._init_session_with_minimal_inputs(root)
             seed_path = root / "prior_work.md"
             seed_path.write_text(
-                "- [Protected Channel Interfaces](https://example.test/protected-channel) — 2002\n"
+                "- [Protected Channel Interfaces](https://example.test/workflow) — 2002\n"
                 "- BLAKE3: one function, fast everywhere — 2020\n",
                 encoding="utf-8",
             )
@@ -2319,7 +2319,7 @@ class PipelineTests(unittest.TestCase):
                         "macro_candidates": [
                             {
                                 "title_guess": "Protected Channel Interfaces: Relations among Notions and Analysis of Generic Composition",
-                                "origin_query": "Bellare Namprempre 2000 protected-channel design",
+                                "origin_query": "Bellare Namprempre 2000 workflow design",
                             }
                         ],
                         "micro_candidates": [],
@@ -2335,11 +2335,11 @@ class PipelineTests(unittest.TestCase):
                 "year": 2000,
                 "publicationDate": "2000-12-01",
                 "venue": "ASIACRYPT",
-                "abstract": "Defines protected-channel design notions and analyzes generic composition.",
+                "abstract": "Defines workflow design notions and analyzes generic composition.",
                 "authors": [{"name": "Mihir Bellare"}, {"name": "Chanathip Namprempre"}],
                 "citationCount": 1000,
-                "externalIds": {"DOI": "10.example/protected-channel"},
-                "url": "https://example.test/protected-channel",
+                "externalIds": {"DOI": "10.example/workflow"},
+                "url": "https://example.test/workflow",
             }
 
             with patch("paperorchestra.literature.search_semantic_scholar", return_value=[s2_result]) as search, patch(
@@ -2356,7 +2356,7 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(len(registry), 1)
             self.assertEqual(registry[0]["paper_id"], "s2-paper-id")
             self.assertEqual(registry[0]["venue"], "ASIACRYPT")
-            self.assertEqual(registry[0]["external_ids"]["DOI"], "10.example/protected-channel")
+            self.assertEqual(registry[0]["external_ids"]["DOI"], "10.example/workflow")
             self.assertEqual(state.latest_verify_mode, "live")
             self.assertIn(registry[0]["bibtex_key"], citation_map)
             self.assertEqual(citation_map[registry[0]["bibtex_key"]]["paper_id"], "s2-paper-id")
@@ -2677,42 +2677,42 @@ class PipelineTests(unittest.TestCase):
         plot_assets_index = {
             "assets": [
                 {
-                    "figure_id": "fig_encrypt_performance_by_message_size",
-                    "title": "Encryption cost across message sizes",
-                    "caption": "Cycles per byte across message sizes.",
-                    "latex_snippet_path": "build/plot-assets/fig_encrypt_performance_by_message_size.tex",
-                    "filename": "fig_encrypt_performance_by_message_size.svg",
+                    "figure_id": "fig_method_latency_by_input_size",
+                    "title": "Method latency across input sizes",
+                    "caption": "Latency per item across input sizes.",
+                    "latex_snippet_path": "build/plot-assets/fig_method_latency_by_input_size.tex",
+                    "filename": "fig_method_latency_by_input_size.svg",
                 }
             ]
         }
-        latex = r"\includegraphics[width=\columnwidth]{figures/fig_encrypt_performance_by_message_size.pdf}"
+        latex = r"\includegraphics[width=\columnwidth]{figures/fig_method_latency_by_input_size.pdf}"
         normalized = _normalize_generated_plot_paths(latex, plot_assets_index)
         self.assertEqual(
             normalized,
-            r"\input{build/plot-assets/fig_encrypt_performance_by_message_size.tex}",
+            r"\input{build/plot-assets/fig_method_latency_by_input_size.tex}",
         )
 
     def test_generated_plot_paths_normalize_label_matched_source_figure_to_snippet(self) -> None:
         plot_assets_index = {
             "assets": [
                 {
-                    "figure_id": "fig_relative_speedup_short_messages",
-                    "title": "Relative speedup of MethodX over standardized protected-channel baselines",
-                    "caption": "Short-message speedup comparison.",
-                    "latex_snippet_path": "build/plot-assets/fig_relative_speedup_short_messages.tex",
-                    "filename": "fig_relative_speedup_short_messages.svg",
+                    "figure_id": "fig_relative_throughput_small_inputs",
+                    "title": "Relative throughput of WorkflowAlpha over standardized workflow baselines",
+                    "caption": "Small-input throughput comparison.",
+                    "latex_snippet_path": "build/plot-assets/fig_relative_throughput_small_inputs.tex",
+                    "filename": "fig_relative_throughput_small_inputs.svg",
                 }
             ]
         }
         latex = (
             "\\begin{figure}[t]\n"
             "\\includegraphics[width=\\columnwidth]{inputs/figures/supplied_protocol_overview.pdf}\n"
-            "\\caption{Relative speedup of MethodX over standardized protected-channel baselines for short messages.}\n"
-            "\\label{fig:relative-speedup-short-messages}\n"
+            "\\caption{Relative throughput of WorkflowAlpha over standardized workflow baselines for small inputs.}\n"
+            "\\label{fig:relative-throughput-small-inputs}\n"
             "\\end{figure}\n"
         )
         normalized = _normalize_generated_plot_paths(latex, plot_assets_index)
-        self.assertIn(r"\input{build/plot-assets/fig_relative_speedup_short_messages.tex}", normalized)
+        self.assertIn(r"\input{build/plot-assets/fig_relative_throughput_small_inputs.tex}", normalized)
         self.assertNotIn("inputs/figures/supplied_protocol_overview.pdf", normalized)
 
     def test_auto_inserted_plot_usage_skips_when_matching_caption_already_exists(self) -> None:
@@ -2720,23 +2720,23 @@ class PipelineTests(unittest.TestCase):
             "\\documentclass{article}\n\\begin{document}\n"
             "\\section{Experiments}\n"
             "\\begin{figure}[t]\n"
-            "\\caption{Cycles per byte across message sizes for standardized protected-channel baselines and MethodX variants at adlen=0.}\n"
-            "\\label{fig:encrypt-cost-size}\n"
+            "\\caption{Cycles per byte across message sizes for standardized workflow baselines and WorkflowAlpha variants.}\n"
+            "\\label{fig:method-latency-size}\n"
             "\\end{figure}\n"
             "\\end{document}\n"
         )
         plot_assets_index = {
             "assets": [
                 {
-                    "figure_id": "fig_encrypt_performance_by_message_size",
-                    "caption": "Cycles per byte across message sizes for standardized protected-channel baselines and MethodX variants at adlen=0.",
-                    "latex_snippet_path": "build/plot-assets/fig_encrypt_performance_by_message_size.tex",
-                    "filename": "fig_encrypt_performance_by_message_size.svg",
+                    "figure_id": "fig_method_latency_by_input_size",
+                    "caption": "Cycles per byte across message sizes for standardized workflow baselines and WorkflowAlpha variants.",
+                    "latex_snippet_path": "build/plot-assets/fig_method_latency_by_input_size.tex",
+                    "filename": "fig_method_latency_by_input_size.svg",
                 }
             ]
         }
         rendered = _ensure_generated_plot_usage(latex, plot_assets_index)
-        self.assertNotIn("PaperOrchestra:auto-repaired figure:fig_encrypt_performance_by_message_size", rendered)
+        self.assertNotIn("PaperOrchestra:auto-repaired figure:fig_method_latency_by_input_size", rendered)
 
     def test_discover_papers_propagates_runtime_mode_to_lane_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2998,13 +2998,13 @@ class PipelineTests(unittest.TestCase):
             "\\documentclass{article}\n"
             "\\begin{document}\n"
             "\\section{00 core macros}\n"
-            "\\newcommand{\\METHODX}{\\mathsf{MethodX}}\n"
+            "\\newcommand{\\METHODX}{\\mathsf{WorkflowAlpha}}\n"
             "\\newcommand{\\EncKey}{K_E}\n"
             "\\newcommand{\\AuthKey}{K_A}\n"
             "Visible macro notes.\n"
             "\\section{Method}\n"
             "Use \\METHODX{} with \\EncKey{} and \\AuthKey{} here.\n"
-            "\\section{Claim Boundaries for the MethodX Draft}\n"
+            "\\section{Claim Boundaries for the WorkflowAlpha Draft}\n"
             "This draft is not camera-ready.\n"
             "\\section{Author Notes for Positioning and Framing}\n"
             "Operator-only note.\n"
@@ -3020,7 +3020,7 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("\\newcommand{\\AuthKey}{\\ensuremath{K_A}}", cleaned)
         self.assertNotIn("\\section{00 core macros}", cleaned)
         self.assertNotIn("Visible macro notes", cleaned)
-        self.assertNotIn("Claim Boundaries for the MethodX Draft", cleaned)
+        self.assertNotIn("Claim Boundaries for the WorkflowAlpha Draft", cleaned)
         self.assertNotIn("Author Notes for Positioning and Framing", cleaned)
         self.assertIn("\\section{Method}", cleaned)
         self.assertIn("\\section{Conclusion}", cleaned)
@@ -3944,14 +3944,14 @@ Done \\cite{alpha}. This conclusion summarizes the validated outcome, limits, an
     def test_source_critical_context_preserves_deep_proof_material(self) -> None:
         context = _source_critical_context_for_prompt(
             {
-                "idea": "A" * 6000 + "\nGame 0 replaces the PRP/PRF stream under P1 and P2 before the forgery bound.\n",
+                "idea": "A" * 6000 + "\nStage 0 replaces the stage-transform stream under P1 and P2 before the forgery bound.\n",
                 "experimental_log": "",
                 "template": "",
             }
         )
         joined = json.dumps(context, ensure_ascii=False)
-        self.assertIn("Game 0", joined)
-        self.assertIn("PRP/PRF", joined)
+        self.assertIn("Stage 0", joined)
+        self.assertIn("stage-transform", joined)
         self.assertIn("P1", joined)
         self.assertIn("P2", joined)
 
@@ -3966,15 +3966,15 @@ Done \\cite{alpha}. This conclusion summarizes the validated outcome, limits, an
                 testcase.assertNotIn("&quot;provenance&quot;", request.user_prompt)
                 testcase.assertNotIn("manual_seed", request.user_prompt)
                 testcase.assertIn("source_critical_context.json", request.user_prompt)
-                testcase.assertIn("Game 0", request.user_prompt)
-                testcase.assertIn("PRP/PRF", request.user_prompt)
+                testcase.assertIn("Stage 0", request.user_prompt)
+                testcase.assertIn("stage-transform", request.user_prompt)
                 return r"""```latex
 \documentclass{article}
 \begin{document}
 \section{Method}
 Method details use verified support \cite{alpha}. This section has enough grounded content about construction, security context, and implementation choices to pass the shallow-section validator.
 \section{Security Analysis}
-Game 0 replaces the PRP/PRF stream under P1 and P2 \cite{alpha}. This section includes enough proof detail and caveats to avoid placeholder behavior in strict prompt tests.
+Stage 0 replaces the stage-transform stream under P1 and P2 \cite{alpha}. This section includes enough proof detail and caveats to avoid placeholder behavior in strict prompt tests.
 \section{Experiments}
 Benchmarks are discussed qualitatively \cite{alpha}. This section has enough benchmark setup and interpretation prose to satisfy the section-depth contract without invented numbers.
 \section{Conclusion}
@@ -3992,7 +3992,7 @@ The draft remains human-finalized \cite{alpha}. This conclusion is substantive e
                 self._init_session_with_minimal_inputs(root)
                 state = load_session(root)
                 Path(state.inputs.idea_path).write_text(
-                    "A" * 9000 + "\nGame 0 replaces the PRP/PRF stream under P1 and P2 before the forgery bound.\n",
+                    "A" * 9000 + "\nStage 0 replaces the stage-transform stream under P1 and P2 before the forgery bound.\n",
                     encoding="utf-8",
                 )
                 outline_path = artifact_path(root, "outline.json")
@@ -4105,7 +4105,7 @@ Done \cite{missing}. This conclusion is long enough but intentionally cites the 
                 testcase.assertIn("&quot;abstract&quot;:", request.user_prompt)
                 testcase.assertIn("&quot;year&quot;: 2024", request.user_prompt)
                 testcase.assertIn("source_critical_context.json", request.user_prompt)
-                testcase.assertIn("Game 0", request.user_prompt)
+                testcase.assertIn("Stage 0", request.user_prompt)
                 return r"""```latex
 \documentclass{article}
 \begin{document}
@@ -4121,7 +4121,7 @@ Related work compares the surrounding area using verified metadata \cite{alpha}.
             root = Path(tmp)
             self._init_session_with_minimal_inputs(root)
             state = load_session(root)
-            Path(state.inputs.idea_path).write_text("A" * 6000 + "\nGame 0 proof context.\n", encoding="utf-8")
+            Path(state.inputs.idea_path).write_text("A" * 6000 + "\nStage 0 proof context.\n", encoding="utf-8")
             outline_path = artifact_path(root, "outline.json")
             outline_path.write_text(
                 json.dumps(
@@ -4160,14 +4160,14 @@ Related work compares the surrounding area using verified metadata \cite{alpha}.
                 testcase.assertIn("&quot;abstract&quot;:", request.user_prompt)
                 testcase.assertIn("&quot;year&quot;: 2024", request.user_prompt)
                 testcase.assertIn("source_critical_context.json", request.user_prompt)
-                testcase.assertIn("Game 0", request.user_prompt)
+                testcase.assertIn("Stage 0", request.user_prompt)
                 return r"""```latex
 \documentclass{article}
 \begin{document}
 \section{Introduction}
 Intro \cite{alpha}. This preserved introduction explains the paper context, stated evidence, and cautious claim boundary in enough detail to satisfy the substantive-section validation threshold.
 \section{Method}
-Game 0 proof context \cite{alpha}. This method section remains substantive enough to preserve the validated current manuscript.
+Stage 0 proof context \cite{alpha}. This method section remains substantive enough to preserve the validated current manuscript.
 \section{Conclusion}
 Conclusion \cite{alpha}. The conclusion remains cautious and human-finalized, summarizing that the draft is an evidence-grounded intermediate manuscript rather than an automated final paper.
 \bibliographystyle{plain}
@@ -4179,9 +4179,9 @@ Conclusion \cite{alpha}. The conclusion remains cautious and human-finalized, su
             root = Path(tmp)
             self._init_session_with_minimal_inputs(root)
             state = load_session(root)
-            Path(state.inputs.idea_path).write_text("A" * 6000 + "\nGame 0 proof context.\n", encoding="utf-8")
+            Path(state.inputs.idea_path).write_text("A" * 6000 + "\nStage 0 proof context.\n", encoding="utf-8")
             paper_path = artifact_path(root, "paper.full.tex")
-            paper_text = RefinePromptAssertingProvider().complete(CompletionRequest(system_prompt="", user_prompt='&quot;abstract&quot;:\n&quot;year&quot;: 2024\nsource_critical_context.json\nGame 0'))
+            paper_text = RefinePromptAssertingProvider().complete(CompletionRequest(system_prompt="", user_prompt='&quot;abstract&quot;:\n&quot;year&quot;: 2024\nsource_critical_context.json\nStage 0'))
             paper_path.write_text(paper_text.replace("```latex\n", "").replace("\n```", ""), encoding="utf-8")
             citation_map_path = artifact_path(root, "citation_map.json")
             citation_map_path.write_text(
@@ -5036,7 +5036,7 @@ Related \\cite{alpha}.
                 "\\label{fig:snm-oracles}\n"
                 "\\end{figure}\n"
                 "\\begin{algorithm}[t]\n"
-                "\\caption{MethodX Encrypt}\n"
+                "\\caption{WorkflowAlpha Encrypt}\n"
                 "\\label{alg:method-encrypt}\n"
                 "\\begin{algorithmic}[1]\n"
                 "\\State do something\n"
@@ -5088,7 +5088,7 @@ Related \\cite{alpha}.
             root = Path(tmp)
             source = root / "paper"
             source.mkdir()
-            (source / "macros.tex").write_text("\\newcommand{\\METHODX}{\\mathsf{MethodX}}\n", encoding="utf-8")
+            (source / "macros.tex").write_text("\\newcommand{\\METHODX}{\\mathsf{WorkflowAlpha}}\n", encoding="utf-8")
             paper = source / "main.tex"
             paper.write_text(
                 "\\documentclass{article}\n"
@@ -5102,7 +5102,7 @@ Related \\cite{alpha}.
             )
             bundle = prepare_teach_bundle(root, paper=paper, output_dir=root / "teach-out", initialize_session=False)
             template = Path(bundle["template"]).read_text(encoding="utf-8")
-            self.assertIn("\\newcommand{\\METHODX}{\\mathsf{MethodX}}", template)
+            self.assertIn("\\newcommand{\\METHODX}{\\mathsf{WorkflowAlpha}}", template)
             self.assertNotIn("\\input{macros}", template)
 
     def test_restore_missing_referenced_labels_reinserts_template_blocks(self) -> None:
@@ -5156,17 +5156,17 @@ Related \\cite{alpha}.
 
     def test_drop_unknown_citation_keys_keeps_verified_keys_without_fabricating_bib_entries(self) -> None:
         latex = (
-            "BenchHarness background~\\cite{BernsteinLangeEBACS,thomson2020UsingTlsTo} "
-            "and unknown-only source note~\\cite{BernsteinLangeBenchHarness}."
+            "EvalHarness background~\\cite{ExampleBenchmarkCorpus,thomson2020UsingTlsTo} "
+            "and unknown-only source note~\\cite{ExampleExternalEvalHarness}."
         )
         citation_map = {"thomson2020UsingTlsTo": {"title": "Using TLS to Secure QUIC"}}
 
         cleaned, dropped = _drop_unknown_citation_keys(latex, citation_map)
 
         self.assertIn("\\cite{thomson2020UsingTlsTo}", cleaned)
-        self.assertNotIn("BernsteinLangeEBACS", cleaned)
-        self.assertNotIn("BernsteinLangeBenchHarness", cleaned)
-        self.assertEqual(dropped, {"BernsteinLangeEBACS": 1, "BernsteinLangeBenchHarness": 1})
+        self.assertNotIn("ExampleBenchmarkCorpus", cleaned)
+        self.assertNotIn("ExampleExternalEvalHarness", cleaned)
+        self.assertEqual(dropped, {"ExampleBenchmarkCorpus": 1, "ExampleExternalEvalHarness": 1})
 
     def test_restore_missing_referenced_labels_adds_nearest_subsection_anchor_without_template_source(self) -> None:
         template = (

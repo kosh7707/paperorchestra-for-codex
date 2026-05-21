@@ -108,8 +108,8 @@ def main() -> int:
         paper = artifact_path(root, "paper.full.tex")
         paper.write_text(
             "\\section{Method}\n"
-            "Prior deployment-scope systems motivate the design, and our construction proves invariant-safety security "
-            "with a 2.5x benchmark improvement~\\cite{PriorSystem}.\n",
+            "Prior deployment-scope systems motivate the design, and our method demonstrates invariant-preservation claim "
+            "with a 2.5x measured improvement~\\cite{PriorSystem}.\n",
             encoding="utf-8",
         )
         citation_map = artifact_path(root, "citation_map.json")
@@ -136,7 +136,7 @@ def main() -> int:
             "mixed citation-scope guard overfired on background citation",
         )
         paper.write_text(
-            "\\section{Analysis}\nOur construction proves invariant-safety security with the stated theorem~\\cite{PriorSystem}.\n",
+            "\\section{Analysis}\nOur method demonstrates invariant-preservation claim with the stated theorem~\\cite{PriorSystem}.\n",
             encoding="utf-8",
         )
         paper_specific_review = build_citation_support_review(root, evidence_mode="heuristic")

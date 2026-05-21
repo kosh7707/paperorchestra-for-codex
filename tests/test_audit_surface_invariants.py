@@ -2356,13 +2356,13 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             root = Path(tmp)
             state = self._init_session_with_minimal_inputs(root)
             Path(state.inputs.idea_path).write_text(
-                "MethodX uses streaming-mode encryption with independently replaceable authentication under a hidden-state precondition.\n"
-                "The theorem states invariant-safety and tamper-detection analysis bounds with Game 0, Game 1, and tag guessing steps.\n"
+                "WorkflowAlpha uses streaming-mode scheduling with independently replaceable validation under a staged-state precondition.\n"
+                "The theorem states invariant-preservation and consistency-check analysis bounds with Stage 0, Stage 1, and queue-bound steps.\n"
                 "Limitations: the proof does not cover unavailable input exposure.\n",
                 encoding="utf-8",
             )
             Path(state.inputs.experimental_log_path).write_text(
-                "BenchHarness stq2 measurements compare Baseline-X throughput and show 2.54x at 16 bytes on the OpenSSL-backed implementation.\n",
+                "EvalHarness stq2 measurements compare Reference-X throughput and show 2.54x at 16 bytes on the reference implementation.\n",
                 encoding="utf-8",
             )
 
@@ -2407,9 +2407,9 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             payload = build_source_obligations(root)
 
             rendered = json.dumps(payload, ensure_ascii=False)
-            self.assertNotIn("Baseline-X", rendered)
-            self.assertNotIn("invariant-safety", rendered)
-            self.assertNotIn("BenchHarness", rendered)
+            self.assertNotIn("Reference-X", rendered)
+            self.assertNotIn("invariant-preservation", rendered)
+            self.assertNotIn("EvalHarness", rendered)
             types = {item["type"] for item in payload["obligations"]}
             self.assertIn("method_core", types)
             self.assertIn("theorem_or_bound", types)
@@ -2456,7 +2456,7 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             self._write_claim_safe_scaffolding(
                 root,
                 "\\documentclass{article}\n\\begin{document}\n\\section{Introduction}\n"
-                "Our scheme is 2.54x faster than Baseline-X and provides stronger security. "
+                "Our scheme is 2.54x faster than Reference-X and preserves stronger consistency. "
                 "Background context is documented~\\cite{TestRef}.\n\\end{document}\n",
             )
 
@@ -2478,17 +2478,17 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             root = Path(tmp)
             state = self._init_session_with_minimal_inputs(root)
             Path(state.inputs.idea_path).write_text(
-                "MethodX uses streaming-mode encryption with independently replaceable authentication under a hidden-state precondition.\n",
+                "WorkflowAlpha uses streaming-mode scheduling with independently replaceable validation under a staged-state precondition.\n",
                 encoding="utf-8",
             )
             Path(state.inputs.experimental_log_path).write_text(
-                "BenchHarness stq2 measurements compare Baseline-X throughput and show 2.54x at 16 bytes.\n",
+                "EvalHarness stq2 measurements compare Reference-X throughput and show 2.54x at 16 bytes.\n",
                 encoding="utf-8",
             )
             self._write_claim_safe_scaffolding(
                 root,
                 "\\documentclass{article}\n\\begin{document}\n\\section{Introduction}\n"
-                "The MethodX authentication method is faster than Baseline-X. "
+                "The WorkflowAlpha validation method is faster than Reference-X. "
                 "Background context is documented~\\cite{TestRef}.\n\\end{document}\n",
             )
 
@@ -2611,20 +2611,20 @@ The regressed mock paper keeps enough method text to satisfy structural validati
             Path(state.inputs.template_path).write_text(
                 "\\documentclass{article}\n\\begin{document}\n"
                 "\\section{Security Analysis}\n"
-                "\\begin{theorem}MethodX is invariant-safety secure under the hidden-state precondition.\\end{theorem}\n"
-                "\\begin{proof}Game 0 is real. Game 1 replaces the stream. The analysis bound follows.\\end{proof}\n"
+                "\\begin{theorem}WorkflowAlpha is invariant-preserving under the staged-state precondition.\\end{theorem}\n"
+                "\\begin{proof}Stage 0 is real. Stage 1 replaces the stream. The analysis bound follows.\\end{proof}\n"
                 "\\section{Experiments}\nBenchmark evidence.\n"
                 "\\end{document}\n",
                 encoding="utf-8",
             )
             Path(state.inputs.experimental_log_path).write_text(
-                "# Benchmark Method\nBenchHarness benchmark measurements show Baseline-X comparison result 2.54x at 16 bytes.\n",
+                "# Benchmark Method\nEvalHarness benchmark measurements show Reference-X comparison result 2.54x at 16 bytes.\n",
                 encoding="utf-8",
             )
             self._write_claim_safe_scaffolding(
                 root,
                 "\\documentclass{article}\n\\begin{document}\n"
-                "\\section{Introduction}\nThe system discusses protected-channel design at a high level.\n"
+                "\\section{Introduction}\nThe system discusses workflow design at a high level.\n"
                 "\\section{Conclusion}\nThe work remains promising.\n"
                 "\\end{document}\n",
             )

@@ -126,7 +126,7 @@ def strip_latex_comments(text: str) -> str:
     Those comments are useful in source materials, but they become manuscript
     surface area once copied into `paper.full.tex`.  Strip only unescaped `%`
     comments for the macro injection path; do not rewrite the registered
-    method/proof/benchmark evidence.
+    method, analysis, and results evidence.
     """
 
     stripped_lines: list[str] = []
@@ -165,8 +165,8 @@ TITLE_META_PATTERNS = [
         r"\bclaim\s+boundaries\b",
         r"\bmethod(?:ology)?\s+core\b",
         r"\bevaluation\s+core\b",
-        r"\bsecurity\s+(?:model|proof)\s+core\b",
-        r"\bbenchmark\s+(?:headline|method|results?)\b",
+        r"\banalysis\s+core\b",
+        r"\bresults?\s+evidence\b",
         r"\bproposed\s+method\b",
         r"\bvalidation\s+argument\b",
         r"\bregistered\s+(?:evidence|material|input)\b",
@@ -327,7 +327,7 @@ allowed_prompt_citation_keys = set(seed_keys if source_seed_keys else [])
 idea = rf"""% Fresh PaperOrchestra smoke input: deterministic author brief.
 % Derived only from registered inputs-materials/*. No prior smoke output is included.
 \section{{Author Intent}}
-Draft a conservative research-paper manuscript around the registered method, analysis, and evaluation evidence. PaperOrchestra should add positioning, related-work discovery, citation placement, abstract/introduction/discussion/conclusion drafting, and consistency checks. It must preserve paper-specific methodology, proof/analysis, and benchmark claims from the registered evidence only.
+Draft a conservative research-paper manuscript around the registered method, analysis, and results evidence. PaperOrchestra should add positioning, related-work discovery, citation placement, abstract/introduction/discussion/conclusion drafting, and consistency checks. It must preserve paper-specific methodology, analysis, and measured-result claims from the registered evidence only.
 
 \section{{Non-Negotiable Claim Boundaries}}
 {bounds}
@@ -338,15 +338,15 @@ Draft a conservative research-paper manuscript around the registered method, ana
 \section{{Methodology Core Source}}
 {method}
 
-\section{{Security Proof Core Source}}
+\section{{Analysis Core Source}}
 {proof}
 
-\section{{Benchmark Headline}}
-The benchmark evidence records the paper's measurement methodology and results. Use exact benchmark claims only from the experimental log input.
+\section{{Results Evidence Source}}
+The registered results evidence records the paper's measurement methodology and outcomes. Use exact measured-result claims only from the experimental log input.
 """
 
-experimental = rf"""% Fresh PaperOrchestra smoke input: deterministic benchmark brief.
-% Derived only from 03_benchmark_method_and_results_core.tex.
+experimental = rf"""% Fresh PaperOrchestra smoke input: deterministic results brief.
+% Derived only from registered results evidence.
 {bench}
 """
 
@@ -365,9 +365,9 @@ template = r"""\documentclass[11pt]{article}
 \end{abstract}
 \section{Introduction}
 \section{Background and Related Work}
-\section{Construction}
-\section{Security Model and Proof}
-\section{Evaluation}
+\section{Method}
+\section{Evidence and Analysis}
+\section{Results}
 \section{Discussion and Limitations}
 \section{Conclusion}
 \bibliographystyle{plain}
@@ -397,7 +397,7 @@ This is a claim-safe live smoke using a minimal author brief.
 - Do not include process-control, workflow-control, or implementation prose in the manuscript.
 - Do not narrate absent figures as a process limitation. If no final figure is available, write prose that stands without a figure.
 - Use external citations only for general background and related work.
-- Paper-specific method/proof/benchmark claims must come from the registered evidence only.
+- Paper-specific method, analysis, and measured-result claims must come from the registered evidence only.
 - If a technical field is not present in the registered evidence, say only that it is outside the current draft scope; do not invent it.
 - The desired output is a review-worthy working draft, not a final publication artifact.
 """
