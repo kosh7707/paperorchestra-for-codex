@@ -74,7 +74,7 @@ attached to the next conversation.
 
 Give Codex this prompt:
 
-> Clone `https://github.com/kosh7707/paperorchestra-for-codex.git`, set it up in a local `.venv`, run `paperorchestra first-use --intent setup`, run the safe mock demo, then configure the local skill and MCP server. After MCP registration, remind me to restart Codex completely and open a new Codex session before checking for `mcp__paperorchestra__...` tools. If MCP is registered but not attached, use the CLI fallback instead of pretending MCP is active.
+> Clone `https://github.com/kosh7707/paperorchestra-for-codex.git`, set it up in a local `.venv`, run `paperorchestra first-use --intent setup`, run the safe mock demo, then configure the local skill and MCP server. Do not run the full repository test suite as setup proof; this is first-user setup, not developer CI. After MCP registration, remind me to restart Codex completely and open a new Codex session before checking for `mcp__paperorchestra__...` tools. If MCP is registered but not attached, use the CLI fallback instead of pretending MCP is active.
 
 Copyable command path:
 
@@ -127,8 +127,10 @@ paperorchestra orchestrate --material ./my-material --execute-local --write-evid
 paperorchestra first-use --intent start --material ./my-material
 ```
 
-Do not start a live model/search run, claim-safe QA loop, or fresh full live
-smoke until the safe mock path and local first-use guide are working.
+Do not start a live model/search run, claim-safe QA loop, fresh full live
+smoke, or full repository test suite while proving first-user setup. Full `pytest`
+is a developer/CI check and may require PATH, TeX, sandbox, or live-smoke
+fixtures that are not needed for a first user to start using PaperOrchestra.
 
 ---
 

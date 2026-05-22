@@ -62,6 +62,7 @@ class PaperOrchestraSkillGuidanceTests(unittest.TestCase):
             "./scripts/install-skill.sh",
             "./scripts/register-codex-mcp.sh --use-local-venv",
             "scripts/smoke-paperorchestra-mcp.py --transport newline --json",
+            "Do not run the full repository test suite",
             "Restart Codex completely",
             "new Codex session",
             "mcp__paperorchestra__",
