@@ -74,6 +74,7 @@ def build_fresh_smoke_acceptance_summary(
     checks = [
         _evidence_completeness_check(root),
         _fresh_smoke_verdict_check(verdict_payload, root / "readable" / "verdict.json"),
+        _manuscript_quality_readiness_check(verdict_payload),
         _material_invariance_check(root),
         _meta_leakage_check(root),
         _operator_feedback_cycles_check(verdict_payload),
@@ -116,6 +117,11 @@ def fresh_smoke_acceptance_evidence(summary: Mapping[str, Any]) -> dict[str, dic
         for check in summary.get("checks", [])
         if isinstance(check, Mapping)
     }
+    check_reasons = {
+        str(check.get("id")): _safe_reason(str(check.get("reason") or ""))
+        for check in summary.get("checks", [])
+        if isinstance(check, Mapping)
+    }
 
     exported = check_statuses.get("exported_pdf_tex_evidence", "blocked")
     leakage = check_statuses.get("meta_leakage_scan", "blocked")
@@ -129,7 +135,12 @@ def fresh_smoke_acceptance_evidence(summary: Mapping[str, Any]) -> dict[str, dic
     elif smoke_mode == "private_final":
         container_status = "blocked"
         private_status = _gate_from_overall(overall) if manifest == "pass" else manifest
-        private_note = "redacted_final_smoke_mode"
+        manuscript_readiness = check_statuses.get("manuscript_quality_readiness", "blocked")
+        private_note = (
+            check_reasons.get("manuscript_quality_readiness", "manuscript_quality_blockers_present")
+            if private_status == "blocked" and manuscript_readiness != "pass"
+            else "redacted_final_smoke_mode"
+        )
     else:
         container_status = "fail"
         private_status = "fail"
@@ -210,6 +221,20 @@ def _fresh_smoke_verdict_check(payload: dict[str, Any] | None, path: Path) -> di
     if result.get("status") == "pass":
         return _check("fresh_smoke_verdict", "pass", "fresh_smoke_verdict_schema_pass")
     return _check("fresh_smoke_verdict", "fail", _first_code(result, "fresh_smoke_verdict_schema_invalid"))
+
+
+def _manuscript_quality_readiness_check(payload: dict[str, Any] | None) -> dict[str, Any]:
+    if payload is None:
+        return _check("manuscript_quality_readiness", "blocked", "fresh_smoke_verdict_missing")
+    quality_gate = str(payload.get("quality_gate_status") or "").strip().lower()
+    manuscript_readiness = str(payload.get("manuscript_readiness") or "").strip().lower()
+    if quality_gate in {"", "unknown"} or manuscript_readiness in {"", "unknown"}:
+        return _check("manuscript_quality_readiness", "blocked", "manuscript_quality_readiness_unknown")
+    if quality_gate == "pass" and manuscript_readiness not in {"not_ready", "blocked", "blocked_figure_gate", "blocked_rendered_references"}:
+        return _check("manuscript_quality_readiness", "pass", "manuscript_quality_ready_or_candidate")
+    if quality_gate == "pass":
+        return _check("manuscript_quality_readiness", "blocked", "manuscript_readiness_not_ready")
+    return _check("manuscript_quality_readiness", "blocked", "manuscript_quality_blockers_present")
 
 
 def _material_invariance_check(root: Path) -> dict[str, Any]:

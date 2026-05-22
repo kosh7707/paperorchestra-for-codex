@@ -1704,6 +1704,24 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
         masked_result = validate_fresh_smoke_verdict(masked)
         self.assertEqual(masked_result["status"], "fail")
         self.assertTrue(any(failure.get("reason") == "pass_loop_verified_cannot_mask_terminal_loop_failure" for failure in masked_result["failures"]))
+        quality_blocker_claimed_ready = {**valid, "manuscript_readiness": "ready_for_human_finalization"}
+        quality_blocker_result = validate_fresh_smoke_verdict(quality_blocker_claimed_ready)
+        self.assertEqual(quality_blocker_result["status"], "fail")
+        self.assertTrue(
+            any(
+                failure.get("reason") == "quality_gate_failure_requires_non_ready_manuscript_readiness"
+                for failure in quality_blocker_result["failures"]
+            )
+        )
+        unknown_quality_claimed_ready = {**valid, "quality_gate_status": "", "manuscript_readiness": "ready"}
+        unknown_quality_result = validate_fresh_smoke_verdict(unknown_quality_claimed_ready)
+        self.assertEqual(unknown_quality_result["status"], "fail")
+        self.assertTrue(
+            any(
+                failure.get("reason") == "pass_loop_verified_requires_explicit_quality_gate_status"
+                for failure in unknown_quality_result["failures"]
+            )
+        )
 
     def test_material_invariance_checks_manifest_ledger_boundary_and_pointer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2410,7 +2428,7 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
     def test_evidence_completeness_requires_operator_rendered_pdf_review_for_pdf_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            for subdir in ["readable", "logs", "artifacts", "inputs", "operator-feedback"]:
+            for subdir in ["readable", "logs", "artifacts", "inputs", "operator-feedback", "critic"]:
                 (root / subdir).mkdir()
             (root / "README.md").write_text("operator_feedback_cycles: 1\n", encoding="utf-8")
             (root / "inputs" / "provenance-ledger.json").write_text('{"items":[]}\n', encoding="utf-8")
@@ -2452,6 +2470,25 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             )
             (root / "final-smoke-status.txt").write_text("human_needed\n", encoding="utf-8")
             (root / "final-smoke-exit-code.txt").write_text("20\n", encoding="utf-8")
+            (root / "critic" / "q1-loop-critic.prompt.md").write_text("critic prompt\n", encoding="utf-8")
+            (root / "critic" / "q1-loop-critic.response.md").write_text("critic response\n", encoding="utf-8")
+            (root / "logs" / "q1_loop_critic.exitcode").write_text("0\n", encoding="utf-8")
+            (root / "artifacts" / "qa-loop.plan.json").write_text(
+                json.dumps(
+                    {
+                        "verdict": "human_needed",
+                        "orchestration_terminal": {
+                            "verdict": "human_needed",
+                            "operator_feedback_cycles": 1,
+                            "operator_feedback_cycles_attempted": 1,
+                            "operator_feedback_cycles_promoted": 0,
+                            "operator_feedback_cycles_rolled_back": 1,
+                            "operator_feedback_cycles_failed": 0,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
             for command_name in ["operator_packet_cycle_1", "operator_import_cycle_1", "operator_apply_cycle_1"]:
                 (root / "logs" / f"{command_name}.command").write_text("true\n", encoding="utf-8")
                 (root / "logs" / f"{command_name}.stdout.log").write_text("", encoding="utf-8")
@@ -2489,6 +2526,238 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
 
             self.assertEqual(result["status"], "fail")
             self.assertIn("operator_rendered_pdf_review_missing", result["failing_codes"])
+
+    def test_evidence_completeness_requires_operator_rendered_pdf_review_attestation_for_pdf_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for subdir in ["readable", "logs", "artifacts", "inputs", "operator-feedback", "critic"]:
+                (root / subdir).mkdir()
+            (root / "README.md").write_text("operator_feedback_cycles: 1\n", encoding="utf-8")
+            (root / "inputs" / "provenance-ledger.json").write_text('{"items":[]}\n', encoding="utf-8")
+            (root / "inputs.sha256").write_text("abc inputs/idea.tex\n", encoding="utf-8")
+            (root / "artifacts" / "session-snapshot-final").mkdir()
+            for artifact in [
+                "material-invariance.json",
+                "fresh-smoke-lane-a-acceptance.json",
+                "meta-leakage-scan.json",
+                "quality-eval.json",
+                "qa-loop.plan.json",
+                "rendered_reference_audit.json",
+                "citation_intent_plan.json",
+                "citation_source_match.json",
+                "citation_integrity.audit.json",
+                "citation_integrity.critic.json",
+                "figure_gate.report.initial.json",
+                "figure_gate.report.final.json",
+                "omx-review-handoff.json",
+                "omx-evidence-summary.json",
+            ]:
+                (root / "artifacts" / artifact).write_text('{"status":"pass"}\n', encoding="utf-8")
+            (root / "artifact-manifest.json").write_text('{"missing_referenced_artifacts":[]}\n', encoding="utf-8")
+            (root / "readable" / "timeline.md").write_text("# Timeline\n", encoding="utf-8")
+            (root / "readable" / "commands.md").write_text(
+                "\n".join(
+                    [
+                        "# Command exit codes",
+                        "- `operator_packet_cycle_1`: `0`",
+                        "- `operator_import_cycle_1`: `0`",
+                        "- `operator_apply_cycle_1`: `0`",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / "readable" / "verdict.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "fresh-smoke-verdict/1",
+                        "smoke_verdict": "pass_loop_verified",
+                        "qa_loop_terminal_verdict": "human_needed",
+                        "qa_loop_terminal_exit_code": 20,
+                        "first_failing_predicate": None,
+                        "first_failing_artifact": None,
+                        "operator_feedback_cycles": 1,
+                        "operator_feedback_cycles_attempted": 1,
+                        "operator_feedback_cycles_promoted": 0,
+                        "operator_feedback_cycles_rolled_back": 1,
+                        "operator_feedback_cycles_failed": 0,
+                        "material_invariance_status": "pass",
+                        "evidence_completeness_status": "pass",
+                        "lane_a_status": "pass",
+                        "critic_verdict": "pass",
+                        "quality_gate_status": "fail_tier2",
+                        "manuscript_readiness": "not_ready",
+                        "orchestration_stop_reason": "operator_cycle_cap_reached",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "final-smoke-status.txt").write_text("human_needed\n", encoding="utf-8")
+            (root / "final-smoke-exit-code.txt").write_text("20\n", encoding="utf-8")
+            (root / "critic" / "q1-loop-critic.prompt.md").write_text("critic prompt\n", encoding="utf-8")
+            (root / "critic" / "q1-loop-critic.response.md").write_text("critic response\n", encoding="utf-8")
+            (root / "logs" / "q1_loop_critic.exitcode").write_text("0\n", encoding="utf-8")
+            (root / "artifacts" / "qa-loop.plan.json").write_text(
+                json.dumps(
+                    {
+                        "verdict": "human_needed",
+                        "orchestration_terminal": {
+                            "verdict": "human_needed",
+                            "operator_feedback_cycles": 1,
+                            "operator_feedback_cycles_attempted": 1,
+                            "operator_feedback_cycles_promoted": 0,
+                            "operator_feedback_cycles_rolled_back": 1,
+                            "operator_feedback_cycles_failed": 0,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            for command_name in ["operator_packet_cycle_1", "operator_import_cycle_1", "operator_apply_cycle_1"]:
+                (root / "logs" / f"{command_name}.command").write_text("true\n", encoding="utf-8")
+                (root / "logs" / f"{command_name}.stdout.log").write_text("", encoding="utf-8")
+                (root / "logs" / f"{command_name}.stderr.log").write_text("", encoding="utf-8")
+                (root / "logs" / f"{command_name}.exitcode").write_text("0\n", encoding="utf-8")
+            pdf = root / "operator-feedback" / "paper.full.pdf"
+            pdf.write_bytes(b"%PDF-1.5\n")
+            pdf_sha = hashlib.sha256(pdf.read_bytes()).hexdigest()
+            packet_artifact = root / "operator-feedback" / "operator-review-packet.cycle-1.artifacts"
+            packet_artifact.mkdir()
+            frozen = packet_artifact / "quality_eval.frozen.json"
+            frozen.write_text('{"verdict":"human_needed"}\n', encoding="utf-8")
+            frozen_sha = hashlib.sha256(frozen.read_bytes()).hexdigest()
+            packet = {
+                "schema_version": "operator-review-packet/1",
+                "review_scope": "pdf_and_tex",
+                "artifacts": [
+                    {"role": "compiled_pdf", "path": "operator-feedback/paper.full.pdf", "sha256": pdf_sha, "size_bytes": pdf.stat().st_size},
+                    {"role": "quality_eval", "path": str(frozen), "sha256": frozen_sha},
+                ],
+            }
+            (root / "operator-feedback" / "operator-review-packet.cycle-1.json").write_text(json.dumps(packet), encoding="utf-8")
+            pdf_text = root / "operator-feedback" / "rendered-pdf-review.cycle-1.txt"
+            pdf_info = root / "operator-feedback" / "rendered-pdf-review.cycle-1.pdfinfo.txt"
+            page_dir = root / "operator-feedback" / "rendered-pdf-pages.cycle-1"
+            page_dir.mkdir()
+            page = page_dir / "page-1.png"
+            pdf_text.write_text("Rendered paper page text.\n", encoding="utf-8")
+            pdf_info.write_text("Pages: 1\n", encoding="utf-8")
+            page.write_bytes(b"png")
+            manifest = root / "operator-feedback" / "rendered-pdf-review.cycle-1.manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-rendered-pdf-review-evidence/1",
+                        "cycle": 1,
+                        "compiled_pdf": "operator-feedback/paper.full.pdf",
+                        "compiled_pdf_sha256": pdf_sha,
+                        "pdf_text": "operator-feedback/rendered-pdf-review.cycle-1.txt",
+                        "pdf_text_sha256": hashlib.sha256(pdf_text.read_bytes()).hexdigest(),
+                        "pdf_info": "operator-feedback/rendered-pdf-review.cycle-1.pdfinfo.txt",
+                        "pdf_info_sha256": hashlib.sha256(pdf_info.read_bytes()).hexdigest(),
+                        "page_images_dir": "operator-feedback/rendered-pdf-pages.cycle-1",
+                        "page_image_count": 1,
+                        "page_images": [
+                            {
+                                "path": "operator-feedback/rendered-pdf-pages.cycle-1/page-1.png",
+                                "sha256": hashlib.sha256(page.read_bytes()).hexdigest(),
+                                "size_bytes": page.stat().st_size,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "operator-feedback" / "operator-feedback-author.cycle-1.prompt.md").write_text(
+                "\n".join(
+                    [
+                        "You MUST inspect the rendered PDF evidence before authoring feedback.",
+                        "Rendered PDF layout text:",
+                        "Rendered PDF page images:",
+                        "source_artifact_role=compiled_pdf",
+                        "rendered_pdf_no_issues",
+                        "rendered_pdf_manifest_sha256",
+                        "reviewed_page_count",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (root / "operator-feedback" / "operator-feedback-author.cycle-1.response.md").write_text("{}", encoding="utf-8")
+            (root / "operator-feedback" / "operator-feedback-author.cycle-1.exitcode").write_text("0\n", encoding="utf-8")
+            unattested = {"schema_version": "operator-feedback/1", "issues": []}
+            (root / "operator-feedback" / "operator-feedback.cycle-1.json").write_text(json.dumps(unattested), encoding="utf-8")
+            (root / "operator-feedback" / "operator-feedback-imported.cycle-1.json").write_text(json.dumps(unattested), encoding="utf-8")
+
+            result = validate_evidence_completeness(root)
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("operator_rendered_pdf_review_unattested", result["failing_codes"])
+
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-rendered-pdf-review-evidence/1",
+                        "cycle": 1,
+                        "compiled_pdf": "operator-feedback/missing.pdf",
+                        "compiled_pdf_sha256": pdf_sha,
+                        "pdf_text": "operator-feedback/rendered-pdf-review.cycle-1.txt",
+                        "pdf_text_sha256": hashlib.sha256(pdf_text.read_bytes()).hexdigest(),
+                        "pdf_info": "operator-feedback/rendered-pdf-review.cycle-1.pdfinfo.txt",
+                        "pdf_info_sha256": hashlib.sha256(pdf_info.read_bytes()).hexdigest(),
+                        "page_images_dir": "operator-feedback/rendered-pdf-pages.cycle-1",
+                        "page_image_count": 1,
+                        "page_images": [
+                            {
+                                "path": "operator-feedback/rendered-pdf-pages.cycle-1/page-1.png",
+                                "sha256": hashlib.sha256(page.read_bytes()).hexdigest(),
+                                "size_bytes": page.stat().st_size,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            stale_manifest_result = validate_evidence_completeness(root)
+            self.assertEqual(stale_manifest_result["status"], "fail")
+            self.assertIn("operator_rendered_pdf_review_manifest_invalid", stale_manifest_result["failing_codes"])
+
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-rendered-pdf-review-evidence/1",
+                        "cycle": 1,
+                        "compiled_pdf": "operator-feedback/paper.full.pdf",
+                        "compiled_pdf_sha256": pdf_sha,
+                        "pdf_text": "operator-feedback/rendered-pdf-review.cycle-1.txt",
+                        "pdf_text_sha256": hashlib.sha256(pdf_text.read_bytes()).hexdigest(),
+                        "pdf_info": "operator-feedback/rendered-pdf-review.cycle-1.pdfinfo.txt",
+                        "pdf_info_sha256": hashlib.sha256(pdf_info.read_bytes()).hexdigest(),
+                        "page_images_dir": "operator-feedback/rendered-pdf-pages.cycle-1",
+                        "page_image_count": 1,
+                        "page_images": [
+                            {
+                                "path": "operator-feedback/rendered-pdf-pages.cycle-1/page-1.png",
+                                "sha256": hashlib.sha256(page.read_bytes()).hexdigest(),
+                                "size_bytes": page.stat().st_size,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            attested = {
+                **unattested,
+                "rendered_pdf_no_issues": {
+                    "compiled_pdf_sha256": pdf_sha,
+                    "rendered_pdf_manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+                    "reviewed_page_count": 1,
+                    "statement": "Reviewed all rendered PDF pages and found no layout-only issues.",
+                },
+            }
+            (root / "operator-feedback" / "operator-feedback.cycle-1.json").write_text(json.dumps(attested), encoding="utf-8")
+            (root / "operator-feedback" / "operator-feedback-imported.cycle-1.json").write_text(json.dumps(attested), encoding="utf-8")
+
+            attested_result = validate_evidence_completeness(root)
+            self.assertEqual(attested_result["status"], "pass", attested_result)
 
     def test_evidence_completeness_compares_operator_history_cycle_count(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

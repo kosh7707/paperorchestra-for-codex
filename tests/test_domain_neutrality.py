@@ -57,7 +57,17 @@ class DomainNeutralityTests(unittest.TestCase):
             "AES-128-" + "CCI",
         ]
         proc = subprocess.run(
-            ["git", "grep", "-n", "-I", "-E", "|".join(patterns), "--", "."],
+            [
+                "git",
+                "grep",
+                "-n",
+                "-I",
+                "-E",
+                "|".join(patterns),
+                "--",
+                ".",
+                f":!{Path(__file__).resolve().relative_to(Path.cwd()).as_posix()}",
+            ],
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

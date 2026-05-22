@@ -61,6 +61,23 @@ def test_normalized_operator_feedback_caps_generated_candidate_issues_to_atomic_
     assert [issue["source_item_key"] for issue in normalized["issues"]] == ["item-2", "item-3", "item-4"]
 
 
+def test_normalized_operator_feedback_prioritizes_compiled_pdf_layout_issues() -> None:
+    draft = {
+        "intent": "generate_new_operator_candidate",
+        "issues": [
+            _issue(1, severity="minor"),
+            _issue(2, severity="major", role="quality_eval"),
+            _issue(3, severity="major", role="compiled_pdf"),
+            _issue(4, severity="major", role="qa_loop_plan"),
+            _issue(5, severity="minor", role="figure_placement_review"),
+        ],
+    }
+
+    normalized = normalize_operator_feedback_draft(_packet(), draft)
+
+    assert any(issue["source_artifact_role"] == "compiled_pdf" for issue in normalized["issues"])
+
+
 def test_operator_feedback_accepts_generic_evidence_and_layout_owner_categories() -> None:
     packet = _packet()
     evidence_issue = _issue(1, role="section_review")
@@ -74,6 +91,22 @@ def test_operator_feedback_accepts_generic_evidence_and_layout_owner_categories(
     normalized = normalize_operator_feedback_draft(packet, draft)
 
     assert [issue["owner_category"] for issue in normalized["issues"]] == ["evidence", "layout"]
+
+
+def test_normalized_operator_feedback_preserves_rendered_pdf_no_issues_attestation() -> None:
+    attestation = {
+        "compiled_pdf_sha256": "a" * 64,
+        "rendered_pdf_manifest_sha256": "b" * 64,
+        "reviewed_page_count": 3,
+        "statement": "Reviewed all rendered PDF pages and found no layout-only issues.",
+    }
+
+    normalized = normalize_operator_feedback_draft(
+        _packet(),
+        {"intent": "generate_new_operator_candidate", "issues": [_issue(1)], "rendered_pdf_no_issues": attestation},
+    )
+
+    assert normalized["rendered_pdf_no_issues"] == attestation
 
 
 def test_operator_refinement_constraints_do_not_treat_dense_citations_as_forbidden_new_failure() -> None:

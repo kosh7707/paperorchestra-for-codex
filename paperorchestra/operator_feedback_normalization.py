@@ -21,11 +21,12 @@ _OPERATOR_ISSUE_SEVERITY_RANK = {
 _OPERATOR_ISSUE_ROLE_RANK = {
     "citation_support_review": 0,
     "figure_placement_review": 1,
-    "quality_eval": 2,
-    "citation_integrity_audit": 3,
-    "qa_loop_execution": 4,
-    "operator_feedback_execution": 5,
-    "qa_loop_plan": 6,
+    "compiled_pdf": 2,
+    "quality_eval": 3,
+    "citation_integrity_audit": 4,
+    "qa_loop_execution": 5,
+    "operator_feedback_execution": 6,
+    "qa_loop_plan": 7,
 }
 
 
@@ -243,6 +244,8 @@ def normalize_operator_feedback_draft(packet: dict[str, Any], draft: dict[str, A
         "manuscript_sha256": packet["manuscript_sha256"],
         "issues": issues,
     }
+    if isinstance(draft.get("rendered_pdf_no_issues"), dict):
+        feedback["rendered_pdf_no_issues"] = dict(draft["rendered_pdf_no_issues"])
     if isinstance(draft.get("human_needed_answer"), dict):
         feedback["human_needed_answer"] = dict(draft["human_needed_answer"])
     return feedback

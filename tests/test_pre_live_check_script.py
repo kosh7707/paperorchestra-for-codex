@@ -276,6 +276,9 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertIn("Rendered PDF page images:", text)
         self.assertIn("title, abstract, tables, figures, captions, overflow, page breaks, and overall readability", text)
         self.assertIn("source_artifact_role=compiled_pdf", text)
+        self.assertIn("rendered_pdf_no_issues", text)
+        self.assertIn("rendered_pdf_manifest_sha256", text)
+        self.assertIn("reviewed_page_count", text)
         self.assertLess(text.index("build-operator-review-packet"), text.index('write_operator_pdf_review_evidence "$cycle"'))
         self.assertLess(text.index('write_operator_pdf_review_evidence "$cycle"'), text.index("cat > \"$prompt\" <<PROMPT"))
 

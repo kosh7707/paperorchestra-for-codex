@@ -561,6 +561,8 @@ def import_operator_feedback(
         "issues": imported_issues,
         "translated_actions": [_action_for_issue(issue) for issue in imported_issues],
     }
+    if isinstance(feedback.get("rendered_pdf_no_issues"), dict):
+        imported["rendered_pdf_no_issues"] = dict(feedback["rendered_pdf_no_issues"])
     if human_needed_answer is not None:
         imported["human_needed_answer"] = human_needed_answer
     path = Path(output_path).resolve() if output_path else artifact_path(cwd, "operator_feedback.imported.json")

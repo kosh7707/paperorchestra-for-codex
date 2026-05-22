@@ -37,6 +37,12 @@ FORBIDDEN_SMOKE_VERDICTS = {
     "failed",
     "execution_error",
 }
+READY_MANUSCRIPT_READINESS_VALUES = {
+    "ready",
+    "ready_for_human_finalization",
+    "submission_ready",
+    "camera_ready",
+}
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 DEFAULT_EXPECTED_MATERIAL_ROOT = Path("examples/fresh-smoke-materials")
 DEFAULT_MATERIAL_POINTER = Path(".omx/state/current-fresh-smoke-materials-root")
@@ -413,10 +419,21 @@ def validate_fresh_smoke_verdict(payload: dict[str, Any]) -> dict[str, Any]:
         ]:
             if payload.get(field) != expected:
                 failures.append({"field": field, "reason": "pass_loop_verified_requires_pass_status", "expected": expected, "actual": payload.get(field)})
-        if payload.get("quality_gate_status") in {None, "unknown"}:
+        quality_gate_status = str(payload.get("quality_gate_status") or "").strip().lower()
+        manuscript_readiness = str(payload.get("manuscript_readiness") or "").strip().lower()
+        if quality_gate_status in {"", "unknown"}:
             failures.append({"field": "quality_gate_status", "reason": "pass_loop_verified_requires_explicit_quality_gate_status"})
-        if payload.get("manuscript_readiness") in {None, "unknown"}:
+        if manuscript_readiness in {"", "unknown"}:
             failures.append({"field": "manuscript_readiness", "reason": "pass_loop_verified_requires_explicit_manuscript_readiness"})
+        if quality_gate_status and quality_gate_status != "pass" and manuscript_readiness in READY_MANUSCRIPT_READINESS_VALUES:
+            failures.append(
+                {
+                    "field": "manuscript_readiness",
+                    "reason": "quality_gate_failure_requires_non_ready_manuscript_readiness",
+                    "quality_gate_status": quality_gate_status,
+                    "actual": manuscript_readiness,
+                }
+            )
         if payload.get("orchestration_stop_reason") in {None, "unknown", "not_started"}:
             failures.append({"field": "orchestration_stop_reason", "reason": "pass_loop_verified_requires_stop_reason"})
     return {
@@ -743,6 +760,108 @@ def _check_final_plan_terminal_consistency(
     )
 
 
+def _sha256_hex(value: Any) -> bool:
+    return isinstance(value, str) and bool(re.fullmatch(r"[0-9a-fA-F]{64}", value.strip()))
+
+
+def _read_json_object(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _rendered_pdf_manifest_check(root: Path, cycle: int, manifest_path: Path) -> tuple[dict[str, Any] | None, list[str]]:
+    manifest = _read_json_object(manifest_path)
+    failures: list[str] = []
+    if manifest.get("schema_version") != "operator-rendered-pdf-review-evidence/1":
+        failures.append("schema_version")
+    if manifest.get("cycle") != cycle:
+        failures.append("cycle")
+    compiled_pdf_sha = manifest.get("compiled_pdf_sha256")
+    if not _sha256_hex(compiled_pdf_sha):
+        failures.append("compiled_pdf_sha256")
+    compiled_pdf_path = root / str(manifest.get("compiled_pdf") or "")
+    if not compiled_pdf_path.is_file() or not _sha256_hex(compiled_pdf_sha) or _sha256_file(compiled_pdf_path) != str(compiled_pdf_sha):
+        failures.append("compiled_pdf_sha256")
+    for key in ("pdf_text_sha256", "pdf_info_sha256"):
+        if not _sha256_hex(manifest.get(key)):
+            failures.append(key)
+    page_count = manifest.get("page_image_count")
+    page_images = manifest.get("page_images")
+    if not isinstance(page_count, int) or page_count < 1:
+        failures.append("page_image_count")
+    if not isinstance(page_images, list) or len(page_images) != page_count:
+        failures.append("page_images")
+    else:
+        for index, page in enumerate(page_images):
+            if not isinstance(page, dict):
+                failures.append(f"page_images[{index}]")
+                continue
+            path = root / str(page.get("path") or "")
+            if not path.is_file() or not _sha256_hex(page.get("sha256")) or _sha256_file(path) != str(page.get("sha256")):
+                failures.append(f"page_images[{index}].sha256")
+    for key in ("pdf_text", "pdf_info"):
+        path = root / str(manifest.get(key) or "")
+        expected = str(manifest.get(f"{key}_sha256") or "")
+        if not path.is_file() or not expected or _sha256_file(path) != expected:
+            failures.append(f"{key}_sha256")
+    return (manifest if not failures else None), failures
+
+
+def _payload_has_compiled_pdf_issue(payload: dict[str, Any]) -> bool:
+    for issue in payload.get("issues") or []:
+        if isinstance(issue, dict) and str(issue.get("source_artifact_role") or "") == "compiled_pdf":
+            return True
+    return False
+
+
+def _payload_has_rendered_pdf_no_issues_attestation(
+    payload: dict[str, Any],
+    *,
+    compiled_pdf_sha256: str,
+    rendered_pdf_manifest_sha256: str,
+    page_image_count: int,
+) -> bool:
+    attestation = payload.get("rendered_pdf_no_issues")
+    if not isinstance(attestation, dict):
+        return False
+    reviewed = attestation.get("reviewed_page_count")
+    statement = str(attestation.get("statement") or "").strip()
+    return (
+        str(attestation.get("compiled_pdf_sha256") or "").lower() == compiled_pdf_sha256.lower()
+        and str(attestation.get("rendered_pdf_manifest_sha256") or "").lower() == rendered_pdf_manifest_sha256.lower()
+        and isinstance(reviewed, int)
+        and reviewed >= page_image_count
+        and bool(statement)
+    )
+
+
+def _operator_pdf_review_response_attested(root: Path, cycle: int, manifest: dict[str, Any], manifest_path: Path) -> bool:
+    compiled_pdf_sha = str(manifest.get("compiled_pdf_sha256") or "")
+    page_count = int(manifest.get("page_image_count") or 0)
+    manifest_sha = _sha256_file(manifest_path)
+    payload_paths = [
+        root / f"operator-feedback/operator-feedback.cycle-{cycle}.json",
+        root / f"operator-feedback/operator-feedback-imported.cycle-{cycle}.json",
+    ]
+    for payload_path in payload_paths:
+        if not payload_path.is_file():
+            continue
+        payload = _read_json_object(payload_path)
+        if _payload_has_compiled_pdf_issue(payload):
+            return True
+        if _payload_has_rendered_pdf_no_issues_attestation(
+            payload,
+            compiled_pdf_sha256=compiled_pdf_sha,
+            rendered_pdf_manifest_sha256=manifest_sha,
+            page_image_count=page_count,
+        ):
+            return True
+    return False
+
+
 def _check_provider_trace_completeness(
     root: Path,
     commands_for_provider: set[str],
@@ -967,7 +1086,28 @@ def _check_operator_cycle_artifacts(
                         )
                         failing_codes.add("operator_rendered_pdf_review_missing")
                     else:
-                        checked.append({"check": "operator_rendered_pdf_review", "cycle": n, "status": "pass"})
+                        manifest_path = root / f"operator-feedback/rendered-pdf-review.cycle-{n}.manifest.json"
+                        manifest, manifest_failures = _rendered_pdf_manifest_check(root, n, manifest_path)
+                        if manifest_failures:
+                            inconsistent.append(
+                                {
+                                    "check": "operator_rendered_pdf_review_manifest",
+                                    "cycle": n,
+                                    "invalid_fields": manifest_failures,
+                                }
+                            )
+                            failing_codes.add("operator_rendered_pdf_review_manifest_invalid")
+                        elif manifest and not _operator_pdf_review_response_attested(root, n, manifest, manifest_path):
+                            inconsistent.append(
+                                {
+                                    "check": "operator_rendered_pdf_review_attestation",
+                                    "cycle": n,
+                                    "reason": "missing_compiled_pdf_issue_or_rendered_pdf_no_issues_attestation",
+                                }
+                            )
+                            failing_codes.add("operator_rendered_pdf_review_unattested")
+                        else:
+                            checked.append({"check": "operator_rendered_pdf_review", "cycle": n, "status": "pass"})
                     prompt_path = root / f"operator-feedback/operator-feedback-author.cycle-{n}.prompt.md"
                     prompt_text = prompt_path.read_text(encoding="utf-8", errors="replace") if prompt_path.exists() else ""
                     required_prompt_markers = [
@@ -975,6 +1115,9 @@ def _check_operator_cycle_artifacts(
                         "Rendered PDF layout text:",
                         "Rendered PDF page images:",
                         "source_artifact_role=compiled_pdf",
+                        "rendered_pdf_no_issues",
+                        "rendered_pdf_manifest_sha256",
+                        "reviewed_page_count",
                     ]
                     missing_markers = [marker for marker in required_prompt_markers if marker not in prompt_text]
                     if missing_markers:

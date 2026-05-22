@@ -260,6 +260,23 @@ def test_private_final_requires_safe_material_manifest_and_maps_private_gate() -
         assert "private-material-manifest" not in rendered
 
 
+def test_private_final_blocks_manuscript_readiness_when_loop_verified_but_quality_fails() -> None:
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp) / "evidence"
+        _write_evidence_root(root, cycles=1, terminal="human_needed")
+        manifest = _safe_material_manifest(Path(tmp) / "private-material-manifest.redacted.json")
+
+        summary = build_fresh_smoke_acceptance_summary(root, smoke_mode="private_final", material_manifest=manifest)
+        evidence = fresh_smoke_acceptance_evidence(summary)
+
+        checks = {check["id"]: check for check in summary["checks"]}
+        assert checks["manuscript_quality_readiness"]["status"] == "blocked"
+        assert checks["manuscript_quality_readiness"]["reason"] == "manuscript_quality_blockers_present"
+        assert summary["overall_status"] == "blocked"
+        assert evidence["private_final_live_smoke_redacted"]["status"] == "blocked"
+        assert "manuscript_quality_blockers_present" in evidence["private_final_live_smoke_redacted"]["notes"]
+
+
 def test_private_final_accepts_prep_script_redacted_file_count_manifest() -> None:
     with TemporaryDirectory() as tmp:
         root = Path(tmp) / "evidence"
