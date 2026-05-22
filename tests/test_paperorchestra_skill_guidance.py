@@ -54,6 +54,23 @@ class PaperOrchestraSkillGuidanceTests(unittest.TestCase):
         self.assertIn("start_autoresearch", text)
         self.assertIn("material_input_required", text)
 
+    def test_readme_has_codex_first_setup_path_with_mcp_restart_boundary(self) -> None:
+        text = self._readme()
+        self.assertIn("## Codex-first setup path", text)
+        for phrase in [
+            "paperorchestra first-use --intent setup",
+            "./scripts/install-skill.sh",
+            "./scripts/register-codex-mcp.sh --use-local-venv",
+            "scripts/smoke-paperorchestra-mcp.py --transport newline --json",
+            "Restart Codex completely",
+            "new Codex session",
+            "mcp__paperorchestra__",
+            "CLI fallback",
+        ]:
+            self.assertIn(phrase, text)
+        self.assertIn("codex mcp list", text)
+        self.assertIn("does not prove active attachment", text)
+
     def test_readme_and_skill_say_evidence_bundles_are_not_readiness_passes(self) -> None:
         combined = self._readme() + "\n" + self._skill()
         self.assertIn("diagnostic artifact", combined)

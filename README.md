@@ -65,6 +65,71 @@ A good first prompt after opening Codex is:
 
 Codex CLI and oh-my-codex are external prerequisites for the advanced paths. This repo documents how to use them after they are installed; it does not install them for you.
 
+## Codex-first setup path
+
+If the first thing you do is open Codex and ask “how do I use this?”, use this
+path. It keeps the first run offline, proves the local package works, registers
+the optional Codex surfaces, then restarts Codex so MCP tools can actually be
+attached to the next conversation.
+
+Give Codex this prompt:
+
+> Clone `https://github.com/kosh7707/paperorchestra-for-codex.git`, set it up in a local `.venv`, run `paperorchestra first-use --intent setup`, run the safe mock demo, then configure the local skill and MCP server. After MCP registration, remind me to restart Codex completely and open a new Codex session before checking for `mcp__paperorchestra__...` tools. If MCP is registered but not attached, use the CLI fallback instead of pretending MCP is active.
+
+Copyable command path:
+
+```bash
+git clone https://github.com/kosh7707/paperorchestra-for-codex.git
+cd paperorchestra-for-codex
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+
+# Compact first-user guide from the implementation itself.
+paperorchestra first-use --intent setup
+paperorchestra first-use --intent how_to_use
+
+# First proof: no live model/search/OMX required.
+./scripts/demo-mock.sh --in-repo
+cd .paper-orchestra/manual-demo
+paperorchestra status --summary
+paperorchestra export-artifacts --output "$OLDPWD/paperorchestra-output"
+cd "$OLDPWD"
+
+# Optional Codex integration surfaces.
+./scripts/install-skill.sh
+./scripts/register-codex-mcp.sh --use-local-venv --dry-run
+./scripts/register-codex-mcp.sh --use-local-venv
+scripts/smoke-paperorchestra-mcp.py --transport newline --json
+```
+
+**MCP restart boundary:** after `./scripts/register-codex-mcp.sh
+--use-local-venv`, **Restart Codex completely** and open a **new Codex
+session**. MCP tools are injected when the client/session starts; an already-open
+conversation usually will not gain `mcp__paperorchestra__...` tools just because
+the config changed.
+
+After the restart:
+
+```bash
+codex mcp list
+scripts/smoke-codex-mcp-attach.sh
+```
+
+`codex mcp list` shows config registration; it does not prove active attachment in the current chat. Active attachment means the new session
+actually exposes tools named like `mcp__paperorchestra__status` or
+`mcp__paperorchestra__orchestrate`. If the raw MCP smoke passes but those tools
+are absent, use the **CLI fallback**:
+
+```bash
+paperorchestra inspect-state --material ./my-material --json
+paperorchestra orchestrate --material ./my-material --execute-local --write-evidence --json
+paperorchestra first-use --intent start --material ./my-material
+```
+
+Do not start a live model/search run, claim-safe QA loop, or fresh full live
+smoke until the safe mock path and local first-use guide are working.
+
 ---
 
 ## First 10 minutes: get one mock manuscript
