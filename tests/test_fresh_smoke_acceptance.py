@@ -333,13 +333,19 @@ def test_meta_leakage_material_fail_and_missing_pdf_tex_affect_statuses() -> Non
         assert evidence["exported_pdf_tex_evidence_bundle"]["status"] == "blocked"
 
 
-def test_operator_feedback_cycle_cap_accepts_five_and_fails_six() -> None:
+def test_operator_feedback_cycle_cap_accepts_five_but_human_needed_quality_blocker_stays_blocked() -> None:
     with TemporaryDirectory() as tmp:
         five = Path(tmp) / "five"
         _write_evidence_root(five, cycles=5, terminal="human_needed")
         accepted = build_fresh_smoke_acceptance_summary(five, smoke_mode="synthetic_container")
-        assert accepted["overall_status"] == "pass"
+        checks = {check["id"]: check for check in accepted["checks"]}
+        assert checks["operator_feedback_cycles"]["status"] == "pass"
+        assert checks["manuscript_quality_readiness"]["status"] == "blocked"
+        assert checks["manuscript_quality_readiness"]["reason"] == "manuscript_quality_blockers_present"
+        assert accepted["overall_status"] == "blocked"
         assert accepted["redacted_counts"]["operator_feedback_cycles"] == 5
+        evidence = fresh_smoke_acceptance_evidence(accepted)
+        assert evidence["fresh_container_functional_smoke"]["status"] == "blocked"
 
         six = Path(tmp) / "six"
         _write_evidence_root(six, cycles=6, terminal="human_needed")
