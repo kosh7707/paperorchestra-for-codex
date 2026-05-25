@@ -18,6 +18,7 @@ from .operator_feedback_normalization import (
 SMOKE_VERDICT_SCHEMA_VERSION = "fresh-smoke-verdict/1"
 ALLOWED_SMOKE_VERDICTS = {
     "pass_loop_verified",
+    "manual_human_needed_handoff",
     "fail_preflight",
     "fail_material_invariance",
     "fail_evidence_incomplete",
@@ -436,6 +437,20 @@ def validate_fresh_smoke_verdict(payload: dict[str, Any]) -> dict[str, Any]:
             )
         if payload.get("orchestration_stop_reason") in {None, "unknown", "not_started"}:
             failures.append({"field": "orchestration_stop_reason", "reason": "pass_loop_verified_requires_stop_reason"})
+    if verdict == "manual_human_needed_handoff":
+        terminal = payload.get("qa_loop_terminal_verdict")
+        if terminal != "human_needed":
+            failures.append({"field": "qa_loop_terminal_verdict", "reason": "manual_handoff_requires_human_needed_terminal", "actual": terminal})
+        if payload.get("qa_loop_terminal_exit_code") != 20:
+            failures.append({"field": "qa_loop_terminal_exit_code", "reason": "manual_handoff_requires_exit_20", "actual": payload.get("qa_loop_terminal_exit_code")})
+        handoff_cycles = payload.get("manual_operator_handoff_cycles")
+        pending_cycles = payload.get("pending_operator_feedback_cycles")
+        if not isinstance(handoff_cycles, int) or handoff_cycles < 1:
+            failures.append({"field": "manual_operator_handoff_cycles", "reason": "manual_handoff_requires_positive_handoff_counter", "actual": handoff_cycles})
+        if not isinstance(pending_cycles, int) or pending_cycles < 1:
+            failures.append({"field": "pending_operator_feedback_cycles", "reason": "manual_handoff_requires_pending_feedback", "actual": pending_cycles})
+        if payload.get("orchestration_stop_reason") != "manual_operator_feedback_required":
+            failures.append({"field": "orchestration_stop_reason", "reason": "manual_handoff_requires_manual_stop_reason", "actual": payload.get("orchestration_stop_reason")})
     return {
         "schema_version": "fresh-smoke-verdict-validation/1",
         "status": "pass" if not failures else "fail",
@@ -1011,15 +1026,24 @@ def _check_operator_cycle_artifacts(
                 cycle_numbers.add(int(match.group(1)))
     if not cycle_numbers:
         return
-    required_templates = [
-        "operator-review-packet.cycle-{n}.json",
-        "operator-feedback-author.cycle-{n}.prompt.md",
-        "operator-feedback-author.cycle-{n}.response.md",
-        "operator-feedback-author.cycle-{n}.exitcode",
-        "operator-feedback.cycle-{n}.json",
-        "operator-feedback-imported.cycle-{n}.json",
-    ]
     for n in sorted(cycle_numbers):
+        manual_handoff_path = root / f"operator-feedback/manual-operator-handoff.cycle-{n}.json"
+        manual_pending = manual_handoff_path.exists() and f"operator_apply_cycle_{n}" not in commands
+        required_templates = (
+            [
+                "operator-review-packet.cycle-{n}.json",
+                "manual-operator-handoff.cycle-{n}.json",
+            ]
+            if manual_pending
+            else [
+                "operator-review-packet.cycle-{n}.json",
+                "operator-feedback-author.cycle-{n}.prompt.md",
+                "operator-feedback-author.cycle-{n}.response.md",
+                "operator-feedback-author.cycle-{n}.exitcode",
+                "operator-feedback.cycle-{n}.json",
+                "operator-feedback-imported.cycle-{n}.json",
+            ]
+        )
         for template in required_templates:
             rel = f"operator-feedback/{template.format(n=n)}"
             path = root / rel
@@ -1097,6 +1121,8 @@ def _check_operator_cycle_artifacts(
                                 }
                             )
                             failing_codes.add("operator_rendered_pdf_review_manifest_invalid")
+                        elif manual_pending:
+                            checked.append({"check": "operator_rendered_pdf_review", "cycle": n, "status": "manual_handoff_pending"})
                         elif manifest and not _operator_pdf_review_response_attested(root, n, manifest, manifest_path):
                             inconsistent.append(
                                 {
@@ -1108,29 +1134,44 @@ def _check_operator_cycle_artifacts(
                             failing_codes.add("operator_rendered_pdf_review_unattested")
                         else:
                             checked.append({"check": "operator_rendered_pdf_review", "cycle": n, "status": "pass"})
-                    prompt_path = root / f"operator-feedback/operator-feedback-author.cycle-{n}.prompt.md"
-                    prompt_text = prompt_path.read_text(encoding="utf-8", errors="replace") if prompt_path.exists() else ""
-                    required_prompt_markers = [
-                        "You MUST inspect the rendered PDF evidence before authoring feedback.",
-                        "Rendered PDF layout text:",
-                        "Rendered PDF page images:",
-                        "source_artifact_role=compiled_pdf",
-                        "rendered_pdf_no_issues",
-                        "rendered_pdf_manifest_sha256",
-                        "reviewed_page_count",
-                    ]
-                    missing_markers = [marker for marker in required_prompt_markers if marker not in prompt_text]
-                    if missing_markers:
-                        inconsistent.append(
-                            {
-                                "check": "operator_rendered_pdf_review_prompt",
-                                "cycle": n,
-                                "missing_markers": missing_markers,
-                            }
-                        )
-                        failing_codes.add("operator_rendered_pdf_review_missing")
+                    if manual_pending:
+                        try:
+                            handoff = json.loads(manual_handoff_path.read_text(encoding="utf-8"))
+                        except Exception as exc:
+                            inconsistent.append({"check": "manual_operator_handoff", "cycle": n, "reason": repr(exc)})
+                            failing_codes.add("manual_operator_handoff_invalid")
+                        else:
+                            if handoff.get("schema_version") == "manual-operator-handoff/1" and handoff.get("cycle") == n:
+                                checked.append({"check": "manual_operator_handoff", "cycle": n, "status": "pass"})
+                            else:
+                                inconsistent.append({"check": "manual_operator_handoff", "cycle": n, "reason": "schema_or_cycle_mismatch"})
+                                failing_codes.add("manual_operator_handoff_invalid")
                     else:
-                        checked.append({"check": "operator_rendered_pdf_review_prompt", "cycle": n, "status": "pass"})
+                        prompt_path = root / f"operator-feedback/operator-feedback-author.cycle-{n}.prompt.md"
+                        prompt_text = prompt_path.read_text(encoding="utf-8", errors="replace") if prompt_path.exists() else ""
+                        required_prompt_markers = [
+                            "You MUST inspect the rendered PDF evidence before authoring feedback.",
+                            "Rendered PDF layout text:",
+                            "Rendered PDF page images:",
+                            "source_artifact_role=compiled_pdf",
+                            "rendered_pdf_no_issues",
+                            "rendered_pdf_manifest_sha256",
+                            "reviewed_page_count",
+                        ]
+                        missing_markers = [marker for marker in required_prompt_markers if marker not in prompt_text]
+                        if missing_markers:
+                            inconsistent.append(
+                                {
+                                    "check": "operator_rendered_pdf_review_prompt",
+                                    "cycle": n,
+                                    "missing_markers": missing_markers,
+                                }
+                            )
+                            failing_codes.add("operator_rendered_pdf_review_missing")
+                        else:
+                            checked.append({"check": "operator_rendered_pdf_review_prompt", "cycle": n, "status": "pass"})
+        if manual_pending:
+            continue
         for command_name in [f"operator_packet_cycle_{n}", f"operator_import_cycle_{n}", f"operator_apply_cycle_{n}"]:
             if command_name not in commands:
                 inconsistent.append({"check": "operator_cycle_command_sequence", "cycle": n, "missing_command": command_name})

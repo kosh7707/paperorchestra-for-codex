@@ -282,6 +282,89 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertLess(text.index("build-operator-review-packet"), text.index('write_operator_pdf_review_evidence "$cycle"'))
         self.assertLess(text.index('write_operator_pdf_review_evidence "$cycle"'), text.index("cat > \"$prompt\" <<PROMPT"))
 
+    def test_fresh_full_live_smoke_exposes_manual_operator_feedback_mode(self) -> None:
+        result = subprocess.run(
+            ["bash", "scripts/fresh-full-live-smoke-loop.sh", "--help"],
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+
+        self.assertIn("--manual-operator-feedback", result.stdout)
+        self.assertIn("--manual-operator-feedback-timeout-seconds", result.stdout)
+        self.assertIn("human writes the feedback draft", result.stdout)
+
+    def test_fresh_full_live_smoke_manual_operator_mode_dry_run_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(
+                [
+                    "bash",
+                    "scripts/fresh-full-live-smoke-loop.sh",
+                    "--dry-run-contract",
+                    "--manual-operator-feedback",
+                    "--manual-operator-feedback-timeout-seconds",
+                    "600",
+                    "--evidence-root",
+                    str(Path(tmp) / "evidence"),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True,
+            )
+
+        payload = json.loads(result.stdout)
+        manual = payload["manual_operator_feedback"]
+        self.assertTrue(manual["enabled"])
+        self.assertEqual(manual["timeout_seconds"], 600)
+        self.assertIn("manual_operator_handoff", manual["artifacts"])
+        self.assertIn("manual_operator_feedback_draft", manual["artifacts"])
+        self.assertIn("no_auto_author", manual["guarantees"])
+        self.assertIn("no_auto_apply_before_human_draft", manual["guarantees"])
+
+    def test_fresh_full_live_smoke_manual_operator_mode_does_not_auto_author_or_apply(self) -> None:
+        text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+        subprocess.run(["bash", "-n", "scripts/fresh-full-live-smoke-loop.sh"], check=True)
+
+        packet_start = text.index("write_operator_review_packet() {")
+        packet_end = text.index("\n}\n\nwrite_manual_operator_handoff", packet_start) + 3
+        packet_function = text[packet_start:packet_end]
+        self.assertIn("build-operator-review-packet", packet_function)
+        self.assertIn('write_operator_pdf_review_evidence "$cycle"', packet_function)
+        self.assertNotIn("run_codex_last_message", packet_function)
+        self.assertNotIn("import-operator-feedback", packet_function)
+        self.assertNotIn("apply-operator-feedback", packet_function)
+
+        wait_start = text.index("wait_for_manual_operator_feedback() {")
+        wait_end = text.index("\n}\n\nwrite_operator_feedback", wait_start) + 3
+        wait_function = text[wait_start:wait_end]
+        self.assertIn("manual-operator-feedback-draft.cycle-${cycle}.json", wait_function)
+        self.assertIn("normalize_operator_feedback_draft", wait_function)
+        self.assertIn("operator_import_cycle_${cycle}", wait_function)
+        self.assertIn("operator_apply_cycle_${cycle}", wait_function)
+        self.assertNotIn("run_codex_last_message", wait_function)
+        self.assertIn("draft=json.loads(draft_path.read_text", wait_function)
+        self.assertIn("manual feedback draft must set an explicit supported intent", wait_function)
+        self.assertIn("manual feedback draft must include at least one human-authored issue", wait_function)
+        self.assertNotIn("re.search", wait_function)
+        self.assertNotIn('{"issues": []}', wait_function)
+
+        human_needed_start = text.index('    20)')
+        human_needed_end = text.index('    30)', human_needed_start)
+        human_needed_branch = text[human_needed_start:human_needed_end]
+        self.assertLess(
+            human_needed_branch.index('if [[ "$MANUAL_OPERATOR_FEEDBACK" == "1" ]]; then'),
+            human_needed_branch.index('if ! write_operator_feedback "$OPERATOR_FEEDBACK_CYCLES"; then'),
+        )
+        self.assertIn("operator_cycle_budget_used=$(( OPERATOR_FEEDBACK_CYCLES > MANUAL_OPERATOR_HANDOFF_CYCLES", human_needed_branch)
+        self.assertIn("manual_cycle=$((operator_cycle_budget_used + 1))", human_needed_branch)
+        self.assertIn('LOOP_STOP_REASON="manual_operator_feedback_required"', human_needed_branch)
+        self.assertIn("manual-operator-handoff.cycle-${manual_cycle}.json", human_needed_branch)
+        self.assertIn("validate_fresh_smoke_lane_a", human_needed_branch)
+        self.assertIn("validate-fresh-smoke-evidence.py", human_needed_branch)
+        self.assertIn("EVIDENCE_COMPLETENESS_STATUS", human_needed_branch)
+        self.assertIn("OPERATOR_FEEDBACK_CYCLES_FAILED", human_needed_branch)
+
     def test_fresh_full_live_smoke_report_status_gate_fails_non_pass_reports(self) -> None:
         wrapper = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
         start = wrapper.index("require_report_status_pass() {")
@@ -886,7 +969,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         ]:
             self.assertIn(wrapper_token, wrapper_text)
         self.assertIn('case "$FINAL" in', wrapper_text)
-        self.assertEqual(wrapper_text.count('python3 "$REPO_ROOT/scripts/validate-fresh-smoke-evidence.py"'), 4)
+        self.assertEqual(wrapper_text.count('python3 "$REPO_ROOT/scripts/validate-fresh-smoke-evidence.py"'), 5)
         self.assertNotIn('scripts/validate-fresh-smoke-evidence.py "$EVIDENCE_ROOT"', wrapper_text)
         self.assertIn('max_iterations_exhausted_with_continue', wrapper_text)
         self.assertIn('evidence_completeness_pre_critic', wrapper_text)

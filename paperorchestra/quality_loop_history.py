@@ -96,6 +96,13 @@ def operator_feedback_cycle_count_from_commands(commands_path: str | Path) -> in
     return len(names)
 
 
+def manual_operator_handoff_count_from_files(evidence_root: str | Path) -> int:
+    op_dir = Path(evidence_root) / "operator-feedback"
+    if not op_dir.exists():
+        return 0
+    return len({int(match.group(1)) for path in op_dir.glob("manual-operator-handoff.cycle-*.json") if (match := re.search(r"\.cycle-([0-9]+)\.json$", path.name))})
+
+
 def validate_smoke_bundle_operator_feedback_cycles(evidence_root: str | Path) -> dict[str, Any]:
     """Validate that smoke summary counters agree with command evidence.
 
@@ -108,6 +115,7 @@ def validate_smoke_bundle_operator_feedback_cycles(evidence_root: str | Path) ->
     commands_path = root / "readable" / "commands.md"
     verdict_path = root / "readable" / "verdict.json"
     command_count = operator_feedback_cycle_count_from_commands(commands_path)
+    handoff_file_count = manual_operator_handoff_count_from_files(root)
     verdict_payload: dict[str, Any] = {}
     if verdict_path.exists():
         try:
@@ -130,17 +138,48 @@ def validate_smoke_bundle_operator_feedback_cycles(evidence_root: str | Path) ->
         attempted_count = int(attempted_count_raw)
     else:
         attempted_count = None
-    status = "pass" if summary_count == command_count and attempted_count == command_count else "fail"
+    handoff_count_raw = verdict_payload.get("manual_operator_handoff_cycles", 0)
+    if isinstance(handoff_count_raw, int):
+        handoff_count = handoff_count_raw
+    elif isinstance(handoff_count_raw, str) and handoff_count_raw.isdigit():
+        handoff_count = int(handoff_count_raw)
+    else:
+        handoff_count = None
+    pending_count_raw = verdict_payload.get("pending_operator_feedback_cycles", 0)
+    if isinstance(pending_count_raw, int):
+        pending_count = pending_count_raw
+    elif isinstance(pending_count_raw, str) and pending_count_raw.isdigit():
+        pending_count = int(pending_count_raw)
+    else:
+        pending_count = None
+    expected_pending = None
+    if handoff_count is not None:
+        expected_pending = max(0, handoff_count - command_count)
+    status = (
+        "pass"
+        if summary_count == command_count
+        and attempted_count == command_count
+        and handoff_count == handoff_file_count
+        and pending_count == expected_pending
+        else "fail"
+    )
     failing_codes = []
     if summary_count != command_count or attempted_count != command_count:
         failing_codes.append("operator_feedback_cycle_counter_mismatch")
+    if handoff_count != handoff_file_count:
+        failing_codes.append("manual_operator_handoff_counter_mismatch")
+    if pending_count != expected_pending:
+        failing_codes.append("pending_operator_feedback_counter_mismatch")
     return {
         "status": status,
         "commands_path": str(commands_path),
         "verdict_path": str(verdict_path),
         "command_operator_apply_cycles": command_count,
+        "manual_operator_handoff_files": handoff_file_count,
         "summary_operator_feedback_cycles": summary_count,
         "summary_operator_feedback_cycles_attempted": attempted_count,
+        "summary_manual_operator_handoff_cycles": handoff_count,
+        "summary_pending_operator_feedback_cycles": pending_count,
         "failing_codes": failing_codes,
     }
 

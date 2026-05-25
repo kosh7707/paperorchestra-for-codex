@@ -291,7 +291,14 @@ def _operator_feedback_cycles_check(payload: dict[str, Any] | None) -> dict[str,
             return _check("operator_feedback_cycles", "fail", "operator_feedback_cycle_split_invalid")
         if sum(split_values) != attempted:
             return _check("operator_feedback_cycles", "fail", "operator_feedback_cycle_split_mismatch")
-    if payload.get("qa_loop_terminal_verdict") == "human_needed" and cycles < 1:
+    manual_pending = (
+        payload.get("smoke_verdict") == "manual_human_needed_handoff"
+        and isinstance(payload.get("manual_operator_handoff_cycles"), int)
+        and payload.get("manual_operator_handoff_cycles") >= 1
+        and isinstance(payload.get("pending_operator_feedback_cycles"), int)
+        and payload.get("pending_operator_feedback_cycles") >= 1
+    )
+    if payload.get("qa_loop_terminal_verdict") == "human_needed" and cycles < 1 and not manual_pending:
         return _check("operator_feedback_cycles", "fail", "human_needed_cycle_evidence_missing")
     return _check("operator_feedback_cycles", "pass", "operator_feedback_cycle_counters_pass")
 

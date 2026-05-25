@@ -1509,6 +1509,47 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             self.assertEqual(attempted_mismatch["status"], "fail")
             self.assertEqual(attempted_mismatch["summary_operator_feedback_cycles_attempted"], 1)
 
+    def test_smoke_bundle_operator_feedback_cycles_accept_manual_pending_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            readable = root / "readable"
+            op_dir = root / "operator-feedback"
+            readable.mkdir()
+            op_dir.mkdir()
+            (readable / "commands.md").write_text("# Command exit codes\n", encoding="utf-8")
+            (op_dir / "manual-operator-handoff.cycle-1.json").write_text(
+                json.dumps({"schema_version": "manual-operator-handoff/1", "cycle": 1}),
+                encoding="utf-8",
+            )
+            (readable / "verdict.json").write_text(
+                json.dumps(
+                    {
+                        "operator_feedback_cycles": 0,
+                        "operator_feedback_cycles_attempted": 0,
+                        "manual_operator_handoff_cycles": 1,
+                        "pending_operator_feedback_cycles": 1,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(validate_smoke_bundle_operator_feedback_cycles(root)["status"], "pass")
+
+            (readable / "verdict.json").write_text(
+                json.dumps(
+                    {
+                        "operator_feedback_cycles": 0,
+                        "operator_feedback_cycles_attempted": 0,
+                        "manual_operator_handoff_cycles": 0,
+                        "pending_operator_feedback_cycles": 0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            mismatch = validate_smoke_bundle_operator_feedback_cycles(root)
+            self.assertEqual(mismatch["status"], "fail")
+            self.assertIn("manual_operator_handoff_counter_mismatch", mismatch["failing_codes"])
+
     def test_fresh_smoke_lane_a_acceptance_checks_progress_attempts_and_citation_identity(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1722,6 +1763,23 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
                 for failure in unknown_quality_result["failures"]
             )
         )
+        manual_handoff = {
+            **valid,
+            "smoke_verdict": "manual_human_needed_handoff",
+            "operator_feedback_cycles": 0,
+            "operator_feedback_cycles_attempted": 0,
+            "operator_feedback_cycles_promoted": 0,
+            "operator_feedback_cycles_rolled_back": 0,
+            "operator_feedback_cycles_failed": 0,
+            "manual_operator_handoff_cycles": 1,
+            "pending_operator_feedback_cycles": 1,
+            "critic_verdict": "not_run",
+            "evidence_completeness_status": "fail",
+            "quality_gate_status": "manual_handoff_pending",
+            "manuscript_readiness": "not_ready",
+            "orchestration_stop_reason": "manual_operator_feedback_required",
+        }
+        self.assertEqual(validate_fresh_smoke_verdict(manual_handoff)["status"], "pass")
 
     def test_material_invariance_checks_manifest_ledger_boundary_and_pointer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2758,6 +2816,119 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
 
             attested_result = validate_evidence_completeness(root)
             self.assertEqual(attested_result["status"], "pass", attested_result)
+
+    def test_evidence_completeness_accepts_pending_manual_operator_handoff_without_auto_author_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for subdir in ["readable", "logs", "artifacts", "inputs", "operator-feedback", "critic"]:
+                (root / subdir).mkdir()
+            (root / "README.md").write_text(
+                "\n".join(
+                    [
+                        "operator_feedback_cycles: 0",
+                        "operator_feedback_cycles_attempted: 0",
+                        "manual_operator_handoff_cycles: 1",
+                        "pending_operator_feedback_cycles: 1",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (root / "inputs" / "provenance-ledger.json").write_text('{"items":[]}\n', encoding="utf-8")
+            (root / "inputs.sha256").write_text("abc inputs/idea.tex\n", encoding="utf-8")
+            (root / "artifact-manifest.json").write_text('{"missing_referenced_artifacts":[],"files":[]}\n', encoding="utf-8")
+            (root / "readable" / "timeline.md").write_text("# Timeline\n", encoding="utf-8")
+            (root / "readable" / "commands.md").write_text("- `operator_packet_cycle_1`: `0`\n", encoding="utf-8")
+            for command_name in ["operator_packet_cycle_1"]:
+                (root / "logs" / f"{command_name}.command").write_text("true\n", encoding="utf-8")
+                (root / "logs" / f"{command_name}.stdout.log").write_text("", encoding="utf-8")
+                (root / "logs" / f"{command_name}.stderr.log").write_text("", encoding="utf-8")
+                (root / "logs" / f"{command_name}.exitcode").write_text("0\n", encoding="utf-8")
+            for artifact in ["material-invariance.json", "fresh-smoke-lane-a-acceptance.json", "meta-leakage-scan.json"]:
+                (root / "artifacts" / artifact).write_text('{"status":"pass"}\n', encoding="utf-8")
+            (root / "artifacts" / "session-snapshot-final").mkdir()
+            (root / "readable" / "verdict.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "fresh-smoke-verdict/1",
+                        "smoke_verdict": "manual_human_needed_handoff",
+                        "qa_loop_terminal_verdict": "human_needed",
+                        "qa_loop_terminal_exit_code": 20,
+                        "first_failing_predicate": "manual_operator_feedback_required",
+                        "first_failing_artifact": "operator-feedback/manual-operator-handoff.cycle-1.json",
+                        "operator_feedback_cycles": 0,
+                        "operator_feedback_cycles_attempted": 0,
+                        "operator_feedback_cycles_promoted": 0,
+                        "operator_feedback_cycles_rolled_back": 0,
+                        "operator_feedback_cycles_failed": 0,
+                        "manual_operator_handoff_cycles": 1,
+                        "pending_operator_feedback_cycles": 1,
+                        "material_invariance_status": "pass",
+                        "evidence_completeness_status": "fail",
+                        "lane_a_status": "pass",
+                        "critic_verdict": "not_run",
+                        "quality_gate_status": "manual_handoff_pending",
+                        "manuscript_readiness": "not_ready",
+                        "orchestration_stop_reason": "manual_operator_feedback_required",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "final-smoke-status.txt").write_text("human_needed\n", encoding="utf-8")
+            (root / "final-smoke-exit-code.txt").write_text("20\n", encoding="utf-8")
+            pdf = root / "operator-feedback" / "paper.full.pdf"
+            pdf.write_bytes(b"%PDF-1.5\n")
+            pdf_sha = hashlib.sha256(pdf.read_bytes()).hexdigest()
+            packet = {
+                "schema_version": "operator-review-packet/1",
+                "review_scope": "pdf_and_tex",
+                "artifacts": [
+                    {"role": "compiled_pdf", "path": "operator-feedback/paper.full.pdf", "sha256": pdf_sha, "size_bytes": pdf.stat().st_size}
+                ],
+            }
+            (root / "operator-feedback" / "operator-review-packet.cycle-1.json").write_text(json.dumps(packet), encoding="utf-8")
+            pdf_text = root / "operator-feedback" / "rendered-pdf-review.cycle-1.txt"
+            pdf_info = root / "operator-feedback" / "rendered-pdf-review.cycle-1.pdfinfo.txt"
+            page_dir = root / "operator-feedback" / "rendered-pdf-pages.cycle-1"
+            page_dir.mkdir()
+            page = page_dir / "page-1.png"
+            pdf_text.write_text("Rendered paper page text.\n", encoding="utf-8")
+            pdf_info.write_text("Pages: 1\n", encoding="utf-8")
+            page.write_bytes(b"png")
+            (root / "operator-feedback" / "rendered-pdf-review.cycle-1.manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-rendered-pdf-review-evidence/1",
+                        "cycle": 1,
+                        "compiled_pdf": "operator-feedback/paper.full.pdf",
+                        "compiled_pdf_sha256": pdf_sha,
+                        "pdf_text": "operator-feedback/rendered-pdf-review.cycle-1.txt",
+                        "pdf_text_sha256": hashlib.sha256(pdf_text.read_bytes()).hexdigest(),
+                        "pdf_info": "operator-feedback/rendered-pdf-review.cycle-1.pdfinfo.txt",
+                        "pdf_info_sha256": hashlib.sha256(pdf_info.read_bytes()).hexdigest(),
+                        "page_images_dir": "operator-feedback/rendered-pdf-pages.cycle-1",
+                        "page_image_count": 1,
+                        "page_images": [
+                            {
+                                "path": "operator-feedback/rendered-pdf-pages.cycle-1/page-1.png",
+                                "sha256": hashlib.sha256(page.read_bytes()).hexdigest(),
+                                "size_bytes": page.stat().st_size,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "operator-feedback" / "manual-operator-handoff.cycle-1.json").write_text(
+                json.dumps({"schema_version": "manual-operator-handoff/1", "cycle": 1, "expected_feedback_draft": "operator-feedback/manual-operator-feedback-draft.cycle-1.json"}),
+                encoding="utf-8",
+            )
+
+            result = validate_evidence_completeness(root)
+
+            self.assertNotIn("operator_cycle_artifact_missing", result["failing_codes"])
+            self.assertNotIn("operator_cycle_command_sequence_incomplete", result["failing_codes"])
+            self.assertNotIn("operator_rendered_pdf_review_unattested", result["failing_codes"])
 
     def test_evidence_completeness_compares_operator_history_cycle_count(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

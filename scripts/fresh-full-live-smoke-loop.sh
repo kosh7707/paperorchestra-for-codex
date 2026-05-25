@@ -3,13 +3,16 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/fresh-full-live-smoke-loop.sh --evidence-root DIR --material-root DIR [--expected-material-root DIR] [--max-operator-cycles N] [--max-iterations N] [--dry-run-contract]
+Usage: scripts/fresh-full-live-smoke-loop.sh --evidence-root DIR --material-root DIR [--expected-material-root DIR] [--max-operator-cycles N] [--max-iterations N] [--manual-operator-feedback] [--manual-operator-feedback-timeout-seconds N] [--dry-run-contract]
 
 Top-level fail-fast fresh full live smoke wrapper. This owns immutable material
 validation, fresh workdir/session setup, evidence bundle shape, bounded
 human_needed operator cycles, Lane-A/evidence/meta/Critic gates, and smoke-level
 verdict synthesis. The inner scripts/live-smoke-claim-safe.sh remains an inner
 claim-safe gate only and is not a replacement for this wrapper.
+
+Manual operator mode stops automation at human_needed: the wrapper builds the
+review packet and rendered-PDF evidence, then waits while human writes the feedback draft under operator-feedback/ before importing/applying it.
 EOF
 }
 
@@ -19,6 +22,8 @@ EXPECTED_MATERIAL_ROOT=""
 MAX_OPERATOR_CYCLES=5
 MAX_ITER=8
 DRY_RUN_CONTRACT=0
+MANUAL_OPERATOR_FEEDBACK=0
+MANUAL_OPERATOR_FEEDBACK_TIMEOUT_SECONDS="${PAPERO_MANUAL_OPERATOR_FEEDBACK_TIMEOUT_SECONDS:-0}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --evidence-root) EVIDENCE_ROOT="$2"; shift 2 ;;
@@ -26,6 +31,8 @@ while [[ $# -gt 0 ]]; do
     --expected-material-root) EXPECTED_MATERIAL_ROOT="$2"; shift 2 ;;
     --max-operator-cycles) MAX_OPERATOR_CYCLES="$2"; shift 2 ;;
     --max-iterations) MAX_ITER="$2"; shift 2 ;;
+    --manual-operator-feedback) MANUAL_OPERATOR_FEEDBACK=1; shift ;;
+    --manual-operator-feedback-timeout-seconds) MANUAL_OPERATOR_FEEDBACK_TIMEOUT_SECONDS="$2"; shift 2 ;;
     --dry-run-contract) DRY_RUN_CONTRACT=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
@@ -186,6 +193,8 @@ OPERATOR_FEEDBACK_CYCLES=0
 OPERATOR_FEEDBACK_CYCLES_PROMOTED=0
 OPERATOR_FEEDBACK_CYCLES_ROLLED_BACK=0
 OPERATOR_FEEDBACK_CYCLES_FAILED=0
+MANUAL_OPERATOR_HANDOFF_CYCLES=0
+PENDING_OPERATOR_FEEDBACK_CYCLES=0
 MATERIAL_INVARIANCE_STATUS="fail"
 EVIDENCE_COMPLETENESS_STATUS="fail"
 LANE_A_STATUS="not_run"
@@ -655,6 +664,8 @@ write_verdict() {
   "operator_feedback_cycles_promoted": ${OPERATOR_FEEDBACK_CYCLES_PROMOTED},
   "operator_feedback_cycles_rolled_back": ${OPERATOR_FEEDBACK_CYCLES_ROLLED_BACK},
   "operator_feedback_cycles_failed": ${OPERATOR_FEEDBACK_CYCLES_FAILED},
+  "manual_operator_handoff_cycles": ${MANUAL_OPERATOR_HANDOFF_CYCLES},
+  "pending_operator_feedback_cycles": ${PENDING_OPERATOR_FEEDBACK_CYCLES},
   "material_invariance_status": "${MATERIAL_INVARIANCE_STATUS}",
   "evidence_completeness_status": "${EVIDENCE_COMPLETENESS_STATUS}",
   "lane_a_status": "${LANE_A_STATUS}",
@@ -682,6 +693,8 @@ EOF
 - operator_feedback_cycles_promoted: ${OPERATOR_FEEDBACK_CYCLES_PROMOTED}
 - operator_feedback_cycles_rolled_back: ${OPERATOR_FEEDBACK_CYCLES_ROLLED_BACK}
 - operator_feedback_cycles_failed: ${OPERATOR_FEEDBACK_CYCLES_FAILED}
+- manual_operator_handoff_cycles: ${MANUAL_OPERATOR_HANDOFF_CYCLES}
+- pending_operator_feedback_cycles: ${PENDING_OPERATOR_FEEDBACK_CYCLES}
 - first_failing_predicate: ${FIRST_FAILING_PREDICATE}
 - first_failing_artifact: ${FIRST_FAILING_ARTIFACT}
 - quality_gate_status: ${QUALITY_GATE_STATUS}
@@ -1233,7 +1246,7 @@ PY_CONTRACT
 
 emit_dry_run_contract() {
   write_provider_wrapper
-  python3 - "$EVIDENCE_ROOT" "$WRAPPER_PATH" "$GEN_CMD" "$WEB_CMD" "${PAPERO_CODEX_CLI_PREFIX:-codex}" <<'PY_DRY'
+  python3 - "$EVIDENCE_ROOT" "$WRAPPER_PATH" "$GEN_CMD" "$WEB_CMD" "${PAPERO_CODEX_CLI_PREFIX:-codex}" "$MANUAL_OPERATOR_FEEDBACK" "$MANUAL_OPERATOR_FEEDBACK_TIMEOUT_SECONDS" <<'PY_DRY'
 import hashlib, json, shlex, sys
 from pathlib import Path
 
@@ -1257,6 +1270,8 @@ prefix_payload=stable_json(codex_prefix)
 critic_prefix=[*codex_prefix, "exec"]
 provider_gen=json.loads(sys.argv[3])
 provider_web=json.loads(sys.argv[4])
+manual_enabled=sys.argv[6] == "1"
+manual_timeout=int(sys.argv[7] or "0")
 print(json.dumps({
   "schema_version":"fresh-full-live-smoke-contract/1",
   "evidence_root_label":label("evidence-root", str(root)),
@@ -1269,6 +1284,17 @@ print(json.dumps({
     "web":{"mode":"web","command_label":label("provider-command", stable_json(provider_web)),"command_sha256":digest(stable_json(provider_web)),"web_search_capable":True},
   },
   "provider_wrapper_contract":sidecar,
+  "manual_operator_feedback":{
+    "enabled":manual_enabled,
+    "timeout_seconds":manual_timeout,
+    "artifacts":{
+      "operator_review_packet":"operator-feedback/operator-review-packet.cycle-N.json",
+      "rendered_pdf_manifest":"operator-feedback/rendered-pdf-review.cycle-N.manifest.json",
+      "manual_operator_handoff":"operator-feedback/manual-operator-handoff.cycle-N.json",
+      "manual_operator_feedback_draft":"operator-feedback/manual-operator-feedback-draft.cycle-N.json"
+    },
+    "guarantees":["no_auto_author","no_auto_apply_before_human_draft"]
+  },
   "stage_contracts":[
     {"name":"codex_auth_preflight","class":"mandatory_auth_preflight","fail_policy":"fail_preflight"},
     {"name":"omx_control_preflight","class":"mandatory_runtime_preflight","fail_policy":"fail_preflight"},
@@ -1415,6 +1441,148 @@ Path(manifest).write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\
 PY_PDF_REVIEW_MANIFEST
 }
 
+write_operator_review_packet() {
+  local cycle="$1"
+  local packet="$OPFB/operator-review-packet.cycle-${cycle}.json"
+  if [[ -f "$ARTIFACTS/paper.full.pdf" ]]; then
+    run_step "operator_packet_cycle_${cycle}" "${CLI[@]}" build-operator-review-packet --output "$packet" --review-scope pdf_and_tex --require-pdf || return 1
+  else
+    run_step "operator_packet_cycle_${cycle}" "${CLI[@]}" build-operator-review-packet --output "$packet" --review-scope tex_only || return 1
+  fi
+  write_operator_pdf_review_evidence "$cycle"
+}
+
+write_manual_operator_handoff() {
+  local cycle="$1"
+  local packet="$OPFB/operator-review-packet.cycle-${cycle}.json"
+  local draft="$OPFB/manual-operator-feedback-draft.cycle-${cycle}.json"
+  local handoff="$OPFB/manual-operator-handoff.cycle-${cycle}.json"
+  local handoff_md="$OPFB/manual-operator-handoff.cycle-${cycle}.md"
+  local pdf_text="$OPFB/rendered-pdf-review.cycle-${cycle}.txt"
+  local pdf_info="$OPFB/rendered-pdf-review.cycle-${cycle}.pdfinfo.txt"
+  local page_dir="$OPFB/rendered-pdf-pages.cycle-${cycle}"
+  local pdf_manifest="$OPFB/rendered-pdf-review.cycle-${cycle}.manifest.json"
+  python3 - "$handoff" "$cycle" "$packet" "$draft" "$pdf_text" "$pdf_info" "$page_dir" "$pdf_manifest" "$EVIDENCE_ROOT" "$MANUAL_OPERATOR_FEEDBACK_TIMEOUT_SECONDS" <<'PY_MANUAL_HANDOFF'
+import json, sys
+from pathlib import Path
+
+handoff, cycle, packet, draft, pdf_text, pdf_info, page_dir, pdf_manifest, root, timeout = sys.argv[1:]
+root_path = Path(root).resolve()
+
+def rel(value: str) -> str:
+    path = Path(value)
+    try:
+        return str(path.resolve().relative_to(root_path))
+    except Exception:
+        return path.name
+
+payload = {
+    "schema_version": "manual-operator-handoff/1",
+    "cycle": int(cycle),
+    "status": "waiting_for_human_feedback_draft",
+    "timeout_seconds": int(timeout or "0"),
+    "packet": rel(packet),
+    "rendered_pdf_review": {
+        "manifest": rel(pdf_manifest),
+        "text": rel(pdf_text),
+        "info": rel(pdf_info),
+        "page_images_dir": rel(page_dir),
+    },
+    "expected_feedback_draft": rel(draft),
+    "draft_schema_hint": {
+        "intent": "generate_new_operator_candidate",
+        "issues": [
+            {
+                "source_artifact_role": "compiled_pdf",
+                "source_item_key": "page/figure/table locator",
+                "target_section": "Whole manuscript",
+                "severity": "major",
+                "rationale": "human-authored critique grounded in the packet/PDF",
+                "suggested_action": "specific revision instruction",
+                "authority_class": "author_feedback",
+                "owner_category": "author",
+            }
+        ],
+    },
+    "next_step": "Write expected_feedback_draft. The wrapper will normalize, import, and apply it only after this human-authored draft exists.",
+    "automation_guardrail": "No Codex operator authoring is run in manual mode before the human-authored draft file appears.",
+}
+Path(handoff).write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+PY_MANUAL_HANDOFF
+  cat > "$handoff_md" <<EOF
+# Manual operator feedback handoff cycle ${cycle}
+
+The wrapper reached \`human_needed\` and is waiting for a human-authored
+feedback draft. Inspect the rendered PDF pages and packet before writing:
+
+- Packet: operator-feedback/operator-review-packet.cycle-${cycle}.json
+- PDF manifest: operator-feedback/rendered-pdf-review.cycle-${cycle}.manifest.json
+- PDF text: operator-feedback/rendered-pdf-review.cycle-${cycle}.txt
+- PDF info: operator-feedback/rendered-pdf-review.cycle-${cycle}.pdfinfo.txt
+- Page images: operator-feedback/rendered-pdf-pages.cycle-${cycle}/
+
+Write the draft JSON here:
+
+- operator-feedback/manual-operator-feedback-draft.cycle-${cycle}.json
+
+No automatic Codex feedback authoring or apply step runs until that human draft
+exists.
+EOF
+}
+
+wait_for_manual_operator_feedback() {
+  local cycle="$1"
+  local packet="$OPFB/operator-review-packet.cycle-${cycle}.json"
+  local draft="$OPFB/manual-operator-feedback-draft.cycle-${cycle}.json"
+  local feedback="$OPFB/operator-feedback.cycle-${cycle}.json"
+  local imported="$OPFB/operator-feedback-imported.cycle-${cycle}.json"
+  local timeout="$MANUAL_OPERATOR_FEEDBACK_TIMEOUT_SECONDS"
+  local waited=0
+  while [[ ! -f "$draft" ]]; do
+    if [[ "$timeout" -le 0 || "$waited" -ge "$timeout" ]]; then
+      return 20
+    fi
+    sleep 5
+    waited=$((waited + 5))
+  done
+  python3 - "$packet" "$draft" "$feedback" <<'PY_MANUAL_FEEDBACK'
+import json, sys
+from pathlib import Path
+from paperorchestra.fresh_smoke import normalize_operator_feedback_draft
+packet_path, draft_path, output_path = map(Path, sys.argv[1:4])
+packet=json.loads(packet_path.read_text(encoding='utf-8'))
+draft=json.loads(draft_path.read_text(encoding='utf-8'))
+if not isinstance(draft, dict):
+    raise SystemExit("manual feedback draft must be a JSON object")
+intent = draft.get("intent")
+if intent not in {"approve_existing_candidate", "generate_new_operator_candidate", "reject_candidate_with_reason"}:
+    raise SystemExit("manual feedback draft must set an explicit supported intent")
+issues = draft.get("issues")
+if intent != "approve_existing_candidate":
+    if not isinstance(issues, list) or not issues:
+        raise SystemExit("manual feedback draft must include at least one human-authored issue")
+    for index, issue in enumerate(issues):
+        if not isinstance(issue, dict):
+            raise SystemExit(f"manual feedback issue {index} must be an object")
+        if not str(issue.get("rationale") or "").strip() or not str(issue.get("suggested_action") or "").strip():
+            raise SystemExit(f"manual feedback issue {index} must include rationale and suggested_action")
+payload=normalize_operator_feedback_draft(packet, draft)
+output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False)+'\n', encoding='utf-8')
+PY_MANUAL_FEEDBACK
+  local normalize_rc=$?
+  if [[ "$normalize_rc" != "0" ]]; then
+    return 22
+  fi
+  run_step "operator_import_cycle_${cycle}" "${CLI[@]}" import-operator-feedback --packet "$packet" --feedback "$feedback" --output "$imported" || return 1
+  set +e
+  run_semantic_retryable_step "operator_apply_cycle_${cycle}" "${CLI[@]}" apply-operator-feedback --imported-feedback "$imported" --quality-mode claim_safe --citation-evidence-mode web --require-compile --require-live-verification --max-supervised-iterations 1 --max-iterations "$MAX_ITER" "${PROVIDER[@]}" "${CITATION_PROVIDER[@]}" "${RUNTIME[@]}"
+  rc=$?
+  set -e
+  preserve_iteration_pdf "cycle-${cycle}-operator-apply" "operator_apply_cycle_${cycle}" || true
+  preserve_operator_feedback_execution_cycle "$cycle" "$rc" || true
+  return "$rc"
+}
+
 write_operator_feedback() {
   local cycle="$1"
   local packet="$OPFB/operator-review-packet.cycle-${cycle}.json"
@@ -1425,12 +1593,7 @@ write_operator_feedback() {
   local pdf_info="$OPFB/rendered-pdf-review.cycle-${cycle}.pdfinfo.txt"
   local page_dir="$OPFB/rendered-pdf-pages.cycle-${cycle}"
   local pdf_manifest="$OPFB/rendered-pdf-review.cycle-${cycle}.manifest.json"
-  if [[ -f "$ARTIFACTS/paper.full.pdf" ]]; then
-    run_step "operator_packet_cycle_${cycle}" "${CLI[@]}" build-operator-review-packet --output "$packet" --review-scope pdf_and_tex --require-pdf || return 1
-  else
-    run_step "operator_packet_cycle_${cycle}" "${CLI[@]}" build-operator-review-packet --output "$packet" --review-scope tex_only || return 1
-  fi
-  write_operator_pdf_review_evidence "$cycle"
+  write_operator_review_packet "$cycle" || return 1
   cat > "$prompt" <<PROMPT
 You are bounded Codex-as-operator feedback for a PaperOrchestra fresh smoke. Use only the packet and unchanged source-material context. Do not add new facts beyond the supplied material. Return strict JSON only.
 
@@ -1627,9 +1790,58 @@ for iter in $(seq 1 "$MAX_ITER"); do
         LOOP_STOP_REASON="iteration_budget_exhausted_after_operator_feedback"
         break
       fi
-      if [[ "$OPERATOR_FEEDBACK_CYCLES" -ge "$MAX_OPERATOR_CYCLES" ]]; then
+      operator_cycle_budget_used=$(( OPERATOR_FEEDBACK_CYCLES > MANUAL_OPERATOR_HANDOFF_CYCLES ? OPERATOR_FEEDBACK_CYCLES : MANUAL_OPERATOR_HANDOFF_CYCLES ))
+      if [[ "$operator_cycle_budget_used" -ge "$MAX_OPERATOR_CYCLES" ]]; then
         LOOP_STOP_REASON="operator_cycle_cap_reached"
         break
+      fi
+      if [[ "$MANUAL_OPERATOR_FEEDBACK" == "1" ]]; then
+        manual_cycle=$((operator_cycle_budget_used + 1))
+        MANUAL_OPERATOR_HANDOFF_CYCLES=$((MANUAL_OPERATOR_HANDOFF_CYCLES + 1))
+        PENDING_OPERATOR_FEEDBACK_CYCLES=1
+        if ! write_operator_review_packet "$manual_cycle"; then
+          fail_now fail_loop_feedback_not_reflected '"manual_operator_packet"' "\"operator-feedback/operator-review-packet.cycle-${manual_cycle}.json\"" 1
+        fi
+        write_manual_operator_handoff "$manual_cycle"
+        set +e
+        wait_for_manual_operator_feedback "$manual_cycle"
+        manual_rc=$?
+        set -e
+        if [[ "$manual_rc" == "20" ]]; then
+          LOOP_STOP_REASON="manual_operator_feedback_required"
+          QUALITY_GATE_STATUS="manual_handoff_pending"
+          MANUSCRIPT_READINESS="not_ready"
+          printf '%s\n' "$FINAL" > "$EVIDENCE_ROOT/final-smoke-status.txt"
+          printf '%s\n' "$STEP_RC" > "$EVIDENCE_ROOT/final-smoke-exit-code.txt"
+          write_verdict manual_human_needed_handoff '"manual_operator_feedback_required"' "\"operator-feedback/manual-operator-handoff.cycle-${manual_cycle}.json\""
+          set +e
+          run_step validate_fresh_smoke_lane_a python3 "$REPO_ROOT/scripts/validate-fresh-smoke-lane-a.py" "$EVIDENCE_ROOT" --output "$ARTIFACTS/fresh-smoke-lane-a-acceptance.json"
+          lane_rc=$?
+          set -e
+          [[ "$lane_rc" == "0" ]] && LANE_A_STATUS="pass" || LANE_A_STATUS="fail"
+          make_manifest
+          python3 "$REPO_ROOT/scripts/validate-fresh-smoke-evidence.py" "$EVIDENCE_ROOT" --output "$ARTIFACTS/evidence-completeness.json" >/dev/null 2>&1 || true
+          if [[ -f "$ARTIFACTS/evidence-completeness.json" ]]; then
+            EVIDENCE_COMPLETENESS_STATUS="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("status","fail"))' "$ARTIFACTS/evidence-completeness.json")"
+          fi
+          write_verdict manual_human_needed_handoff '"manual_operator_feedback_required"' "\"operator-feedback/manual-operator-handoff.cycle-${manual_cycle}.json\""
+          make_manifest
+          echo "Fresh full live smoke MANUAL HUMAN_NEEDED: operator feedback required"
+          echo "Evidence: $EVIDENCE_ROOT"
+          exit 20
+        elif [[ "$manual_rc" != "0" ]]; then
+          OPERATOR_FEEDBACK_CYCLES=$manual_cycle
+          PENDING_OPERATOR_FEEDBACK_CYCLES=0
+          if [[ ! -f "$OPFB/operator-feedback-cycle-${manual_cycle}.classification" ]]; then
+            OPERATOR_FEEDBACK_CYCLES_FAILED=$((OPERATOR_FEEDBACK_CYCLES_FAILED + 1))
+          fi
+          fail_now fail_loop_feedback_not_reflected '"manual_operator_feedback"' "\"operator-feedback/manual-operator-feedback-draft.cycle-${manual_cycle}.json\"" 1
+        fi
+        OPERATOR_FEEDBACK_CYCLES=$manual_cycle
+        PENDING_OPERATOR_FEEDBACK_CYCLES=0
+        copy_session_artifacts
+        FINAL="continue"; STEP_RC=10; QA_LOOP_TERMINAL_VERDICT='"continue"'; QA_LOOP_TERMINAL_EXIT_CODE=10
+        continue
       fi
       OPERATOR_FEEDBACK_CYCLES=$((OPERATOR_FEEDBACK_CYCLES + 1))
       if ! write_operator_feedback "$OPERATOR_FEEDBACK_CYCLES"; then
