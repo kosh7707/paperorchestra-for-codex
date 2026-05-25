@@ -365,7 +365,7 @@ Command shape used:
 
 ```bash
 docker run --rm \
-  -v /home/kosh/paperorchestra-for-codex:/host-repo:ro \
+  -v "$PWD:/host-repo:ro" \
   paperorchestra-ubuntu-tools:24.04 bash -lc '
 set -Eeuo pipefail
 git config --global --add safe.directory /host-repo

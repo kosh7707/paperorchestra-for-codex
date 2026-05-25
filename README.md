@@ -258,6 +258,20 @@ The strict lifecycle is documented in
 [`docs/quality-gate-state-machine.md`](docs/quality-gate-state-machine.md).
 For setup knobs and missing-package fixes, use [`ENVIRONMENT.md`](ENVIRONMENT.md).
 
+For task-focused walkthroughs, start with the tutorials below instead of reading this whole README linearly.
+
+## Tutorials
+
+| Tutorial | Use when |
+| --- | --- |
+| [`docs/tutorials/index.md`](docs/tutorials/index.md) | You want the tutorial map and document roles. |
+| [`docs/tutorials/start.md`](docs/tutorials/start.md) | You are setting up from a fresh checkout and need stale CLI/MCP guidance. |
+| [`docs/tutorials/mock-demo.md`](docs/tutorials/mock-demo.md) | You want the safe offline mock/demo path and export commands. |
+| [`docs/tutorials/docker-container-qa.md`](docs/tutorials/docker-container-qa.md) | You need Docker/container QA, named-volume venv, PEP 668, compile, and export guidance. |
+| [`docs/tutorials/rendered-pdf-human-qa.md`](docs/tutorials/rendered-pdf-human-qa.md) | You are acting as the human/operator who must inspect rendered PDF pages. |
+| [`docs/tutorials/claim-safe-quality-loop.md`](docs/tutorials/claim-safe-quality-loop.md) | You need claim-safe quality gates, `qa-loop-step`, or Ralph handoff semantics. |
+
+
 ---
 
 ## What this project is
@@ -492,23 +506,19 @@ Only then move to:
 - `--verify-mode live` after `SEMANTIC_SCHOLAR_API_KEY` is set
 - `--compile` after `paperorchestra check-compile-env` passes
 
+
 ### Developer fresh-QA checklist
 
-For contributor/debugging work, install the small dev extra and run the one-shot
-fresh QA wrapper:
+For contributor/debugging work, install the small dev extra and run the one-shot fresh QA wrapper:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e ".[dev]"
-
 scripts/fresh-qa.sh
 ```
 
-The script writes logs and a machine-readable summary under
-`.paper-orchestra/fresh-qa/`. It verifies the CLI, `doctor`, environment
-inventory, the bundled minimal mock pipeline, fidelity/eval artifact surfaces,
-compile readiness, optional compile when ready, and `pytest`.
+The wrapper writes logs and `summary.json` under `.paper-orchestra/fresh-qa/`. It checks CLI help, `doctor`, environment inventory, the bundled minimal mock pipeline, fidelity/eval artifact surfaces, compile readiness, optional compile when ready, and `pytest`.
 
 Useful variants:
 
@@ -518,57 +528,16 @@ scripts/fresh-qa.sh --skip-compile
 python -m pytest -q
 ```
 
-Container entry must refresh Codex CLI and OMX before any PaperOrchestra QA.
-Use the repo wrapper when possible; it enters through
-`scripts/container-entrypoint.sh`, which runs `scripts/update-container-ai-clis.sh`
-on every new container start before handing you a shell or command:
+Container entry must refresh Codex CLI and OMX before PaperOrchestra QA. Use the repo wrapper, not a raw `docker run`, unless you reproduce the same entrypoint. The full Docker runbook, including the named-volume venv fast loop and mandatory PDF dogfood path, is in [`docs/tutorials/docker-container-qa.md`](docs/tutorials/docker-container-qa.md).
+
+Minimal package hints:
 
 ```bash
-# interactive shell; add --with-codex-auth when you need model-backed omx explore
-scripts/container-run.sh --privileged --with-codex-auth
-
-# one-shot proof that the container can operate OMX after the mandatory update
-scripts/container-run.sh --privileged --with-codex-auth -- \
-  omx explore --prompt 'Return exactly OK_CONTAINER_OMX'
-
-# one-shot PaperOrchestra smoke; the wrapper updates codex/omx first
-scripts/container-run.sh -- scripts/fresh-qa.sh --skip-tests --skip-compile
-```
-
-If you must write a raw `docker run`, use the same entrypoint pattern so updates
-are not skipped:
-
-```bash
-docker run --rm --privileged \
-  -v "$PWD:/repo:rw" -w /repo \
-  --entrypoint /repo/scripts/container-entrypoint.sh \
-  paperorchestra-ubuntu-tools:24.04 bash -l
-```
-
-Set `PAPERO_UPDATE_CONTAINER_AI_CLIS=0` only for an intentional offline/debug
-exception. `scripts/fresh-qa.sh` and `scripts/fresh-full-live-smoke-loop.sh` also
-run the same updater automatically when they detect they are inside a container.
-
-Minimal containers may need extra system packages for the tool surfaces used by
-developers:
-
-```bash
-# OMX explore harness extraction in very small images
-apt-get install -y xz-utils        # root container
-sudo apt-get install -y xz-utils   # normal sudo user
-
-# PDF compile path
+apt-get install -y xz-utils
 apt-get install -y pkg-config libpng-dev texlive-latex-base texlive-latex-recommended texlive-fonts-recommended latexmk bubblewrap
-# or:
-sudo apt-get install -y pkg-config libpng-dev texlive-latex-base texlive-latex-recommended texlive-fonts-recommended latexmk bubblewrap
 ```
 
-If `bwrap` is installed but `paperorchestra check-compile-env` reports it as
-unusable because user namespaces are blocked, install a fallback sandbox such as
-`firejail` or set `PAPERO_TEX_SANDBOX_CMD`. `paperorchestra
-bootstrap-compile-env` now reports whether it thinks you are root, whether
-`sudo` is available/passwordless, and which install command form fits the
-current machine.
+If `bwrap` is installed but unusable, install `firejail` or set `PAPERO_TEX_SANDBOX_CMD`; `paperorchestra bootstrap-compile-env` prints the machine-specific command form.
 
 ### Beast-proof live path: Codex discovers, S2 verifies
 
@@ -691,125 +660,28 @@ unknown names fail closed instead of silently falling back.
 
 ---
 
+
 ## Copyable environment template
 
-The repo no longer ships a standalone `.env.example`; use this commented template directly in your shell profile, `direnv`, `mise`, or copy it into a local untracked `.env` file.
+The full environment inventory and readiness profiles live in [`ENVIRONMENT.md`](ENVIRONMENT.md) and `paperorchestra environment`. Keep local secrets out of commits; copy only the variables you need into `.env`, direnv, mise, or your shell profile.
 
-For most users, the minimum variables worth setting first are:
-
-- `PAPERO_MODEL_CMD` for real shell-provider runs
-- `PAPERO_REFERENCE_PDF` for the paper-derived reference smoke
-- `SEMANTIC_SCHOLAR_API_KEY` for more reliable live verification
-- `PAPERO_ALLOW_TEX_COMPILE=1` only when you intentionally want PDF compile
+Common operator-set variables:
 
 ```bash
-# PaperOrchestra environment template
-#
-# This file is NOT auto-loaded by PaperOrchestra.
-# Use one of these patterns:
-#   copy this block into .env
-#   set -a && source .env && set +a
-# or translate the same variables into direnv/mise/your shell profile.
+# Shell provider for real model-backed runs.
+export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"high\""]'
 
-# ---------------------------------------------------------------------------
-# Common runtime knobs (optional)
-# ---------------------------------------------------------------------------
-# PAPERO_OMX_MODEL=gpt-5.5
-# PAPERO_OMX_REASONING_EFFORT=xhigh
-# PAPERO_OMX_EXEC_TIMEOUT_SECONDS=900
-# PAPERO_OMX_CONTROL_TIMEOUT_SECONDS=120
-# PAPERO_OMX_TIMEOUT_GRACE_SECONDS=120
-# Read-only control-plane retry only; omx exec is grace-only, not replayed.
-# Fresh full live smoke forces this retry layer off to avoid nested attempts.
-# PAPERO_OMX_RETRY_ATTEMPTS=1
-# PAPERO_OMX_RETRY_BACKOFF_SECONDS=15
-# PAPERO_OMX_RETRY_JITTER_SECONDS=3
-# PAPERO_STRICT_OMX_NATIVE=1
-# PAPERO_REFINE_AXIS_TOLERANCE=2
-# PAPERO_STRICT_CONTENT_GATES=1
-# PAPERO_LATEX_TIMEOUT_SEC=120
-# PAPERO_DOMAIN=generic
+# Live citation/search verification.
+export SEMANTIC_SCHOLAR_API_KEY='<your-key>'
 
-# ---------------------------------------------------------------------------
-# Shell provider (required for --provider shell)
-# ---------------------------------------------------------------------------
-# PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"high\""]'
-# PAPERO_PROVIDER_TIMEOUT_SECONDS=600
-# PAPERO_PROVIDER_TIMEOUT_GRACE_SECONDS=120
-# Provider replay requires explicit retry-safe declaration and transport evidence;
-# plain timeouts are grace-only. Fresh full live smoke forces this retry layer off.
-# Requires BOTH PAPERO_PROVIDER_RETRY_SAFE=1 AND PAPERO_PROVIDER_RETRY_ATTEMPTS>0.
-# PAPERO_PROVIDER_RETRY_SAFE=1
-# PAPERO_PROVIDER_RETRY_ATTEMPTS=1
-# PAPERO_PROVIDER_RETRY_BACKOFF_SECONDS=15
-# PAPERO_PROVIDER_RETRY_JITTER_SECONDS=3
-# PAPERO_PROVIDER_RETRY_TRACE_DIR=review/provider-retry-traces
-# Fresh full live smoke wrapper retry owner:
-# PAPERO_CODEX_RETRY_ATTEMPTS=1
-# PAPERO_CODEX_RETRY_BACKOFF_SECONDS=15
-# PAPERO_CODEX_RETRY_JITTER_SECONDS=3
-# Optional non-interactive replacement for aliasing `codex` through OMX:
-# PAPERO_CODEX_CLI_PREFIX='omx --madmax --high --dangerously-bypass-approvals-and-sandbox'
-# PAPERO_PROVIDER_SEED=7
-# PAPERO_PROVIDER_TEMPERATURE=0.2
-# PAPERO_PROVIDER_MAX_OUTPUT_TOKENS=4096
-# PAPERO_ALLOWED_PROVIDER_BINARIES=codex,openai,ollama,llm,claude,gemini
+# Compile only when intentionally building a PDF.
+export PAPERO_ALLOW_TEX_COMPILE=1
 
-# ---------------------------------------------------------------------------
-# Search / verification
-# ---------------------------------------------------------------------------
-# SEMANTIC_SCHOLAR_API_KEY=<your-key>
-# PAPERO_SEARCH_GROUNDED_MODE=live
-# S2 is used to verify/normalize candidate papers discovered by Codex/web search;
-# it is not expected to be the sole canonical-reference discovery engine.
-
-# ---------------------------------------------------------------------------
-# Compile
-# ---------------------------------------------------------------------------
-# PAPERO_ALLOW_TEX_COMPILE=1
-# PAPERO_TEX_SANDBOX_CMD='["/absolute/path/to/tex-sandbox.sh"]'
-# TEXINPUTS=/absolute/path/to/custom/texmf:
-
-# ---------------------------------------------------------------------------
-# Reference smoke scripts
-# ---------------------------------------------------------------------------
-# PAPERO_SMOKE_LIVE=1
-# PAPERO_SMOKE_COMPILE=1
-# PAPERO_SMOKE_WORKDIR=/tmp/paperorchestra-reference-smoke
-# PAPERO_SMOKE_KEEP_WORKDIR=1
-# PAPERO_SMOKE_PROVIDER=shell
-# PAPERO_SMOKE_RUNTIME_MODE=omx_native
-# PAPERO_SMOKE_DISCOVERY_MODE=search-grounded
-# PAPERO_SMOKE_RESEARCH_MODE=live
-# PAPERO_SMOKE_VERIFY_MODE=live
-# PAPERO_SMOKE_REFINE_ITERATIONS=1
-# PAPERO_SMOKE_TIMEOUT_SECONDS=900
-# PAPERO_SMOKE_PROVIDER_TIMEOUT_SECONDS=600
-# PAPERO_SMOKE_OMX_EXEC_TIMEOUT_SECONDS=600
-# PAPERO_SMOKE_POLL_INTERVAL_SECONDS=5
-# PAPERO_SMOKE_SEED_ANSWERS_FILE=/absolute/path/to/seed_answers.json
-# PAPERO_SMOKE_RESULTS_MARKDOWN_FILE=/absolute/path/to/results.md
-# PAPERO_SMOKE_REFERENCE_BENCHMARK_CASE=/absolute/path/to/benchmark_case.json
-# PAPERO_REFERENCE_PDF=/absolute/path/to/reference.pdf
-
-# ---------------------------------------------------------------------------
-# Testset smoke script
-# ---------------------------------------------------------------------------
-# PAPERO_TESTSET_SMOKE_WORKDIR=/tmp/paperorchestra-public-smoke
-# PAPERO_TESTSET_SMOKE_KEEP_WORKDIR=1
-# PAPERO_TESTSET_SMOKE_PROVIDER=mock
-# PAPERO_TESTSET_SMOKE_PROVIDER_COMMAND='["codex","exec","--skip-git-repo-check"]'
-# PAPERO_TESTSET_SMOKE_RUNTIME_MODE=compatibility
-# PAPERO_TESTSET_SMOKE_REFINE_ITERATIONS=1
-# PAPERO_TESTSET_SMOKE_COMPILE=1
-# PAPERO_TESTSET_SMOKE_STRICT_OMX_NATIVE=0
-# PAPERO_TESTSET_SMOKE_SKIP_RESEARCH_PRIOR_WORK=0
-# PAPERO_TESTSET_SMOKE_PROVIDER_TIMEOUT_SECONDS=900
-# PAPERO_TESTSET_SMOKE_OMX_EXEC_TIMEOUT_SECONDS=900
-# PAPERO_TESTSET_SMOKE_OMX_CONTROL_TIMEOUT_SECONDS=120
+# Domain remains generic unless you register an external domain profile in code.
+export PAPERO_DOMAIN=generic
 ```
 
----
+For smoke-specific knobs such as `PAPERO_SMOKE_WORKDIR`, `PAPERO_TESTSET_SMOKE_WORKDIR`, provider retry policy, and OMX timeouts, use [`ENVIRONMENT.md`](ENVIRONMENT.md). For Docker/container QA, use [`docs/tutorials/docker-container-qa.md`](docs/tutorials/docker-container-qa.md).
 
 ## Prerequisites
 
@@ -836,18 +708,74 @@ Full install/package/env details now live in **`ENVIRONMENT.md`** so this README
 
 ## Environment variables
 
-The full inventory is in **`ENVIRONMENT.md`**. A copyable commented template now lives in the `Copyable environment template` section of this README. The most common operator-set variables are:
+The full inventory is in **`ENVIRONMENT.md`**. The short template above is for the variables most operators actually set. The following compact index intentionally names every operator-facing variable so README, `ENVIRONMENT.md`, and generated environment inventory stay in sync:
 
-```bash
-export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"high\""]'
-export PAPERO_OMX_MODEL=gpt-5.5
-export PAPERO_OMX_REASONING_EFFORT=xhigh
-export PAPERO_OMX_EXEC_TIMEOUT_SECONDS=900
-export PAPERO_DOMAIN=generic
-export PAPERO_STRICT_OMX_NATIVE=1
-export SEMANTIC_SCHOLAR_API_KEY='<recommended for live verification>'
-export PAPERO_ALLOW_TEX_COMPILE=1
-```
+- `PAPERO_OMX_MODEL`
+- `PAPERO_OMX_REASONING_EFFORT`
+- `PAPERO_OMX_EXEC_TIMEOUT_SECONDS`
+- `PAPERO_OMX_CONTROL_TIMEOUT_SECONDS`
+- `PAPERO_STRICT_OMX_NATIVE`
+- `PAPERO_REFINE_AXIS_TOLERANCE`
+- `PAPERO_STRICT_CONTENT_GATES`
+- `PAPERO_LATEX_TIMEOUT_SEC`
+- `PAPERO_DOMAIN`
+- `PAPERO_MODEL_CMD`
+- `PAPERO_PROVIDER_TIMEOUT_SECONDS`
+- `PAPERO_PROVIDER_TIMEOUT_GRACE_SECONDS`
+- `PAPERO_PROVIDER_RETRY_ATTEMPTS`
+- `PAPERO_PROVIDER_RETRY_BACKOFF_SECONDS`
+- `PAPERO_PROVIDER_RETRY_JITTER_SECONDS`
+- `PAPERO_PROVIDER_RETRY_SAFE`
+- `PAPERO_PROVIDER_RETRY_TRACE_DIR`
+- `PAPERO_OMX_TIMEOUT_GRACE_SECONDS`
+- `PAPERO_OMX_RETRY_ATTEMPTS`
+- `PAPERO_OMX_RETRY_BACKOFF_SECONDS`
+- `PAPERO_OMX_RETRY_JITTER_SECONDS`
+- `PAPERO_PROVIDER_SEED`
+- `PAPERO_PROVIDER_TEMPERATURE`
+- `PAPERO_PROVIDER_MAX_OUTPUT_TOKENS`
+- `PAPERO_ALLOWED_PROVIDER_BINARIES`
+- `PAPERO_CODEX_RETRY_ATTEMPTS`
+- `PAPERO_CODEX_RETRY_BACKOFF_SECONDS`
+- `PAPERO_CODEX_RETRY_JITTER_SECONDS`
+- `PAPERO_SMOKE_STEP_RETRY_ATTEMPTS`
+- `PAPERO_SMOKE_STEP_RETRY_BACKOFF_SECONDS`
+- `PAPERO_SMOKE_STEP_RETRY_JITTER_SECONDS`
+- `SEMANTIC_SCHOLAR_API_KEY`
+- `PAPERO_SEARCH_GROUNDED_MODE`
+- `PAPERO_ALLOW_TEX_COMPILE`
+- `PAPERO_TEX_SANDBOX_CMD`
+- `TEXINPUTS`
+- `PAPERO_SMOKE_LIVE`
+- `PAPERO_SMOKE_COMPILE`
+- `PAPERO_SMOKE_WORKDIR`
+- `PAPERO_SMOKE_KEEP_WORKDIR`
+- `PAPERO_SMOKE_PROVIDER`
+- `PAPERO_SMOKE_RUNTIME_MODE`
+- `PAPERO_SMOKE_DISCOVERY_MODE`
+- `PAPERO_SMOKE_RESEARCH_MODE`
+- `PAPERO_SMOKE_VERIFY_MODE`
+- `PAPERO_SMOKE_REFINE_ITERATIONS`
+- `PAPERO_SMOKE_TIMEOUT_SECONDS`
+- `PAPERO_SMOKE_PROVIDER_TIMEOUT_SECONDS`
+- `PAPERO_SMOKE_OMX_EXEC_TIMEOUT_SECONDS`
+- `PAPERO_SMOKE_POLL_INTERVAL_SECONDS`
+- `PAPERO_SMOKE_SEED_ANSWERS_FILE`
+- `PAPERO_SMOKE_RESULTS_MARKDOWN_FILE`
+- `PAPERO_SMOKE_REFERENCE_BENCHMARK_CASE`
+- `PAPERO_REFERENCE_PDF`
+- `PAPERO_TESTSET_SMOKE_WORKDIR`
+- `PAPERO_TESTSET_SMOKE_KEEP_WORKDIR`
+- `PAPERO_TESTSET_SMOKE_PROVIDER`
+- `PAPERO_TESTSET_SMOKE_PROVIDER_COMMAND`
+- `PAPERO_TESTSET_SMOKE_RUNTIME_MODE`
+- `PAPERO_TESTSET_SMOKE_REFINE_ITERATIONS`
+- `PAPERO_TESTSET_SMOKE_COMPILE`
+- `PAPERO_TESTSET_SMOKE_STRICT_OMX_NATIVE`
+- `PAPERO_TESTSET_SMOKE_SKIP_RESEARCH_PRIOR_WORK`
+- `PAPERO_TESTSET_SMOKE_PROVIDER_TIMEOUT_SECONDS`
+- `PAPERO_TESTSET_SMOKE_OMX_EXEC_TIMEOUT_SECONDS`
+- `PAPERO_TESTSET_SMOKE_OMX_CONTROL_TIMEOUT_SECONDS`
 
 Useful helper commands:
 
@@ -1064,156 +992,28 @@ paperorchestra write-sections \
 ```
 
 ---
+
 ## A-Z CLI usage
 
-If you only remember one rule: **run mock first, then shell, then OMX-native, then live verify, then compile**.
+Use tutorials for command-heavy walkthroughs:
 
-### A. Pre-flight checks
+- first setup: [`docs/tutorials/start.md`](docs/tutorials/start.md)
+- safe mock/demo: [`docs/tutorials/mock-demo.md`](docs/tutorials/mock-demo.md)
+- Docker QA and export: [`docs/tutorials/docker-container-qa.md`](docs/tutorials/docker-container-qa.md)
+- rendered PDF human QA: [`docs/tutorials/rendered-pdf-human-qa.md`](docs/tutorials/rendered-pdf-human-qa.md)
+- claim-safe loop: [`docs/tutorials/claim-safe-quality-loop.md`](docs/tutorials/claim-safe-quality-loop.md)
 
-```bash
-paperorchestra doctor
-paperorchestra estimate-cost --discovery-mode search-grounded --refine-iterations 1 --compile --runtime-mode omx_native
-paperorchestra check-compile-env
-```
-
-### B. Initialize from manual input files
+Minimum manual session shape:
 
 ```bash
-paperorchestra init \
-  --idea examples/minimal/idea.md \
-  --experimental-log examples/minimal/experimental_log.md \
-  --template examples/minimal/template.tex \
-  --guidelines examples/minimal/conference_guidelines.md \
-  --figures-dir examples/minimal/figures \
-  --cutoff-date 2024-11-01 \
-  --venue ICLR \
-  --page-limit 8
+paperorchestra init   --idea ./idea.md   --experimental-log ./experimental_log.md   --template ./template.tex   --guidelines ./conference_guidelines.md
+
+paperorchestra run --provider mock --verify-mode mock --runtime-mode compatibility
+paperorchestra status --summary
+paperorchestra export-artifacts --output ./paperorchestra-output
 ```
 
-### C. Run a safe demo pipeline
-
-```bash
-paperorchestra run \
-  --provider mock \
-  --verify-mode mock \
-  --runtime-mode compatibility \
-  --discovery-mode model \
-  --refine-iterations 1
-```
-
-### D. Run a live OMX-native pipeline
-
-```bash
-export PAPERO_ALLOW_TEX_COMPILE=1
-export PAPERO_OMX_MODEL=gpt-5.5
-export PAPERO_OMX_REASONING_EFFORT=xhigh
-export SEMANTIC_SCHOLAR_API_KEY='<optional but recommended>'
-
-paperorchestra run \
-  --provider shell \
-  --verify-mode live \
-  --verify-error-policy skip \
-  --verify-fallback-mode mock \
-  --runtime-mode omx_native \
-  --strict-omx-native \
-  --discovery-mode search-grounded \
-  --refine-iterations 1 \
-  --compile
-```
-
-Omit `--strict-omx-native` only when compatibility fallback is acceptable and you are willing to inspect `runtime-parity.json` afterward.
-
-### E. Run with full fidelity proof artifacts
-
-Use `paperorchestra run --full-fidelity` when you want the run command to also emit the proof-surface artifact chain.
-
-If you have a reference benchmark case:
-
-```bash
-paperorchestra run \
-  --provider mock \
-  --verify-mode mock \
-  --runtime-mode compatibility \
-  --discovery-mode model \
-  --refine-iterations 0 \
-  --full-fidelity \
-  --reference-case path/to/benchmark_case.json
-```
-
-This writes:
-
-- `session_eval_summary.json`
-- `review_gate_comparison.json`
-- `generated_citation_titles.json`
-- `citation_partition_request.json`
-- refreshed `fidelity.audit.json`
-
-When `--reference-case` is provided, it also writes:
-
-- `reference_comparison.json`
-- `reference_case_partition_scaffold.json`
-- `reference_case_partitioned_citation_coverage.json`
-
-### F. Inspect status and artifacts
-
-```bash
-paperorchestra status --json
-paperorchestra audit-fidelity
-paperorchestra audit-reproducibility
-paperorchestra build-session-eval-summary
-paperorchestra build-review-gate-comparison
-paperorchestra build-generated-citation-titles
-```
-
-### G. Compile current paper
-
-```bash
-export PAPERO_ALLOW_TEX_COMPILE=1
-paperorchestra compile
-```
-
-### H. Clean OMX temp artifacts
-
-```bash
-paperorchestra cleanup-tmp
-paperorchestra cleanup-tmp --max-age-seconds 3600
-```
-
-This removes only `.paper-orchestra/tmp/omx-*` files.
-
----
-
-## Guided intake flow
-
-Use this when you do not already have the strict file bundle. Guided intake is a **structured intake flow**, not a hidden LLM deep-interview engine: it assembles templated story/claim candidates from your answers, flags missing evidence with rules, and requires user approval before finalizing direction.
-
-```bash
-paperorchestra intake-start
-paperorchestra intake-answer --answers-json '{
-  "method_summary": "...",
-  "key_results": ["..."],
-  "evidence_paths": ["./results.md"]
-}'
-paperorchestra intake-finalize
-```
-
-If the system requests review/approval:
-
-```bash
-paperorchestra intake-research --mode mock
-paperorchestra intake-review
-paperorchestra intake-approve \
-  --story-candidate-id story-method-centric \
-  --claim-candidate-ids claim-method,claim-gap
-```
-
-Then run:
-
-```bash
-paperorchestra job-start-run --provider mock --verify-mode mock --runtime-mode compatibility --refine-iterations 1
-```
-
----
+`paperorchestra run` is draft generation, not full quality approval. For existing manuscripts, start with `paperorchestra teach`; for ambiguous inputs, use the guided intake commands (`intake-start`, `intake-answer`, `intake-review`, `intake-research`, `intake-finalize`, `intake-approve`).
 
 ## Validation and review honesty
 
@@ -1358,143 +1158,22 @@ paperorchestra compare-partitioned-citation-coverage \
 
 ---
 
+
 ## MCP server
 
-`python -m pip install -e .` inside your repo `.venv` installs the MCP server binary, but it does **not**
-automatically register that server with Codex, Claude, or any other MCP client.
-Register it in the client you use.
+`python -m pip install -e .` inside your repo `.venv` installs the `paperorchestra-mcp` binary, but it does **not** automatically register that server with Codex, Claude, or any other MCP client.
 
-For Codex CLI, the easiest path from a fresh clone is:
+Recommended path:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e .
-
-# Preview the exact TOML that would be written:
 ./scripts/register-codex-mcp.sh --use-local-venv --dry-run
-
-# Write/update ~/.codex/config.toml, with a timestamped backup by default:
 ./scripts/register-codex-mcp.sh --use-local-venv
-```
-
-`--use-local-venv` registers the absolute path to this checkout's
-`.venv/bin/paperorchestra-mcp`, which avoids PATH/environment drift after Codex
-restarts. The registration is idempotent for the `paperorchestra` MCP server:
-it preserves unrelated TOML sections, replaces any existing
-`[mcp_servers.paperorchestra]` and `[mcp_servers.paperorchestra.env]` sections,
-and tells you where the backup was written.
-
-Compatibility shortcut:
-
-```bash
-./scripts/setup-codex-mcp.sh --codex-cli --use-local-venv
-```
-
-Start the stdio server directly:
-
-```bash
-paperorchestra-mcp
-```
-
-Quick binary check:
-
-```bash
-which paperorchestra-mcp
-paperorchestra --version
-paperorchestra environment --summary
-```
-
-MCP health smoke:
-
-```bash
-scripts/smoke-paperorchestra-mcp.py
-scripts/smoke-paperorchestra-mcp.py --transport content-length --json
 scripts/smoke-paperorchestra-mcp.py --transport newline --json
-scripts/smoke-paperorchestra-mcp.py --transport newline --probe-evidence-bundle --json
 ```
 
-This smoke test checks Codex config registration, executable availability,
-MCP `initialize`, `tools/list`, expected PaperOrchestra tool names, and a
-harmless `status` tool call. Run both transports when debugging Codex attach:
-`content-length` preserves compatibility with MCP clients that use header
-framing, while `newline` matches Codex CLI stdio framing observed in issue #5.
-The optional `--probe-evidence-bundle` flag also calls
-`orchestrate(write_evidence=true)` and verifies that the MCP server can persist
-a public-safe bounded evidence bundle. It is opt-in because it writes diagnostic
-files under the smoke `--cwd`.
-Raw transport smoke intentionally does **not** prove that the current Codex
-conversation has received `mcp__paperorchestra__...` tools. For active Codex
-attach evidence, run:
+Then restart the MCP client/session. `codex mcp list` proves config registration; `scripts/smoke-codex-mcp-attach.sh` or visible `mcp__paperorchestra__...` tools prove active attachment. If attachment is absent but raw smoke passes, use the CLI fallback from [`docs/tutorials/start.md`](docs/tutorials/start.md) and report a client/session attachment issue.
 
-```bash
-scripts/smoke-codex-mcp-attach.sh
-```
-
-Minimal Codex App / JSON-style MCP config shape:
-
-```json
-{
-  "mcpServers": {
-    "paperorchestra": {
-      "command": "paperorchestra-mcp",
-      "args": [],
-      "env": {
-        "SEMANTIC_SCHOLAR_API_KEY": "<optional>",
-        "PAPERO_ALLOWED_PROVIDER_BINARIES": "codex,openai,ollama,llm,claude,gemini"
-      }
-    }
-  }
-}
-```
-
-Codex CLI TOML-style config shape, commonly in `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.paperorchestra]
-command = "/absolute/path/to/paperorchestra-for-codex/.venv/bin/paperorchestra-mcp"
-enabled = true
-startup_timeout_sec = 10
-
-[mcp_servers.paperorchestra.env]
-PAPERO_ALLOWED_PROVIDER_BINARIES = "codex,openai,ollama,llm,claude,gemini"
-```
-
-Do not put secrets in a committed config. Keep `SEMANTIC_SCHOLAR_API_KEY` in
-your shell environment or a local `.env` that is never committed.
-
-After registration, restart the MCP client/session and verify that the
-`paperorchestra` tools are visible. For Codex, `codex mcp list` only confirms
-that the server is registered in config; it does **not** guarantee that the
-current conversation was started with `mcp__paperorchestra__...` tools attached.
-If the namespace is absent but `scripts/smoke-paperorchestra-mcp.py` passes, the
-server is healthy and the remaining issue is active session attachment/tool
-injection in the Codex runtime. Use this triage order:
-
-1. Restart Codex completely, not only the shell inside the old conversation.
-2. Confirm registration with `codex mcp list`.
-3. Run `scripts/smoke-paperorchestra-mcp.py --transport content-length --json`
-   and `scripts/smoke-paperorchestra-mcp.py --transport newline --json`.
-4. If raw transport smoke passes, run `scripts/smoke-codex-mcp-attach.sh`.
-5. If smoke still passes but `mcp__paperorchestra__...` tools are absent, use
-   the CLI fallback and report a Codex MCP attachment/tool-injection issue with
-   the smoke output.
-
-If the server starts but tools cannot make live model calls, check
-`PAPERO_MODEL_CMD`, `PAPERO_ALLOWED_PROVIDER_BINARIES`, and
-`SEMANTIC_SCHOLAR_API_KEY`.
-If your MCP client does not inherit the same Python environment or `PATH`, register
-`paperorchestra-mcp` with an absolute path from `which paperorchestra-mcp`.
-
-MCP tool inventory (current surfaces):
-
-- intake: `start_intake`, `get_intake_status`, `get_intake_review`, `answer_intake_question`, `research_prior_work`, `finalize_intake`, `approve_intake_direction`
-- run control: `start_run`, `get_run_status`, `tail_run_log`, `list_runs`, `cancel_run`
-- session/pipeline: `teach`, `init_session`, `status`, `run_pipeline`, `generate_outline`, `generate_plots`, `discover_papers`, `research_prior_work_seed`, `import_prior_work`, `verify_papers`, `build_bib`, `write_intro_related`, `write_sections`, `critique`, `review_sections`, `review_citations`, `review_current_paper`, `suggest_revisions`, `refine_current_paper`, `compile_current_paper`
-- compile/fidelity/eval: `check_compile_environment`, `bootstrap_compile_environment`, `audit_fidelity`, `audit_reproducibility`, `quality_gate`, `build_reference_benchmark_case`, `build_session_eval_summary`, `build_review_gate_comparison`, `build_generated_citation_titles`, `compare_reference_case`, `build_reference_case_partition_scaffold`, `compare_reference_case_citation_coverage`, `build_citation_partition_request`, `compare_partitioned_citation_coverage`
-- OMX helpers: `recommend_omx_workflow`, `omx_status`, `omx_state`, `omx_explore`, `omx_team_status`, `list_omx_teams`, `launch_omx_team`, `shutdown_omx_team`
-
----
+For current setup commands and stale CLI checks, use [`docs/tutorials/start.md`](docs/tutorials/start.md). For environment details, run `paperorchestra environment --summary` and read [`ENVIRONMENT.md`](ENVIRONMENT.md).
 
 ## Skill installation
 

@@ -334,12 +334,12 @@ auto-launch long-running workers.
 
 ## 4. Copyable env template
 
-The copyable commented template now lives in `README.md` under **`Copyable environment template`**.
+A compact operator template lives in `README.md` under **`Copyable environment template`**. The broader walkthroughs live in `docs/tutorials/start.md` and `docs/tutorials/docker-container-qa.md`.
 
 Typical usage:
 
 ```bash
-# copy the block from README.md into a local .env if you want one
+# copy only the variables you need from README.md into a local .env
 set -a
 source .env
 set +a
