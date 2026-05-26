@@ -5,19 +5,45 @@ import unittest
 from pathlib import Path
 
 
+PUBLIC_PRIVATE_CORPUS_SCAN_PATHS = [
+    Path("tests/test_citation_alias_canonicalization.py"),
+    Path("tests/test_citation_and_session.py"),
+    Path("tests/test_citation_integrity.py"),
+    Path("tests/test_citation_path_smoke.py"),
+    Path("tests/test_citation_support_provenance.py"),
+    Path("tests/test_citation_support_review_v3.py"),
+    Path("tests/test_narrative_planning.py"),
+    Path("tests/test_audit_surface_invariants.py"),
+    Path("tests/test_strict_quality_gate_hardening.py"),
+    Path("tests/test_jobs_and_pipeline.py"),
+    Path("tests/test_orchestra_citation_quality.py"),
+    Path("tests/test_orchestra_references.py"),
+    Path("tests/test_pipeline_quality_and_operator_feedback.py"),
+    Path("tests/test_rendered_reference_duplicate_identity.py"),
+    Path("scripts/controlled-quality-gate-smoke.py"),
+    Path("scripts/fresh-full-live-smoke-loop.sh"),
+    Path("scripts/derive-fresh-smoke-inputs.py"),
+    Path("scripts/release-safety-scan.py"),
+]
+
+
 class DomainNeutralityTests(unittest.TestCase):
+    def test_citation_regression_fixtures_are_in_private_corpus_scan_scope(self) -> None:
+        required_paths = {
+            Path("tests/test_citation_alias_canonicalization.py"),
+            Path("tests/test_citation_and_session.py"),
+            Path("tests/test_citation_integrity.py"),
+            Path("tests/test_citation_path_smoke.py"),
+            Path("tests/test_citation_support_provenance.py"),
+            Path("tests/test_citation_support_review_v3.py"),
+            Path("tests/test_orchestra_citation_quality.py"),
+            Path("tests/test_orchestra_references.py"),
+            Path("tests/test_rendered_reference_duplicate_identity.py"),
+        }
+
+        self.assertEqual(required_paths - set(PUBLIC_PRIVATE_CORPUS_SCAN_PATHS), set())
+
     def test_public_tracked_regression_fixtures_do_not_preserve_private_crypto_corpus_terms(self) -> None:
-        scoped_paths = [
-            Path("tests/test_narrative_planning.py"),
-            Path("tests/test_audit_surface_invariants.py"),
-            Path("tests/test_strict_quality_gate_hardening.py"),
-            Path("tests/test_jobs_and_pipeline.py"),
-            Path("tests/test_pipeline_quality_and_operator_feedback.py"),
-            Path("scripts/controlled-quality-gate-smoke.py"),
-            Path("scripts/fresh-full-live-smoke-loop.sh"),
-            Path("scripts/derive-fresh-smoke-inputs.py"),
-            Path("scripts/release-safety-scan.py"),
-        ]
         forbidden = [
             "protected-" + "channel",
             "Baseline-" + "128-X",
@@ -40,7 +66,7 @@ class DomainNeutralityTests(unittest.TestCase):
         ]
 
         offenders: list[str] = []
-        for path in scoped_paths:
+        for path in PUBLIC_PRIVATE_CORPUS_SCAN_PATHS:
             text = path.read_text(encoding="utf-8")
             for token in forbidden:
                 if token in text:
