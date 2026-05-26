@@ -65,6 +65,21 @@ def _request_url(request) -> str:
 
 
 class SourceBackedCitationSupportReviewTests(unittest.TestCase):
+    def _setup_single_alpha_url_case(self, root: Path, *, url: str = "https://publisher.example.org/papers/alpha"):
+        state = _init_source_session(root)
+        paper = artifact_path(root, "paper.full.tex")
+        paper.write_text(
+            "\\section{Background}\n"
+            "Alpha uses code graphs for vulnerability detection~\\cite{Alpha}.\n",
+            encoding="utf-8",
+        )
+        citation_map = artifact_path(root, "citation_map.json")
+        citation_map.write_text(json.dumps({"Alpha": {"title": "Alpha Graph", "url": url}}), encoding="utf-8")
+        state.artifacts.paper_full_tex = str(paper)
+        state.artifacts.citation_map_json = str(citation_map)
+        save_session(root, state)
+        return state
+
     def test_source_backed_review_splits_multicite_into_paragraph_cases_and_references_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -487,14 +502,7 @@ class SourceBackedCitationSupportReviewTests(unittest.TestCase):
     def test_source_backed_review_keeps_forbidden_source_blocked_without_mirror_attempts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            state = _init_source_session(root)
-            paper = artifact_path(root, "paper.full.tex")
-            paper.write_text("\\section{Background}\nAlpha uses code graphs for vulnerability detection~\\cite{Alpha}.\n", encoding="utf-8")
-            citation_map = artifact_path(root, "citation_map.json")
-            citation_map.write_text(json.dumps({"Alpha": {"title": "Alpha Graph", "url": "https://publisher.example.org/papers/alpha"}}), encoding="utf-8")
-            state.artifacts.paper_full_tex = str(paper)
-            state.artifacts.citation_map_json = str(citation_map)
-            save_session(root, state)
+            self._setup_single_alpha_url_case(root)
             seen_urls: list[str] = []
 
             def fake_urlopen(request, timeout=10):
@@ -511,6 +519,182 @@ class SourceBackedCitationSupportReviewTests(unittest.TestCase):
         self.assertEqual(case["evidence"]["why"], "forbidden")
         self.assertEqual(case["verdict"], "human_needed")
         self.assertIn("artifacts/references/C1/source.pdf", case["ask"])
+
+    def test_source_backed_review_blocks_login_html_without_fetching_pdf_links(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            landing_url = "https://publisher.example.org/papers/alpha"
+            seen_urls: list[str] = []
+
+            def fake_urlopen(request, timeout=10):
+                url = _request_url(request)
+                seen_urls.append(url)
+                if url == landing_url:
+                    return _FakeResponse(
+                        b"<html><body>Sign in to access this article."
+                        b"<input type=\"password\" name=\"password\">"
+                        b"<a href=\"/papers/alpha.pdf\">PDF</a></body></html>",
+                        "text/html",
+                        final_url=url,
+                    )
+                raise AssertionError(f"blocked landing page must not fetch PDF candidate {url}")
+
+            with patch("paperorchestra.critics.urllib.request.urlopen", side_effect=fake_urlopen):
+                review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+            meta = json.loads(artifact_path(root, "references/C1/source.meta.json").read_text(encoding="utf-8"))
+            source_html_exists = artifact_path(root, "references/C1/source.html").exists()
+            source_txt_exists = artifact_path(root, "references/C1/source.txt").exists()
+            source_pdf_exists = artifact_path(root, "references/C1/source.pdf").exists()
+
+        self.assertEqual(seen_urls, [landing_url])
+        self.assertEqual(case["evidence"], {"status": "blocked", "why": "login_required", "url": landing_url})
+        self.assertEqual(case["verdict"], "human_needed")
+        self.assertIn("login_required", case["ask"])
+        self.assertIn("artifacts/references/C1/source.pdf", case["ask"])
+        self.assertEqual(meta["evidence"]["why"], "login_required")
+        self.assertFalse(source_html_exists)
+        self.assertFalse(source_txt_exists)
+        self.assertFalse(source_pdf_exists)
+
+    def test_source_backed_review_blocks_captcha_html_before_pdf_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            landing_url = "https://publisher.example.org/papers/alpha"
+            seen_urls: list[str] = []
+
+            def fake_urlopen(request, timeout=10):
+                url = _request_url(request)
+                seen_urls.append(url)
+                if url == landing_url:
+                    return _FakeResponse(
+                        b"<html><body>reCAPTCHA challenge: verify you are human."
+                        b"Sign in to access this article."
+                        b"<a href=\"/papers/alpha.pdf\">PDF</a></body></html>",
+                        "text/html",
+                        final_url=url,
+                    )
+                raise AssertionError(f"blocked landing page must not fetch PDF candidate {url}")
+
+            with patch("paperorchestra.critics.urllib.request.urlopen", side_effect=fake_urlopen):
+                review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+            source_html_exists = artifact_path(root, "references/C1/source.html").exists()
+            source_txt_exists = artifact_path(root, "references/C1/source.txt").exists()
+            source_pdf_exists = artifact_path(root, "references/C1/source.pdf").exists()
+
+        self.assertEqual(seen_urls, [landing_url])
+        self.assertEqual(case["evidence"]["status"], "blocked")
+        self.assertEqual(case["evidence"]["why"], "captcha")
+        self.assertEqual(case["verdict"], "human_needed")
+        self.assertFalse(source_html_exists)
+        self.assertFalse(source_txt_exists)
+        self.assertFalse(source_pdf_exists)
+
+    def test_source_backed_review_blocks_paywall_html_without_passing_on_overlap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            landing_url = "https://publisher.example.org/papers/alpha"
+            seen_urls: list[str] = []
+
+            def fake_urlopen(request, timeout=10):
+                url = _request_url(request)
+                seen_urls.append(url)
+                if url == landing_url:
+                    return _FakeResponse(
+                        b"<html><body>Alpha uses code graphs for vulnerability detection. "
+                        b"Purchase access for the full text article. Institutional access options are available. "
+                        b"<a href=\"/papers/alpha.pdf\">PDF</a></body></html>",
+                        "text/html",
+                        final_url=url,
+                    )
+                raise AssertionError(f"blocked landing page must not fetch PDF candidate {url}")
+
+            with patch("paperorchestra.critics.urllib.request.urlopen", side_effect=fake_urlopen):
+                review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+            source_html_exists = artifact_path(root, "references/C1/source.html").exists()
+            source_txt_exists = artifact_path(root, "references/C1/source.txt").exists()
+            source_pdf_exists = artifact_path(root, "references/C1/source.pdf").exists()
+
+        self.assertEqual(seen_urls, [landing_url])
+        self.assertEqual(case["evidence"]["status"], "blocked")
+        self.assertEqual(case["evidence"]["why"], "paywall")
+        self.assertEqual(case["verdict"], "human_needed")
+        self.assertFalse(source_html_exists)
+        self.assertFalse(source_txt_exists)
+        self.assertFalse(source_pdf_exists)
+
+    def test_source_backed_review_blocks_generic_antibot_html_as_forbidden(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            landing_url = "https://publisher.example.org/papers/alpha"
+            seen_urls: list[str] = []
+
+            def fake_urlopen(request, timeout=10):
+                url = _request_url(request)
+                seen_urls.append(url)
+                if url == landing_url:
+                    return _FakeResponse(
+                        b"<html><body>Access denied. Request blocked due to automated traffic. "
+                        b"<a href=\"/papers/alpha.pdf\">PDF</a></body></html>",
+                        "text/html",
+                        final_url=url,
+                    )
+                raise AssertionError(f"blocked landing page must not fetch PDF candidate {url}")
+
+            with patch("paperorchestra.critics.urllib.request.urlopen", side_effect=fake_urlopen):
+                review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+            source_html_exists = artifact_path(root, "references/C1/source.html").exists()
+            source_txt_exists = artifact_path(root, "references/C1/source.txt").exists()
+            source_pdf_exists = artifact_path(root, "references/C1/source.pdf").exists()
+
+        self.assertEqual(seen_urls, [landing_url])
+        self.assertEqual(case["evidence"]["status"], "blocked")
+        self.assertEqual(case["evidence"]["why"], "forbidden")
+        self.assertEqual(case["verdict"], "human_needed")
+        self.assertFalse(source_html_exists)
+        self.assertFalse(source_txt_exists)
+        self.assertFalse(source_pdf_exists)
+
+    def test_source_backed_review_keeps_normal_html_with_benign_login_words_passable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            landing_url = "https://publisher.example.org/papers/alpha"
+            seen_urls: list[str] = []
+
+            def fake_urlopen(request, timeout=10):
+                url = _request_url(request)
+                seen_urls.append(url)
+                if url == landing_url:
+                    return _FakeResponse(
+                        b"<html><body>Alpha uses code graphs for vulnerability detection. "
+                        b"The study discusses a subscription model for tool deployment and a login experiment benchmark, "
+                        b"but this article body is fully readable.</body></html>",
+                        "text/html",
+                        final_url=url,
+                    )
+                raise AssertionError(f"unexpected URL {url}")
+
+            with patch("paperorchestra.critics.urllib.request.urlopen", side_effect=fake_urlopen):
+                review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+            source_html_exists = artifact_path(root, "references/C1/source.html").exists()
+            source_txt_exists = artifact_path(root, "references/C1/source.txt").exists()
+
+        self.assertEqual(seen_urls, [landing_url])
+        self.assertEqual(case["evidence"]["status"], "html")
+        self.assertEqual(case["evidence"]["path"], "artifacts/references/C1/source.html")
+        self.assertEqual(case["evidence"]["text"], "artifacts/references/C1/source.txt")
+        self.assertEqual(case["verdict"], "pass")
+        self.assertTrue(source_html_exists)
+        self.assertTrue(source_txt_exists)
 
     def test_write_source_backed_review_emits_short_human_needed_markdown(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

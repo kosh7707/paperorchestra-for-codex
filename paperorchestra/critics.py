@@ -479,6 +479,31 @@ def _html_to_text(value: str) -> str:
     return _collapse_ws(html.unescape(text))
 
 
+def _blocked_html_reason(final_url: str, html_value: str) -> str | None:
+    visible_text = _html_to_text(html_value).lower()
+    raw_text = html.unescape(html_value).lower()
+    haystack = f"{visible_text} {raw_text}"
+
+    def has_any(*markers: str) -> bool:
+        return any(marker in haystack for marker in markers)
+
+    article_context = has_any("article", "paper", "full text", "full-text", "download", "access")
+    if has_any("captcha", "recaptcha", "hcaptcha", "verify you are human", "checking your browser"):
+        return "captcha"
+    if has_any("login required", "sign in to access", "log in to continue"):
+        return "login_required"
+    if "type=\"password\"" in raw_text or "type='password'" in raw_text:
+        if article_context:
+            return "login_required"
+    if has_any("purchase access", "subscribe to access", "rent this article"):
+        return "paywall"
+    if has_any("institutional access", "access options", "get access") and has_any("article", "paper", "full text", "full-text"):
+        return "paywall"
+    if has_any("access denied", "request blocked", "bot protection", "automated traffic", "forbidden"):
+        return "forbidden"
+    return None
+
+
 def _response_final_url(response: Any, requested_url: str) -> str:
     geturl = getattr(response, "geturl", None)
     if callable(geturl):
@@ -646,6 +671,9 @@ def _download_source_evidence(cwd: str | Path | None, case: dict[str, Any]) -> d
             return evidence
         if "text/html" in content_type or data.lstrip().startswith(b"<"):
             html_text = data.decode("utf-8", "replace")
+            blocked_reason = _blocked_html_reason(final_url, html_text)
+            if blocked_reason:
+                return {"status": "blocked", "why": blocked_reason, "url": final_url}
             pdf_candidate_decisions = _candidate_pdf_links(final_url, html_text)
             selected_pdf = _download_pdf_candidate(cwd, directory, final_url, pdf_candidate_decisions)
             if selected_pdf is not None:
