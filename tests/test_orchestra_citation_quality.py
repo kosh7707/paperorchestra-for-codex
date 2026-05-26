@@ -188,6 +188,160 @@ def _recursive_strings(value) -> list[str]:
 
 
 class CitationQualityGateTests(unittest.TestCase):
+    def _public_and_internal_cqg(self, root: Path) -> tuple[dict, dict]:
+        internal = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
+        public = build_citation_quality_gate(root, quality_mode="claim_safe")
+        _assert_exact_lean_cqg(self, public)
+        self.assertEqual(public, internal["public_report"])
+        return public, internal
+
+    def _assert_no_private_cqg_markers(self, *payloads: dict) -> None:
+        rendered = "\n".join(json.dumps(payload, ensure_ascii=False, sort_keys=True) for payload in payloads)
+        for marker in [
+            "PRIVATE_PARAGRAPH",
+            "PRIVATE_ANCHOR",
+            "PRIVATE_TARGET",
+            "PRIVATE_SOURCE_TITLE",
+            "PRIVATE_NOTE",
+            "PRIVATE_ASK",
+        ]:
+            self.assertNotIn(marker, rendered)
+
+    def test_v3_repeated_key_cqg_summary_is_case_granular(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_session(
+                root,
+                cite_key="Repeat",
+                title="Repeat Source",
+                paper_text=(
+                    "\\section{Background}\n"
+                    "Repeat supports the first claim~\\cite{Repeat}.\n"
+                    "Repeat needs protected follow-up evidence~\\cite{Repeat}.\n"
+                ),
+            )
+            _write_claim_map(root, [{"id": "claim-repeat", "claim_type": "numeric", "required": True, "citation_keys": ["Repeat"]}])
+            artifact_path(root, "references/C1/source.txt").write_text("Repeat supports the first claim.", encoding="utf-8")
+            _write_source_support_review_v3(
+                root,
+                [
+                    {
+                        "id": "C1",
+                        "key": "Repeat",
+                        "paragraph": "PRIVATE_PARAGRAPH first claim \\cite{Repeat}.",
+                        "anchor": "PRIVATE_ANCHOR first claim \\cite{Repeat}.",
+                        "target": "PRIVATE_TARGET first claim",
+                        "source": {"type": "paper", "title": "PRIVATE_SOURCE_TITLE"},
+                        "evidence": {"status": "text", "text": "artifacts/references/C1/source.txt"},
+                        "verdict": "pass",
+                        "note": "PRIVATE_NOTE pass case.",
+                    },
+                    {
+                        "id": "C2",
+                        "key": "Repeat",
+                        "paragraph": "PRIVATE_PARAGRAPH blocked follow-up \\cite{Repeat}.",
+                        "anchor": "PRIVATE_ANCHOR blocked follow-up \\cite{Repeat}.",
+                        "target": "PRIVATE_TARGET blocked follow-up",
+                        "source": {"type": "paper", "title": "PRIVATE_SOURCE_TITLE"},
+                        "evidence": {"status": "blocked", "why": "login_required"},
+                        "verdict": "human_needed",
+                        "ask": "PRIVATE_ASK provide protected evidence.",
+                    },
+                ],
+            )
+
+            public, internal = self._public_and_internal_cqg(root)
+
+        self.assertEqual(public["summary"]["pass"], 1)
+        self.assertEqual(public["summary"]["human_needed"], 1)
+        self.assertEqual(len(internal["items"]), 2)
+        self.assertEqual(len({item["item_id"] for item in internal["items"]}), 2)
+        self.assertEqual(len({tuple(item["citation_keys_sha256"]) for item in internal["items"]}), 1)
+        self.assertTrue(any(failure["case"] == "C2" and failure["key"] == "Repeat" for failure in public["failures"]))
+        self.assertFalse(any(failure["case"] == "C1" for failure in public["failures"]))
+        self._assert_no_private_cqg_markers(public, {"items": internal["items"]})
+
+    def test_v3_repeated_key_fail_case_is_not_hidden_by_pass_case(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_session(
+                root,
+                cite_key="Repeat",
+                title="Repeat Source",
+                paper_text=(
+                    "\\section{Background}\n"
+                    "Repeat supports a baseline claim~\\cite{Repeat}.\n"
+                    "Repeat contradicts a stronger claim~\\cite{Repeat}.\n"
+                ),
+            )
+            _write_claim_map(root, [{"id": "claim-repeat", "claim_type": "numeric", "required": True, "citation_keys": ["Repeat"]}])
+            artifact_path(root, "references/C1/source.txt").write_text("Repeat supports a baseline claim.", encoding="utf-8")
+            _write_source_support_review_v3(
+                root,
+                [
+                    {
+                        "id": "C1",
+                        "key": "Repeat",
+                        "paragraph": "PRIVATE_PARAGRAPH baseline \\cite{Repeat}.",
+                        "anchor": "PRIVATE_ANCHOR baseline \\cite{Repeat}.",
+                        "target": "PRIVATE_TARGET baseline",
+                        "evidence": {"status": "text", "text": "artifacts/references/C1/source.txt"},
+                        "verdict": "pass",
+                    },
+                    {
+                        "id": "C2",
+                        "key": "Repeat",
+                        "paragraph": "PRIVATE_PARAGRAPH contradiction \\cite{Repeat}.",
+                        "anchor": "PRIVATE_ANCHOR contradiction \\cite{Repeat}.",
+                        "target": "PRIVATE_TARGET contradiction",
+                        "evidence": {"status": "text", "text": "artifacts/references/C2/source.txt"},
+                        "verdict": "fail",
+                        "note": "PRIVATE_NOTE unsupported.",
+                    },
+                ],
+            )
+
+            public, internal = self._public_and_internal_cqg(root)
+
+        self.assertEqual(public["status"], "fail")
+        self.assertEqual(public["summary"]["pass"], 1)
+        self.assertEqual(public["summary"]["fail"], 1)
+        self.assertEqual(len(internal["items"]), 2)
+        self.assertIn("critical_unsupported_citation", internal["hard_gate_failures"])
+        self.assertTrue(any(failure["case"] == "C2" and failure["code"] == "critical_unsupported_citation" for failure in public["failures"]))
+        self.assertFalse(any(failure["case"] == "C1" for failure in public["failures"]))
+        self._assert_no_private_cqg_markers(public, {"items": internal["items"]})
+
+    def test_legacy_v2_cqg_grouping_remains_key_compatible(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_session(
+                root,
+                cite_key="Repeat",
+                title="Repeat Source",
+                paper_text=(
+                    "\\section{Background}\n"
+                    "Repeat appears twice~\\cite{Repeat}.\n"
+                    "Repeat appears again~\\cite{Repeat}.\n"
+                ),
+            )
+            _write_claim_map(root, [{"id": "claim-repeat", "claim_type": "numeric", "required": True, "citation_keys": ["Repeat"]}])
+            _write_support_review(
+                root,
+                [
+                    {"id": "legacy-1", "citation_keys": ["Repeat"], "support_status": "supported", "critical": True},
+                    {"id": "legacy-2", "citation_keys": ["Repeat"], "support_status": "unsupported", "critical": True},
+                ],
+            )
+
+            public, internal = self._public_and_internal_cqg(root)
+
+        self.assertEqual(public["status"], "fail")
+        self.assertEqual(public["summary"]["fail"], 1)
+        self.assertEqual(public["summary"]["pass"], 0)
+        self.assertEqual(len(internal["items"]), 1)
+        self.assertIn("critical_unsupported_citation", internal["hard_gate_failures"])
+
     def test_public_citation_quality_surfaces_are_exact_lean_schema_for_source_needed_case(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

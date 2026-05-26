@@ -217,52 +217,52 @@ def build_citation_quality_gate_internal(cwd: str | Path | None, *, quality_mode
         explicit_noncritical = _is_explicitly_noncritical(claims_by_key.get(key, []), roles_by_key.get(key, set()))
         metadata_status = "missing" if key in missing_keys else "unknown" if rendered_missing or key in unknown_keys else "known"
         weak_identity = key in weak_identity_keys
-        key_support_items = support_by_key.get(key, [])
-        support_status = _worst_support_status(key_support_items)
-        support_missing = key not in support_by_key
-        key_failures: list[str] = []
-        key_warnings: list[str] = []
-        if critical:
-            if rendered_missing and mode == "claim_safe":
-                key_failures.append("critical_citation_metadata_missing")
+        for group_index, key_support_items in enumerate(_support_groups_for_quality_items(support_by_key.get(key, []))):
+            support_status = _worst_support_status(key_support_items)
+            support_missing = not key_support_items
+            key_failures: list[str] = []
+            key_warnings: list[str] = []
+            if critical:
+                if rendered_missing and mode == "claim_safe":
+                    key_failures.append("critical_citation_metadata_missing")
+                elif metadata_status == "missing":
+                    key_failures.append("critical_missing_bib_entry")
+                elif metadata_status == "unknown":
+                    key_failures.append("critical_unknown_reference")
+                if weak_identity:
+                    key_failures.append("critical_weak_reference_identity")
+                if support_missing and mode == "claim_safe":
+                    key_failures.append("critical_citation_support_missing")
+                elif support_status in _UNSUPPORTED_STATUSES:
+                    key_failures.append("critical_unsupported_citation")
             elif metadata_status == "missing":
-                key_failures.append("critical_missing_bib_entry")
-            elif metadata_status == "unknown":
-                key_failures.append("critical_unknown_reference")
-            if weak_identity:
-                key_failures.append("critical_weak_reference_identity")
-            if support_missing and mode == "claim_safe":
-                key_failures.append("critical_citation_support_missing")
-            elif support_status in _UNSUPPORTED_STATUSES:
-                key_failures.append("critical_unsupported_citation")
-        elif metadata_status == "missing":
-            key_warnings.append("noncritical_missing_bib_entry")
-        elif metadata_status == "unknown" or explicit_noncritical:
-            if metadata_status == "unknown":
-                key_warnings.append("noncritical_unknown_reference")
-        if weak_identity and not critical:
-            key_warnings.append("noncritical_weak_reference_identity")
-        severity = "blocker" if key_failures else "warning" if key_warnings else "info"
-        hard.extend(key_failures)
-        warnings.extend(key_warnings)
-        items.append(
-            CitationQualityItem(
-                item_id=f"redacted-citation-item:{_sha256_text(key)[:12]}",
-                citation_key=key,
-                claim_id=_first_claim_id(claims_by_key.get(key, [])),
-                citation_key_sha256=_sha256_text(key),
-                critical=critical,
-                need_status="required" if critical else "optional" if explicit_noncritical else "unknown",
-                support_status=support_status,
-                metadata_status=metadata_status,
-                severity=severity,
-                failing_codes=sorted(dict.fromkeys(key_failures)),
-                warning_codes=sorted(dict.fromkeys(key_warnings)),
-                public_case=_public_case_id(key_support_items, claims_by_key.get(key, [])),
-                public_failure_code=_public_failure_code(key_support_items, key_failures),
-                public_failure_message=_public_failure_message(key_support_items, key_failures),
+                key_warnings.append("noncritical_missing_bib_entry")
+            elif metadata_status == "unknown" or explicit_noncritical:
+                if metadata_status == "unknown":
+                    key_warnings.append("noncritical_unknown_reference")
+            if weak_identity and not critical:
+                key_warnings.append("noncritical_weak_reference_identity")
+            severity = "blocker" if key_failures else "warning" if key_warnings else "info"
+            hard.extend(key_failures)
+            warnings.extend(key_warnings)
+            items.append(
+                CitationQualityItem(
+                    item_id=_quality_item_id(key, key_support_items, group_index=group_index),
+                    citation_key=key,
+                    claim_id=_first_claim_id(claims_by_key.get(key, [])),
+                    citation_key_sha256=_sha256_text(key),
+                    critical=critical,
+                    need_status="required" if critical else "optional" if explicit_noncritical else "unknown",
+                    support_status=support_status,
+                    metadata_status=metadata_status,
+                    severity=severity,
+                    failing_codes=sorted(dict.fromkeys(key_failures)),
+                    warning_codes=sorted(dict.fromkeys(key_warnings)),
+                    public_case=_public_case_id(key_support_items, claims_by_key.get(key, [])),
+                    public_failure_code=_public_failure_code(key_support_items, key_failures),
+                    public_failure_message=_public_failure_message(key_support_items, key_failures),
+                )
             )
-        )
 
     integrity_warnings = _integrity_warning_codes(integrity)
     warnings.extend(integrity_warnings)
@@ -432,6 +432,28 @@ def _public_case_id(support_items: list[dict[str, Any]], claims: list[dict[str, 
         if case_id:
             return str(case_id)
     return _first_claim_id(claims)
+
+
+def _support_groups_for_quality_items(support_items: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    if not support_items:
+        return [[]]
+    v3_items = [item for item in support_items if item.get("review_schema") == "citation-support-review/3"]
+    if not v3_items:
+        return [support_items]
+    groups = [[item] for item in v3_items]
+    legacy_items = [item for item in support_items if item.get("review_schema") != "citation-support-review/3"]
+    if legacy_items:
+        groups.append(legacy_items)
+    return groups
+
+
+def _quality_item_id(key: str, support_items: list[dict[str, Any]], *, group_index: int) -> str:
+    for item in support_items:
+        if item.get("review_schema") == "citation-support-review/3":
+            case_id = str(item.get("case_id") or item.get("id") or "").strip()
+            basis = f"{key}:v3:{case_id}:{group_index}"
+            return f"redacted-citation-item:{_sha256_text(basis)[:12]}"
+    return f"redacted-citation-item:{_sha256_text(key)[:12]}"
 
 
 def _public_failure_code(support_items: list[dict[str, Any]], key_failures: list[str]) -> str | None:
