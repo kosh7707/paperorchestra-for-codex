@@ -3038,6 +3038,34 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             self.assertNotIn("operator_rendered_pdf_review_missing", result["failing_codes"])
             self.assertNotIn("operator_rendered_pdf_review_unattested", result["failing_codes"])
 
+    def test_evidence_completeness_accepts_completed_manual_operator_cycle_when_pdf_issue_only_in_manual_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_minimal_fresh_smoke_evidence_root(root)
+            self._write_pdf_operator_packet(root)
+            self._write_completed_manual_operator_cycle(root)
+            non_pdf_feedback = {
+                "schema_version": "operator-feedback/1",
+                "source": "codex_operator",
+                "issues": [
+                    {
+                        "source_artifact_role": "quality_eval",
+                        "source_item_key": "tier_2",
+                        "target_section": "Whole manuscript",
+                        "severity": "major",
+                        "rationale": "The normalized feedback kept the higher-priority claim-safety issue.",
+                        "suggested_action": "Fix the claim-safety issue.",
+                    }
+                ],
+            }
+            (root / "operator-feedback" / "operator-feedback.cycle-1.json").write_text(json.dumps(non_pdf_feedback), encoding="utf-8")
+            (root / "operator-feedback" / "operator-feedback-imported.cycle-1.json").write_text(json.dumps(non_pdf_feedback), encoding="utf-8")
+
+            result = validate_evidence_completeness(root)
+
+            self.assertEqual(result["status"], "pass", result)
+            self.assertNotIn("operator_rendered_pdf_review_unattested", result["failing_codes"])
+
     def test_completed_manual_operator_cycle_accepts_immutable_packet_pdf_snapshot_after_mutable_pdf_changes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -3214,22 +3242,41 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
                 "schema_version": "operator-feedback/1",
                 "issues": [
                     {
-                        "source_artifact_role": "compiled_pdf",
-                        "source_item_key": "page 1",
+                        "source_artifact_role": "quality_eval",
+                        "source_item_key": "tier_2",
                         "target_section": "Whole manuscript",
                         "severity": "major",
-                        "rationale": "Rendered PDF issue.",
-                        "suggested_action": "Fix it.",
+                        "rationale": "Automatic normalized feedback did not cite the rendered PDF.",
+                        "suggested_action": "Fix the claim-safety issue.",
                     }
                 ],
             }
             (root / "operator-feedback" / "operator-feedback.cycle-1.json").write_text(json.dumps(feedback), encoding="utf-8")
             (root / "operator-feedback" / "operator-feedback-imported.cycle-1.json").write_text(json.dumps(feedback), encoding="utf-8")
+            (root / "operator-feedback" / "manual-operator-feedback-draft.cycle-1.json").write_text(
+                json.dumps(
+                    {
+                        "intent": "generate_new_operator_candidate",
+                        "issues": [
+                            {
+                                "source_artifact_role": "compiled_pdf",
+                                "source_item_key": "page 1",
+                                "target_section": "Whole manuscript",
+                                "severity": "major",
+                                "rationale": "This stray manual draft must not attest an automatic cycle.",
+                                "suggested_action": "Ignore the stray manual draft for automatic-cycle evidence.",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
 
             result = validate_evidence_completeness(root)
 
             self.assertEqual(result["status"], "fail")
             self.assertIn("operator_cycle_artifact_missing", result["failing_codes"])
+            self.assertIn("operator_rendered_pdf_review_unattested", result["failing_codes"])
             self.assertIn(
                 {
                     "check": "operator_cycle_artifact",

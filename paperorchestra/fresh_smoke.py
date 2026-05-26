@@ -853,7 +853,14 @@ def _payload_has_rendered_pdf_no_issues_attestation(
     )
 
 
-def _operator_pdf_review_response_attested(root: Path, cycle: int, manifest: dict[str, Any], manifest_path: Path) -> bool:
+def _operator_pdf_review_response_attested(
+    root: Path,
+    cycle: int,
+    manifest: dict[str, Any],
+    manifest_path: Path,
+    *,
+    manual_draft_path: Path | None = None,
+) -> bool:
     compiled_pdf_sha = str(manifest.get("compiled_pdf_sha256") or "")
     page_count = int(manifest.get("page_image_count") or 0)
     manifest_sha = _sha256_file(manifest_path)
@@ -861,6 +868,8 @@ def _operator_pdf_review_response_attested(root: Path, cycle: int, manifest: dic
         root / f"operator-feedback/operator-feedback.cycle-{cycle}.json",
         root / f"operator-feedback/operator-feedback-imported.cycle-{cycle}.json",
     ]
+    if manual_draft_path is not None:
+        payload_paths.append(manual_draft_path)
     for payload_path in payload_paths:
         if not payload_path.is_file():
             continue
@@ -1157,7 +1166,13 @@ def _check_operator_cycle_artifacts(
                             failing_codes.add("operator_rendered_pdf_review_manifest_invalid")
                         elif manual_pending:
                             checked.append({"check": "operator_rendered_pdf_review", "cycle": n, "status": "manual_handoff_pending"})
-                        elif manifest and not _operator_pdf_review_response_attested(root, n, manifest, manifest_path):
+                        elif manifest and not _operator_pdf_review_response_attested(
+                            root,
+                            n,
+                            manifest,
+                            manifest_path,
+                            manual_draft_path=(root / f"operator-feedback/manual-operator-feedback-draft.cycle-{n}.json") if manual_completed else None,
+                        ):
                             inconsistent.append(
                                 {
                                     "check": "operator_rendered_pdf_review_attestation",
