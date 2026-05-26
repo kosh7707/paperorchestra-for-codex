@@ -305,6 +305,17 @@ def _citation_support_check_v3(
     review_identity = [(str(case.get("id")), str(case.get("key"))) for case in cases]
     if current_identity != review_identity:
         failing_codes.append("citation_support_case_coverage_mismatch")
+    current_context = [_v3_case_context_projection(case) for case in current_cases]
+    review_context = [_v3_case_context_projection(case) for case in cases]
+    context_mismatch_indexes: list[int] = []
+    if current_identity == review_identity:
+        context_mismatch_indexes = [
+            index
+            for index, (current_case, review_case) in enumerate(zip(current_context, review_context))
+            if current_case != review_case
+        ]
+        if context_mismatch_indexes:
+            failing_codes.append("citation_support_case_context_mismatch")
 
     missing_source_artifacts = 0
     run_root = path.parent.parent
@@ -346,12 +357,35 @@ def _citation_support_check_v3(
         "unsupported_count": summary["fail"],
         "needs_manual_check_count": summary["human_needed"],
         "evidence_missing_count": missing_source_artifacts,
+        "context_mismatch_count": len(context_mismatch_indexes),
+        "context_mismatch_indexes": context_mismatch_indexes,
+        "review_case_context_count": len(review_context),
+        "current_case_context_count": len(current_context),
         "evidence_mode": payload.get("mode"),
         "source_backed": True,
         "legacy_untrusted": False,
         "invalid_status_values": sorted(set(invalid_verdicts)),
         "failing_codes": failing_codes,
     }
+
+
+def _v3_case_context_projection(case: dict[str, Any]) -> dict[str, str]:
+    resolution = case.get("resolution") if isinstance(case.get("resolution"), dict) else {}
+    comparable_target = case.get("target")
+    if resolution.get("action") == "weaken_claim" and resolution.get("original_target"):
+        comparable_target = resolution.get("original_target")
+    return {
+        "id": str(case.get("id") or ""),
+        "key": str(case.get("key") or ""),
+        "loc": _normalize_v3_context_text(case.get("loc")),
+        "paragraph": _normalize_v3_context_text(case.get("paragraph")),
+        "anchor": _normalize_v3_context_text(case.get("anchor")),
+        "target": _normalize_v3_context_text(comparable_target),
+    }
+
+
+def _normalize_v3_context_text(value: Any) -> str:
+    return " ".join(str(value or "").split())
 
 
 def ensure_final_citation_review_bound_to_quality_eval(quality_eval_path: str | Path, final_review_path: str | Path) -> dict[str, Any]:

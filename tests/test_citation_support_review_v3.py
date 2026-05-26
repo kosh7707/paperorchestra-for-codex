@@ -1304,6 +1304,133 @@ class SourceBackedCitationSupportReviewTests(unittest.TestCase):
         self.assertEqual(check["status"], "pass")
         self.assertEqual(check["canonical_summary"], {"pass": 1, "weak": 0, "fail": 0, "human_needed": 0})
 
+
+    def test_claim_safe_support_check_rejects_v3_when_citation_target_context_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._setup_single_alpha_url_case(root)
+            paper = Path(state.artifacts.paper_full_tex)
+            artifact_path(root, "references/C1/source.txt").write_text(
+                "Alpha uses code graphs for vulnerability detection.", encoding="utf-8"
+            )
+            review = build_citation_support_review(root, evidence_mode="source")
+            artifact_path(root, "citation_support_review.json").write_text(json.dumps(review), encoding="utf-8")
+
+            paper.write_text(
+                "\\section{Background}\n"
+                "Alpha eliminates all false positives in production scanners~\\cite{Alpha}.\n",
+                encoding="utf-8",
+            )
+            with patch("paperorchestra.critics.urllib.request.urlopen") as urlopen:
+                check = _citation_support_check(root, load_session(root), quality_mode="claim_safe")
+
+        urlopen.assert_not_called()
+        self.assertEqual(check["status"], "fail")
+        self.assertIn("citation_support_case_context_mismatch", check["failing_codes"])
+        self.assertEqual(check["context_mismatch_count"], 1)
+        self.assertEqual(check["context_mismatch_indexes"], [0])
+        self.assertEqual(check["review_case_context_count"], 1)
+        self.assertEqual(check["current_case_context_count"], 1)
+
+    def test_claim_safe_support_check_allows_v3_when_only_uncited_text_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._setup_single_alpha_url_case(root)
+            paper = Path(state.artifacts.paper_full_tex)
+            original_text = paper.read_text(encoding="utf-8")
+            artifact_path(root, "references/C1/source.txt").write_text(
+                "Alpha uses code graphs for vulnerability detection.", encoding="utf-8"
+            )
+            review = build_citation_support_review(root, evidence_mode="source")
+            artifact_path(root, "citation_support_review.json").write_text(json.dumps(review), encoding="utf-8")
+
+            paper.write_text(original_text + "\n\nThis uncited operational note should not stale citation case context.\n", encoding="utf-8")
+            with patch("paperorchestra.critics.urllib.request.urlopen") as urlopen:
+                check = _citation_support_check(root, load_session(root), quality_mode="claim_safe")
+
+        urlopen.assert_not_called()
+        self.assertEqual(check["status"], "pass")
+        self.assertNotIn("citation_support_case_context_mismatch", check["failing_codes"])
+        self.assertEqual(check["context_mismatch_count"], 0)
+        self.assertEqual(check["context_mismatch_indexes"], [])
+        self.assertEqual(check["review_case_context_count"], 1)
+        self.assertEqual(check["current_case_context_count"], 1)
+
+    def test_claim_safe_support_check_rejects_v3_when_citation_location_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._setup_single_alpha_url_case(root)
+            paper = Path(state.artifacts.paper_full_tex)
+            artifact_path(root, "references/C1/source.txt").write_text(
+                "Alpha uses code graphs for vulnerability detection.", encoding="utf-8"
+            )
+            review = build_citation_support_review(root, evidence_mode="source")
+            artifact_path(root, "citation_support_review.json").write_text(json.dumps(review), encoding="utf-8")
+
+            paper.write_text(
+                "\\section{Related Work}\n"
+                "Alpha uses code graphs for vulnerability detection~\\cite{Alpha}.\n",
+                encoding="utf-8",
+            )
+            with patch("paperorchestra.critics.urllib.request.urlopen") as urlopen:
+                check = _citation_support_check(root, load_session(root), quality_mode="claim_safe")
+
+        urlopen.assert_not_called()
+        self.assertEqual(check["status"], "fail")
+        self.assertIn("citation_support_case_context_mismatch", check["failing_codes"])
+        self.assertEqual(check["context_mismatch_count"], 1)
+        self.assertEqual(check["context_mismatch_indexes"], [0])
+        self.assertEqual(check["review_case_context_count"], 1)
+        self.assertEqual(check["current_case_context_count"], 1)
+
+    def test_claim_safe_support_check_uses_original_target_for_weaken_claim_freshness(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._setup_single_alpha_url_case(root)
+            paper = Path(state.artifacts.paper_full_tex)
+            artifact_path(root, "references/C1/source.txt").write_text("Alpha uses code graphs.", encoding="utf-8")
+            artifact_path(root, "references/C1/human-resolution.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "citation-human-resolution/1",
+                        "case": "C1",
+                        "action": "weaken_claim",
+                        "target": "Alpha uses code graphs",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+            self.assertEqual(case["target"], "Alpha uses code graphs")
+            self.assertEqual(case["resolution"]["action"], "weaken_claim")
+            self.assertIn("vulnerability detection", case["resolution"]["original_target"])
+            artifact_path(root, "citation_support_review.json").write_text(json.dumps(review), encoding="utf-8")
+
+            with patch("paperorchestra.critics.urllib.request.urlopen") as unchanged_urlopen:
+                unchanged_check = _citation_support_check(root, load_session(root), quality_mode="claim_safe")
+            paper.write_text(
+                "\\section{Background}\n"
+                "Alpha eliminates all false positives in production scanners~\\cite{Alpha}.\n",
+                encoding="utf-8",
+            )
+            with patch("paperorchestra.critics.urllib.request.urlopen") as changed_urlopen:
+                changed_check = _citation_support_check(root, load_session(root), quality_mode="claim_safe")
+
+        unchanged_urlopen.assert_not_called()
+        changed_urlopen.assert_not_called()
+        self.assertEqual(unchanged_check["status"], "pass")
+        self.assertEqual(unchanged_check["context_mismatch_count"], 0)
+        self.assertEqual(unchanged_check["context_mismatch_indexes"], [])
+        self.assertEqual(unchanged_check["review_case_context_count"], 1)
+        self.assertEqual(unchanged_check["current_case_context_count"], 1)
+        self.assertEqual(changed_check["status"], "fail")
+        self.assertIn("citation_support_case_context_mismatch", changed_check["failing_codes"])
+        self.assertEqual(changed_check["context_mismatch_count"], 1)
+        self.assertEqual(changed_check["context_mismatch_indexes"], [0])
+        self.assertEqual(changed_check["review_case_context_count"], 1)
+        self.assertEqual(changed_check["current_case_context_count"], 1)
+
     def test_claim_safe_support_check_rejects_pass_without_readable_source_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
