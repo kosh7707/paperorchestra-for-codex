@@ -50,6 +50,7 @@ _PRIVATE_MARKERS = ("PRIVATE", "SECRET", "TOKEN")
 @dataclass(frozen=True)
 class CitationQualityItem:
     item_id: str
+    citation_key: str
     claim_id: str | None
     citation_key_sha256: str
     critical: bool
@@ -59,9 +60,12 @@ class CitationQualityItem:
     severity: str
     failing_codes: list[str] = field(default_factory=list)
     warning_codes: list[str] = field(default_factory=list)
+    public_case: str | None = None
+    public_failure_code: str | None = None
+    public_failure_message: str | None = None
     private_safe: bool = True
 
-    def to_public_dict(self) -> dict[str, Any]:
+    def to_internal_dict(self) -> dict[str, Any]:
         return {
             "item_id": self.item_id,
             "claim_id": self.claim_id,
@@ -90,9 +94,16 @@ class CitationQualityGateReport:
     private_safe_summary: bool = True
 
     def to_public_dict(self) -> dict[str, Any]:
+        return {
+            "schema": CITATION_QUALITY_GATE_SCHEMA_VERSION,
+            "status": self.status,
+            "summary": _citation_summary_from_items(self.items),
+            "failures": _public_failures(self.items, self.hard_gate_failures),
+        }
+
+    def to_internal_dict(self) -> dict[str, Any]:
         hard = sorted(dict.fromkeys(self.hard_gate_failures))
         warnings = sorted(dict.fromkeys(self.warning_codes))
-        lean_failures = [{"code": code, "severity": "blocker"} for code in hard]
         gate_summary = {
             "status": self.status,
             "hard_failures": len(hard),
@@ -104,16 +115,17 @@ class CitationQualityGateReport:
         return {
             "schema": CITATION_QUALITY_GATE_SCHEMA_VERSION,
             "schema_version": CITATION_QUALITY_GATE_SCHEMA_VERSION,
+            "public_report": self.to_public_dict(),
             "status": self.status,
             "quality_mode": self.quality_mode,
             "summary": citation_summary,
             "gate_summary": gate_summary,
-            "failures": lean_failures,
+            "failures": _public_failures(self.items, self.hard_gate_failures),
             "manuscript_sha256": self.manuscript_sha256,
             "hard_gate_failures": hard,
             "warning_codes": warnings,
             "counts": dict(self.counts),
-            "items": [item.to_public_dict() for item in self.items],
+            "items": [item.to_internal_dict() for item in self.items],
             "acceptance_gate_impacts": {
                 "no_unknown_refs_for_critical_claims": "fail"
                 if any(code in hard for code in {"critical_unknown_reference", "critical_missing_bib_entry"})
@@ -130,11 +142,15 @@ def citation_quality_gate_path(cwd: str | Path | None) -> Path:
 
 
 def build_citation_quality_gate(cwd: str | Path | None, *, quality_mode: str = "ralph") -> dict[str, Any]:
+    return build_citation_quality_gate_internal(cwd, quality_mode=quality_mode)["public_report"]
+
+
+def build_citation_quality_gate_internal(cwd: str | Path | None, *, quality_mode: str = "ralph") -> dict[str, Any]:
     mode = _normalize_quality_mode(quality_mode)
     state = load_session(cwd)
     paper = Path(state.artifacts.paper_full_tex).resolve() if state.artifacts.paper_full_tex else None
     if paper is None or not paper.exists():
-        return CitationQualityGateReport(
+        report = CitationQualityGateReport(
             status="fail",
             quality_mode=mode,
             manuscript_sha256=None,
@@ -142,7 +158,10 @@ def build_citation_quality_gate(cwd: str | Path | None, *, quality_mode: str = "
             warning_codes=[],
             counts=_empty_counts(),
             source_artifact_hashes={},
-        ).to_public_dict()
+        )
+        payload = report.to_internal_dict()
+        _assert_public_safe(payload["public_report"])
+        return payload
 
     manuscript_sha = _file_sha256(paper)
     rendered_path = rendered_reference_audit_path(cwd)
@@ -193,7 +212,8 @@ def build_citation_quality_gate(cwd: str | Path | None, *, quality_mode: str = "
         explicit_noncritical = _is_explicitly_noncritical(claims_by_key.get(key, []), roles_by_key.get(key, set()))
         metadata_status = "missing" if key in missing_keys else "unknown" if rendered_missing or key in unknown_keys else "known"
         weak_identity = key in weak_identity_keys
-        support_status = _worst_support_status(support_by_key.get(key, []))
+        key_support_items = support_by_key.get(key, [])
+        support_status = _worst_support_status(key_support_items)
         support_missing = key not in support_by_key
         key_failures: list[str] = []
         key_warnings: list[str] = []
@@ -223,6 +243,7 @@ def build_citation_quality_gate(cwd: str | Path | None, *, quality_mode: str = "
         items.append(
             CitationQualityItem(
                 item_id=f"redacted-citation-item:{_sha256_text(key)[:12]}",
+                citation_key=key,
                 claim_id=_first_claim_id(claims_by_key.get(key, [])),
                 citation_key_sha256=_sha256_text(key),
                 critical=critical,
@@ -232,6 +253,9 @@ def build_citation_quality_gate(cwd: str | Path | None, *, quality_mode: str = "
                 severity=severity,
                 failing_codes=sorted(dict.fromkeys(key_failures)),
                 warning_codes=sorted(dict.fromkeys(key_warnings)),
+                public_case=_public_case_id(key_support_items, claims_by_key.get(key, [])),
+                public_failure_code=_public_failure_code(key_support_items, key_failures),
+                public_failure_message=_public_failure_message(key_support_items, key_failures),
             )
         )
 
@@ -255,9 +279,10 @@ def build_citation_quality_gate(cwd: str | Path | None, *, quality_mode: str = "
             "citation_source_match": _file_sha256(source_match_path),
             "citation_integrity_audit": _file_sha256(integrity_path),
         },
-    ).to_public_dict()
-    _assert_public_safe(report)
-    return report
+    )
+    payload = report.to_internal_dict()
+    _assert_public_safe(payload["public_report"])
+    return payload
 
 
 def write_citation_quality_gate(
@@ -303,6 +328,47 @@ def _citation_summary_from_items(items: list[CitationQualityItem]) -> dict[str, 
     return summary
 
 
+def _public_failures(items: list[CitationQualityItem], hard_gate_failures: list[str]) -> list[dict[str, str]]:
+    failures: list[dict[str, str]] = []
+    covered_codes: set[str] = set()
+    for item in items:
+        if not item.failing_codes:
+            continue
+        codes = [item.public_failure_code] if item.public_failure_code else list(item.failing_codes)
+        for code in sorted(dict.fromkeys(code for code in codes if code)):
+            covered_codes.add(code)
+            failures.append(
+                {
+                    "case": str(item.public_case or item.claim_id or item.item_id),
+                    "key": item.citation_key,
+                    "code": str(code),
+                    "message": str(item.public_failure_message or _default_public_failure_message(str(code))),
+                }
+            )
+    item_internal_codes = {code for item in items for code in item.failing_codes}
+    public_codes = {failure["code"] for failure in failures}
+    for code in sorted(dict.fromkeys(hard_gate_failures)):
+        if code in item_internal_codes or code in public_codes or code in covered_codes:
+            continue
+        failures.append({"case": "", "key": "", "code": str(code), "message": _default_public_failure_message(str(code))})
+    return failures
+
+
+def _default_public_failure_message(code: str) -> str:
+    messages = {
+        "human_needed": "Source requires manual evidence.",
+        "critical_unsupported_citation": "Citation support is insufficient for a required claim.",
+        "critical_citation_support_missing": "Citation support evidence is missing for a required claim.",
+        "critical_unknown_reference": "A required citation has unknown rendered reference metadata.",
+        "critical_missing_bib_entry": "A required citation is missing a rendered bibliography entry.",
+        "critical_citation_metadata_missing": "Rendered citation metadata is unavailable for a required citation.",
+        "critical_weak_reference_identity": "A required citation has weak reference identity.",
+        "citation_quality_stale": "Citation quality evidence is stale for the current manuscript.",
+        "citation_quality_manuscript_missing": "The manuscript is missing for citation quality evaluation.",
+    }
+    return messages.get(code, "Citation quality gate failed.")
+
+
 def _stale_codes(payloads: dict[str, Any], manuscript_sha: str | None, *, claim_safe: bool) -> list[str]:
     if not claim_safe or not manuscript_sha:
         return []
@@ -335,17 +401,40 @@ def _support_items_from_v3_cases(cases: Any, *, run_root: Path | None = None) ->
             continue
         evidence = case.get("evidence") if isinstance(case.get("evidence"), dict) else {}
         evidence_readable = _v3_evidence_is_readable(evidence, run_root=run_root)
+        verdict = str(case.get("verdict") or "human_needed").strip().lower() or "human_needed"
         items.append(
             {
                 "id": str(case.get("id") or f"case:{_sha256_text(key)[:12]}"),
+                "case_id": str(case.get("id") or f"case:{_sha256_text(key)[:12]}"),
                 "citation_keys": [key],
-                "support_status": _v3_support_status(case.get("verdict"), evidence.get("status"), evidence_readable=evidence_readable),
+                "support_status": _v3_support_status(verdict, evidence.get("status"), evidence_readable=evidence_readable),
                 "evidence_status": str(evidence.get("status") or "missing").strip().lower() or "missing",
                 "evidence_readable": evidence_readable,
                 "review_schema": "citation-support-review/3",
+                "verdict": verdict,
             }
         )
     return items
+
+
+def _public_case_id(support_items: list[dict[str, Any]], claims: list[dict[str, Any]]) -> str | None:
+    for item in support_items:
+        case_id = item.get("case_id") or item.get("id")
+        if case_id:
+            return str(case_id)
+    return _first_claim_id(claims)
+
+
+def _public_failure_code(support_items: list[dict[str, Any]], key_failures: list[str]) -> str | None:
+    for item in support_items:
+        if item.get("review_schema") == "citation-support-review/3" and item.get("verdict") == "human_needed":
+            return "human_needed"
+    return str(key_failures[0]) if key_failures else None
+
+
+def _public_failure_message(support_items: list[dict[str, Any]], key_failures: list[str]) -> str | None:
+    code = _public_failure_code(support_items, key_failures)
+    return _default_public_failure_message(code) if code else None
 
 
 def _v3_evidence_is_readable(evidence: dict[str, Any], *, run_root: Path | None) -> bool:

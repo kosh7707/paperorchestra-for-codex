@@ -20,7 +20,7 @@ from .fidelity import build_reproducibility_audit, run_fidelity_audit, write_rep
 from .io_utils import read_json, write_json
 from .models import utc_now_iso
 from .narrative import planning_artifact_status
-from .orchestra_citation_quality import build_citation_quality_gate, citation_quality_gate_path
+from .orchestra_citation_quality import build_citation_quality_gate_internal, citation_quality_gate_path
 from .omx_diagnostics import OMX_EVIDENCE_SUMMARY_FILENAME, OMX_REVIEW_HANDOFF_FILENAME
 from .providers import ShellProvider, get_citation_support_provider
 from .session import artifact_path, load_session, runtime_root, save_session
@@ -615,7 +615,7 @@ def build_quality_eval(
             claim_counts = _validation_issue_counts(reproducibility)
             citation_support = _citation_support_check(cwd, state, quality_mode=mode)
             citation_integrity = citation_integrity_check(cwd, state, quality_mode=mode)
-            citation_quality = build_citation_quality_gate(cwd, quality_mode=mode)
+            citation_quality = build_citation_quality_gate_internal(cwd, quality_mode=mode)
             source_material = _source_material_fidelity_check(state)
             figure_grounding = _figure_grounding_check(state)
             source_obligations = evaluate_source_obligations(cwd)

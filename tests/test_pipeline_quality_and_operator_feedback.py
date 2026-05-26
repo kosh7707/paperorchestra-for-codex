@@ -390,6 +390,43 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
         self.assertEqual(metrics["critical_weak_reference_identity"], 2)
         self.assertEqual(metrics["noncritical_weak_reference_identity"], 3)
 
+    def test_operator_tier2_metrics_read_internal_cqg_counts_not_public_report(self) -> None:
+        quality_eval = {
+            "tiers": {
+                "tier_2_claim_safety": {
+                    "checks": {
+                        "citation_quality_gate": {
+                            "status": "fail",
+                            "hard_gate_failures": ["critical_unsupported_citation"],
+                            "counts": {
+                                "critical_unsupported_count": 1,
+                                "critical_need_count": 2,
+                                "critical_weak_identity_count": 3,
+                                "noncritical_weak_identity_count": 4,
+                                "citation_bomb_count": 5,
+                                "duplicate_reference_count": 6,
+                            },
+                            "public_report": {
+                                "schema": "citation-quality-gate/2",
+                                "status": "fail",
+                                "summary": {"pass": 0, "weak": 0, "fail": 0, "human_needed": 1},
+                                "failures": [{"case": "C1", "key": "Known", "code": "human_needed", "message": "Source required."}],
+                            },
+                        }
+                    }
+                }
+            }
+        }
+
+        metrics = _claim_safe_tier2_metric_counts(quality_eval)
+
+        self.assertEqual(metrics["critical_unsupported_citation"], 1)
+        self.assertEqual(metrics["critical_citation_support_missing"], 2)
+        self.assertEqual(metrics["critical_weak_reference_identity"], 3)
+        self.assertEqual(metrics["noncritical_weak_reference_identity"], 4)
+        self.assertEqual(metrics["citation_bomb_detected"], 5)
+        self.assertEqual(metrics["citation_duplicate_support"], 6)
+
     def test_qa_loop_step_attempts_citation_integrity_repair_handler(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

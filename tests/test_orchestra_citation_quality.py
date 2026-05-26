@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from paperorchestra.citation_integrity import rendered_reference_audit_path, write_rendered_reference_audit
 from paperorchestra.cli import main as cli_main
@@ -15,7 +17,9 @@ from paperorchestra.narrative import write_planning_artifacts
 from paperorchestra.orchestra_citation_quality import (
     CITATION_QUALITY_GATE_SCHEMA_VERSION,
     build_citation_quality_gate,
+    build_citation_quality_gate_internal,
     citation_quality_gate_path,
+    write_citation_quality_gate,
 )
 from paperorchestra.orchestrator import run_until_blocked
 from paperorchestra.quality_loop import build_quality_eval
@@ -136,7 +140,266 @@ def _write_source_support_review_v3(root: Path, cases: list[dict]) -> Path:
     return path
 
 
+def _attach_claim_safe_compile_report(root: Path) -> None:
+    state = load_session(root)
+    paper = Path(state.artifacts.paper_full_tex)
+    pdf = artifact_path(root, "paper.full.pdf")
+    pdf.write_bytes(b"%PDF-1.5\n% synthetic test pdf\n")
+    compile_report = artifact_path(root, "compile-report.json")
+    compile_report.write_text(
+        json.dumps(
+            {
+                "clean": True,
+                "manuscript_sha256": hashlib.sha256(paper.read_bytes()).hexdigest(),
+                "pdf_path": str(pdf),
+                "pdf_exists": True,
+                "pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest(),
+                "warning_summary": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    state.artifacts.compiled_pdf = str(pdf)
+    state.artifacts.latest_compile_report_json = str(compile_report)
+    save_session(root, state)
+
+
+def _assert_exact_lean_cqg(test: unittest.TestCase, report: dict) -> None:
+    test.assertEqual(set(report), {"schema", "status", "summary", "failures"})
+    test.assertEqual(report["schema"], "citation-quality-gate/2")
+    test.assertIn(report["status"], {"pass", "warn", "fail"})
+    test.assertEqual(set(report["summary"]), {"pass", "weak", "fail", "human_needed"})
+    for failure in report["failures"]:
+        test.assertEqual(set(failure), {"case", "key", "code", "message"})
+
+
+def _recursive_strings(value) -> list[str]:
+    strings: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            strings.append(str(key))
+            strings.extend(_recursive_strings(item))
+    elif isinstance(value, list):
+        for item in value:
+            strings.extend(_recursive_strings(item))
+    elif value is not None:
+        strings.append(str(value))
+    return strings
+
+
 class CitationQualityGateTests(unittest.TestCase):
+    def test_public_citation_quality_surfaces_are_exact_lean_schema_for_source_needed_case(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_session(root, cite_key="Known", title="Known Title")
+            _write_claim_map(root, [{"id": "C1", "claim_type": "numeric", "required": True, "citation_keys": ["Known"]}])
+            _write_source_support_review_v3(
+                root,
+                [
+                    {
+                        "id": "C1",
+                        "key": "Known",
+                        "loc": "Background ¶1",
+                        "paragraph": "PRIVATE_RAW_CONTEXT needs a source~\\cite{Known}.",
+                        "anchor": "PRIVATE_ANCHOR needs a source~\\cite{Known}.",
+                        "target": "PRIVATE_TARGET needs a source",
+                        "source": {"type": "paper", "title": "Known Title"},
+                        "evidence": {"status": "missing", "why": "unretrieved"},
+                        "verdict": "human_needed",
+                        "ask": "Place source.pdf under artifacts/references/C1/.",
+                    }
+                ],
+            )
+            public = build_citation_quality_gate(root, quality_mode="claim_safe")
+            path, returned = write_citation_quality_gate(root, quality_mode="claim_safe")
+            written = json.loads(path.read_text(encoding="utf-8"))
+            cli_output = root / "citation-quality-cli.json"
+            stdout = io.StringIO()
+            with _chdir(root), contextlib.redirect_stdout(stdout):
+                exit_code = cli_main(["audit-citation-quality", "--quality-mode", "claim_safe", "--output", str(cli_output)])
+            cli_payload = json.loads(stdout.getvalue())
+
+        self.assertEqual(exit_code, 0)
+        for report in (public, returned, written, cli_payload["report"]):
+            _assert_exact_lean_cqg(self, report)
+            self.assertEqual(report["status"], "fail")
+            self.assertEqual(report["summary"]["human_needed"], 1)
+            self.assertEqual(len(report["failures"]), 1)
+            self.assertEqual(report["failures"][0]["case"], "C1")
+            self.assertEqual(report["failures"][0]["key"], "Known")
+            self.assertEqual(report["failures"][0]["code"], "human_needed")
+            self.assertIsInstance(report["failures"][0]["message"], str)
+            self.assertNotIn("severity", report["failures"][0])
+            for forbidden in {
+                "schema_version",
+                "quality_mode",
+                "gate_summary",
+                "manuscript_sha256",
+                "hard_gate_failures",
+                "warning_codes",
+                "counts",
+                "items",
+                "acceptance_gate_impacts",
+                "source_artifact_hashes",
+                "private_safe_summary",
+            }:
+                self.assertNotIn(forbidden, report)
+
+    def test_public_citation_quality_surfaces_do_not_leak_context_or_source_sentinels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_session(root, cite_key="Known", title="SOURCE_TITLE_SENTINEL")
+            absolute_source = root / "absolute-source-sentinel.txt"
+            _write_claim_map(root, [{"id": "C1", "claim_type": "numeric", "required": True, "citation_keys": ["Known"]}])
+            _write_source_support_review_v3(
+                root,
+                [
+                    {
+                        "id": "C1",
+                        "key": "Known",
+                        "loc": "Background ¶1",
+                        "paragraph": "PRIVATE_RAW_CONTEXT should stay private~\\cite{Known}.",
+                        "anchor": "PRIVATE_ANCHOR should stay private~\\cite{Known}.",
+                        "target": "PRIVATE_TARGET should stay private",
+                        "source": {
+                            "type": "paper",
+                            "title": "SOURCE_TITLE_SENTINEL",
+                            "url": "https://example.test/SOURCE_URL_SENTINEL",
+                            "excerpt": "SOURCE_EXCERPT_SENTINEL",
+                        },
+                        "evidence": {"status": "missing", "path": str(absolute_source), "why": "blocked"},
+                        "verdict": "human_needed",
+                        "note": "NOTE_SENTINEL",
+                        "ask": "ASK_SENTINEL artifacts/references/C1/source.pdf",
+                    }
+                ],
+            )
+            public = build_citation_quality_gate(root, quality_mode="claim_safe")
+            path, returned = write_citation_quality_gate(root, quality_mode="claim_safe")
+            written = json.loads(path.read_text(encoding="utf-8"))
+            cli_output = root / "citation-quality-cli.json"
+            stdout = io.StringIO()
+            with _chdir(root), contextlib.redirect_stdout(stdout):
+                cli_main(["audit-citation-quality", "--quality-mode", "claim_safe", "--output", str(cli_output)])
+            cli_payload = json.loads(stdout.getvalue())
+
+        forbidden = {
+            "PRIVATE_RAW_CONTEXT",
+            "PRIVATE_ANCHOR",
+            "PRIVATE_TARGET",
+            "SOURCE_TITLE_SENTINEL",
+            "SOURCE_URL_SENTINEL",
+            "SOURCE_EXCERPT_SENTINEL",
+            "NOTE_SENTINEL",
+            "ASK_SENTINEL",
+            "FAILURE_MESSAGE_SENTINEL",
+            "artifacts/references/",
+            str(root),
+            "items",
+            "source_artifact_hashes",
+            "manuscript_sha256",
+            "paragraph",
+            "anchor",
+            "target",
+        }
+        for report in (public, returned, written, cli_payload["report"]):
+            _assert_exact_lean_cqg(self, report)
+            all_strings = _recursive_strings(report)
+            for text in all_strings:
+                self.assertNotIn("sha256", text.lower())
+                self.assertNotIn("hash", text.lower())
+            rendered = json.dumps(report, ensure_ascii=False)
+            for sentinel in forbidden:
+                self.assertNotIn(sentinel, rendered)
+
+    def test_internal_citation_quality_api_preserves_routing_fields_after_public_split(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_session(root, cite_key="Known", title="Known Title")
+            _write_claim_map(root, [{"id": "C1", "claim_type": "numeric", "required": True, "citation_keys": ["Known"]}])
+            _write_source_support_review_v3(
+                root,
+                [
+                    {
+                        "id": "C1",
+                        "key": "Known",
+                        "loc": "Background ¶1",
+                        "paragraph": "A critical claim needs a source~\\cite{Known}.",
+                        "anchor": "A critical claim needs a source~\\cite{Known}.",
+                        "target": "A critical claim needs a source",
+                        "source": {"type": "paper", "title": "Known Title"},
+                        "evidence": {"status": "missing", "why": "unretrieved"},
+                        "verdict": "human_needed",
+                        "ask": "Provide a source artifact.",
+                    }
+                ],
+            )
+
+            internal = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
+            public = build_citation_quality_gate(root, quality_mode="claim_safe")
+
+        _assert_exact_lean_cqg(self, internal["public_report"])
+        self.assertEqual(internal["public_report"], public)
+        self.assertEqual(internal["status"], "fail")
+        self.assertIn("critical_unsupported_citation", internal["hard_gate_failures"])
+        for field in {
+            "critical_unsupported_count",
+            "critical_need_count",
+            "critical_weak_identity_count",
+            "noncritical_weak_identity_count",
+            "citation_bomb_count",
+            "duplicate_reference_count",
+        }:
+            self.assertIn(field, internal["counts"])
+        self.assertIsInstance(internal["items"], list)
+        self.assertIn("acceptance_gate_impacts", internal)
+
+    def test_quality_eval_consumes_internal_citation_quality_but_keeps_persisted_artifact_lean(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_session(root, cite_key="Known", title="Known Title")
+            _attach_claim_safe_compile_report(root)
+            write_planning_artifacts(root)
+            _write_claim_map(root, [{"id": "C1", "claim_type": "numeric", "required": True, "citation_keys": ["Known"]}])
+            _write_source_support_review_v3(
+                root,
+                [
+                    {
+                        "id": "C1",
+                        "key": "Known",
+                        "loc": "Background ¶1",
+                        "paragraph": "A critical claim needs a source~\\cite{Known}.",
+                        "anchor": "A critical claim needs a source~\\cite{Known}.",
+                        "target": "A critical claim needs a source",
+                        "source": {"type": "paper", "title": "Known Title"},
+                        "evidence": {"status": "missing", "why": "unretrieved"},
+                        "verdict": "human_needed",
+                        "ask": "Provide a source artifact.",
+                    }
+                ],
+            )
+            write_citation_quality_gate(root, quality_mode="claim_safe")
+            reproducibility = {"citation_artifact_issues": [], "strict_content_gate_issues": [], "prompt_trace_file_count": 1, "verdict": "PASS"}
+            with patch("paperorchestra.quality_loop.build_reproducibility_audit", return_value=reproducibility), patch(
+                "paperorchestra.quality_loop.planning_artifact_status",
+                return_value={"status": "pass", "failing_codes": [], "artifacts": {}},
+            ), patch("paperorchestra.quality_loop._manuscript_prompt_leakage", return_value=[]):
+                payload = build_quality_eval(root, quality_mode="claim_safe", reproducibility=reproducibility)
+            gate = payload["tiers"]["tier_2_claim_safety"]["checks"]["citation_quality_gate"]
+            written = json.loads(citation_quality_gate_path(root).read_text(encoding="utf-8"))
+
+        self.assertEqual(payload["tiers"]["tier_1_structural"]["status"], "pass")
+        self.assertEqual(payload["tiers"]["tier_2_claim_safety"]["status"], "fail")
+        self.assertIn("critical_unsupported_citation", payload["tiers"]["tier_2_claim_safety"]["failing_codes"])
+        self.assertEqual(gate["status"], "fail")
+        self.assertIn("hard_gate_failures", gate)
+        self.assertIn("counts", gate)
+        self.assertIn("public_report", gate)
+        _assert_exact_lean_cqg(self, gate["public_report"])
+        _assert_exact_lean_cqg(self, written)
+        self.assertIn("citation_quality_gate_sha256", payload["source_artifacts"])
+        self.assertNotIn("citation_quality_gate", payload["source_artifacts"])
+
     def test_claim_safe_unknown_metadata_for_critical_claim_is_hard_blocker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -155,15 +418,13 @@ class CitationQualityGateTests(unittest.TestCase):
                 ],
             )
 
-            report = build_citation_quality_gate(root, quality_mode="claim_safe")
+            report = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
             rendered = json.dumps(report, ensure_ascii=False)
 
         self.assertEqual(report["schema_version"], CITATION_QUALITY_GATE_SCHEMA_VERSION)
         self.assertEqual(report["status"], "fail")
         self.assertIn("critical_unknown_reference", report["hard_gate_failures"])
         self.assertEqual(report["acceptance_gate_impacts"]["no_unknown_refs_for_critical_claims"], "fail")
-        self.assertNotIn("UnknownMeta", rendered)
-        self.assertNotIn("Unknown", rendered)
         self.assertNotIn(tmp, rendered)
 
     def test_same_unknown_metadata_is_warning_when_explicitly_noncritical(self) -> None:
@@ -184,7 +445,7 @@ class CitationQualityGateTests(unittest.TestCase):
                 ],
             )
 
-            report = build_citation_quality_gate(root, quality_mode="claim_safe")
+            report = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
 
         self.assertEqual(report["status"], "warn")
         self.assertNotIn("critical_unknown_reference", report["hard_gate_failures"])
@@ -207,7 +468,7 @@ class CitationQualityGateTests(unittest.TestCase):
                 ],
             )
 
-            report = build_citation_quality_gate(root, quality_mode="claim_safe")
+            report = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
             rendered = json.dumps(report, ensure_ascii=False)
 
         self.assertEqual(report["status"], "fail")
@@ -233,7 +494,7 @@ class CitationQualityGateTests(unittest.TestCase):
                 ],
             )
 
-            report = build_citation_quality_gate(root, quality_mode="claim_safe")
+            report = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
 
         self.assertEqual(report["status"], "pass")
         self.assertEqual(report["hard_gate_failures"], [])
@@ -266,7 +527,7 @@ class CitationQualityGateTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            report = build_citation_quality_gate(root, quality_mode="claim_safe")
+            report = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
             rendered = json.dumps(report, ensure_ascii=False)
 
         self.assertEqual(report["status"], "pass")
@@ -302,7 +563,7 @@ class CitationQualityGateTests(unittest.TestCase):
                 ],
             )
 
-            report = build_citation_quality_gate(root, quality_mode="claim_safe")
+            report = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
             rendered = json.dumps(report, ensure_ascii=False)
 
         self.assertEqual(report["status"], "fail")
@@ -336,7 +597,7 @@ class CitationQualityGateTests(unittest.TestCase):
                 ],
             )
 
-            report = build_citation_quality_gate(root, quality_mode="claim_safe")
+            report = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
             rendered = json.dumps(report, ensure_ascii=False)
 
         self.assertEqual(report["status"], "fail")
@@ -363,7 +624,7 @@ class CitationQualityGateTests(unittest.TestCase):
                 ],
             )
 
-            report = build_citation_quality_gate(root, quality_mode="claim_safe")
+            report = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
 
         self.assertEqual(report["status"], "fail")
         self.assertIn("critical_citation_metadata_missing", report["hard_gate_failures"])
@@ -390,7 +651,7 @@ class CitationQualityGateTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            report = build_citation_quality_gate(root, quality_mode="claim_safe")
+            report = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
 
         self.assertEqual(report["status"], "fail")
         self.assertIn("critical_unknown_reference", report["hard_gate_failures"])
@@ -403,7 +664,7 @@ class CitationQualityGateTests(unittest.TestCase):
             _init_session(root, cite_key="Known", title="Known Title")
             _write_claim_map(root, [{"id": "C1", "claim_type": "novelty", "required": True, "citation_required": True, "citation_keys": ["Known"]}])
 
-            report = build_citation_quality_gate(root, quality_mode="claim_safe")
+            report = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
 
         self.assertEqual(report["status"], "fail")
         self.assertIn("critical_citation_support_missing", report["hard_gate_failures"])
@@ -418,7 +679,7 @@ class CitationQualityGateTests(unittest.TestCase):
             payload["paper_full_tex_sha256"] = "0" * 64
             rendered_path.write_text(json.dumps(payload), encoding="utf-8")
 
-            report = build_citation_quality_gate(root, quality_mode="claim_safe")
+            report = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
 
         self.assertEqual(report["status"], "fail")
         self.assertIn("citation_quality_stale", report["hard_gate_failures"])
@@ -436,7 +697,8 @@ class CitationQualityGateTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 0)
         self.assertTrue(output_exists)
-        self.assertEqual(payload["report"]["schema_version"], CITATION_QUALITY_GATE_SCHEMA_VERSION)
+        _assert_exact_lean_cqg(self, payload["report"])
+        self.assertEqual(payload["report"]["schema"], CITATION_QUALITY_GATE_SCHEMA_VERSION)
         self.assertEqual(Path(payload["path"]), output)
 
     def test_quality_eval_includes_citation_quality_gate_without_raw_leaks(self) -> None:
@@ -464,15 +726,35 @@ class CitationQualityGateTests(unittest.TestCase):
                         "citation_quality_gate": {
                             "status": "fail",
                             "hard_gate_failures": [
+                                "citation_quality_stale",
                                 "critical_unknown_reference",
                                 "critical_unsupported_citation",
+                                "critical_citation_support_missing",
                                 "critical_weak_reference_identity",
                             ],
+                            "counts": {
+                                "critical_unsupported_count": 1,
+                                "critical_need_count": 1,
+                                "critical_weak_identity_count": 1,
+                                "noncritical_weak_identity_count": 0,
+                                "citation_bomb_count": 0,
+                                "duplicate_reference_count": 0,
+                            },
+                            "public_report": {
+                                "schema": "citation-quality-gate/2",
+                                "status": "fail",
+                                "summary": {"pass": 0, "weak": 0, "fail": 0, "human_needed": 1},
+                                "failures": [
+                                    {"case": "C1", "key": "Known", "code": "human_needed", "message": "Source required."}
+                                ],
+                            },
                         }
                     },
                     "failing_codes": [
+                        "citation_quality_stale",
                         "critical_unknown_reference",
                         "critical_unsupported_citation",
+                        "critical_citation_support_missing",
                         "critical_weak_reference_identity",
                     ],
                 }
@@ -483,7 +765,9 @@ class CitationQualityGateTests(unittest.TestCase):
         expected_codes = {
             "critical_unknown_reference",
             "critical_unsupported_citation",
+            "critical_citation_support_missing",
             "critical_weak_reference_identity",
+            "citation_quality_stale",
         }
         citation_actions = [action for action in actions if str(action.get("code")) in expected_codes]
 

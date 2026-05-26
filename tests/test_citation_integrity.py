@@ -23,7 +23,7 @@ from paperorchestra.citation_integrity import (
 )
 from paperorchestra.cli import main as cli_main
 from paperorchestra.models import InputBundle
-from paperorchestra.orchestra_citation_quality import build_citation_quality_gate
+from paperorchestra.orchestra_citation_quality import build_citation_quality_gate_internal
 from paperorchestra.session import artifact_path, create_session, load_session, save_session
 
 
@@ -365,7 +365,7 @@ def test_stable_report_reference_identity_does_not_trigger_weak_identity_gate() 
         rendered = build_rendered_reference_audit(root, quality_mode="claim_safe")
         write_rendered_reference_audit(root, quality_mode="claim_safe")
         write_citation_integrity_audit(root, quality_mode="claim_safe")
-        report = build_citation_quality_gate(root, quality_mode="claim_safe")
+        report = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
 
         assert "StableReport" not in rendered["weak_identity_keys"]
         assert "critical_weak_reference_identity" not in report["hard_gate_failures"]
@@ -424,7 +424,7 @@ def test_critical_weak_reference_identity_blocks_citation_quality_gate() -> None
         rendered = build_rendered_reference_audit(root, quality_mode="claim_safe")
         write_rendered_reference_audit(root, quality_mode="claim_safe")
         write_citation_integrity_audit(root, quality_mode="claim_safe")
-        report = build_citation_quality_gate(root, quality_mode="claim_safe")
+        report = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
 
         assert "WeakIdentity" in rendered["weak_identity_keys"]
         assert report["status"] == "fail"
@@ -464,7 +464,7 @@ def test_noncritical_weak_reference_identity_is_warning_not_blocker() -> None:
 
         write_rendered_reference_audit(root, quality_mode="claim_safe")
         write_citation_integrity_audit(root, quality_mode="claim_safe")
-        report = build_citation_quality_gate(root, quality_mode="claim_safe")
+        report = build_citation_quality_gate_internal(root, quality_mode="claim_safe")
 
         assert report["status"] == "warn"
         assert "critical_weak_reference_identity" not in report["hard_gate_failures"]
