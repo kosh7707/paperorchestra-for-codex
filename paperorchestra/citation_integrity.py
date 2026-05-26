@@ -482,9 +482,68 @@ def _cite_key_counts_from_text(text: str) -> tuple[list[dict[str, Any]], dict[st
 
 
 def _support_items(cwd: str | Path | None, state: Any) -> list[dict[str, Any]]:
-    payload = _read_json_if_exists(_citation_support_review_path(cwd, state))
+    support_path = _citation_support_review_path(cwd, state)
+    payload = _read_json_if_exists(support_path)
+    if isinstance(payload, dict) and payload.get("schema") == "citation-support-review/3":
+        return _support_items_from_v3_cases(payload.get("cases"), run_root=support_path.parent.parent)
     items = payload.get("items") if isinstance(payload, dict) else None
     return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+
+
+def _support_items_from_v3_cases(cases: Any, *, run_root: Path | None = None) -> list[dict[str, Any]]:
+    if not isinstance(cases, list):
+        return []
+    items: list[dict[str, Any]] = []
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        key = str(case.get("key") or "").strip()
+        if not key:
+            continue
+        evidence = case.get("evidence") if isinstance(case.get("evidence"), dict) else {}
+        items.append(
+            {
+                "id": str(case.get("id") or f"case-{len(items) + 1}"),
+                "sentence": None,
+                "citation_keys": [key],
+                "support_status": _v3_support_status(case.get("verdict"), evidence, run_root=run_root),
+                "claim_type": None,
+                "evidence": [] if evidence.get("status") in {"missing", "blocked"} else [evidence],
+            }
+        )
+    return items
+
+
+def _v3_support_status(verdict: Any, evidence: dict[str, Any], *, run_root: Path | None = None) -> str:
+    status = str(evidence.get("status") or "missing").strip().lower() or "missing"
+    normalized = str(verdict or "human_needed").strip().lower() or "human_needed"
+    if normalized == "pass":
+        return "supported" if status in {"pdf", "html", "text"} and _v3_evidence_text_readable(evidence, run_root=run_root) else "insufficient_evidence"
+    if normalized == "weak":
+        return "metadata_only"
+    if normalized == "fail":
+        return "unsupported"
+    if normalized == "human_needed":
+        return "insufficient_evidence"
+    return "unknown"
+
+
+def _v3_evidence_text_readable(evidence: dict[str, Any], *, run_root: Path | None = None) -> bool:
+    values = [evidence.get("text")]
+    if str(evidence.get("status") or "").strip().lower() == "text":
+        values.append(evidence.get("path"))
+    for value in values:
+        if not isinstance(value, str) or not value.strip():
+            continue
+        path = Path(value)
+        if not path.is_absolute() and run_root is not None:
+            path = run_root / path
+        try:
+            if path.exists() and path.is_file() and path.stat().st_size > 0:
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def _role_tokens(value: Any) -> set[str]:

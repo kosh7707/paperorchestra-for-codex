@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import re
 import shutil
+import subprocess
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -265,6 +270,449 @@ def _citation_entry_payload(citation_map: dict[str, Any], keys: list[str]) -> li
             }
         )
     return entries
+
+
+def _clean_optional_string(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
+def _source_type_for_entry(entry: dict[str, Any]) -> str:
+    raw = " ".join(
+        str(entry.get(field) or "")
+        for field in ("source_type", "entry_type", "type", "venue", "journal", "booktitle", "url")
+    ).lower()
+    if any(token in raw for token in ("arxiv", "preprint")):
+        return "preprint"
+    if any(token in raw for token in ("rfc", "nist", "standard", "spec")):
+        return "standard"
+    if any(token in raw for token in ("github", "repository", "repo")):
+        return "repo"
+    if any(token in raw for token in ("dataset", "zenodo", "figshare")):
+        return "dataset"
+    if any(token in raw for token in ("blog", "post")):
+        return "blog"
+    if any(token in raw for token in ("docs", "documentation", "manual")):
+        return "docs"
+    if any(token in raw for token in ("report", "techreport", "whitepaper")):
+        return "report"
+    return "paper" if entry.get("title") else "other"
+
+
+def _lean_source_payload(key: str, citation_map: dict[str, Any]) -> dict[str, Any]:
+    raw = citation_map.get(key, {}) if isinstance(citation_map, dict) else {}
+    entry = raw if isinstance(raw, dict) else {}
+    payload: dict[str, Any] = {"type": _source_type_for_entry(entry)}
+    for out_key, fields in {
+        "title": ("title",),
+        "url": ("url", "source_url"),
+        "doi": ("doi", "DOI"),
+        "arxiv": ("arxiv_id", "arxiv", "ArXiv"),
+    }.items():
+        for field in fields:
+            value = _clean_optional_string(entry.get(field))
+            if value:
+                payload[out_key] = value
+                break
+    if "title" not in payload:
+        payload["title"] = key
+    return payload
+
+
+def _strip_cites(text: str) -> str:
+    return re.sub(CITE_COMMAND_RE, "", text).replace("~", " ")
+
+
+def _collapse_ws(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _sentence_for_cite_in_paragraph(paragraph: str, cite_start: int, cite_end: int) -> str:
+    start = _sentence_start(paragraph, cite_start)
+    end = _sentence_end(paragraph, cite_end)
+    return _collapse_ws(paragraph[start:end])
+
+
+def _looks_like_section_heading(paragraph: str) -> bool:
+    stripped = paragraph.strip()
+    return bool(stripped and len(stripped) < 80 and stripped.endswith(".") and "\\cite" not in stripped)
+
+
+def _run_relative_artifact_path(cwd: str | Path | None, path: Path) -> str:
+    state = load_session(cwd)
+    run_root = artifact_path(cwd, "_relative_anchor", session_id=state.session_id).parent.parent
+    try:
+        return path.resolve().relative_to(run_root.resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def build_source_backed_citation_cases(
+    cwd: str | Path | None,
+    *,
+    resolve_evidence: bool = True,
+) -> list[dict[str, Any]]:
+    """Build lean per-citation cases from the current manuscript.
+
+    This is the source-backed v3 surface.  Cases are derived from the actual
+    manuscript, not from the planning artifact: one case per citation key, with
+    paragraph context plus a sentence anchor and target claim span.
+    """
+
+    state = load_session(cwd)
+    if not state.artifacts.paper_full_tex:
+        raise ValueError("Need paper.full.tex before citation support review.")
+    latex = Path(state.artifacts.paper_full_tex).read_text(encoding="utf-8")
+    citation_map = read_json(state.artifacts.citation_map_json) if state.artifacts.citation_map_json else {}
+    body = _citation_review_body(latex)
+    raw_paragraphs = [_collapse_ws(part) for part in re.split(r"\n\s*\n+", body) if _collapse_ws(part)]
+    current_section = "Manuscript"
+    paragraph_index = 0
+    cases: list[dict[str, Any]] = []
+    for paragraph in raw_paragraphs:
+        if "\\cite" not in paragraph and _looks_like_section_heading(paragraph):
+            current_section = paragraph.rstrip(".")
+            continue
+        if "\\cite" not in paragraph:
+            continue
+        paragraph_index += 1
+        for cite_command_index, match in enumerate(CITE_COMMAND_RE.finditer(paragraph), start=1):
+            raw_keys = [item.strip() for item in match.group(2).split(",") if item.strip()]
+            anchor = _sentence_for_cite_in_paragraph(paragraph, match.start(), match.end())
+            target = _collapse_ws(_strip_cites(anchor)).rstrip(".")
+            for key in raw_keys:
+                case_id = f"C{len(cases) + 1}"
+                case: dict[str, Any] = {
+                    "id": case_id,
+                    "key": key,
+                    "loc": f"{current_section} ¶{paragraph_index}",
+                    "paragraph": paragraph,
+                    "anchor": anchor,
+                    "target": target,
+                    "source": _lean_source_payload(key, citation_map),
+                }
+                if resolve_evidence:
+                    case["_cwd"] = cwd
+                    evidence = _resolve_source_evidence(cwd, case)
+                    case["evidence"] = evidence
+                    verdict, message_field, message = _inspect_source_case(case, evidence)
+                    case["verdict"] = verdict
+                    case[message_field] = message
+                cases.append(case)
+    return cases
+
+
+def _reference_case_dir(cwd: str | Path | None, case_id: str) -> Path:
+    return artifact_path(cwd, f"references/{case_id}/source.meta.json").parent
+
+
+def _source_locators(source: dict[str, Any]) -> list[str]:
+    locators: list[str] = []
+    arxiv = _clean_optional_string(source.get("arxiv"))
+    if arxiv:
+        arxiv_id = re.sub(r"(?i)^arxiv:\s*", "", arxiv).strip()
+        arxiv_id = re.sub(r"v\d+$", "", arxiv_id)
+        if arxiv_id:
+            locators.append(f"https://arxiv.org/pdf/{arxiv_id}.pdf")
+            locators.append(f"https://arxiv.org/abs/{arxiv_id}")
+    url = _clean_optional_string(source.get("url"))
+    if url:
+        locators.append(url)
+    doi = _clean_optional_string(source.get("doi"))
+    if doi:
+        doi_value = re.sub(r"(?i)^https?://(?:dx\.)?doi\.org/", "", doi).strip()
+        if doi_value:
+            locators.append(f"https://doi.org/{doi_value}")
+    result: list[str] = []
+    for locator in locators:
+        if locator not in result:
+            result.append(locator)
+    return result
+
+
+def _write_source_meta(cwd: str | Path | None, case: dict[str, Any], evidence: dict[str, Any]) -> None:
+    directory = _reference_case_dir(cwd, str(case["id"]))
+    directory.mkdir(parents=True, exist_ok=True)
+    source = case.get("source") if isinstance(case.get("source"), dict) else {}
+    meta = {
+        "schema": "citation-source-artifact/1",
+        "case": str(case.get("id") or ""),
+        "key": str(case.get("key") or ""),
+        "source": source,
+        "evidence": evidence,
+    }
+    (directory / "source.meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _existing_source_evidence(cwd: str | Path | None, case_id: str) -> dict[str, Any] | None:
+    directory = _reference_case_dir(cwd, case_id)
+    pdf = directory / "source.pdf"
+    html_path = directory / "source.html"
+    text = directory / "source.txt"
+    if pdf.exists():
+        evidence = {"status": "pdf", "path": _run_relative_artifact_path(cwd, pdf)}
+        if text.exists():
+            evidence["text"] = _run_relative_artifact_path(cwd, text)
+        return evidence
+    if html_path.exists():
+        evidence = {"status": "html", "path": _run_relative_artifact_path(cwd, html_path)}
+        if text.exists():
+            evidence["text"] = _run_relative_artifact_path(cwd, text)
+        return evidence
+    if text.exists():
+        return {"status": "text", "text": _run_relative_artifact_path(cwd, text)}
+    return None
+
+
+def _html_to_text(value: str) -> str:
+    text = re.sub(r"(?is)<script.*?</script>|<style.*?</style>", " ", value)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    return _collapse_ws(html.unescape(text))
+
+
+def _extract_pdf_text(pdf_path: Path, text_path: Path) -> bool:
+    if not shutil.which("pdftotext"):
+        return False
+    try:
+        subprocess.run(["pdftotext", str(pdf_path), str(text_path)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+    except Exception:
+        return False
+    return text_path.exists() and text_path.stat().st_size > 0
+
+
+def _download_source_evidence(cwd: str | Path | None, case: dict[str, Any]) -> dict[str, Any] | None:
+    source = case.get("source") if isinstance(case.get("source"), dict) else {}
+    locators = _source_locators(source)
+    if not locators:
+        return None
+    last_result: dict[str, Any] | None = None
+    for url in locators:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in {"http", "https"}:
+            last_result = {"status": "blocked", "why": "unsupported_url_scheme", "url": url}
+            continue
+        if parsed.hostname and parsed.hostname.endswith(".test"):
+            continue
+        directory = _reference_case_dir(cwd, str(case["id"]))
+        directory.mkdir(parents=True, exist_ok=True)
+        request = urllib.request.Request(url, headers={"User-Agent": "PaperOrchestra-reference-fetch/1.0"})
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                data = response.read(10_000_000 + 1)
+                content_type = str(response.headers.get("Content-Type") or "").lower()
+        except urllib.error.HTTPError as exc:
+            if exc.code in {401, 403}:
+                return {"status": "blocked", "why": "forbidden", "url": url}
+            if exc.code == 404:
+                last_result = {"status": "missing", "why": "not_found", "url": url}
+                continue
+            last_result = {"status": "missing", "why": "network_error", "url": url}
+            continue
+        except Exception:
+            last_result = {"status": "missing", "why": "network_error", "url": url}
+            continue
+        if len(data) > 10_000_000:
+            return {"status": "blocked", "why": "oversized", "url": url}
+        if data.startswith(b"%PDF") or "application/pdf" in content_type:
+            pdf = directory / "source.pdf"
+            pdf.write_bytes(data)
+            text_path = directory / "source.txt"
+            evidence = {"status": "pdf", "path": _run_relative_artifact_path(cwd, pdf), "url": url}
+            if _extract_pdf_text(pdf, text_path):
+                evidence["text"] = _run_relative_artifact_path(cwd, text_path)
+            return evidence
+        if "text/html" in content_type or data.lstrip().startswith(b"<"):
+            html_path = directory / "source.html"
+            html_path.write_bytes(data)
+            text_path = directory / "source.txt"
+            text_path.write_text(_html_to_text(data.decode("utf-8", "replace")), encoding="utf-8")
+            return {
+                "status": "html",
+                "path": _run_relative_artifact_path(cwd, html_path),
+                "text": _run_relative_artifact_path(cwd, text_path),
+                "url": url,
+            }
+        text_path = directory / "source.txt"
+        text_path.write_text(data.decode("utf-8", "replace"), encoding="utf-8")
+        return {"status": "text", "text": _run_relative_artifact_path(cwd, text_path), "url": url}
+    return last_result
+
+
+def _resolve_source_evidence(cwd: str | Path | None, case: dict[str, Any]) -> dict[str, Any]:
+    existing = _existing_source_evidence(cwd, str(case["id"]))
+    if existing is not None:
+        _write_source_meta(cwd, case, existing)
+        return existing
+    downloaded = _download_source_evidence(cwd, case)
+    if downloaded is not None:
+        _write_source_meta(cwd, case, downloaded)
+        return downloaded
+    source = case.get("source") if isinstance(case.get("source"), dict) else {}
+    if source.get("url"):
+        evidence = {"status": "missing", "why": "unretrieved"}
+    else:
+        evidence = {"status": "missing", "why": "no_locator"}
+    _write_source_meta(cwd, case, evidence)
+    return evidence
+
+
+def _read_run_relative_text(cwd: str | Path | None, relative_path: str | None) -> str:
+    if not relative_path:
+        return ""
+    state = load_session(cwd)
+    run_root = artifact_path(cwd, "_relative_anchor", session_id=state.session_id).parent.parent
+    path = Path(relative_path)
+    if not path.is_absolute():
+        path = run_root / path
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+
+
+def _meaningful_terms(text: str) -> set[str]:
+    stop = {
+        "the",
+        "and",
+        "that",
+        "this",
+        "with",
+        "from",
+        "uses",
+        "use",
+        "using",
+        "for",
+        "into",
+        "also",
+        "show",
+        "shows",
+        "systems",
+        "system",
+    }
+    return {term for term in re.findall(r"[a-z0-9]{3,}", text.lower()) if term not in stop}
+
+
+def _inspect_source_case(case: dict[str, Any], evidence: dict[str, Any]) -> tuple[str, str, str]:
+    status = str(evidence.get("status") or "missing")
+    if status in {"blocked", "missing"}:
+        why = str(evidence.get("why") or status)
+        ask = (
+            f"Provide a PDF at artifacts/references/{case['id']}/source.pdf, "
+            f"HTML/text at artifacts/references/{case['id']}/source.html or source.txt, "
+            "an accessible official URL, a replacement citation, or approve weakening/removing the claim."
+        )
+        return "human_needed", "ask", ask if why == "unretrieved" else f"{why}: {ask}"
+    cwd = case.get("_cwd")
+    text = _read_run_relative_text(cwd, str(evidence.get("text") or "")) if cwd is not None else ""
+    if not text.strip():
+        ask = (
+            f"Provide readable extracted text at artifacts/references/{case['id']}/source.txt, "
+            "or replace/approve weakening the citation if the source cannot be read."
+        )
+        return "human_needed", "ask", ask
+    overlap = _meaningful_terms(str(case.get("target") or "")) & _meaningful_terms(text)
+    if len(overlap) >= 2:
+        return "pass", "note", "The retrieved source artifact provides local support for the target claim."
+    return "weak", "note", "A source artifact was available, but local support for the target claim was only partial."
+
+
+def _source_review_summary(cases: list[dict[str, Any]]) -> dict[str, int]:
+    summary = {"pass": 0, "weak": 0, "fail": 0, "human_needed": 0}
+    for case in cases:
+        verdict = str(case.get("verdict") or "human_needed")
+        if verdict not in summary:
+            verdict = "human_needed"
+        summary[verdict] += 1
+    return summary
+
+
+def _short_markdown_value(value: Any, *, limit: int = 240) -> str:
+    text = _collapse_ws(str(value or ""))
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
+def render_citation_support_human_needed_markdown(review: dict[str, Any]) -> str | None:
+    if review.get("schema") != "citation-support-review/3":
+        return None
+    cases = [
+        case
+        for case in review.get("cases") or []
+        if isinstance(case, dict) and str(case.get("verdict") or "").strip().lower() == "human_needed"
+    ]
+    if not cases:
+        return None
+    lines = [
+        "# Citation source follow-up",
+        "",
+        "Add the missing source artifact, then rerun `paperorchestra review-citations --evidence-mode source`.",
+        "",
+    ]
+    for case in cases:
+        source = case.get("source") if isinstance(case.get("source"), dict) else {}
+        evidence = case.get("evidence") if isinstance(case.get("evidence"), dict) else {}
+        title = _short_markdown_value(source.get("title") or case.get("key"), limit=160)
+        url = _short_markdown_value(source.get("url"), limit=180)
+        reason = _short_markdown_value(evidence.get("why") or evidence.get("status") or "missing", limit=120)
+        lines.extend(
+            [
+                f"## {case.get('id', '?')} — `{case.get('key', '?')}`",
+                f"- Location: {_short_markdown_value(case.get('loc'), limit=120)}",
+                f"- Paragraph: {_short_markdown_value(case.get('paragraph'), limit=360)}",
+                f"- Anchor: {_short_markdown_value(case.get('anchor'), limit=300)}",
+                f"- Target: {_short_markdown_value(case.get('target'), limit=300)}",
+                f"- Source: {title}" + (f" ({url})" if url else ""),
+                f"- Problem: {reason}",
+                f"- Ask: {_short_markdown_value(case.get('ask'), limit=300)}",
+                "",
+            ]
+        )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def build_source_backed_citation_support_review(cwd: str | Path | None, *, mode: str = "source") -> dict[str, Any]:
+    cases = build_source_backed_citation_cases(cwd, resolve_evidence=True)
+    public_cases: list[dict[str, Any]] = []
+    for case in cases:
+        case = dict(case)
+        case.pop("_cwd", None)
+        public_cases.append(case)
+    return {
+        "schema": "citation-support-review/3",
+        "mode": mode,
+        "summary": _source_review_summary(public_cases),
+        "cases": public_cases,
+    }
+
+
+def build_citation_source_retrieval_debug(cwd: str | Path | None) -> dict[str, Any]:
+    cases = build_source_backed_citation_cases(cwd, resolve_evidence=False)
+    items: list[dict[str, Any]] = []
+    summary: dict[str, int] = {}
+    for case in cases:
+        evidence = _resolve_source_evidence(cwd, case)
+        status = str(evidence.get("status") or "missing")
+        summary[status] = summary.get(status, 0) + 1
+        source = case.get("source") if isinstance(case.get("source"), dict) else {}
+        items.append(
+            {
+                "id": case.get("id"),
+                "key": case.get("key"),
+                "source": source,
+                "candidate_locators": _source_locators(source),
+                "evidence": evidence,
+            }
+        )
+    return {
+        "schema": "citation-source-retrieval-debug/1",
+        "summary": dict(sorted(summary.items())),
+        "items": items,
+    }
+
+
+def write_citation_source_retrieval_debug(cwd: str | Path | None, output_path: str | Path | None = None) -> Path:
+    path = Path(output_path).resolve() if output_path else artifact_path(cwd, "citation_source_retrieval_debug.json")
+    path.write_text(json.dumps(build_citation_source_retrieval_debug(cwd), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
 
 
 def _claim_type(sentence: str) -> str:
@@ -944,8 +1392,10 @@ def build_citation_support_review(
     retrieved_web_evidence_sha256: str | None = None,
     retrieved_web_evidence_path: str | None = None,
 ) -> dict[str, Any]:
-    if evidence_mode not in {"heuristic", "model", "web"}:
+    if evidence_mode not in {"heuristic", "model", "web", "source"}:
         raise ValueError(f"Unsupported citation evidence mode: {evidence_mode}")
+    if evidence_mode == "source":
+        return build_source_backed_citation_support_review(cwd, mode=evidence_mode)
     state = load_session(cwd)
     if not state.artifacts.paper_full_tex:
         raise ValueError("Need paper.full.tex before citation support review.")
@@ -1192,6 +1642,12 @@ def write_citation_support_review(
         + "\n",
         encoding="utf-8",
     )
+    human_needed_markdown = render_citation_support_human_needed_markdown(payload)
+    human_needed_markdown_path = path.with_name("citation_support_human_needed.md")
+    if human_needed_markdown:
+        human_needed_markdown_path.write_text(human_needed_markdown, encoding="utf-8")
+    else:
+        human_needed_markdown_path.unlink(missing_ok=True)
     if cache_payload_path is not None:
         cache_payload_path.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
         if evidence_mode in {"model", "web"} and provider is not None:

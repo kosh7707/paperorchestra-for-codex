@@ -17,7 +17,7 @@ from .citation_integrity import (
     write_rendered_reference_audit,
 )
 from .orchestra_citation_quality import write_citation_quality_gate
-from .critics import write_citation_support_review, write_section_review
+from .critics import write_citation_source_retrieval_debug, write_citation_support_review, write_section_review
 from .doctor import build_doctor_report, build_session_recovery_hint
 from .environment import build_environment_inventory
 from .fidelity import write_reproducibility_audit
@@ -197,7 +197,7 @@ def build_parser() -> argparse.ArgumentParser:
     answer_human_needed_parser.add_argument("--require-live-verification", action="store_true")
     answer_human_needed_parser.add_argument("--accept-mixed-provenance", action="store_true")
     answer_human_needed_parser.add_argument("--require-compile", action="store_true")
-    answer_human_needed_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web"])
+    answer_human_needed_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web", "source"])
     _runtime_mode_args(answer_human_needed_parser, strict_flag=True)
     _common_provider_args(answer_human_needed_parser)
     _citation_provider_args(answer_human_needed_parser)
@@ -394,10 +394,12 @@ def build_parser() -> argparse.ArgumentParser:
     citation_review_parser.add_argument(
         "--evidence-mode",
         default="heuristic",
-        choices=["heuristic", "model", "web"],
+        choices=["heuristic", "model", "web", "source"],
         help="Use heuristic metadata checks, a model critic, or a web-search-capable model critic for cited-sentence support.",
     )
     _common_provider_args(citation_review_parser)
+    citation_retrieval_parser = sub.add_parser("debug-citation-sources", help="Resolve citation source artifacts without running the citation-support critic")
+    citation_retrieval_parser.add_argument("--output")
     rendered_reference_parser = sub.add_parser("audit-rendered-references", help="Audit the rendered bibliography denominator and visible BibTeX metadata")
     rendered_reference_parser.add_argument("--output")
     rendered_reference_parser.add_argument("--quality-mode", default="ralph", choices=["draft", "ralph", "claim_safe"])
@@ -490,7 +492,7 @@ def build_parser() -> argparse.ArgumentParser:
     qa_loop_step_parser.add_argument("--accept-mixed-provenance", action="store_true")
     qa_loop_step_parser.add_argument("--require-live-verification", action="store_true")
     qa_loop_step_parser.add_argument("--require-compile", action="store_true")
-    qa_loop_step_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web"])
+    qa_loop_step_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web", "source"])
     _runtime_mode_args(qa_loop_step_parser, strict_flag=True)
     _common_provider_args(qa_loop_step_parser)
     _citation_provider_args(qa_loop_step_parser)
@@ -519,7 +521,7 @@ def build_parser() -> argparse.ArgumentParser:
     operator_apply_parser.add_argument("--require-live-verification", action="store_true")
     operator_apply_parser.add_argument("--accept-mixed-provenance", action="store_true")
     operator_apply_parser.add_argument("--require-compile", action="store_true")
-    operator_apply_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web"])
+    operator_apply_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web", "source"])
     _runtime_mode_args(operator_apply_parser, strict_flag=True)
     _common_provider_args(operator_apply_parser)
     _citation_provider_args(operator_apply_parser)
@@ -570,7 +572,7 @@ def build_parser() -> argparse.ArgumentParser:
     critique_parser.add_argument(
         "--citation-evidence-mode",
         default="heuristic",
-        choices=["heuristic", "model", "web"],
+        choices=["heuristic", "model", "web", "source"],
         help="Evidence mode for the citation-support critic used by critique.",
     )
     _runtime_mode_args(critique_parser, strict_flag=True)
@@ -1412,6 +1414,10 @@ def main(argv: list[str] | None = None) -> int:
                     evidence_mode=args.evidence_mode,
                 )
             )
+            return 0
+
+        if args.command == "debug-citation-sources":
+            print(write_citation_source_retrieval_debug(cwd, args.output))
             return 0
 
         if args.command == "audit-rendered-references":

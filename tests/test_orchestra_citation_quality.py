@@ -116,6 +116,26 @@ def _write_support_review(root: Path, items: list[dict]) -> Path:
     return path
 
 
+def _write_source_support_review_v3(root: Path, cases: list[dict]) -> Path:
+    state = load_session(root)
+    path = Path(state.artifacts.paper_full_tex).resolve().parent / "citation_support_review.json"
+    summary = {verdict: 0 for verdict in ("pass", "weak", "fail", "human_needed")}
+    for case in cases:
+        summary[str(case.get("verdict") or "human_needed")] += 1
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "citation-support-review/3",
+                "mode": "source",
+                "summary": summary,
+                "cases": cases,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 class CitationQualityGateTests(unittest.TestCase):
     def test_claim_safe_unknown_metadata_for_critical_claim_is_hard_blocker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -218,6 +238,112 @@ class CitationQualityGateTests(unittest.TestCase):
         self.assertEqual(report["status"], "pass")
         self.assertEqual(report["hard_gate_failures"], [])
         self.assertEqual(report["counts"]["critical_unsupported_count"], 0)
+
+    def test_source_backed_v3_pass_supports_critical_citation_without_raw_context_leak(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_session(root, cite_key="Known", title="Known Title")
+            _write_claim_map(root, [{"id": "C1", "claim_type": "numeric", "required": True, "citation_keys": ["Known"]}])
+            _write_source_support_review_v3(
+                root,
+                [
+                    {
+                        "id": "C1",
+                        "key": "Known",
+                        "loc": "Background ¶1",
+                        "paragraph": "PRIVATE_RAW_CONTEXT should never appear~\\cite{Known}.",
+                        "anchor": "PRIVATE_RAW_CONTEXT should never appear~\\cite{Known}.",
+                        "target": "PRIVATE_RAW_CONTEXT should never appear",
+                        "source": {"type": "paper", "title": "Known Title"},
+                        "evidence": {"status": "text", "text": "artifacts/references/C1/source.txt"},
+                        "verdict": "pass",
+                        "note": "Supported by source text.",
+                    }
+                ],
+            )
+            artifact_path(root, "references/C1/source.txt").write_text(
+                "Known source text supports the cited critical claim.",
+                encoding="utf-8",
+            )
+
+            report = build_citation_quality_gate(root, quality_mode="claim_safe")
+            rendered = json.dumps(report, ensure_ascii=False)
+
+        self.assertEqual(report["status"], "pass")
+        self.assertEqual(report["schema_version"], "citation-quality-gate/2")
+        self.assertEqual(report["schema"], "citation-quality-gate/2")
+        self.assertEqual(report["summary"], {"pass": 1, "weak": 0, "fail": 0, "human_needed": 0})
+        self.assertEqual(report["failures"], [])
+        self.assertEqual(report["hard_gate_failures"], [])
+        self.assertNotIn("PRIVATE_RAW_CONTEXT", rendered)
+        self.assertNotIn("Known Title", rendered)
+        self.assertNotIn(tmp, rendered)
+
+    def test_source_backed_v3_pass_without_readable_artifact_fails_claim_safe(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_session(root, cite_key="Known", title="Known Title")
+            _write_claim_map(root, [{"id": "C1", "claim_type": "numeric", "required": True, "citation_keys": ["Known"]}])
+            _write_source_support_review_v3(
+                root,
+                [
+                    {
+                        "id": "C1",
+                        "key": "Known",
+                        "loc": "Background ¶1",
+                        "paragraph": "PRIVATE_RAW_CONTEXT should never appear~\\cite{Known}.",
+                        "anchor": "PRIVATE_RAW_CONTEXT should never appear~\\cite{Known}.",
+                        "target": "PRIVATE_RAW_CONTEXT should never appear",
+                        "source": {"type": "paper", "title": "Known Title"},
+                        "evidence": {"status": "text", "text": "artifacts/references/C1/source.txt"},
+                        "verdict": "pass",
+                        "note": "Claimed supported, but source text is missing.",
+                    }
+                ],
+            )
+
+            report = build_citation_quality_gate(root, quality_mode="claim_safe")
+            rendered = json.dumps(report, ensure_ascii=False)
+
+        self.assertEqual(report["status"], "fail")
+        self.assertIn("critical_unsupported_citation", report["hard_gate_failures"])
+        self.assertIn("critical_unsupported_citation", [failure["code"] for failure in report["failures"]])
+        self.assertEqual(report["summary"]["human_needed"], 1)
+        self.assertNotIn("PRIVATE_RAW_CONTEXT", rendered)
+        self.assertNotIn("Known Title", rendered)
+        self.assertNotIn(tmp, rendered)
+
+    def test_source_backed_v3_human_needed_blocks_critical_citation_without_raw_context_leak(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _init_session(root, cite_key="Known", title="Known Title")
+            _write_claim_map(root, [{"id": "C1", "claim_type": "numeric", "required": True, "citation_keys": ["Known"]}])
+            _write_source_support_review_v3(
+                root,
+                [
+                    {
+                        "id": "C1",
+                        "key": "Known",
+                        "loc": "Background ¶1",
+                        "paragraph": "PRIVATE_RAW_CONTEXT needs a source~\\cite{Known}.",
+                        "anchor": "PRIVATE_RAW_CONTEXT needs a source~\\cite{Known}.",
+                        "target": "PRIVATE_RAW_CONTEXT needs a source",
+                        "source": {"type": "paper", "title": "Known Title"},
+                        "evidence": {"status": "missing", "why": "unretrieved"},
+                        "verdict": "human_needed",
+                        "ask": "Place source.pdf under artifacts/references/C1/.",
+                    }
+                ],
+            )
+
+            report = build_citation_quality_gate(root, quality_mode="claim_safe")
+            rendered = json.dumps(report, ensure_ascii=False)
+
+        self.assertEqual(report["status"], "fail")
+        self.assertIn("critical_unsupported_citation", report["hard_gate_failures"])
+        self.assertNotIn("PRIVATE_RAW_CONTEXT", rendered)
+        self.assertNotIn("Known Title", rendered)
+        self.assertNotIn(tmp, rendered)
 
     def test_claim_safe_missing_rendered_metadata_for_critical_citation_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -755,7 +755,7 @@ def get_citation_support_provider(
     command: str | None = None,
     evidence_mode: str = "heuristic",
 ) -> BaseProvider | None:
-    if evidence_mode == "heuristic":
+    if evidence_mode in {"heuristic", "source"}:
         return None
     provider_command = command
     if evidence_mode == "web" and name == "shell" and not provider_command and not os.environ.get("PAPERO_MODEL_CMD"):

@@ -16,7 +16,7 @@ from .io_utils import write_json
 from .quality_loop_utils import _file_sha256, _read_json_if_exists
 from .session import artifact_path, load_session
 
-CITATION_QUALITY_GATE_SCHEMA_VERSION = "citation-quality-gate/1"
+CITATION_QUALITY_GATE_SCHEMA_VERSION = "citation-quality-gate/2"
 CITATION_QUALITY_GATE_FILENAME = "citation_quality_gate.json"
 _HIGH_CRITICAL_TOKENS = {
     "critical",
@@ -92,10 +92,23 @@ class CitationQualityGateReport:
     def to_public_dict(self) -> dict[str, Any]:
         hard = sorted(dict.fromkeys(self.hard_gate_failures))
         warnings = sorted(dict.fromkeys(self.warning_codes))
+        lean_failures = [{"code": code, "severity": "blocker"} for code in hard]
+        gate_summary = {
+            "status": self.status,
+            "hard_failures": len(hard),
+            "warnings": len(warnings),
+            "critical_needs": int(self.counts.get("critical_need_count") or 0),
+            "critical_unsupported": int(self.counts.get("critical_unsupported_count") or 0),
+        }
+        citation_summary = _citation_summary_from_items(self.items)
         return {
+            "schema": CITATION_QUALITY_GATE_SCHEMA_VERSION,
             "schema_version": CITATION_QUALITY_GATE_SCHEMA_VERSION,
             "status": self.status,
             "quality_mode": self.quality_mode,
+            "summary": citation_summary,
+            "gate_summary": gate_summary,
+            "failures": lean_failures,
             "manuscript_sha256": self.manuscript_sha256,
             "hard_gate_failures": hard,
             "warning_codes": warnings,
@@ -161,7 +174,7 @@ def build_citation_quality_gate(cwd: str | Path | None, *, quality_mode: str = "
     missing_keys = _string_set(rendered.get("missing_bib_keys_for_cites") if isinstance(rendered, dict) else [])
     weak_identity_keys = _string_set(rendered.get("weak_identity_keys") if isinstance(rendered, dict) else [])
     visible_keys = _string_set(rendered.get("visible_reference_keys") if isinstance(rendered, dict) else [])
-    support_items = _support_items(support)
+    support_items = _support_items(support, run_root=support_path.parent.parent)
     support_by_key = _support_by_key(support_items)
     claims_by_key = _claims_by_key(claim_map)
     roles_by_key = _roles_by_key(placement)
@@ -275,6 +288,21 @@ def _empty_counts() -> dict[str, int]:
     }
 
 
+def _citation_summary_from_items(items: list[CitationQualityItem]) -> dict[str, int]:
+    summary = {"pass": 0, "weak": 0, "fail": 0, "human_needed": 0}
+    for item in items:
+        status = str(item.support_status or "unknown").strip().lower() or "unknown"
+        if status == "supported" and not item.failing_codes:
+            summary["pass"] += 1
+        elif status == "metadata_only":
+            summary["weak"] += 1
+        elif status in {"unsupported", "contradicted"}:
+            summary["fail"] += 1
+        else:
+            summary["human_needed"] += 1
+    return summary
+
+
 def _stale_codes(payloads: dict[str, Any], manuscript_sha: str | None, *, claim_safe: bool) -> list[str]:
     if not claim_safe or not manuscript_sha:
         return []
@@ -288,9 +316,69 @@ def _stale_codes(payloads: dict[str, Any], manuscript_sha: str | None, *, claim_
     return sorted(dict.fromkeys(stale))
 
 
-def _support_items(payload: Any) -> list[dict[str, Any]]:
+def _support_items(payload: Any, *, run_root: Path | None = None) -> list[dict[str, Any]]:
+    if isinstance(payload, dict) and payload.get("schema") == "citation-support-review/3":
+        return _support_items_from_v3_cases(payload.get("cases"), run_root=run_root)
     items = payload.get("items") if isinstance(payload, dict) else None
     return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+
+
+def _support_items_from_v3_cases(cases: Any, *, run_root: Path | None = None) -> list[dict[str, Any]]:
+    if not isinstance(cases, list):
+        return []
+    items: list[dict[str, Any]] = []
+    for case in cases:
+        if not isinstance(case, dict):
+            continue
+        key = str(case.get("key") or "").strip()
+        if not key:
+            continue
+        evidence = case.get("evidence") if isinstance(case.get("evidence"), dict) else {}
+        evidence_readable = _v3_evidence_is_readable(evidence, run_root=run_root)
+        items.append(
+            {
+                "id": str(case.get("id") or f"case:{_sha256_text(key)[:12]}"),
+                "citation_keys": [key],
+                "support_status": _v3_support_status(case.get("verdict"), evidence.get("status"), evidence_readable=evidence_readable),
+                "evidence_status": str(evidence.get("status") or "missing").strip().lower() or "missing",
+                "evidence_readable": evidence_readable,
+                "review_schema": "citation-support-review/3",
+            }
+        )
+    return items
+
+
+def _v3_evidence_is_readable(evidence: dict[str, Any], *, run_root: Path | None) -> bool:
+    status = str(evidence.get("status") or "missing").strip().lower() or "missing"
+    text_value = evidence.get("text")
+    path_value = evidence.get("path")
+    candidates: list[Path] = []
+    for value in [text_value, path_value if status == "text" else None]:
+        if not isinstance(value, str) or not value.strip():
+            continue
+        raw = Path(value)
+        candidates.append(raw if raw.is_absolute() or run_root is None else run_root / raw)
+    for candidate in candidates:
+        try:
+            if candidate.exists() and candidate.is_file() and candidate.stat().st_size > 0:
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _v3_support_status(verdict: Any, evidence_status: Any, *, evidence_readable: bool = False) -> str:
+    status = str(evidence_status or "missing").strip().lower() or "missing"
+    normalized = str(verdict or "human_needed").strip().lower() or "human_needed"
+    if normalized == "pass":
+        return "supported" if status in {"pdf", "html", "text"} and evidence_readable else "insufficient_evidence"
+    if normalized == "weak":
+        return "metadata_only"
+    if normalized == "fail":
+        return "unsupported"
+    if normalized == "human_needed":
+        return "insufficient_evidence"
+    return "unknown"
 
 
 def _support_by_key(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:

@@ -181,6 +181,93 @@ def test_citation_semantics_detects_bombs_duplicates_and_claim_source_mismatch()
         assert "claim_source_mismatch" in audit["failing_codes"]
 
 
+def test_source_backed_v3_human_needed_counts_as_claim_source_mismatch() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        state = _init_session(root)
+        paper = artifact_path(root, "paper.full.tex")
+        paper.write_text("Background needs support~\\cite{Prior}.\n", encoding="utf-8")
+        state.artifacts.paper_full_tex = str(paper)
+        save_session(root, state)
+        review = paper.parent / "citation_support_review.json"
+        review.write_text(
+            json.dumps(
+                {
+                    "schema": "citation-support-review/3",
+                    "mode": "source",
+                    "summary": {"pass": 0, "weak": 0, "fail": 0, "human_needed": 1},
+                    "cases": [
+                        {
+                            "id": "C1",
+                            "key": "Prior",
+                            "loc": "Background ¶1",
+                            "paragraph": "PRIVATE_RAW_CONTEXT needs support~\\cite{Prior}.",
+                            "anchor": "PRIVATE_RAW_CONTEXT needs support~\\cite{Prior}.",
+                            "target": "PRIVATE_RAW_CONTEXT needs support",
+                            "source": {"type": "paper", "title": "Prior Scheduler"},
+                            "evidence": {"status": "missing", "why": "unretrieved"},
+                            "verdict": "human_needed",
+                            "ask": "Add source.pdf.",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        source_match = build_citation_source_match(root, quality_mode="claim_safe")
+        rendered = json.dumps(source_match, ensure_ascii=False)
+
+        assert source_match["status"] == "fail"
+        assert source_match["support_status_counts"] == {"insufficient_evidence": 1}
+        assert "claim_source_mismatch" in source_match["failing_codes"]
+        assert "PRIVATE_RAW_CONTEXT" not in rendered
+
+
+def test_source_backed_v3_pass_with_missing_source_text_counts_as_claim_source_mismatch() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        state = _init_session(root)
+        paper = artifact_path(root, "paper.full.tex")
+        paper.write_text("Background needs support~\\cite{Prior}.\n", encoding="utf-8")
+        state.artifacts.paper_full_tex = str(paper)
+        save_session(root, state)
+        review = paper.parent / "citation_support_review.json"
+        review.write_text(
+            json.dumps(
+                {
+                    "schema": "citation-support-review/3",
+                    "mode": "source",
+                    "summary": {"pass": 1, "weak": 0, "fail": 0, "human_needed": 0},
+                    "cases": [
+                        {
+                            "id": "C1",
+                            "key": "Prior",
+                            "loc": "Background ¶1",
+                            "paragraph": "PRIVATE_RAW_CONTEXT needs support~\\cite{Prior}.",
+                            "anchor": "PRIVATE_RAW_CONTEXT needs support~\\cite{Prior}.",
+                            "target": "PRIVATE_RAW_CONTEXT needs support",
+                            "source": {"type": "paper", "title": "Prior Scheduler"},
+                            "evidence": {"status": "pdf", "path": "artifacts/references/C1/source.pdf", "text": "artifacts/references/C1/source.txt"},
+                            "verdict": "pass",
+                            "note": "Claimed supported, but source text file is missing.",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        artifact_path(root, "references/C1/source.pdf").write_bytes(b"%PDF-1.4\n")
+
+        source_match = build_citation_source_match(root, quality_mode="claim_safe")
+        rendered = json.dumps(source_match, ensure_ascii=False)
+
+        assert source_match["status"] == "fail"
+        assert source_match["support_status_counts"] == {"insufficient_evidence": 1}
+        assert "claim_source_mismatch" in source_match["failing_codes"]
+        assert "PRIVATE_RAW_CONTEXT" not in rendered
+
+
 def test_dense_citation_bundle_warns_without_hard_failing_integrity() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)

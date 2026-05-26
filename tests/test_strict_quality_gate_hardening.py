@@ -1241,7 +1241,7 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
         tools = {tool["name"]: tool for tool in mcp_server.TOOLS}
         schema_prop = tools["apply_operator_feedback"]["inputSchema"]["properties"]["citation_evidence_mode"]
         self.assertEqual(schema_prop["default"], "web")
-        self.assertEqual(schema_prop["enum"], ["heuristic", "model", "web"])
+        self.assertEqual(schema_prop["enum"], ["heuristic", "model", "web", "source"])
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

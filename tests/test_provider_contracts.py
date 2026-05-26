@@ -70,3 +70,8 @@ class ProviderWrapperContractTests(unittest.TestCase):
             command = write_wrapper(Path(tmp), tamper=True)
             with self.assertRaises(ProviderError):
                 get_citation_support_provider("shell", command=command, evidence_mode="web")
+
+    def test_source_evidence_mode_uses_local_reference_resolver_without_model_provider(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            command = write_wrapper(Path(tmp))
+            self.assertIsNone(get_citation_support_provider("shell", command=command, evidence_mode="source"))

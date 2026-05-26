@@ -6083,7 +6083,7 @@ Related \\cite{alpha}.
         self.assertIn("citation_evidence_mode", critique_props)
         self.assertEqual(critique_props["citation_evidence_mode"]["default"], "heuristic")
         self.assertEqual(apply_props["citation_evidence_mode"]["default"], "web")
-        self.assertEqual(apply_props["citation_evidence_mode"]["enum"], ["heuristic", "model", "web"])
+        self.assertEqual(apply_props["citation_evidence_mode"]["enum"], ["heuristic", "model", "web", "source"])
 
     def test_cli_claim_safe_feedback_defaults_to_web_citation_evidence(self) -> None:
         parser = build_parser()

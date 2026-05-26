@@ -5135,6 +5135,90 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(beyond["promotion_status"], "rolled_back")
             self.assertIn("reviewer_catastrophic_regression", beyond["attempts"][-1]["gate_reasons"])
 
+    def test_operator_feedback_failed_candidate_rolls_back_citation_support_review_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            original_text = "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nDraft.\\end{document}\n"
+            paper.write_text(original_text, encoding="utf-8")
+            review = review_path(root, "review.latest.json")
+            review.write_text(json.dumps({"overall_score": 70, "axis_scores": {}, "summary": {"weaknesses": [], "top_improvements": []}, "questions": [], "penalties": []}), encoding="utf-8")
+            support_path = paper.parent / "citation_support_review.json"
+            original_support = {"schema": "citation-support-review/3", "marker": "original"}
+            support_path.write_text(json.dumps(original_support), encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.latest_review_json = str(review)
+            save_session(root, state)
+            self._write_terminal_human_needed_plan(root)
+            packet_path, packet = build_operator_review_packet(root, review_scope="tex_only")
+            issue_id = derive_operator_issue_id(
+                packet["packet_sha256"],
+                source_artifact_role="paper_full_tex",
+                source_item_key="Intro:p1",
+                target_section="Intro",
+                rationale="The introduction needs a candidate change.",
+                suggested_action="Add a candidate sentence.",
+            )
+            feedback_path = root / "operator-feedback.json"
+            feedback_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-feedback/1",
+                        "source": "codex_operator",
+                        "not_independent_human_review": True,
+                        "intent": "generate_new_operator_candidate",
+                        "packet_sha256": packet["packet_sha256"],
+                        "manuscript_sha256": packet["manuscript_sha256"],
+                        "issues": [
+                            {
+                                "id": issue_id,
+                                "source_artifact_role": "paper_full_tex",
+                                "source_item_key": "Intro:p1",
+                                "target_section": "Intro",
+                                "severity": "major",
+                                "rationale": "The introduction needs a candidate change.",
+                                "suggested_action": "Add a candidate sentence.",
+                                "authority_class": "prose_rewrite",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            imported_path, _ = import_operator_feedback(root, packet_path=packet_path, feedback_path=feedback_path)
+
+            def fake_refine(cwd, provider, **kwargs):
+                target = Path(load_session(cwd).artifacts.paper_full_tex)
+                target.write_text(original_text.replace("Draft.", "Draft. Candidate sentence."), encoding="utf-8")
+                return [{"iteration": 1, "accepted": True, "reason": "test"}]
+
+            citation_write_count = {"value": 0}
+
+            def fake_write_citation_review(cwd, *args, **kwargs):
+                citation_write_count["value"] += 1
+                if citation_write_count["value"] == 1:
+                    support_path.write_text(json.dumps({"schema": "citation-support-review/3", "marker": "candidate"}), encoding="utf-8")
+                return support_path
+
+            candidate_eval = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "tiers": {"tier_2_claim_safety": {"status": "fail", "failing_codes": ["new_candidate_blocker"]}},
+            }
+            restored_eval = {"session_id": state.session_id, "mode": "claim_safe", "tiers": {}}
+            with patch("paperorchestra.operator_feedback.refine_current_paper", side_effect=fake_refine):
+                with patch("paperorchestra.operator_feedback.write_section_review", return_value=root / "section.json"):
+                    with patch("paperorchestra.operator_feedback.write_citation_support_review", side_effect=fake_write_citation_review):
+                        with patch("paperorchestra.operator_feedback.review_current_paper", return_value=root / "review.json"):
+                            with patch("paperorchestra.operator_feedback.write_quality_eval", side_effect=[(root / "candidate-quality.json", candidate_eval), (root / "restored-quality.json", restored_eval)]):
+                                with patch("paperorchestra.operator_feedback.write_quality_loop_plan", side_effect=[(root / "candidate-plan.json", {"verdict": "failed"}), (root / "restored-plan.json", {"verdict": "human_needed"})]):
+                                    _, execution = apply_operator_feedback(root, MockProvider(), imported_feedback_path=imported_path)
+
+            self.assertEqual(execution["promotion_status"], "rolled_back")
+            self.assertEqual(paper.read_text(encoding="utf-8"), original_text)
+            self.assertEqual(json.loads(support_path.read_text(encoding="utf-8")), original_support)
+
     def test_operator_feedback_preserves_each_generated_candidate_attempt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

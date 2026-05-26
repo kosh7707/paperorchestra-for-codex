@@ -958,10 +958,27 @@ def _write_operator_review_for_refiner(
 def _session_snapshot(cwd: str | Path | None) -> dict[str, Any]:
     state = load_session(cwd)
     paper_path = Path(state.artifacts.paper_full_tex).resolve() if state.artifacts.paper_full_tex else None
+    artifact_paths = []
+    if paper_path:
+        artifact_paths.extend(
+            [
+                paper_path.parent / "citation_support_review.json",
+                paper_path.parent / "citation_support_review.trace.json",
+                paper_path.parent / "citation_support_human_needed.md",
+            ]
+        )
     return {
         "state": state.to_dict(),
         "paper_path": str(paper_path) if paper_path else None,
         "paper_text": paper_path.read_text(encoding="utf-8") if paper_path and paper_path.exists() else None,
+        "artifact_files": [
+            {
+                "path": str(path),
+                "exists": path.exists(),
+                "content": path.read_bytes() if path.exists() else None,
+            }
+            for path in artifact_paths
+        ],
     }
 
 def _restore_session_snapshot(cwd: str | Path | None, snapshot: dict[str, Any]) -> None:
@@ -971,6 +988,16 @@ def _restore_session_snapshot(cwd: str | Path | None, snapshot: dict[str, Any]) 
     paper_text = snapshot.get("paper_text")
     if paper_path and paper_text is not None:
         Path(paper_path).write_text(paper_text, encoding="utf-8")
+    for item in snapshot.get("artifact_files") or []:
+        path_value = item.get("path") if isinstance(item, dict) else None
+        if not path_value:
+            continue
+        path = Path(path_value)
+        if item.get("exists"):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(item.get("content") or b"")
+        else:
+            path.unlink(missing_ok=True)
     state = SessionState.from_dict(snapshot["state"])
     save_session(cwd, state)
 

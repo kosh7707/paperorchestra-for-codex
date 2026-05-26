@@ -183,7 +183,7 @@ TOOLS: list[JSON] = [
                 "accept_mixed_provenance": {"type": "boolean"},
                 "require_compile": {"type": "boolean"},
                 "runtime_mode": {"type": "string"},
-                "citation_evidence_mode": {"type": "string", "enum": ["heuristic", "model", "web"]},
+                "citation_evidence_mode": {"type": "string", "enum": ["heuristic", "model", "web", "source"]},
             },
             "required": ["answer"],
         },
@@ -291,7 +291,7 @@ TOOLS: list[JSON] = [
                 "runtime_mode": {"type": "string"},
                 "citation_evidence_mode": {
                     "type": "string",
-                    "enum": ["heuristic", "model", "web"],
+                    "enum": ["heuristic", "model", "web", "source"],
                     "default": "web",
                     "description": "Claim-safe operator-feedback validation defaults to web-capable citation support; weaker modes require explicit opt-in.",
                 },
@@ -604,7 +604,7 @@ TOOLS: list[JSON] = [
                 "runtime_mode": {"type": "string"},
                 "citation_evidence_mode": {
                     "type": "string",
-                    "enum": ["heuristic", "model", "web"],
+                    "enum": ["heuristic", "model", "web", "source"],
                     "default": "heuristic",
                     "description": "Critique is an advisory helper; use web explicitly when claim-support evidence is required.",
                 }
@@ -626,7 +626,7 @@ TOOLS: list[JSON] = [
                 "output_path": {"type": "string"},
                 "evidence_mode": {
                     "type": "string",
-                    "enum": ["heuristic", "model", "web"],
+                    "enum": ["heuristic", "model", "web", "source"],
                     "default": "heuristic",
                     "description": "Advisory citation-review mode. Claim-safe operator feedback uses web by default through apply_operator_feedback.",
                 },

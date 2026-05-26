@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .critics import citation_item_has_valid_supporting_evidence, extract_cited_sentences
+from .critics import build_source_backed_citation_cases, citation_item_has_valid_supporting_evidence, extract_cited_sentences
 from .providers import ShellProvider, exec_argv_prefix_proves_web_search, get_citation_support_provider
 from .quality_loop_policy import CITATION_SUPPORT_STATUSES
 from .quality_loop_utils import _file_sha256, _read_json_if_exists
@@ -89,6 +89,8 @@ def _citation_support_check(cwd: str | Path | None, state, *, quality_mode: str 
     payload = _read_json_if_exists(path)
     if not isinstance(payload, dict):
         return {"status": "fail", "path": str(path), "failing_codes": ["citation_support_review_missing"], "summary": None}
+    if payload.get("schema") == "citation-support-review/3":
+        return _citation_support_check_v3(cwd, state, path, payload, quality_mode=quality_mode)
     current_sha = _file_sha256(state.artifacts.paper_full_tex)
     if current_sha and payload.get("manuscript_sha256") != current_sha:
         return {
@@ -266,6 +268,87 @@ def _citation_support_check(cwd: str | Path | None, state, *, quality_mode: str 
         "web_search_required": provenance.get("web_search_required"),
         "model_review_used": model_review_used,
         "legacy_untrusted": legacy_untrusted,
+        "failing_codes": failing_codes,
+    }
+
+
+def _citation_support_check_v3(
+    cwd: str | Path | None,
+    state,
+    path: Path,
+    payload: dict[str, Any],
+    *,
+    quality_mode: str,
+) -> dict[str, Any]:
+    raw_cases = payload.get("cases") if isinstance(payload.get("cases"), list) else []
+    cases = [case for case in raw_cases if isinstance(case, dict)]
+    summary = {"pass": 0, "weak": 0, "fail": 0, "human_needed": 0}
+    invalid_verdicts: list[str] = []
+    for case in cases:
+        verdict = str(case.get("verdict") or "human_needed")
+        if verdict not in summary:
+            invalid_verdicts.append(verdict)
+            verdict = "human_needed"
+        summary[verdict] += 1
+    reported_summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
+    failing_codes: list[str] = []
+    if reported_summary != summary:
+        failing_codes.append("citation_support_summary_mismatch")
+    if invalid_verdicts:
+        failing_codes.append("citation_support_invalid_status")
+    try:
+        current_cases = build_source_backed_citation_cases(cwd, resolve_evidence=False)
+    except Exception:
+        current_cases = []
+    current_identity = [(str(case.get("id")), str(case.get("key"))) for case in current_cases]
+    review_identity = [(str(case.get("id")), str(case.get("key"))) for case in cases]
+    if current_identity != review_identity:
+        failing_codes.append("citation_support_case_coverage_mismatch")
+
+    missing_source_artifacts = 0
+    run_root = path.parent.parent
+    for case in cases:
+        evidence = case.get("evidence") if isinstance(case.get("evidence"), dict) else {}
+        verdict = str(case.get("verdict") or "human_needed")
+        status = str(evidence.get("status") or "missing")
+        if verdict == "pass":
+            text_value = evidence.get("text")
+            text_path = run_root / str(text_value) if isinstance(text_value, str) and not Path(text_value).is_absolute() else Path(str(text_value)) if text_value else None
+            text_ready = False
+            try:
+                text_ready = bool(text_path and text_path.exists() and text_path.is_file() and text_path.stat().st_size > 0)
+            except OSError:
+                text_ready = False
+            if status not in {"pdf", "html", "text"} or not text_ready:
+                missing_source_artifacts += 1
+    if summary["weak"]:
+        failing_codes.append("citation_support_weak")
+    if summary["fail"]:
+        failing_codes.append("citation_support_unsupported")
+    if summary["human_needed"]:
+        failing_codes.append("citation_support_manual_check")
+    if missing_source_artifacts:
+        failing_codes.append("citation_support_evidence_missing")
+    status = "fail" if failing_codes else "pass"
+    return {
+        "status": status,
+        "path": str(path),
+        "citation_review_sha256": _file_sha256(path),
+        "summary": summary,
+        "canonical_summary": summary,
+        "reported_summary": reported_summary,
+        "claims_checked": len(cases),
+        "item_count": len(cases),
+        "case_count": len(cases),
+        "current_case_count": len(current_cases),
+        "weakly_supported_count": summary["weak"],
+        "unsupported_count": summary["fail"],
+        "needs_manual_check_count": summary["human_needed"],
+        "evidence_missing_count": missing_source_artifacts,
+        "evidence_mode": payload.get("mode"),
+        "source_backed": True,
+        "legacy_untrusted": False,
+        "invalid_status_values": sorted(set(invalid_verdicts)),
         "failing_codes": failing_codes,
     }
 
