@@ -696,6 +696,182 @@ class SourceBackedCitationSupportReviewTests(unittest.TestCase):
         self.assertTrue(source_html_exists)
         self.assertTrue(source_txt_exists)
 
+    def test_source_inspector_does_not_pass_diffuse_keyword_overlap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            artifact_path(root, "references/C1/source.txt").write_text(
+                "Alpha is the name of a research prototype. "
+                "Separately, code graphs appear in program analysis. "
+                "Vulnerability detection remains difficult in deployment.",
+                encoding="utf-8",
+            )
+
+            review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertEqual(case["verdict"], "weak")
+        self.assertLess(len(case["note"]), 180)
+        self.assertNotIn("Vulnerability detection remains difficult", case["note"])
+
+    def test_source_inspector_requires_subject_entity_for_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            artifact_path(root, "references/C1/source.txt").write_text(
+                "Code graphs support vulnerability detection in several production systems.",
+                encoding="utf-8",
+            )
+
+            review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertEqual(case["verdict"], "weak")
+        self.assertEqual(review["summary"], {"pass": 0, "weak": 1, "fail": 0, "human_needed": 0})
+
+    def test_source_inspector_marks_weaker_general_support_as_weak(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            artifact_path(root, "references/C1/source.txt").write_text(
+                "Alpha explores code graphs for program analysis and visualization.",
+                encoding="utf-8",
+            )
+
+            review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertEqual(case["verdict"], "weak")
+        self.assertEqual(review["summary"], {"pass": 0, "weak": 1, "fail": 0, "human_needed": 0})
+
+    def test_source_inspector_keeps_direct_support_as_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            artifact_path(root, "references/C1/source.txt").write_text(
+                "Alpha uses code graphs for vulnerability detection in deployed analysis workflows.",
+                encoding="utf-8",
+            )
+
+            review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertEqual(case["verdict"], "pass")
+        self.assertEqual(review["summary"], {"pass": 1, "weak": 0, "fail": 0, "human_needed": 0})
+
+    def test_source_inspector_marks_direct_contradiction_as_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            artifact_path(root, "references/C1/source.txt").write_text(
+                "Alpha does not use code graphs for vulnerability detection.",
+                encoding="utf-8",
+            )
+
+            review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertEqual(case["verdict"], "fail")
+        self.assertEqual(review["summary"], {"pass": 0, "weak": 0, "fail": 1, "human_needed": 0})
+
+    def test_source_inspector_does_not_fail_benign_or_unrelated_negation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            artifact_path(root, "references/C1/source.txt").write_text(
+                "Alpha not only uses code graphs for vulnerability detection, it also reports triage outcomes. "
+                "A separate baseline is not evaluated in this artifact.",
+                encoding="utf-8",
+            )
+
+            review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertEqual(case["verdict"], "pass")
+        self.assertNotEqual(case["verdict"], "fail")
+
+    def test_source_inspector_later_contradiction_overrides_earlier_support(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            artifact_path(root, "references/C1/source.txt").write_text(
+                "Alpha uses code graphs for vulnerability detection in an early prototype. "
+                "However, the final evaluated Alpha system does not use code graphs for vulnerability detection.",
+                encoding="utf-8",
+            )
+
+            review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertEqual(case["verdict"], "fail")
+        self.assertEqual(review["summary"], {"pass": 0, "weak": 0, "fail": 1, "human_needed": 0})
+
+    def test_source_inspector_ignores_poisoned_non_target_context_and_title(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = _init_source_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Background}\n"
+                "Alpha uses code graphs for vulnerability detection. "
+                "Alpha improves triage~\\cite{Alpha}.\n",
+                encoding="utf-8",
+            )
+            citation_map = artifact_path(root, "citation_map.json")
+            citation_map.write_text(
+                json.dumps({"Alpha": {"title": "Alpha Graph Vulnerability Detection", "url": "https://example.test/alpha"}}),
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.citation_map_json = str(citation_map)
+            save_session(root, state)
+            artifact_path(root, "references/C1/source.txt").write_text(
+                "Alpha uses code graphs for vulnerability detection.",
+                encoding="utf-8",
+            )
+
+            review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertEqual(str(case["target"]).strip(), "Alpha improves triage")
+        self.assertNotEqual(case["verdict"], "pass")
+
+    def test_source_inspector_keeps_citation_cases_isolated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = _init_source_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Background}\n"
+                "Alpha improves triage~\\cite{Alpha}. "
+                "Beta uses code graphs for vulnerability detection~\\cite{Beta}.\n",
+                encoding="utf-8",
+            )
+            citation_map = artifact_path(root, "citation_map.json")
+            citation_map.write_text(
+                json.dumps(
+                    {
+                        "Alpha": {"title": "Alpha Graph Vulnerability Detection", "url": "https://example.test/alpha"},
+                        "Beta": {"title": "Beta Graph Vulnerability Detection", "url": "https://example.test/beta"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.citation_map_json = str(citation_map)
+            save_session(root, state)
+            artifact_path(root, "references/C1/source.txt").write_text("Alpha is a prototype.", encoding="utf-8")
+            artifact_path(root, "references/C2/source.txt").write_text(
+                "Beta uses code graphs for vulnerability detection.",
+                encoding="utf-8",
+            )
+
+            review = build_citation_support_review(root, evidence_mode="source")
+            by_key = {case["key"]: case for case in review["cases"]}
+
+        self.assertNotEqual(by_key["Alpha"]["verdict"], "pass")
+        self.assertEqual(by_key["Beta"]["verdict"], "pass")
+
     def test_write_source_backed_review_emits_short_human_needed_markdown(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
