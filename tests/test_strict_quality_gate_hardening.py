@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -3285,6 +3287,36 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
                 },
                 result["missing"],
             )
+
+    def test_validate_fresh_smoke_evidence_script_uses_repo_local_manual_cycle_logic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_minimal_fresh_smoke_evidence_root(root)
+            self._write_pdf_operator_packet(root)
+            self._write_completed_manual_operator_cycle(root, include_compiled_pdf_issue=True)
+            output = root / "artifacts" / "evidence-completeness.json"
+
+            env = os.environ.copy()
+            env.pop("PYTHONPATH", None)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/validate-fresh-smoke-evidence.py",
+                    str(root),
+                    "--output",
+                    str(output),
+                ],
+                cwd=Path(__file__).resolve().parents[1],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            payload = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(payload["status"], "pass", payload)
+            self.assertNotIn("operator_cycle_artifact_missing", payload["failing_codes"])
 
     def test_evidence_completeness_accepts_pending_manual_operator_handoff_without_auto_author_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
