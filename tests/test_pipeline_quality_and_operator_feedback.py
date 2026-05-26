@@ -5184,6 +5184,10 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             support_path = paper.parent / "citation_support_review.json"
             original_support = {"schema": "citation-support-review/3", "marker": "original"}
             support_path.write_text(json.dumps(original_support), encoding="utf-8")
+            reference_source = artifact_path(root, "references/C1/source.txt")
+            reference_source.write_text("original source evidence", encoding="utf-8")
+            reference_resolution = artifact_path(root, "references/C1/human-resolution.json")
+            new_reference_source = artifact_path(root, "references/C2/nested/source.txt")
             state.artifacts.paper_full_tex = str(paper)
             state.artifacts.latest_review_json = str(review)
             save_session(root, state)
@@ -5236,6 +5240,19 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
                 citation_write_count["value"] += 1
                 if citation_write_count["value"] == 1:
                     support_path.write_text(json.dumps({"schema": "citation-support-review/3", "marker": "candidate"}), encoding="utf-8")
+                    reference_source.write_text("candidate source evidence", encoding="utf-8")
+                    reference_resolution.write_text(
+                        json.dumps(
+                            {
+                                "schema": "citation-human-resolution/1",
+                                "case": "C1",
+                                "action": "provide_source_url",
+                                "url": "https://publisher.example.org/candidate",
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                    new_reference_source.write_text("candidate-only nested source evidence", encoding="utf-8")
                 return support_path
 
             candidate_eval = {
@@ -5255,6 +5272,9 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(execution["promotion_status"], "rolled_back")
             self.assertEqual(paper.read_text(encoding="utf-8"), original_text)
             self.assertEqual(json.loads(support_path.read_text(encoding="utf-8")), original_support)
+            self.assertEqual(reference_source.read_text(encoding="utf-8"), "original source evidence")
+            self.assertFalse(reference_resolution.exists())
+            self.assertFalse(new_reference_source.exists())
 
     def test_operator_feedback_preserves_each_generated_candidate_attempt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

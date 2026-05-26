@@ -920,6 +920,344 @@ class SourceBackedCitationSupportReviewTests(unittest.TestCase):
 
         self.assertTrue(stale_removed)
 
+    def test_human_resolution_source_url_ignores_stale_source_and_reinspects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root, url="https://example.test/stale")
+            stale = artifact_path(root, "references/C1/source.txt")
+            stale.write_text("Alpha is only a prototype with no graph evidence.", encoding="utf-8")
+            artifact_path(root, "references/C1/human-resolution.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "citation-human-resolution/1",
+                        "case": "C1",
+                        "action": "provide_source_url",
+                        "url": "https://publisher.example.org/alpha-source",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            seen_urls: list[str] = []
+
+            def fake_urlopen(request, timeout=10):
+                url = _request_url(request)
+                seen_urls.append(url)
+                return _FakeResponse(
+                    b"<html><body>Alpha uses code graphs for vulnerability detection.</body></html>",
+                    "text/html",
+                    final_url=url,
+                )
+
+            with patch("paperorchestra.critics.urllib.request.urlopen", side_effect=fake_urlopen):
+                review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertEqual(seen_urls, ["https://publisher.example.org/alpha-source"])
+        self.assertEqual(case["source"]["url"], "https://publisher.example.org/alpha-source")
+        self.assertEqual(case["resolution"]["action"], "provide_source_url")
+        self.assertEqual(case["resolution"]["status"], "applied")
+        self.assertEqual(case["verdict"], "pass")
+
+    def test_human_resolution_source_url_unsupported_fetch_does_not_auto_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root, url="https://example.test/stale")
+            artifact_path(root, "references/C1/human-resolution.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "citation-human-resolution/1",
+                        "case": "C1",
+                        "action": "provide_source_url",
+                        "url": "https://publisher.example.org/alpha-source",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fake_urlopen(request, timeout=10):
+                return _FakeResponse(
+                    b"<html><body>Alpha is a prototype dashboard.</body></html>",
+                    "text/html",
+                    final_url=_request_url(request),
+                )
+
+            with patch("paperorchestra.critics.urllib.request.urlopen", side_effect=fake_urlopen):
+                review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertIn("resolution", case)
+        self.assertEqual(case["resolution"]["action"], "provide_source_url")
+        self.assertNotEqual(case["verdict"], "pass")
+
+    def test_human_resolution_source_url_overrides_stale_arxiv_locator(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = _init_source_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\section{Background}\nAlpha uses code graphs for vulnerability detection~\\cite{Alpha}.\n", encoding="utf-8")
+            citation_map = artifact_path(root, "citation_map.json")
+            citation_map.write_text(
+                json.dumps({"Alpha": {"title": "Old Alpha", "arxiv": "2401.99999", "url": "https://example.test/stale"}}),
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.citation_map_json = str(citation_map)
+            save_session(root, state)
+            artifact_path(root, "references/C1/human-resolution.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "citation-human-resolution/1",
+                        "case": "C1",
+                        "action": "provide_source_url",
+                        "url": "https://publisher.example.org/human-alpha",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            seen_urls: list[str] = []
+
+            def fake_urlopen(request, timeout=10):
+                url = _request_url(request)
+                seen_urls.append(url)
+                return _FakeResponse(
+                    b"<html><body>Alpha uses code graphs for vulnerability detection.</body></html>",
+                    "text/html",
+                    final_url=url,
+                )
+
+            with patch("paperorchestra.critics.urllib.request.urlopen", side_effect=fake_urlopen):
+                review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertEqual(seen_urls, ["https://publisher.example.org/human-alpha"])
+        self.assertNotIn("arxiv", case["source"])
+        self.assertEqual(case["verdict"], "pass")
+
+    def test_human_resolution_replacement_citation_revalidates_replacement_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = _init_source_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\section{Background}\nAlpha uses code graphs for vulnerability detection~\\cite{Alpha}.\n", encoding="utf-8")
+            citation_map = artifact_path(root, "citation_map.json")
+            citation_map.write_text(
+                json.dumps(
+                    {
+                        "Alpha": {"title": "Unsupported Alpha", "url": "https://example.test/old-alpha"},
+                        "Better": {"title": "Better Graph Study", "url": "https://publisher.example.org/better"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.citation_map_json = str(citation_map)
+            save_session(root, state)
+            artifact_path(root, "references/C1/source.txt").write_text("Alpha is unrelated to graph-based vulnerability detection.", encoding="utf-8")
+            artifact_path(root, "references/C1/human-resolution.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "citation-human-resolution/1",
+                        "case": "C1",
+                        "action": "replace_citation",
+                        "replacement_key": "Better",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            seen_urls: list[str] = []
+
+            def fake_urlopen(request, timeout=10):
+                url = _request_url(request)
+                seen_urls.append(url)
+                return _FakeResponse(
+                    b"<html><body>Better shows Alpha uses code graphs for vulnerability detection.</body></html>",
+                    "text/html",
+                    final_url=url,
+                )
+
+            with patch("paperorchestra.critics.urllib.request.urlopen", side_effect=fake_urlopen):
+                review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertEqual(seen_urls, ["https://publisher.example.org/better"])
+        self.assertEqual(case["key"], "Better")
+        self.assertEqual(case["resolution"]["action"], "replace_citation")
+        self.assertEqual(case["resolution"]["original_key"], "Alpha")
+        self.assertEqual(case["resolution"]["replacement_key"], "Better")
+        self.assertEqual(case["verdict"], "pass")
+
+    def test_human_resolution_replacement_unsupported_source_does_not_auto_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = _init_source_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\section{Background}\nAlpha uses code graphs for vulnerability detection~\\cite{Alpha}.\n", encoding="utf-8")
+            citation_map = artifact_path(root, "citation_map.json")
+            citation_map.write_text(
+                json.dumps(
+                    {
+                        "Alpha": {"title": "Unsupported Alpha", "url": "https://example.test/old-alpha"},
+                        "Better": {"title": "Better Graph Study", "url": "https://publisher.example.org/better"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.citation_map_json = str(citation_map)
+            save_session(root, state)
+            artifact_path(root, "references/C1/human-resolution.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "citation-human-resolution/1",
+                        "case": "C1",
+                        "action": "replace_citation",
+                        "replacement_key": "Better",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def fake_urlopen(request, timeout=10):
+                return _FakeResponse(
+                    b"<html><body>Better studies unrelated dashboards.</body></html>",
+                    "text/html",
+                    final_url=_request_url(request),
+                )
+
+            with patch("paperorchestra.critics.urllib.request.urlopen", side_effect=fake_urlopen):
+                review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertEqual(case["key"], "Better")
+        self.assertIn("resolution", case)
+        self.assertEqual(case["resolution"]["action"], "replace_citation")
+        self.assertNotEqual(case["verdict"], "pass")
+
+    def test_human_resolution_replacement_uses_operator_supplied_source_artifact_when_marked(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = _init_source_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\section{Background}\nAlpha uses code graphs for vulnerability detection~\\cite{Alpha}.\n", encoding="utf-8")
+            citation_map = artifact_path(root, "citation_map.json")
+            citation_map.write_text(
+                json.dumps(
+                    {
+                        "Alpha": {"title": "Unsupported Alpha", "url": "https://example.test/old-alpha"},
+                        "Better": {"title": "Better Graph Study", "url": "https://publisher.example.org/better"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.citation_map_json = str(citation_map)
+            save_session(root, state)
+            artifact_path(root, "references/C1/source.txt").write_text("Better shows Alpha uses code graphs for vulnerability detection.", encoding="utf-8")
+            artifact_path(root, "references/C1/human-resolution.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "citation-human-resolution/1",
+                        "case": "C1",
+                        "action": "replace_citation",
+                        "replacement_key": "Better",
+                        "use_provided_source": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("paperorchestra.critics.urllib.request.urlopen") as urlopen:
+                review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        urlopen.assert_not_called()
+        self.assertEqual(case["key"], "Better")
+        self.assertEqual(case["evidence"]["status"], "text")
+        self.assertEqual(case["resolution"]["source"], "provided")
+        self.assertEqual(case["verdict"], "pass")
+
+    def test_human_resolution_weaken_claim_changes_target_but_requires_support(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            artifact_path(root, "references/C1/source.txt").write_text("Alpha uses code graphs.", encoding="utf-8")
+            artifact_path(root, "references/C1/human-resolution.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "citation-human-resolution/1",
+                        "case": "C1",
+                        "action": "weaken_claim",
+                        "target": "Alpha uses code graphs",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertEqual(case["target"], "Alpha uses code graphs")
+        self.assertEqual(case["resolution"]["action"], "weaken_claim")
+        self.assertIn("vulnerability detection", case["resolution"]["original_target"])
+        self.assertEqual(case["resolution"]["target"], "Alpha uses code graphs")
+        self.assertEqual(case["verdict"], "pass")
+
+    def test_human_resolution_weaken_claim_without_source_support_does_not_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            artifact_path(root, "references/C1/source.txt").write_text("Alpha is a prototype dashboard.", encoding="utf-8")
+            artifact_path(root, "references/C1/human-resolution.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "citation-human-resolution/1",
+                        "case": "C1",
+                        "action": "weaken_claim",
+                        "target": "Alpha uses code graphs",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertIn("resolution", case)
+        self.assertEqual(case["resolution"]["action"], "weaken_claim")
+        self.assertEqual(case["target"], "Alpha uses code graphs")
+        self.assertNotEqual(case["verdict"], "pass")
+
+    def test_human_resolution_remove_claim_is_audited_but_not_source_support(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._setup_single_alpha_url_case(root)
+            artifact_path(root, "references/C1/human-resolution.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "citation-human-resolution/1",
+                        "case": "C1",
+                        "action": "remove_claim",
+                        "reason": "The claim is unsupported by available sources.",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch(
+                "paperorchestra.critics.urllib.request.urlopen",
+                return_value=_FakeResponse(b"<html><body>Network should not be consulted for removal.</body></html>", "text/html"),
+            ) as urlopen:
+                review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+
+        self.assertEqual(case["verdict"], "human_needed")
+        self.assertIn("resolution", case)
+        self.assertEqual(case["resolution"]["action"], "remove_claim")
+        self.assertEqual(case["resolution"]["status"], "requires_manuscript_edit")
+        self.assertIn("remove", case["ask"].lower())
+        self.assertNotIn(case["verdict"], {"pass", "weak"})
+        urlopen.assert_not_called()
+
     def test_debug_citation_sources_cli_resolves_sources_without_support_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
