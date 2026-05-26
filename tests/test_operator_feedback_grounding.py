@@ -17,8 +17,24 @@ from paperorchestra.operator_feedback import (
     build_operator_review_packet,
 )
 from paperorchestra.pipeline import write_figure_placement_review
+from paperorchestra.pipeline import ContractError
 from paperorchestra.quality_loop import _figure_grounding_check, build_quality_eval
 from paperorchestra.session import artifact_path, create_session, load_session, save_session
+
+
+PRIVATE_NOTE = "PRIVATE_AUTHOR_DECISION_DO_NOT_EXPORT"
+STRICT_HUMAN_NEEDED_SCHEMAS = (
+    "human-needed-answer-metadata/1",
+    "human-needed-answer-public/1",
+)
+FORBIDDEN_OPERATOR_NOTE_CASES = (
+    ("answer_text", {"nested": {"answer_text": PRIVATE_NOTE}}),
+    ("private_answer_path", {"nested": {"private_answer_path": "/private/answer.json"}}),
+    ("private_path", {"nested": {"private_path": "/private/location"}}),
+    ("raw", {"nested": {"raw": PRIVATE_NOTE}}),
+    ("raw_answer", {"items": [{"raw_answer": PRIVATE_NOTE}]}),
+    ("answer_not_redacted", {"items": [{"nested": {"answer": PRIVATE_NOTE}}]}),
+)
 
 
 def _packet() -> dict[str, object]:
@@ -107,6 +123,133 @@ def test_normalized_operator_feedback_preserves_rendered_pdf_no_issues_attestati
     )
 
     assert normalized["rendered_pdf_no_issues"] == attestation
+
+
+def test_normalized_operator_feedback_migrates_ad_hoc_human_needed_notes() -> None:
+    notes = {
+        "cycle": 1,
+        "trend_matrix": {
+            "narrative": "improved_but_stalled",
+            "claims": "stalled",
+            "figures": "stalled",
+            "citations": "stalled_or_regressed",
+            "benchmark_explanation": "partially_improved_but_still_needs_evidence_binding",
+        },
+        "pdf_attestation": "All pages inspected; no layout-only blocker.",
+    }
+
+    normalized = normalize_operator_feedback_draft(
+        _packet(),
+        {"intent": "generate_new_operator_candidate", "issues": [_issue(1)], "human_needed_answer": notes},
+    )
+
+    assert "human_needed_answer" not in normalized
+    assert normalized["operator_review_notes"] == notes
+
+
+def test_normalized_operator_feedback_preserves_safe_operator_review_notes() -> None:
+    notes = {
+        "cycle": 2,
+        "trend_matrix": {"citations": "improved", "figures": "stalled"},
+        "pdf_attestation": "Every page image was inspected.",
+        "nested": {"answer": "redacted"},
+    }
+
+    normalized = normalize_operator_feedback_draft(
+        _packet(),
+        {"intent": "generate_new_operator_candidate", "issues": [_issue(1)], "operator_review_notes": notes},
+    )
+
+    assert normalized["operator_review_notes"] == notes
+    assert "human_needed_answer" not in normalized
+
+
+def test_normalized_operator_feedback_preserves_strict_human_needed_metadata() -> None:
+    for schema_version in STRICT_HUMAN_NEEDED_SCHEMAS:
+        metadata = {
+            "schema_version": schema_version,
+            "session_id": "session-1",
+            "packet_sha256": "packet-sha",
+            "packet_file_sha256": "a" * 64,
+            "manuscript_sha256": "manuscript-sha",
+            "answer_sha256": "b" * 64,
+            "decision_kind": "generate_new_operator_candidate",
+            "handoff_type": "general_operator_feedback",
+            "target_issue_ids": [],
+        }
+
+        normalized = normalize_operator_feedback_draft(
+            _packet(),
+            {"intent": "generate_new_operator_candidate", "issues": [_issue(1)], "human_needed_answer": metadata},
+        )
+
+        assert normalized["human_needed_answer"] == metadata
+        assert "operator_review_notes" not in normalized
+
+
+def test_normalized_operator_feedback_rejects_unsafe_operator_notes() -> None:
+    unsafe_drafts: list[tuple[str, dict[str, object]]] = []
+    for label, payload in FORBIDDEN_OPERATOR_NOTE_CASES:
+        unsafe_drafts.append(
+            (
+                f"explicit_notes_{label}",
+                {
+                    "intent": "generate_new_operator_candidate",
+                    "issues": [_issue(1)],
+                    "operator_review_notes": payload,
+                },
+            )
+        )
+        unsafe_drafts.append(
+            (
+                f"migrated_human_needed_{label}",
+                {
+                    "intent": "generate_new_operator_candidate",
+                    "issues": [_issue(1)],
+                    "human_needed_answer": payload,
+                },
+            )
+        )
+        unsafe_drafts.append(
+            (
+                f"explicit_notes_plus_unsafe_human_needed_{label}",
+                {
+                    "intent": "generate_new_operator_candidate",
+                    "issues": [_issue(1)],
+                    "operator_review_notes": {"cycle": 1, "answer": "redacted"},
+                    "human_needed_answer": payload,
+                },
+            )
+        )
+    unsafe_drafts.append(
+        (
+            "unsupported_human_needed_schema",
+            {
+                "intent": "generate_new_operator_candidate",
+                "issues": [_issue(1)],
+                "human_needed_answer": {"schema_version": "human-needed-answer-metdata/typo", "answer": "redacted"},
+            },
+        )
+    )
+
+    for label, draft in unsafe_drafts:
+        try:
+            normalize_operator_feedback_draft(_packet(), draft)
+        except ContractError:
+            continue
+        raise AssertionError(f"unsafe draft was accepted ({label}): {draft}")
+
+
+def test_normalized_operator_feedback_rejects_non_object_operator_review_notes() -> None:
+    for notes in ["plain text", ["trend_matrix"], 1, None]:
+        try:
+            normalize_operator_feedback_draft(
+                _packet(),
+                {"intent": "generate_new_operator_candidate", "issues": [_issue(1)], "operator_review_notes": notes},
+            )
+        except ContractError:
+            continue
+        raise AssertionError(f"non-object operator_review_notes was accepted: {notes!r}")
 
 
 def test_operator_refinement_constraints_do_not_treat_dense_citations_as_forbidden_new_failure() -> None:

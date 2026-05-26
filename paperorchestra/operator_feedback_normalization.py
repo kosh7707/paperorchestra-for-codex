@@ -6,11 +6,14 @@ from typing import Any
 
 from .operator_feedback import (
     ACTIONABLE_FAILURE_OWNER_CATEGORIES,
+    HUMAN_NEEDED_ANSWER_SCHEMA_VERSIONS,
     OPERATOR_FEEDBACK_INTENTS,
     OPERATOR_FEEDBACK_SCHEMA_VERSION,
     OPERATOR_SOURCE,
     derive_operator_issue_id,
+    validate_operator_review_notes,
 )
+from .pipeline import ContractError
 
 _MAX_GENERATED_OPERATOR_ISSUES = 3
 _OPERATOR_ISSUE_SEVERITY_RANK = {
@@ -281,6 +284,21 @@ def normalize_operator_feedback_draft(packet: dict[str, Any], draft: dict[str, A
     }
     if isinstance(draft.get("rendered_pdf_no_issues"), dict):
         feedback["rendered_pdf_no_issues"] = dict(draft["rendered_pdf_no_issues"])
-    if isinstance(draft.get("human_needed_answer"), dict):
-        feedback["human_needed_answer"] = dict(draft["human_needed_answer"])
+    operator_review_notes = None
+    if "operator_review_notes" in draft:
+        operator_review_notes = validate_operator_review_notes(draft.get("operator_review_notes"))
+
+    human_needed_answer = draft.get("human_needed_answer")
+    if isinstance(human_needed_answer, dict):
+        schema_version = human_needed_answer.get("schema_version")
+        if schema_version in HUMAN_NEEDED_ANSWER_SCHEMA_VERSIONS:
+            feedback["human_needed_answer"] = dict(human_needed_answer)
+        elif "schema_version" in human_needed_answer:
+            raise ContractError("human_needed_answer metadata has an unsupported schema_version")
+        else:
+            migrated_notes = validate_operator_review_notes(human_needed_answer)
+            if operator_review_notes is None:
+                operator_review_notes = migrated_notes
+    if operator_review_notes is not None:
+        feedback["operator_review_notes"] = operator_review_notes
     return feedback

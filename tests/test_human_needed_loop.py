@@ -13,6 +13,7 @@ from paperorchestra.human_needed import record_human_needed_answer
 from paperorchestra.io_utils import read_json
 from paperorchestra.mcp_server import TOOL_HANDLERS
 from paperorchestra.operator_feedback import (
+    _load_imported_feedback,
     apply_operator_feedback,
     build_operator_review_packet,
     derive_operator_issue_id,
@@ -26,6 +27,14 @@ from tests.pipeline_test_support import PipelineTestCase
 
 
 PRIVATE_PHRASE = "PRIVATE_AUTHOR_DECISION_DO_NOT_EXPORT"
+FORBIDDEN_OPERATOR_NOTE_CASES = (
+    ("answer_text", {"nested": {"answer_text": PRIVATE_PHRASE}}),
+    ("private_answer_path", {"nested": {"private_answer_path": "/private/answer.json"}}),
+    ("private_path", {"nested": {"private_path": "/private/location"}}),
+    ("raw", {"nested": {"raw": PRIVATE_PHRASE}}),
+    ("raw_answer", {"items": [{"raw_answer": PRIVATE_PHRASE}]}),
+    ("answer_not_redacted", {"items": [{"nested": {"answer": PRIVATE_PHRASE}}]}),
+)
 
 
 class HumanNeededLoopTests(PipelineTestCase):
@@ -381,6 +390,152 @@ class HumanNeededLoopTests(PipelineTestCase):
                     packet_path=result["packet_path"],
                     feedback_path=feedback_path,
                 )
+
+    def _feedback_with_operator_notes(self, root: Path, notes: dict) -> tuple[Path, dict, Path]:
+        self._session_with_human_plan(root)
+        packet_path, packet = build_operator_review_packet(root, review_scope="tex_only")
+        issue_id = derive_operator_issue_id(
+            packet["packet_sha256"],
+            source_artifact_role="qa_loop_plan",
+            source_item_key="verdict:human_needed",
+            target_section="Whole manuscript",
+            rationale="Manual cycle found unresolved citation and narrative issues.",
+            suggested_action="Generate a bounded operator-feedback candidate that addresses the unresolved issues.",
+        )
+        feedback_path = root / "operator-feedback.json"
+        feedback_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "operator-feedback/1",
+                    "source": "codex_operator",
+                    "not_independent_human_review": True,
+                    "intent": "generate_new_operator_candidate",
+                    "packet_sha256": packet["packet_sha256"],
+                    "manuscript_sha256": packet["manuscript_sha256"],
+                    "issues": [
+                        {
+                            "id": issue_id,
+                            "source_artifact_role": "qa_loop_plan",
+                            "source_item_key": "verdict:human_needed",
+                            "target_section": "Whole manuscript",
+                            "severity": "major",
+                            "rationale": "Manual cycle found unresolved citation and narrative issues.",
+                            "suggested_action": "Generate a bounded operator-feedback candidate that addresses the unresolved issues.",
+                            "authority_class": "author_feedback",
+                        }
+                    ],
+                    "operator_review_notes": notes,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return packet_path, packet, feedback_path
+
+    def test_import_operator_feedback_preserves_operator_review_notes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            notes = {
+                "cycle": 1,
+                "trend_matrix": {
+                    "narrative": "improved_but_stalled",
+                    "claims": "stalled",
+                    "figures": "stalled",
+                    "citations": "stalled_or_regressed",
+                    "benchmark_explanation": "partially_improved_but_still_needs_evidence_binding",
+                },
+                "pdf_attestation": "All rendered pages inspected; no layout-only blockers found.",
+                "human_answer_marker": {"answer": "redacted"},
+            }
+            packet_path, _packet, feedback_path = self._feedback_with_operator_notes(root, notes)
+
+            _imported_path, imported = import_operator_feedback(root, packet_path=packet_path, feedback_path=feedback_path)
+
+            self.assertEqual(imported["operator_review_notes"], notes)
+
+    def test_import_operator_feedback_rejects_non_object_operator_review_notes(self) -> None:
+        for label, notes in (
+            ("string", "plain text"),
+            ("list", ["trend_matrix"]),
+            ("number", 1),
+            ("null", None),
+        ):
+            with self.subTest(label=label):
+                with tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    packet_path, _packet, feedback_path = self._feedback_with_operator_notes(root, notes)
+
+                    with self.assertRaisesRegex(ContractError, "operator_review_notes"):
+                        import_operator_feedback(root, packet_path=packet_path, feedback_path=feedback_path)
+
+    def test_import_operator_feedback_rejects_unsafe_operator_review_notes(self) -> None:
+        for label, payload in FORBIDDEN_OPERATOR_NOTE_CASES:
+            with self.subTest(label=label):
+                with tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    packet_path, _packet, feedback_path = self._feedback_with_operator_notes(root, payload)
+
+                    with self.assertRaisesRegex(ContractError, "operator_review_notes"):
+                        import_operator_feedback(root, packet_path=packet_path, feedback_path=feedback_path)
+
+    def test_apply_operator_feedback_revalidates_and_carries_operator_review_notes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            notes = {"cycle": 1, "pdf_attestation": "All rendered pages inspected."}
+            packet_path, _packet, feedback_path = self._feedback_with_operator_notes(root, notes)
+            imported_path, imported = import_operator_feedback(root, packet_path=packet_path, feedback_path=feedback_path)
+
+            for label, payload in FORBIDDEN_OPERATOR_NOTE_CASES:
+                tampered = json.loads(json.dumps(imported))
+                tampered["operator_review_notes"] = payload
+                tampered_path = root / f"operator-feedback-imported-tampered-{label}.json"
+                tampered_path.write_text(json.dumps(tampered), encoding="utf-8")
+                with self.subTest(label=label):
+                    with self.assertRaisesRegex(ContractError, "operator_review_notes"):
+                        _load_imported_feedback(tampered_path)
+            for label, payload in (
+                ("string", "plain text"),
+                ("list", ["trend_matrix"]),
+                ("number", 1),
+                ("null", None),
+            ):
+                tampered = json.loads(json.dumps(imported))
+                tampered["operator_review_notes"] = payload
+                tampered_path = root / f"operator-feedback-imported-tampered-nonobject-{label}.json"
+                tampered_path.write_text(json.dumps(tampered), encoding="utf-8")
+                with self.subTest(label=f"non_object_{label}"):
+                    with self.assertRaisesRegex(ContractError, "operator_review_notes"):
+                        _load_imported_feedback(tampered_path)
+
+            def fake_refine(cwd, provider, **kwargs):
+                target = Path(load_session(cwd).artifacts.paper_full_tex)
+                target.write_text(
+                    "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nOperator notes preserved.\n\\end{document}\n",
+                    encoding="utf-8",
+                )
+                return [{"iteration": 1, "accepted": True, "reason": "test"}]
+
+            quality_eval = {"session_id": load_session(root).session_id, "mode": "draft", "tiers": {}}
+            with patch("paperorchestra.operator_feedback.refine_current_paper", side_effect=fake_refine):
+                with patch("paperorchestra.operator_feedback.record_current_validation_report", return_value=(root / "validation.json", {"ok": True})):
+                    with patch("paperorchestra.operator_feedback.write_section_review", return_value=root / "section.json"):
+                        with patch("paperorchestra.operator_feedback.write_figure_placement_review", return_value=(root / "figure.json", {"manuscript_sha256": "sha256:test"})):
+                            with patch("paperorchestra.operator_feedback.write_citation_support_review", return_value=root / "citation.json"):
+                                with patch("paperorchestra.operator_feedback.review_current_paper", return_value=root / "review.json"):
+                                    with patch("paperorchestra.operator_feedback.write_rendered_reference_audit", return_value=root / "rendered.json"):
+                                        with patch("paperorchestra.operator_feedback.write_citation_integrity_audit", return_value=root / "integrity.json"):
+                                            with patch("paperorchestra.operator_feedback.write_citation_integrity_critic", return_value=root / "critic.json"):
+                                                with patch("paperorchestra.operator_feedback.write_quality_eval", return_value=(root / "quality.json", quality_eval)):
+                                                    with patch("paperorchestra.operator_feedback.write_quality_loop_plan", return_value=(root / "plan.json", {"verdict": "human_needed"})):
+                                                        _execution_path, execution = apply_operator_feedback(
+                                                            root,
+                                                            MockProvider(),
+                                                            imported_feedback_path=imported_path,
+                                                            quality_mode="draft",
+                                                        )
+
+            self.assertEqual(execution["operator_review_notes"], notes)
+            incorporation = read_json(execution["incorporation_report"])
+            self.assertEqual(incorporation["operator_review_notes"], notes)
 
     def test_answer_human_needed_apply_returns_public_safe_summary_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

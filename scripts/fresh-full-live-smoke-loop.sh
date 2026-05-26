@@ -1586,6 +1586,18 @@ payload = {
                 "owner_category": "author",
             }
         ],
+        "operator_review_notes": {
+            "cycle": int(cycle),
+            "trend_matrix": {
+                "narrative": "improved|regressed|stalled",
+                "claims": "improved|regressed|stalled",
+                "figures": "improved|regressed|stalled",
+                "citations": "improved|regressed|stalled",
+                "benchmark_explanation": "improved|regressed|stalled",
+            },
+            "pdf_attestation": "short public-safe statement that every rendered PDF page was inspected",
+            "human_needed_answer_policy": "human_needed_answer is reserved for strict hash-bound metadata",
+        },
     },
     "next_step": "Write expected_feedback_draft. The wrapper will normalize, import, and apply it only after this human-authored draft exists.",
     "automation_guardrail": "No Codex operator authoring is run in manual mode before the human-authored draft file appears.",
@@ -1610,6 +1622,10 @@ Write the draft JSON here:
 
 No automatic Codex feedback authoring or apply step runs until that human draft
 exists.
+
+Put public cycle/trend/PDF-review annotations in \`operator_review_notes\`
+(including \`trend_matrix\`). \`human_needed_answer\` is reserved for strict
+hash-bound metadata and must not be used for free-form operator notes.
 EOF
 }
 
@@ -1695,7 +1711,8 @@ Meta leakage scan: $ARTIFACTS/meta-leakage-scan.json
 
 Rendered-PDF QA checklist: title, abstract, tables, figures, captions, overflow, page breaks, and overall readability. Do not approve or generate feedback from TeX/JSON alone when PDF evidence is available.
 
-Schema: {"intent":"approve_existing_candidate|generate_new_operator_candidate|reject_candidate_with_reason","issues":[{"source_artifact_role":"paper_full_tex|quality_eval|qa_loop_plan|qa_loop_execution|operator_feedback_execution|section_review|citation_support_review|compiled_pdf","source_item_key":"short locator","target_section":"Abstract|current_manuscript_section_title|Whole manuscript","severity":"blocker|major|minor","rationale":"specific reason grounded in artifacts","suggested_action":"specific rewrite instruction","authority_class":"author_feedback|claim_safety|evidence_alignment|layout_quality|citation_support|narrative_quality|meta_leakage","owner_category":"author|evidence|bibliography|implementation|layout"}],"rendered_pdf_no_issues":{"compiled_pdf_sha256":"sha256 from Rendered PDF review manifest","rendered_pdf_manifest_sha256":"sha256 of rendered-pdf-review manifest","reviewed_page_count":0,"statement":"required only when no issue cites source_artifact_role=compiled_pdf; state that every rendered page was inspected and no layout-only issues were found"}}
+Schema: {"intent":"approve_existing_candidate|generate_new_operator_candidate|reject_candidate_with_reason","issues":[{"source_artifact_role":"paper_full_tex|quality_eval|qa_loop_plan|qa_loop_execution|operator_feedback_execution|section_review|citation_support_review|compiled_pdf","source_item_key":"short locator","target_section":"Abstract|current_manuscript_section_title|Whole manuscript","severity":"blocker|major|minor","rationale":"specific reason grounded in artifacts","suggested_action":"specific rewrite instruction","authority_class":"author_feedback|claim_safety|evidence_alignment|layout_quality|citation_support|narrative_quality|meta_leakage","owner_category":"author|evidence|bibliography|implementation|layout"}],"rendered_pdf_no_issues":{"compiled_pdf_sha256":"sha256 from Rendered PDF review manifest","rendered_pdf_manifest_sha256":"sha256 of rendered-pdf-review manifest","reviewed_page_count":0,"statement":"required only when no issue cites source_artifact_role=compiled_pdf; state that every rendered page was inspected and no layout-only issues were found"},"operator_review_notes":{"cycle":0,"trend_matrix":{"narrative":"improved|regressed|stalled","claims":"improved|regressed|stalled","figures":"improved|regressed|stalled","citations":"improved|regressed|stalled","benchmark_explanation":"improved|regressed|stalled"},"pdf_attestation":"public-safe note from page-by-page PDF inspection; human_needed_answer is reserved for strict hash-bound metadata"}}
+Use operator_review_notes for public cycle notes such as trend_matrix and PDF attestation. human_needed_answer is reserved for strict hash-bound metadata and must not contain free-form review notes.
 If the packet contains an unpromoted qa_loop_execution/operator_feedback_execution candidate_approval with candidate_progress.forward_progress=true, choose intent=approve_existing_candidate and include issue(s) whose source_artifact_role targets only that candidate approval source. Do not include extra diagnostic issues from stale candidate sources when approving. A historical approval whose candidate_sha256 already equals the packet manuscript_sha256 is not actionable; in that case choose generate_new_operator_candidate unless rejecting is safer.
 PROMPT
   run_codex_last_message "operator_feedback_author_cycle_${cycle}" "$prompt" "$response" "$OPFB/operator-feedback-author.cycle-${cycle}.jsonl" "$OPFB/operator-feedback-author.cycle-${cycle}.stderr.log" "$OPFB/operator-feedback-author.cycle-${cycle}.exitcode" "gpt-5.5" "high"

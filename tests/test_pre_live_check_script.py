@@ -272,6 +272,12 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         packet_start = text.index("write_operator_review_packet() {")
         packet_end = text.index("\n}\n\nwrite_manual_operator_handoff", packet_start) + 3
         packet_function = text[packet_start:packet_end]
+        manual_handoff_start = text.index("write_manual_operator_handoff() {")
+        manual_handoff_end = text.index("\n}\n\nwait_for_manual_operator_feedback", manual_handoff_start) + 3
+        manual_handoff_function = text[manual_handoff_start:manual_handoff_end]
+        operator_prompt_start = text.index('cat > "$prompt" <<PROMPT')
+        operator_prompt_end = text.index("\nPROMPT", operator_prompt_start)
+        operator_prompt = text[operator_prompt_start:operator_prompt_end]
 
         self.assertIn('pdftotext -layout "$pdf" "$pdf_text"', text)
         self.assertIn('pdfinfo "$pdf" > "$pdf_info"', text)
@@ -292,6 +298,12 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertIn("title, abstract, tables, figures, captions, overflow, page breaks, and overall readability", text)
         self.assertIn("source_artifact_role=compiled_pdf", text)
         self.assertIn("rendered_pdf_no_issues", text)
+        self.assertIn("operator_review_notes", operator_prompt)
+        self.assertIn("trend_matrix", operator_prompt)
+        self.assertIn("human_needed_answer is reserved for strict hash-bound metadata", operator_prompt)
+        self.assertIn('"operator_review_notes"', manual_handoff_function)
+        self.assertIn('"trend_matrix"', manual_handoff_function)
+        self.assertIn("human_needed_answer is reserved for strict hash-bound metadata", manual_handoff_function)
         self.assertIn("rendered_pdf_manifest_sha256", text)
         self.assertIn("reviewed_page_count", text)
         self.assertLess(text.index("build-operator-review-packet"), text.index('write_operator_pdf_review_evidence "$cycle" "$packet"'))

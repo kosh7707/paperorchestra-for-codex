@@ -79,6 +79,11 @@ OPERATOR_FEEDBACK_INTENTS = {
     "reject_candidate_with_reason",
 }
 HUMAN_NEEDED_METADATA_SCHEMA_VERSION = "human-needed-answer-metadata/1"
+HUMAN_NEEDED_PUBLIC_SCHEMA_VERSION = "human-needed-answer-public/1"
+HUMAN_NEEDED_ANSWER_SCHEMA_VERSIONS = {
+    HUMAN_NEEDED_METADATA_SCHEMA_VERSION,
+    HUMAN_NEEDED_PUBLIC_SCHEMA_VERSION,
+}
 HUMAN_NEEDED_METADATA_FORBIDDEN_KEYS = {
     "answer_text",
     "private_answer_path",
@@ -407,6 +412,13 @@ def _contains_forbidden_human_needed_metadata(payload: Any) -> bool:
         return any(_contains_forbidden_human_needed_metadata(item) for item in payload)
     return False
 
+def validate_operator_review_notes(notes: Any) -> dict[str, Any]:
+    if not isinstance(notes, dict):
+        raise ContractError("operator_review_notes must be a JSON object")
+    if _contains_forbidden_human_needed_metadata(notes):
+        raise ContractError("operator_review_notes must not contain raw/private answer data")
+    return dict(notes)
+
 def _validate_human_needed_answer_metadata(
     metadata: Any,
     packet: dict[str, Any],
@@ -423,7 +435,7 @@ def _validate_human_needed_answer_metadata(
     unexpected_keys = sorted(set(metadata) - HUMAN_NEEDED_METADATA_ALLOWED_KEYS)
     if unexpected_keys:
         raise ContractError("human_needed_answer metadata contains unsupported fields: " + ", ".join(unexpected_keys))
-    if metadata.get("schema_version") not in {HUMAN_NEEDED_METADATA_SCHEMA_VERSION, "human-needed-answer-public/1"}:
+    if metadata.get("schema_version") not in HUMAN_NEEDED_ANSWER_SCHEMA_VERSIONS:
         raise ContractError("human_needed_answer metadata has an unsupported schema_version")
     if _contains_forbidden_human_needed_metadata(metadata):
         raise ContractError("human_needed_answer metadata must not contain raw/private answer data")
@@ -546,6 +558,9 @@ def import_operator_feedback(
         intent=intent,
         imported_issue_roles={str(issue.get("source_artifact_role") or "") for issue in imported_issues},
     )
+    operator_review_notes = None
+    if "operator_review_notes" in feedback:
+        operator_review_notes = validate_operator_review_notes(feedback.get("operator_review_notes"))
     imported = {
         "schema_version": OPERATOR_FEEDBACK_IMPORT_SCHEMA_VERSION,
         "imported_at": utc_now_iso(),
@@ -564,6 +579,8 @@ def import_operator_feedback(
     }
     if isinstance(feedback.get("rendered_pdf_no_issues"), dict):
         imported["rendered_pdf_no_issues"] = dict(feedback["rendered_pdf_no_issues"])
+    if operator_review_notes is not None:
+        imported["operator_review_notes"] = operator_review_notes
     if human_needed_answer is not None:
         imported["human_needed_answer"] = human_needed_answer
     path = Path(output_path).resolve() if output_path else artifact_path(cwd, "operator_feedback.imported.json")
@@ -592,6 +609,8 @@ def _load_imported_feedback(imported_feedback_path: str | Path) -> dict[str, Any
                 if isinstance(issue, dict)
             },
         )
+    if "operator_review_notes" in payload:
+        validate_operator_review_notes(payload.get("operator_review_notes"))
     return payload
 
 def _operator_review_payload(imported: dict[str, Any], *, prior_attempts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -2281,6 +2300,8 @@ def apply_operator_feedback(
     }
     if isinstance(imported.get("human_needed_answer"), dict):
         execution["human_needed_answer"] = dict(imported["human_needed_answer"])
+    if isinstance(imported.get("operator_review_notes"), dict):
+        execution["operator_review_notes"] = dict(imported["operator_review_notes"])
     snapshot = _session_snapshot(cwd)
     before_text = snapshot.get("paper_text") or ""
     owner_categories = [str(issue.get("owner_category") or "author") for issue in imported.get("issues") or []]
@@ -2519,6 +2540,8 @@ def apply_operator_feedback(
         }
         if isinstance(imported.get("human_needed_answer"), dict):
             incorporation_report["human_needed_answer"] = dict(imported["human_needed_answer"])
+        if isinstance(imported.get("operator_review_notes"), dict):
+            incorporation_report["operator_review_notes"] = dict(imported["operator_review_notes"])
         incorporation_path = artifact_path(cwd, "operator_feedback.incorporation.json")
         write_json(incorporation_path, incorporation_report)
         plan = final_verification["plan"] if final_verification else {}
