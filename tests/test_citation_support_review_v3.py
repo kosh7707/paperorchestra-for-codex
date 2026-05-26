@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from paperorchestra.cli import main as cli_main
-from paperorchestra.critics import build_citation_support_review, write_citation_support_review
+from paperorchestra.critics import build_citation_support_review, build_source_backed_citation_cases, write_citation_support_review
 from paperorchestra.models import InputBundle
 from paperorchestra.quality_loop_citation_support import _citation_support_check
 from paperorchestra.session import artifact_path, create_session, load_session, save_session
@@ -126,6 +126,69 @@ class SourceBackedCitationSupportReviewTests(unittest.TestCase):
             self.assertNotIn("sha256", json.dumps(case).lower())
             self.assertTrue(case["evidence"]["text"].startswith(f"artifacts/references/{case['id']}/"))
             self.assertEqual(case["verdict"], "pass")
+
+    def test_source_type_classifier_does_not_treat_post_quantum_paper_as_blog(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = _init_source_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Background}\n"
+                "Post-quantum authenticated encryption studies evaluate modular hash designs~\\cite{PQPaper}.\n",
+                encoding="utf-8",
+            )
+            citation_map = artifact_path(root, "citation_map.json")
+            citation_map.write_text(
+                json.dumps(
+                    {
+                        "PQPaper": {
+                            "title": "Synthetic Authenticated Encryption Study",
+                            "venue": "Workshop on Post-Quantum Cryptography",
+                            "url": "https://publisher.example.org/pqpaper",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.citation_map_json = str(citation_map)
+            save_session(root, state)
+
+            cases = build_source_backed_citation_cases(root, resolve_evidence=False)
+
+        self.assertEqual(cases[0]["source"]["type"], "paper")
+
+    def test_source_type_classifier_preserves_doi_less_report_and_source_url(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = _init_source_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Background}\n"
+                "Operational reports describe deployment pressure~\\cite{OpsReport}.\n",
+                encoding="utf-8",
+            )
+            citation_map = artifact_path(root, "citation_map.json")
+            citation_map.write_text(
+                json.dumps(
+                    {
+                        "OpsReport": {
+                            "source_type": "report",
+                            "title": "Synthetic Operational Tooling Report",
+                            "source_url": "https://publisher.example.org/reports/ops",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.citation_map_json = str(citation_map)
+            save_session(root, state)
+
+            cases = build_source_backed_citation_cases(root, resolve_evidence=False)
+
+        self.assertEqual(cases[0]["source"]["type"], "report")
+        self.assertEqual(cases[0]["source"]["url"], "https://publisher.example.org/reports/ops")
 
     def test_source_backed_review_marks_unretrievable_source_as_human_needed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

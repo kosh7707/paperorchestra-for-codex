@@ -279,24 +279,41 @@ def _clean_optional_string(value: Any) -> str | None:
 
 
 def _source_type_for_entry(entry: dict[str, Any]) -> str:
-    raw = " ".join(
+    text_fields = " ".join(
         str(entry.get(field) or "")
-        for field in ("source_type", "entry_type", "type", "venue", "journal", "booktitle", "url")
-    ).lower()
-    if any(token in raw for token in ("arxiv", "preprint")):
+        for field in ("source_type", "entry_type", "type", "venue", "journal", "booktitle")
+    )
+    url_fields = [str(entry.get(field) or "") for field in ("url", "source_url")]
+    tokens = set(re.findall(r"[a-z0-9]+", text_fields.lower()))
+    normalized = " ".join(re.findall(r"[a-z0-9]+", text_fields.lower()))
+    url_tokens: set[str] = set()
+    url_hosts: set[str] = set()
+    for value in url_fields:
+        parsed = urllib.parse.urlparse(value)
+        url_hosts.add((parsed.hostname or "").lower())
+        url_tokens.update(re.findall(r"[a-z0-9]+", f"{parsed.netloc} {parsed.path}".lower()))
+
+    def has_token(*values: str) -> bool:
+        wanted = set(values)
+        return bool(tokens & wanted or url_tokens & wanted)
+
+    def has_phrase(value: str) -> bool:
+        return value in normalized
+
+    if has_token("arxiv", "preprint") or any(host == "arxiv.org" for host in url_hosts):
         return "preprint"
-    if any(token in raw for token in ("rfc", "nist", "standard", "spec")):
+    if has_token("rfc", "nist", "standard", "spec", "specification"):
         return "standard"
-    if any(token in raw for token in ("github", "repository", "repo")):
-        return "repo"
-    if any(token in raw for token in ("dataset", "zenodo", "figshare")):
-        return "dataset"
-    if any(token in raw for token in ("blog", "post")):
-        return "blog"
-    if any(token in raw for token in ("docs", "documentation", "manual")):
-        return "docs"
-    if any(token in raw for token in ("report", "techreport", "whitepaper")):
+    if has_token("report", "techreport", "whitepaper") or has_phrase("technical report"):
         return "report"
+    if has_token("dataset", "zenodo", "figshare") or any(host in {"zenodo.org", "figshare.com"} for host in url_hosts):
+        return "dataset"
+    if has_token("blog") or has_phrase("blog post"):
+        return "blog"
+    if has_token("docs", "documentation", "manual"):
+        return "docs"
+    if has_token("github", "repository", "repo") or any(host == "github.com" or host.endswith(".github.com") for host in url_hosts):
+        return "repo"
     return "paper" if entry.get("title") else "other"
 
 
