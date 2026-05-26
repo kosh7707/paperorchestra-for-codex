@@ -2127,6 +2127,9 @@ def apply_operator_feedback(
                 resolved_active_failures=resolved_active_failures,
                 allow_human_reviewable_new_tier2=intent == "approve_existing_candidate",
             )
+            if candidate_result.get("preserved_prior_after_contract_regression") is True:
+                gate_reasons = list(dict.fromkeys([*gate_reasons, "contract_regression_preserved_prior"]))
+                ok = False
             candidate_sha_for_attempt = _sha256_prefixed(_sha256_digest(str(candidate_result.get("candidate_sha256") or "")) or _file_sha256(candidate_result.get("candidate_path")))
             if not ok and _repeats_non_promotable_candidate([*packet_prior_attempts, *(execution.get("attempts") or [])], candidate_sha_for_attempt):
                 gate_reasons = list(dict.fromkeys([*gate_reasons, "repeated_non_promotable_candidate"]))
@@ -2156,6 +2159,16 @@ def apply_operator_feedback(
                 "executor_trace_artifact": candidate_result.get("executor_trace_artifact"),
                 "executor_failure_category": candidate_result.get("executor_failure_category") or "none",
             }
+            if candidate_result.get("preserved_prior_after_contract_regression") is True:
+                attempt_record["preserved_prior_after_contract_regression"] = True
+                for key in (
+                    "rejected_candidate_path",
+                    "rejected_candidate_sha256",
+                    "contract_regression_issue_count",
+                    "contract_regression_validation_report_path",
+                ):
+                    if candidate_result.get(key) is not None:
+                        attempt_record[key] = candidate_result[key]
             execution["attempts"].append(attempt_record)
             final_incorporation = incorporation
             final_verification = verification

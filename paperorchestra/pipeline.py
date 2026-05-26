@@ -4035,6 +4035,7 @@ def refine_current_paper(
             strict_claim_safe=strict_claim_safe_prompt,
         )
         experimental_log_text = read_text(state.inputs.experimental_log_path)
+        candidate_iter = state.refinement_iteration + 1
         previous_worklog_path = review_path(cwd, f"refinement_worklog.iter-{state.refinement_iteration:02d}.json")
         previous_worklog = read_text(previous_worklog_path) if previous_worklog_path.exists() else "{}"
         prompt_paper_text = _prompt_compact_text(current_paper, head_chars=22000, tail_chars=4000)
@@ -4127,6 +4128,7 @@ def refine_current_paper(
             citation_placement_plan=citation_placement_plan,
         )
         blocking_issues = _blocking_issues(validation_issues)
+        contract_regression_preservation: dict[str, Any] | None = None
         if blocking_issues:
             preserved_issues = collect_paper_contract_issues(
                 current_paper,
@@ -4141,6 +4143,22 @@ def refine_current_paper(
                 citation_placement_plan=citation_placement_plan,
             )
             if not _blocking_issues(preserved_issues):
+                rejected_candidate_path = artifact_path(cwd, f"paper.refined.iter-{candidate_iter:02d}.rejected-contract.tex")
+                write_text(rejected_candidate_path, latex)
+                rejected_validation_path, _rejected_validation_payload = _record_validation_report(
+                    cwd,
+                    stage="refinement_rejected_contract_regression",
+                    issues=validation_issues,
+                    name=f"validation.refine.iter-{candidate_iter:02d}.rejected-contract.json",
+                    manuscript_text=latex,
+                )
+                contract_regression_preservation = {
+                    "preserved_prior_after_contract_regression": True,
+                    "rejected_candidate_path": str(rejected_candidate_path),
+                    "rejected_candidate_sha256": _file_sha256(rejected_candidate_path),
+                    "contract_regression_issue_count": len(_blocking_issues(validation_issues)),
+                    "contract_regression_validation_report_path": str(rejected_validation_path),
+                }
                 latex = current_paper
                 validation_issues = preserved_issues
                 blocking_issues = []
@@ -4205,7 +4223,6 @@ def refine_current_paper(
                 + " | ".join(_issue_messages(validation_issues))
             )
 
-        candidate_iter = state.refinement_iteration + 1
         candidate_tex_path = artifact_path(cwd, f"paper.refined.iter-{candidate_iter:02d}.tex")
         worklog_path = review_path(cwd, f"refinement_worklog.iter-{candidate_iter:02d}.json")
         write_text(candidate_tex_path, latex)
@@ -4286,27 +4303,29 @@ def refine_current_paper(
             state.artifacts.latest_validation_json = str(validation_path)
             state.review_history = state.review_history[:temp_review_history_len]
             save_session(cwd, state)
-            accepted_results.append(
-                {
-                    "iteration": candidate_iter,
-                    "accepted": False,
-                    "candidate_only": True,
-                    "reason": "candidate_ready_without_generic_acceptance",
-                    "score_before": previous_score,
-                    "score_after": candidate_score,
-                    "axis_scores_before": previous_axes,
-                    "axis_scores_after": candidate_axes,
-                    "paper_path": temp_state_paper,
-                    "candidate_path": str(candidate_tex_path),
-                    "candidate_sha256": _file_sha256(candidate_tex_path),
-                    "worklog_path": str(worklog_path),
-                    "compile_error": compile_error,
-                    "validation_report_path": str(validation_path),
-                    "validation_report": validation_payload,
-                    "review_path": str(candidate_review_path) if candidate_review_path else None,
-                    "no_op_refinement": no_op_refinement,
-                }
-            )
+            candidate_result = {
+                "iteration": candidate_iter,
+                "accepted": False,
+                "candidate_only": True,
+                "reason": "candidate_ready_without_generic_acceptance",
+                "score_before": previous_score,
+                "score_after": candidate_score,
+                "axis_scores_before": previous_axes,
+                "axis_scores_after": candidate_axes,
+                "paper_path": temp_state_paper,
+                "candidate_path": str(candidate_tex_path),
+                "candidate_sha256": _file_sha256(candidate_tex_path),
+                "worklog_path": str(worklog_path),
+                "compile_error": compile_error,
+                "validation_report_path": str(validation_path),
+                "validation_report": validation_payload,
+                "review_path": str(candidate_review_path) if candidate_review_path else None,
+                "no_op_refinement": no_op_refinement,
+            }
+            if contract_regression_preservation:
+                candidate_result.update(contract_regression_preservation)
+                candidate_result["reason"] = "contract_regression_preserved_prior"
+            accepted_results.append(candidate_result)
             break
         accept = compile_error is None and (no_op_refinement or _accept_review_delta(candidate_score, previous_score, candidate_axes, previous_axes))
         if (

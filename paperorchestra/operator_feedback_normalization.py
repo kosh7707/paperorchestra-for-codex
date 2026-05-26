@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .operator_feedback import (
+    ACTIONABLE_FAILURE_OWNER_CATEGORIES,
     OPERATOR_FEEDBACK_INTENTS,
     OPERATOR_FEEDBACK_SCHEMA_VERSION,
     OPERATOR_SOURCE,
@@ -28,6 +29,39 @@ _OPERATOR_ISSUE_ROLE_RANK = {
     "operator_feedback_execution": 6,
     "qa_loop_plan": 7,
 }
+
+
+def _infer_operator_issue_owner_category(issue: dict[str, str]) -> str:
+    owner = str(issue.get("owner_category") or "").strip()
+    if owner in ACTIONABLE_FAILURE_OWNER_CATEGORIES:
+        return owner
+    text = " ".join(
+        str(issue.get(key) or "")
+        for key in (
+            "source_artifact_role",
+            "source_item_key",
+            "target_section",
+            "rationale",
+            "suggested_action",
+            "authority_class",
+            "owner_category",
+        )
+    ).lower()
+    if any(token in text for token in ("pipeline", "executor", "engine", "harness", "runtime", "apply", "import", "feedback loop")):
+        return "implementation"
+    if any(token in text for token in ("experiment", "benchmark", "evaluation", "result")):
+        return "experiment"
+    if any(token in text for token in ("proof", "theorem", "security", "bound")):
+        return "proof"
+    if any(token in text for token in ("citation", "bibliography", "reference", "bibtex")):
+        return "bibliography"
+    if any(token in text for token in ("compile", "validation", "implementation", "execution")):
+        return "implementation"
+    if any(token in text for token in ("figure", "layout", "pdf", "caption", "page")):
+        return "layout"
+    if any(token in text for token in ("evidence", "source", "artifact")):
+        return "evidence"
+    return "author"
 
 
 def _without_sha256_prefix(value: Any) -> str:
@@ -164,6 +198,7 @@ def normalize_operator_feedback_draft(packet: dict[str, Any], draft: dict[str, A
         }
         if not issue["rationale"] or not issue["suggested_action"]:
             continue
+        issue["owner_category"] = _infer_operator_issue_owner_category(issue)
         issues.append(issue)
 
     if intent == "approve_existing_candidate":

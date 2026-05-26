@@ -3335,6 +3335,56 @@ Regressed mock paper.
             state = load_session(root)
             self.assertEqual(state.current_phase, "draft_complete")
 
+    def test_candidate_only_refinement_exposes_contract_regression_preservation(self) -> None:
+        class ContractRegressiveProvider(MockProvider):
+            def complete(self, request: CompletionRequest) -> str:
+                if "content refinement agent" in request.system_prompt.lower():
+                    return """```json
+{
+  "addressed_weaknesses": ["Tried an unsafe rewrite"],
+  "integrated_answers": [],
+  "actions_taken": ["Removed required structure"]
+}
+```
+```latex
+\\documentclass{article}
+\\begin{document}
+Regressed mock paper without the required sections or figure/citation grounding.
+\\end{document}
+```
+"""
+                return super().complete(request)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._init_session_with_minimal_inputs(root)
+            provider = MockProvider()
+            generate_outline(root, provider)
+            generate_plots(root, provider)
+            plan_narrative_and_claims(root, provider)
+            write_sections(root, provider)
+            review_current_paper(root, provider)
+            state = load_session(root)
+            original_text = Path(state.artifacts.paper_full_tex).read_text(encoding="utf-8")
+
+            result = refine_current_paper(
+                root,
+                ContractRegressiveProvider(),
+                iterations=1,
+                claim_safe=True,
+                candidate_only=True,
+            )
+
+            self.assertEqual(len(result), 1)
+            candidate = result[0]
+            self.assertTrue(candidate["preserved_prior_after_contract_regression"])
+            rejected_path = Path(candidate["rejected_candidate_path"])
+            self.assertTrue(rejected_path.exists())
+            self.assertIn("Regressed mock paper", rejected_path.read_text(encoding="utf-8"))
+            self.assertNotEqual(Path(candidate["candidate_path"]), rejected_path)
+            self.assertEqual(Path(candidate["candidate_path"]).read_text(encoding="utf-8"), original_text)
+            self.assertEqual(Path(load_session(root).artifacts.paper_full_tex).read_text(encoding="utf-8"), original_text)
+
     def test_refinement_accepts_after_small_regression_retry_confirms_non_regression(self) -> None:
         class RetryTolerantProvider(MockProvider):
             def __init__(self) -> None:

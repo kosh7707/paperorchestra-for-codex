@@ -5,12 +5,50 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from pipeline_test_support import *
+from paperorchestra.fresh_smoke import normalize_operator_feedback_draft
 from paperorchestra.narrative import write_planning_artifacts
 from paperorchestra.operator_feedback import _attach_candidate_approval_from_attempt, _claim_safe_tier2_metric_counts
 
 
 class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
     """Quality-loop, operator-feedback, Ralph bridge, and critic-stack regression tests split out of the former PipelineTests monolith."""
+
+    def test_normalized_operator_feedback_sanitizes_pipeline_owner_category_for_import(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nDraft.\n\\end{document}\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            self._write_terminal_human_needed_plan(root)
+            packet_path, packet = build_operator_review_packet(root, review_scope="tex_only")
+            draft = {
+                "intent": "generate_new_operator_candidate",
+                "issues": [
+                    {
+                        "source_artifact_role": "operator_feedback_execution",
+                        "source_item_key": "promotion_status:rolled_back",
+                        "target_section": "Whole manuscript",
+                        "severity": "blocker",
+                        "rationale": "The pipeline executor did not turn valid feedback into a manuscript diff.",
+                        "suggested_action": "Classify the feedback loop as an implementation issue if the executor cannot apply it.",
+                        "authority_class": "author_feedback",
+                        "owner_category": "pipeline",
+                    }
+                ],
+            }
+
+            normalized = normalize_operator_feedback_draft(packet, draft)
+            feedback_path = root / "operator-feedback.json"
+            feedback_path.write_text(json.dumps(normalized), encoding="utf-8")
+            _imported_path, imported = import_operator_feedback(root, packet_path=packet_path, feedback_path=feedback_path)
+
+            self.assertEqual(imported["issues"][0]["owner_category"], "implementation")
+            self.assertEqual(imported["translated_actions"][0]["owner_category"], "implementation")
 
     def test_operator_candidate_approval_progress_carries_metric_issue_delta(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -5320,6 +5358,61 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertNotEqual(candidate_paths[0], candidate_paths[1])
             self.assertIn("attempt 1", candidate_paths[0].read_text(encoding="utf-8"))
             self.assertIn("attempt 2", candidate_paths[1].read_text(encoding="utf-8"))
+
+    def test_operator_feedback_attempt_surfaces_contract_regression_preservation_without_executor_crash(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            original_text = "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nDraft.\\end{document}\n"
+            paper.write_text(original_text, encoding="utf-8")
+            review = review_path(root, "review.latest.json")
+            review.write_text(json.dumps({"overall_score": 70, "axis_scores": {}, "summary": {"weaknesses": [], "top_improvements": []}, "questions": [], "penalties": []}), encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.latest_review_json = str(review)
+            save_session(root, state)
+            self._write_terminal_human_needed_plan(root)
+            artifact_path(root, "quality-eval.json").write_text(json.dumps({"schema_version": "quality-eval/1", "tiers": {"tier_2_claim_safety": {"status": "fail", "failing_codes": ["existing_claim_issue"]}}}), encoding="utf-8")
+            packet_path, packet = build_operator_review_packet(root, review_scope="tex_only")
+            issue_id = derive_operator_issue_id(packet["packet_sha256"], source_artifact_role="paper_full_tex", source_item_key="Intro:p1", target_section="Intro", rationale="The contribution paragraph is missing.", suggested_action="Add contribution language.")
+            feedback_path = root / "operator-feedback.json"
+            feedback_path.write_text(json.dumps({"schema_version": "operator-feedback/1", "source": "codex_operator", "not_independent_human_review": True, "intent": "generate_new_operator_candidate", "packet_sha256": packet["packet_sha256"], "manuscript_sha256": packet["manuscript_sha256"], "issues": [{"id": issue_id, "source_artifact_role": "paper_full_tex", "source_item_key": "Intro:p1", "target_section": "Intro", "severity": "major", "rationale": "The contribution paragraph is missing.", "suggested_action": "Add contribution language.", "authority_class": "prose_rewrite"}]}), encoding="utf-8")
+            imported_path, _ = import_operator_feedback(root, packet_path=packet_path, feedback_path=feedback_path)
+            rejected = artifact_path(root, "paper.refined.iter-01.rejected-contract.tex")
+            rejected.write_text("\\documentclass{article}\n\\begin{document}\nRegressed candidate.\\end{document}\n", encoding="utf-8")
+
+            def fake_refine(cwd, provider, **kwargs):
+                return [{
+                    "iteration": 1,
+                    "candidate_only": True,
+                    "reason": "candidate_ready_without_generic_acceptance",
+                    "candidate_path": str(paper),
+                    "candidate_sha256": "sha256:" + hashlib.sha256(paper.read_bytes()).hexdigest(),
+                    "score_before": 70,
+                    "score_after": 70,
+                    "axis_scores_before": {},
+                    "axis_scores_after": {},
+                    "preserved_prior_after_contract_regression": True,
+                    "rejected_candidate_path": str(rejected),
+                    "contract_regression_issue_count": 2,
+                }]
+
+            quality_eval = {"session_id": state.session_id, "mode": "claim_safe", "tiers": {"tier_0_preconditions": {"status": "pass"}, "tier_1_structural": {"status": "pass"}, "tier_2_claim_safety": {"status": "fail", "failing_codes": ["existing_claim_issue"]}}}
+            with patch("paperorchestra.operator_feedback.refine_current_paper", side_effect=fake_refine):
+                with patch("paperorchestra.operator_feedback.write_section_review", return_value=root / "section.json"):
+                    with patch("paperorchestra.operator_feedback.write_citation_support_review", return_value=root / "citation.json"):
+                        with patch("paperorchestra.operator_feedback.review_current_paper", return_value=root / "review.json"):
+                            with patch("paperorchestra.operator_feedback.write_quality_eval", return_value=(root / "quality.json", quality_eval)):
+                                with patch("paperorchestra.operator_feedback.write_quality_loop_plan", return_value=(root / "plan.json", {"verdict": "human_needed"})):
+                                    _, execution = apply_operator_feedback(root, MockProvider(), imported_feedback_path=imported_path)
+
+            self.assertEqual(execution["promotion_status"], "rolled_back")
+            self.assertEqual(execution["verdict"], "human_needed")
+            attempt = execution["attempts"][0]
+            self.assertTrue(attempt["preserved_prior_after_contract_regression"])
+            self.assertEqual(attempt["rejected_candidate_path"], str(rejected))
+            self.assertEqual(attempt["executor_failure_category"], "none")
+            self.assertIn("contract_regression_preserved_prior", attempt["gate_reasons"])
 
     def test_operator_feedback_promotes_operator_execution_candidate_with_human_reviewable_new_code(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
