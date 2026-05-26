@@ -423,6 +423,196 @@ class SourceBackedCitationSupportReviewTests(unittest.TestCase):
         self.assertEqual(case["evidence"]["text"], "artifacts/references/C1/source.txt")
         self.assertEqual(case["verdict"], "pass")
 
+    def test_source_backed_review_accepts_official_pdf_on_landing_subdomain(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = _init_source_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\section{Background}\nAlpha uses code graphs for vulnerability detection~\\cite{Alpha}.\n", encoding="utf-8")
+            citation_map = artifact_path(root, "citation_map.json")
+            citation_map.write_text(json.dumps({"Alpha": {"title": "Alpha Graph", "url": "https://publisher.example.org/papers/alpha"}}), encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.citation_map_json = str(citation_map)
+            save_session(root, state)
+            seen_urls: list[str] = []
+
+            def fake_urlopen(request, timeout=10):
+                url = _request_url(request)
+                seen_urls.append(url)
+                if url == "https://publisher.example.org/papers/alpha":
+                    return _FakeResponse(
+                        b'<html><a href="https://assets.publisher.example.org/papers/alpha.pdf">Article PDF</a></html>',
+                        "text/html",
+                        final_url=url,
+                    )
+                if url == "https://assets.publisher.example.org/papers/alpha.pdf":
+                    return _FakeResponse(b"%PDF-1.4 fake", "application/pdf", final_url=url)
+                raise AssertionError(f"unexpected URL {url}")
+
+            def fake_extract(pdf_path: Path, text_path: Path) -> bool:
+                text_path.write_text("Alpha uses code graphs for vulnerability detection.", encoding="utf-8")
+                return True
+
+            with patch("paperorchestra.critics.urllib.request.urlopen", side_effect=fake_urlopen):
+                with patch("paperorchestra.critics._extract_pdf_text", side_effect=fake_extract):
+                    review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+            meta = json.loads(artifact_path(root, "references/C1/source.meta.json").read_text(encoding="utf-8"))
+            source_html_exists = artifact_path(root, "references/C1/source.html").exists()
+
+        self.assertEqual(seen_urls, ["https://publisher.example.org/papers/alpha", "https://assets.publisher.example.org/papers/alpha.pdf"])
+        self.assertEqual(case["evidence"]["status"], "pdf")
+        self.assertEqual(case["evidence"]["url"], "https://assets.publisher.example.org/papers/alpha.pdf")
+        self.assertEqual(case["verdict"], "pass")
+        self.assertFalse(source_html_exists)
+        self.assertTrue(
+            any(
+                item["url"] == "https://assets.publisher.example.org/papers/alpha.pdf"
+                and item["decision"] == "selected"
+                for item in meta["evidence"]["pdf_candidates"]
+            )
+        )
+
+    def test_source_backed_review_accepts_pdf_redirect_to_landing_subdomain(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = _init_source_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\section{Background}\nAlpha uses code graphs for vulnerability detection~\\cite{Alpha}.\n", encoding="utf-8")
+            citation_map = artifact_path(root, "citation_map.json")
+            citation_map.write_text(json.dumps({"Alpha": {"title": "Alpha Graph", "url": "https://publisher.example.org/papers/alpha"}}), encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.citation_map_json = str(citation_map)
+            save_session(root, state)
+            seen_urls: list[str] = []
+
+            def fake_urlopen(request, timeout=10):
+                url = _request_url(request)
+                seen_urls.append(url)
+                if url == "https://publisher.example.org/papers/alpha":
+                    return _FakeResponse(b'<html><a href="/papers/alpha.pdf">PDF</a></html>', "text/html", final_url=url)
+                if url == "https://publisher.example.org/papers/alpha.pdf":
+                    return _FakeResponse(
+                        b"%PDF-1.4 fake",
+                        "application/pdf",
+                        final_url="https://assets.publisher.example.org/papers/alpha.pdf",
+                    )
+                raise AssertionError(f"unexpected URL {url}")
+
+            def fake_extract(pdf_path: Path, text_path: Path) -> bool:
+                text_path.write_text("Alpha uses code graphs for vulnerability detection.", encoding="utf-8")
+                return True
+
+            with patch("paperorchestra.critics.urllib.request.urlopen", side_effect=fake_urlopen):
+                with patch("paperorchestra.critics._extract_pdf_text", side_effect=fake_extract):
+                    review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+            meta = json.loads(artifact_path(root, "references/C1/source.meta.json").read_text(encoding="utf-8"))
+            source_html_exists = artifact_path(root, "references/C1/source.html").exists()
+
+        self.assertEqual(seen_urls, ["https://publisher.example.org/papers/alpha", "https://publisher.example.org/papers/alpha.pdf"])
+        self.assertEqual(case["evidence"]["status"], "pdf")
+        self.assertEqual(case["evidence"]["url"], "https://assets.publisher.example.org/papers/alpha.pdf")
+        self.assertEqual(case["verdict"], "pass")
+        self.assertFalse(source_html_exists)
+        self.assertTrue(
+            any(
+                item["url"] == "https://publisher.example.org/papers/alpha.pdf"
+                and item["final_url"] == "https://assets.publisher.example.org/papers/alpha.pdf"
+                and item["decision"] == "selected"
+                for item in meta["evidence"]["pdf_candidates"]
+            )
+        )
+
+    def test_source_backed_review_rejects_disallowed_landing_subdomain_before_pdf_fetch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = _init_source_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\section{Background}\nAlpha uses code graphs for vulnerability detection~\\cite{Alpha}.\n", encoding="utf-8")
+            citation_map = artifact_path(root, "citation_map.json")
+            citation_map.write_text(json.dumps({"Alpha": {"title": "Alpha Graph", "url": "https://publisher.example.org/papers/alpha"}}), encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.citation_map_json = str(citation_map)
+            save_session(root, state)
+            seen_urls: list[str] = []
+
+            def fake_urlopen(request, timeout=10):
+                url = _request_url(request)
+                seen_urls.append(url)
+                if url == "https://publisher.example.org/papers/alpha":
+                    return _FakeResponse(
+                        b'<html><a href="https://mirror.publisher.example.org/papers/alpha.pdf">PDF mirror</a></html>',
+                        "text/html",
+                        final_url=url,
+                    )
+                raise AssertionError(f"disallowed PDF URL should not be fetched: {url}")
+
+            with patch("paperorchestra.critics.urllib.request.urlopen", side_effect=fake_urlopen):
+                review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+            meta = json.loads(artifact_path(root, "references/C1/source.meta.json").read_text(encoding="utf-8"))
+            source_pdf_exists = artifact_path(root, "references/C1/source.pdf").exists()
+
+        self.assertEqual(seen_urls, ["https://publisher.example.org/papers/alpha"])
+        self.assertFalse(source_pdf_exists)
+        self.assertNotEqual(case["evidence"]["status"], "pdf")
+        self.assertNotEqual(case["verdict"], "pass")
+        self.assertTrue(
+            any(
+                item["url"] == "https://mirror.publisher.example.org/papers/alpha.pdf"
+                and item["decision"] == "rejected"
+                and item["reason"] == "disallowed_host"
+                for item in meta["evidence"]["pdf_candidates"]
+            )
+        )
+
+    def test_source_backed_review_rejects_disallowed_subdomain_redirect_before_saving(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = _init_source_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\section{Background}\nAlpha uses code graphs for vulnerability detection~\\cite{Alpha}.\n", encoding="utf-8")
+            citation_map = artifact_path(root, "citation_map.json")
+            citation_map.write_text(json.dumps({"Alpha": {"title": "Alpha Graph", "url": "https://publisher.example.org/papers/alpha"}}), encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.citation_map_json = str(citation_map)
+            save_session(root, state)
+            seen_urls: list[str] = []
+
+            def fake_urlopen(request, timeout=10):
+                url = _request_url(request)
+                seen_urls.append(url)
+                if url == "https://publisher.example.org/papers/alpha":
+                    return _FakeResponse(b'<html><a href="/papers/alpha.pdf">PDF</a></html>', "text/html", final_url=url)
+                if url == "https://publisher.example.org/papers/alpha.pdf":
+                    return _FakeResponse(
+                        b"%PDF-1.4 fake",
+                        "application/pdf",
+                        final_url="https://mirror.publisher.example.org/papers/alpha.pdf",
+                    )
+                raise AssertionError(f"unexpected URL {url}")
+
+            with patch("paperorchestra.critics.urllib.request.urlopen", side_effect=fake_urlopen):
+                review = build_citation_support_review(root, evidence_mode="source")
+            case = review["cases"][0]
+            meta = json.loads(artifact_path(root, "references/C1/source.meta.json").read_text(encoding="utf-8"))
+            source_pdf_exists = artifact_path(root, "references/C1/source.pdf").exists()
+
+        self.assertEqual(seen_urls, ["https://publisher.example.org/papers/alpha", "https://publisher.example.org/papers/alpha.pdf"])
+        self.assertFalse(source_pdf_exists)
+        self.assertNotEqual(case["evidence"]["status"], "pdf")
+        self.assertNotEqual(case["verdict"], "pass")
+        self.assertTrue(
+            any(
+                item["url"] == "https://publisher.example.org/papers/alpha.pdf"
+                and item["final_url"] == "https://mirror.publisher.example.org/papers/alpha.pdf"
+                and item["decision"] == "rejected"
+                and item["reason"] == "disallowed_host"
+                for item in meta["evidence"]["pdf_candidates"]
+            )
+        )
+
     def test_source_backed_review_rejects_off_domain_pdf_candidates_with_meta(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
