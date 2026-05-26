@@ -43,6 +43,170 @@ from paperorchestra.validator import check_prompt_meta_leakage
 
 
 class StrictQualityGateHardeningTests(unittest.TestCase):
+    def _write_minimal_fresh_smoke_evidence_root(self, root: Path, *, operator_cycles: int = 1, manual_handoffs: int | None = None) -> None:
+        for subdir in ["readable", "logs", "artifacts", "inputs", "operator-feedback", "critic"]:
+            (root / subdir).mkdir(parents=True, exist_ok=True)
+        manual_handoffs = operator_cycles if manual_handoffs is None else manual_handoffs
+        (root / "README.md").write_text(
+            "\n".join(
+                [
+                    f"operator_feedback_cycles: {operator_cycles}",
+                    f"operator_feedback_cycles_attempted: {operator_cycles}",
+                    "operator_feedback_cycles_promoted: 0",
+                    f"operator_feedback_cycles_rolled_back: {operator_cycles}",
+                    "operator_feedback_cycles_failed: 0",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (root / "inputs" / "provenance-ledger.json").write_text('{"items":[]}\n', encoding="utf-8")
+        (root / "inputs.sha256").write_text("abc inputs/idea.tex\n", encoding="utf-8")
+        (root / "artifact-manifest.json").write_text('{"missing_referenced_artifacts":[],"files":[]}\n', encoding="utf-8")
+        (root / "artifacts" / "session-snapshot-final").mkdir(exist_ok=True)
+        for artifact in ["material-invariance.json", "fresh-smoke-lane-a-acceptance.json", "meta-leakage-scan.json"]:
+            (root / "artifacts" / artifact).write_text('{"status":"pass"}\n', encoding="utf-8")
+        (root / "readable" / "timeline.md").write_text("# Timeline\n", encoding="utf-8")
+        commands = ["# Command exit codes"]
+        for cycle in range(1, operator_cycles + 1):
+            commands.extend(
+                [
+                    f"- `operator_packet_cycle_{cycle}`: `0`",
+                    f"- `operator_import_cycle_{cycle}`: `0`",
+                    f"- `operator_apply_cycle_{cycle}`: `0`",
+                ]
+            )
+            for command_name in [f"operator_packet_cycle_{cycle}", f"operator_import_cycle_{cycle}", f"operator_apply_cycle_{cycle}"]:
+                (root / "logs" / f"{command_name}.command").write_text("true\n", encoding="utf-8")
+                (root / "logs" / f"{command_name}.stdout.log").write_text("", encoding="utf-8")
+                (root / "logs" / f"{command_name}.stderr.log").write_text("", encoding="utf-8")
+                (root / "logs" / f"{command_name}.exitcode").write_text("0\n", encoding="utf-8")
+        (root / "readable" / "commands.md").write_text("\n".join(commands) + "\n", encoding="utf-8")
+        (root / "readable" / "verdict.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "fresh-smoke-verdict/1",
+                    "smoke_verdict": "fail_loop_feedback_not_reflected",
+                    "qa_loop_terminal_verdict": "human_needed",
+                    "qa_loop_terminal_exit_code": 20,
+                    "first_failing_predicate": "operator_feedback",
+                    "first_failing_artifact": "operator-feedback/operator-feedback.cycle-1.json",
+                    "operator_feedback_cycles": operator_cycles,
+                    "operator_feedback_cycles_attempted": operator_cycles,
+                    "operator_feedback_cycles_promoted": 0,
+                    "operator_feedback_cycles_rolled_back": operator_cycles,
+                    "operator_feedback_cycles_failed": 0,
+                    "manual_operator_handoff_cycles": manual_handoffs,
+                    "pending_operator_feedback_cycles": 0,
+                    "material_invariance_status": "pass",
+                    "evidence_completeness_status": "fail",
+                    "lane_a_status": "pass",
+                    "critic_verdict": "not_run",
+                    "quality_gate_status": "fail_tier2",
+                    "manuscript_readiness": "not_ready",
+                    "orchestration_stop_reason": "iteration_budget_exhausted_after_operator_feedback",
+                }
+            ),
+            encoding="utf-8",
+        )
+        (root / "final-smoke-status.txt").write_text("human_needed\n", encoding="utf-8")
+        (root / "final-smoke-exit-code.txt").write_text("20\n", encoding="utf-8")
+
+    def _write_pdf_operator_packet(self, root: Path, *, cycle: int = 1) -> tuple[str, str]:
+        pdf = root / "operator-feedback" / "paper.full.pdf"
+        pdf.write_bytes(b"%PDF-1.5\n")
+        pdf_sha = hashlib.sha256(pdf.read_bytes()).hexdigest()
+        packet_artifact = root / "operator-feedback" / f"operator-review-packet.cycle-{cycle}.artifacts"
+        packet_artifact.mkdir(exist_ok=True)
+        frozen = packet_artifact / "quality_eval.frozen.json"
+        frozen.write_text('{"verdict":"human_needed"}\n', encoding="utf-8")
+        frozen_sha = hashlib.sha256(frozen.read_bytes()).hexdigest()
+        packet = {
+            "schema_version": "operator-review-packet/1",
+            "review_scope": "pdf_and_tex",
+            "artifacts": [
+                {"role": "compiled_pdf", "path": "operator-feedback/paper.full.pdf", "sha256": pdf_sha, "size_bytes": pdf.stat().st_size},
+                {"role": "quality_eval", "path": str(frozen), "sha256": frozen_sha},
+            ],
+        }
+        (root / "operator-feedback" / f"operator-review-packet.cycle-{cycle}.json").write_text(json.dumps(packet), encoding="utf-8")
+        pdf_text = root / "operator-feedback" / f"rendered-pdf-review.cycle-{cycle}.txt"
+        pdf_info = root / "operator-feedback" / f"rendered-pdf-review.cycle-{cycle}.pdfinfo.txt"
+        page_dir = root / "operator-feedback" / f"rendered-pdf-pages.cycle-{cycle}"
+        page_dir.mkdir()
+        page = page_dir / "page-1.png"
+        pdf_text.write_text("Rendered paper page text.\n", encoding="utf-8")
+        pdf_info.write_text("Pages: 1\n", encoding="utf-8")
+        page.write_bytes(b"png")
+        manifest = root / "operator-feedback" / f"rendered-pdf-review.cycle-{cycle}.manifest.json"
+        manifest.write_text(
+            json.dumps(
+                {
+                    "schema_version": "operator-rendered-pdf-review-evidence/1",
+                    "cycle": cycle,
+                    "compiled_pdf": "operator-feedback/paper.full.pdf",
+                    "compiled_pdf_sha256": pdf_sha,
+                    "pdf_text": f"operator-feedback/rendered-pdf-review.cycle-{cycle}.txt",
+                    "pdf_text_sha256": hashlib.sha256(pdf_text.read_bytes()).hexdigest(),
+                    "pdf_info": f"operator-feedback/rendered-pdf-review.cycle-{cycle}.pdfinfo.txt",
+                    "pdf_info_sha256": hashlib.sha256(pdf_info.read_bytes()).hexdigest(),
+                    "page_images_dir": f"operator-feedback/rendered-pdf-pages.cycle-{cycle}",
+                    "page_image_count": 1,
+                    "page_images": [
+                        {
+                            "path": f"operator-feedback/rendered-pdf-pages.cycle-{cycle}/page-1.png",
+                            "sha256": hashlib.sha256(page.read_bytes()).hexdigest(),
+                            "size_bytes": page.stat().st_size,
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return pdf_sha, hashlib.sha256(manifest.read_bytes()).hexdigest()
+
+    def _write_completed_manual_operator_cycle(
+        self,
+        root: Path,
+        *,
+        cycle: int = 1,
+        include_draft: bool = True,
+        include_execution: bool = True,
+        include_compiled_pdf_issue: bool = True,
+        root_execution_only: bool = False,
+    ) -> None:
+        (root / "operator-feedback" / f"manual-operator-handoff.cycle-{cycle}.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "manual-operator-handoff/1",
+                    "cycle": cycle,
+                    "expected_feedback_draft": f"operator-feedback/manual-operator-feedback-draft.cycle-{cycle}.json",
+                }
+            ),
+            encoding="utf-8",
+        )
+        issue = {
+            "source_artifact_role": "compiled_pdf" if include_compiled_pdf_issue else "quality_eval",
+            "source_item_key": "page 1" if include_compiled_pdf_issue else "tier_2",
+            "target_section": "Whole manuscript",
+            "severity": "major",
+            "rationale": "The rendered page was inspected by the manual operator.",
+            "suggested_action": "Repair the issue.",
+            "authority_class": "layout_quality" if include_compiled_pdf_issue else "claim_safety",
+            "owner_category": "layout" if include_compiled_pdf_issue else "evidence",
+        }
+        draft = {"intent": "generate_new_operator_candidate", "issues": [issue]}
+        if include_draft:
+            (root / "operator-feedback" / f"manual-operator-feedback-draft.cycle-{cycle}.json").write_text(json.dumps(draft), encoding="utf-8")
+        feedback = {"schema_version": "operator-feedback/1", "source": "codex_operator", "issues": [issue]}
+        (root / "operator-feedback" / f"operator-feedback.cycle-{cycle}.json").write_text(json.dumps(feedback), encoding="utf-8")
+        (root / "operator-feedback" / f"operator-feedback-imported.cycle-{cycle}.json").write_text(json.dumps(feedback), encoding="utf-8")
+        execution_payload = {"schema_version": "operator-feedback-execution/1", "promotion_status": "rolled_back", "attempts": []}
+        if include_execution and not root_execution_only:
+            (root / "operator-feedback" / f"operator_feedback.execution.cycle-{cycle}.json").write_text(json.dumps(execution_payload), encoding="utf-8")
+        if root_execution_only:
+            (root / "artifacts" / f"operator_feedback.execution.cycle-{cycle}.json").write_text(json.dumps(execution_payload), encoding="utf-8")
+
     def test_actionable_candidate_approval_ignores_already_promoted_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -2816,6 +2980,107 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
 
             attested_result = validate_evidence_completeness(root)
             self.assertEqual(attested_result["status"], "pass", attested_result)
+
+    def test_evidence_completeness_accepts_completed_manual_operator_cycle_without_auto_author_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_minimal_fresh_smoke_evidence_root(root)
+            self._write_pdf_operator_packet(root)
+            self._write_completed_manual_operator_cycle(root)
+
+            result = validate_evidence_completeness(root)
+
+            self.assertEqual(result["status"], "pass", result)
+            self.assertNotIn("operator_cycle_artifact_missing", result["failing_codes"])
+            self.assertNotIn("operator_rendered_pdf_review_missing", result["failing_codes"])
+            self.assertNotIn("operator_rendered_pdf_review_unattested", result["failing_codes"])
+
+    def test_evidence_completeness_rejects_completed_manual_operator_cycle_missing_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_minimal_fresh_smoke_evidence_root(root)
+            self._write_pdf_operator_packet(root)
+            self._write_completed_manual_operator_cycle(root, include_draft=False)
+
+            result = validate_evidence_completeness(root)
+
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("operator_cycle_artifact_missing", result["failing_codes"])
+            self.assertIn(
+                {
+                    "check": "operator_cycle_artifact",
+                    "cycle": 1,
+                    "path": "operator-feedback/manual-operator-feedback-draft.cycle-1.json",
+                },
+                result["missing"],
+            )
+
+    def test_evidence_completeness_rejects_completed_manual_operator_cycle_missing_execution_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_minimal_fresh_smoke_evidence_root(root)
+            self._write_pdf_operator_packet(root)
+            self._write_completed_manual_operator_cycle(root, include_execution=False, root_execution_only=True)
+
+            result = validate_evidence_completeness(root)
+
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("operator_cycle_artifact_missing", result["failing_codes"])
+            self.assertTrue((root / "artifacts" / "operator_feedback.execution.cycle-1.json").exists())
+            self.assertIn(
+                {
+                    "check": "operator_cycle_artifact",
+                    "cycle": 1,
+                    "path": "operator-feedback/operator_feedback.execution.cycle-1.json",
+                },
+                result["missing"],
+            )
+
+    def test_evidence_completeness_rejects_completed_manual_pdf_cycle_without_rendered_pdf_attestation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_minimal_fresh_smoke_evidence_root(root)
+            self._write_pdf_operator_packet(root)
+            self._write_completed_manual_operator_cycle(root, include_compiled_pdf_issue=False)
+
+            result = validate_evidence_completeness(root)
+
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("operator_rendered_pdf_review_unattested", result["failing_codes"])
+
+    def test_evidence_completeness_still_requires_auto_author_artifacts_for_automatic_operator_cycle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_minimal_fresh_smoke_evidence_root(root, manual_handoffs=0)
+            self._write_pdf_operator_packet(root)
+            feedback = {
+                "schema_version": "operator-feedback/1",
+                "issues": [
+                    {
+                        "source_artifact_role": "compiled_pdf",
+                        "source_item_key": "page 1",
+                        "target_section": "Whole manuscript",
+                        "severity": "major",
+                        "rationale": "Rendered PDF issue.",
+                        "suggested_action": "Fix it.",
+                    }
+                ],
+            }
+            (root / "operator-feedback" / "operator-feedback.cycle-1.json").write_text(json.dumps(feedback), encoding="utf-8")
+            (root / "operator-feedback" / "operator-feedback-imported.cycle-1.json").write_text(json.dumps(feedback), encoding="utf-8")
+
+            result = validate_evidence_completeness(root)
+
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("operator_cycle_artifact_missing", result["failing_codes"])
+            self.assertIn(
+                {
+                    "check": "operator_cycle_artifact",
+                    "cycle": 1,
+                    "path": "operator-feedback/operator-feedback-author.cycle-1.prompt.md",
+                },
+                result["missing"],
+            )
 
     def test_evidence_completeness_accepts_pending_manual_operator_handoff_without_auto_author_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

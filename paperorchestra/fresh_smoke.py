@@ -1028,14 +1028,25 @@ def _check_operator_cycle_artifacts(
         return
     for n in sorted(cycle_numbers):
         manual_handoff_path = root / f"operator-feedback/manual-operator-handoff.cycle-{n}.json"
-        manual_pending = manual_handoff_path.exists() and f"operator_apply_cycle_{n}" not in commands
-        required_templates = (
-            [
+        manual_cycle = manual_handoff_path.exists()
+        manual_pending = manual_cycle and f"operator_apply_cycle_{n}" not in commands
+        manual_completed = manual_cycle and f"operator_apply_cycle_{n}" in commands
+        if manual_pending:
+            required_templates = [
                 "operator-review-packet.cycle-{n}.json",
                 "manual-operator-handoff.cycle-{n}.json",
             ]
-            if manual_pending
-            else [
+        elif manual_completed:
+            required_templates = [
+                "operator-review-packet.cycle-{n}.json",
+                "manual-operator-handoff.cycle-{n}.json",
+                "manual-operator-feedback-draft.cycle-{n}.json",
+                "operator-feedback.cycle-{n}.json",
+                "operator-feedback-imported.cycle-{n}.json",
+                "operator_feedback.execution.cycle-{n}.json",
+            ]
+        else:
+            required_templates = [
                 "operator-review-packet.cycle-{n}.json",
                 "operator-feedback-author.cycle-{n}.prompt.md",
                 "operator-feedback-author.cycle-{n}.response.md",
@@ -1043,7 +1054,6 @@ def _check_operator_cycle_artifacts(
                 "operator-feedback.cycle-{n}.json",
                 "operator-feedback-imported.cycle-{n}.json",
             ]
-        )
         for template in required_templates:
             rel = f"operator-feedback/{template.format(n=n)}"
             path = root / rel
@@ -1146,7 +1156,7 @@ def _check_operator_cycle_artifacts(
                             else:
                                 inconsistent.append({"check": "manual_operator_handoff", "cycle": n, "reason": "schema_or_cycle_mismatch"})
                                 failing_codes.add("manual_operator_handoff_invalid")
-                    else:
+                    elif not manual_completed:
                         prompt_path = root / f"operator-feedback/operator-feedback-author.cycle-{n}.prompt.md"
                         prompt_text = prompt_path.read_text(encoding="utf-8", errors="replace") if prompt_path.exists() else ""
                         required_prompt_markers = [
