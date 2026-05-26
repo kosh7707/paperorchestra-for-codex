@@ -7,6 +7,7 @@ from .critics import citation_item_has_valid_supporting_evidence
 from .quality_loop_actions import _action
 from .quality_loop_history import _failing_codes_from_quality_eval, _tier_statuses
 from .quality_loop_policy import (
+    CITATION_SUPPORT_REVIEW_REFRESH_CODES,
     HARD_HUMAN_ACTION_CODES,
     NON_REVIEWABLE_ACTION_CODES,
     NON_REVIEWABLE_TIER1_CODES,
@@ -241,11 +242,10 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
     citation_check = (tier2.get("checks") or {}).get("citation_support_critic") if isinstance(tier2, dict) else None
     if isinstance(citation_check, dict):
         citation_codes = set(citation_check.get("failing_codes") or [])
-        if citation_codes & {"citation_support_review_missing", "citation_support_review_stale"}:
-            code = "citation_support_review_stale" if "citation_support_review_stale" in citation_codes else "citation_support_review_missing"
+        for code in sorted(citation_codes & CITATION_SUPPORT_REVIEW_REFRESH_CODES):
             actions.append(
                 _action(
-                    action_id="quality-eval:citation-support",
+                    action_id=f"quality-eval:citation-support:{code}",
                     code=code,
                     source=citation_check.get("path"),
                     target="claim safety",

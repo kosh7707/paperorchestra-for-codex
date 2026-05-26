@@ -30,6 +30,7 @@ from .pipeline import (
 from .providers import BaseProvider, get_citation_support_provider
 from .source_obligations import write_source_obligations
 from .quality_loop import (
+    CITATION_SUPPORT_REVIEW_REFRESH_CODES,
     DEFAULT_MAX_ITERATIONS,
     QA_LOOP_SUPPORTED_HANDLER_CODES,
     REVIEW_REFRESH_CODES,
@@ -611,7 +612,7 @@ def run_qa_loop_step(
                     else None,
                 }
             )
-        elif code in {"citation_support_review_missing", "citation_support_review_stale", "citation_support_evidence_research_needed"}:
+        elif code in CITATION_SUPPORT_REVIEW_REFRESH_CODES | {"citation_support_evidence_research_needed"}:
             review_path = write_citation_support_review(cwd, provider=citation_provider, evidence_mode=citation_evidence_mode)
             execution["actions_attempted"].append({"code": code, "handler": "review_citations", "path": str(review_path)})
         elif code in {

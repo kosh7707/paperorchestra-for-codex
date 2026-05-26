@@ -2830,6 +2830,45 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             ],
         }
 
+
+    def test_v3_case_context_mismatch_routes_to_citation_review_refresh_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            review_path.write_text(
+                json.dumps({"schema": "citation-support-review/3", "summary": {}, "cases": []}),
+                encoding="utf-8",
+            )
+
+            actions = _quality_eval_actions(
+                self._manual_check_quality_eval(review_path, ["citation_support_case_context_mismatch"])
+            )
+
+        codes = {action.get("code") for action in actions}
+        self.assertIn("citation_support_case_context_mismatch", codes)
+        self.assertNotIn("citation_support_critic_failed", codes)
+        refresh_action = [action for action in actions if action.get("code") == "citation_support_case_context_mismatch"][0]
+        self.assertEqual(refresh_action["automation"], "automatic")
+        self.assertIn("paperorchestra review-citations --evidence-mode web", refresh_action["suggested_commands"])
+
+    def test_v3_case_coverage_mismatch_routes_to_citation_review_refresh_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            review_path.write_text(
+                json.dumps({"schema": "citation-support-review/3", "summary": {}, "cases": []}),
+                encoding="utf-8",
+            )
+
+            actions = _quality_eval_actions(
+                self._manual_check_quality_eval(review_path, ["citation_support_case_coverage_mismatch"])
+            )
+
+        codes = {action.get("code") for action in actions}
+        self.assertIn("citation_support_case_coverage_mismatch", codes)
+        self.assertNotIn("citation_support_critic_failed", codes)
+        refresh_action = [action for action in actions if action.get("code") == "citation_support_case_coverage_mismatch"][0]
+        self.assertEqual(refresh_action["automation"], "automatic")
+        self.assertIn("paperorchestra review-citations --evidence-mode web", refresh_action["suggested_commands"])
+
     def test_manual_check_with_fix_and_support_evidence_routes_to_semi_auto_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             review_path = Path(tmp) / "citation_support_review.json"
@@ -3063,6 +3102,63 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             _, quality_eval = write_quality_eval(root, quality_mode="claim_safe", max_iterations=5)
             self.assertEqual(quality_eval["cross_iteration"]["budget"]["attempts_used"], 1)
             self.assertEqual(quality_eval["cross_iteration"]["budget"]["remaining"], 4)
+
+
+    def test_qa_loop_step_runs_v3_mismatch_citation_review_handlers(self) -> None:
+        for code in ["citation_support_case_context_mismatch", "citation_support_case_coverage_mismatch"]:
+            with self.subTest(code=code):
+                with tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    state = self._init_session_with_minimal_inputs(root)
+                    paper = artifact_path(root, "paper.full.tex")
+                    paper.write_text(
+                        "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\n"
+                        "QUIC uses TLS~\\cite{RFC9001}.\n"
+                        "\\bibliographystyle{plain}\n\\bibliography{references}\n\\end{document}\n",
+                        encoding="utf-8",
+                    )
+                    state.artifacts.paper_full_tex = str(paper)
+                    save_session(root, state)
+                    write_planning_artifacts(root)
+                    record_current_validation_report(root, name="validation.current.json")
+                    write_figure_placement_review(root)
+
+                    before_eval = {
+                        "session_id": "po-test",
+                        "mode": "claim_safe",
+                        "tiers": {
+                            "tier_2_claim_safety": {
+                                "status": "fail",
+                                "failing_codes": [code],
+                            }
+                        },
+                    }
+                    after_eval = {
+                        "session_id": "po-test",
+                        "mode": "claim_safe",
+                        "tiers": {"tier_2_claim_safety": {"status": "pass", "failing_codes": []}},
+                    }
+                    before_plan = {
+                        "verdict": "continue",
+                        "repair_actions": [{"code": code, "automation": "automatic"}],
+                    }
+                    after_plan = {"verdict": "human_needed", "repair_actions": []}
+                    with patch(
+                        "paperorchestra.ralph_bridge.write_quality_eval",
+                        side_effect=[(root / "before-q.json", before_eval), (root / "after-q.json", after_eval)],
+                    ):
+                        with patch(
+                            "paperorchestra.ralph_bridge.write_quality_loop_plan",
+                            side_effect=[(root / "before-p.json", before_plan), (root / "after-p.json", after_plan)],
+                        ):
+                            with patch("paperorchestra.ralph_bridge.write_citation_support_review", return_value=root / "citation_support_review.json") as review:
+                                result = run_qa_loop_step(root, MockProvider(), citation_evidence_mode="heuristic")
+
+                    review.assert_called()
+                    attempted = result.payload.get("actions_attempted", [])
+                    self.assertTrue(attempted)
+                    self.assertEqual(attempted[0]["code"], code)
+                    self.assertEqual(attempted[0]["handler"], "review_citations")
 
     def test_qa_loop_step_runs_missing_citation_review_handler(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

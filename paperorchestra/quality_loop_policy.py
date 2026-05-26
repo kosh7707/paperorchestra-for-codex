@@ -70,6 +70,13 @@ TIER2_CLAIM_CODES = {
     "unknown_citation_keys",
 }
 
+CITATION_SUPPORT_REVIEW_REFRESH_CODES = {
+    "citation_support_review_missing",
+    "citation_support_review_stale",
+    "citation_support_case_coverage_mismatch",
+    "citation_support_case_context_mismatch",
+}
+
 QA_LOOP_SUPPORTED_HANDLER_CODES = {
     "narrative_plan_missing",
     "claim_map_missing",
@@ -81,8 +88,7 @@ QA_LOOP_SUPPORTED_HANDLER_CODES = {
     "validation_report_stale",
     "figure_placement_review_missing",
     "figure_placement_review_stale",
-    "citation_support_review_missing",
-    "citation_support_review_stale",
+    *CITATION_SUPPORT_REVIEW_REFRESH_CODES,
     "citation_support_evidence_research_needed",
     "rendered_reference_audit_missing",
     "rendered_reference_audit_stale",

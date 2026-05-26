@@ -30,6 +30,7 @@ from .validator import check_citation_placement, check_claim_map_coverage, check
 from .quality_loop_policy import (
     AUTO_REPAIR_CODES,
     BUDGET_CONSUMING_HISTORY_EVENTS,
+    CITATION_SUPPORT_REVIEW_REFRESH_CODES,
     CITATION_SUPPORT_STATUSES,
     DEFAULT_MAX_ITERATIONS,
     FIGURE_REPAIR_CODES,
