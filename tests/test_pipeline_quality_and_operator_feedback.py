@@ -79,6 +79,627 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(progress["citation_issue_delta"], -5)
             self.assertEqual(progress["active_tier2_metric_delta"]["base_total"], 9)
 
+    def test_operator_issue_context_protects_legacy_and_v3_untargeted_supported_citation_items(self) -> None:
+        from paperorchestra.operator_feedback import _operator_issue_context
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n"
+                "\\begin{document}\n"
+                "\\section{Intro}\n"
+                "Legacy supported fact \\cite{safeLegacy}.\n"
+                "Legacy weak fact \\cite{weakLegacy}.\n"
+                "Duplicate supported fact \\cite{dupKey}.\n"
+                "Dense supported fact \\cite{denseKey}.\n"
+                "V3 supported fact \\cite{safeV3}.\n"
+                "V3 weak fact \\cite{sharedKey}.\n"
+                "V3 other supported fact \\cite{sharedKey}.\n"
+                "\\end{document}\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            manuscript_sha = hashlib.sha256(paper.read_bytes()).hexdigest()
+            artifact_path(root, "citation_support_review.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "citation-support-review/3",
+                        "manuscript_sha256": manuscript_sha,
+                        "items": [
+                            {
+                                "id": "legacy-pass",
+                                "citation_keys": ["safeLegacy"],
+                                "sentence": "Legacy supported fact \\cite{safeLegacy}.",
+                                "support_status": "supported",
+                            },
+                            {
+                                "id": "legacy-weak",
+                                "citation_keys": ["weakLegacy"],
+                                "sentence": "Legacy weak fact \\cite{weakLegacy}.",
+                                "support_status": "weakly_supported",
+                            },
+                            {
+                                "id": "legacy-unsupported",
+                                "citation_keys": ["unsupportedLegacy"],
+                                "sentence": "Legacy unsupported fact \\cite{unsupportedLegacy}.",
+                                "support_status": "unsupported",
+                            },
+                            {
+                                "id": "legacy-supported-same-sentence",
+                                "citation_keys": ["sameSentenceLegacy"],
+                                "sentence": "Exact problematic shared sentence \\cite{sameSentenceLegacy}.",
+                                "support_status": "supported",
+                            },
+                            {
+                                "id": "legacy-unsupported-same-sentence",
+                                "citation_keys": ["differentLegacy"],
+                                "sentence": "Exact problematic shared sentence \\cite{sameSentenceLegacy}.",
+                                "support_status": "unsupported",
+                            },
+                            {
+                                "id": "legacy-dup-pass",
+                                "citation_keys": ["dupKey"],
+                                "sentence": "Duplicate supported fact \\cite{dupKey}.",
+                                "support_status": "supported",
+                            },
+                            {
+                                "id": "legacy-density-pass",
+                                "citation_keys": ["denseKey"],
+                                "sentence": "Dense supported fact \\cite{denseKey}.",
+                                "support_status": "supported",
+                            },
+                        ],
+                        "cases": [
+                            {
+                                "id": "C-safe-v3",
+                                "key": "safeV3",
+                                "anchor": "V3 supported fact \\cite{safeV3}.",
+                                "verdict": "pass",
+                            },
+                            {
+                                "id": "C-weak-v3",
+                                "key": "sharedKey",
+                                "anchor": "V3 weak fact \\cite{sharedKey}.",
+                                "verdict": "weak",
+                            },
+                            {
+                                "id": "C-fail-v3",
+                                "key": "failKey",
+                                "anchor": "V3 failed fact \\cite{failKey}.",
+                                "verdict": "fail",
+                            },
+                            {
+                                "id": "C-human-v3",
+                                "key": "humanKey",
+                                "anchor": "V3 human-needed fact \\cite{humanKey}.",
+                                "verdict": "human_needed",
+                            },
+                            {
+                                "id": "C-exact-pass-v3",
+                                "key": "exactPassKey",
+                                "anchor": "Exact v3 problematic fact \\cite{exactPassKey}.",
+                                "verdict": "pass",
+                            },
+                            {
+                                "id": "C-exact-fail-v3",
+                                "key": "exactFailKey",
+                                "anchor": "Exact v3 problematic fact \\cite{exactPassKey}.",
+                                "verdict": "fail",
+                            },
+                            {
+                                "id": "C-shared-pass-v3",
+                                "key": "sharedKey",
+                                "anchor": "V3 other supported fact \\cite{sharedKey}.",
+                                "verdict": "pass",
+                            },
+                            {
+                                "id": "C-target-fallback-v3",
+                                "key": "targetOnlyKey",
+                                "target": "V3 target fallback fact \\cite{targetOnlyKey}.",
+                                "verdict": "pass",
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            artifact_path(root, "citation_integrity.audit.json").write_text(
+                json.dumps(
+                    {
+                        "manuscript_sha256": manuscript_sha,
+                        "checks": {
+                            "duplicate_support": {"duplicate_keys": ["dupKey"]},
+                            "citation_density": {
+                                "bomb_sentences": [
+                                    {
+                                        "id": "density-1",
+                                        "sentence": "Dense supported fact \\cite{denseKey}.",
+                                        "citation_keys": ["denseKey"],
+                                    }
+                                ]
+                            },
+                        },
+                        "failing_codes": ["citation_duplicate_support", "citation_bomb_detected"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self._write_terminal_human_needed_plan(root)
+            packet_path, _packet = build_operator_review_packet(root, review_scope="tex_only")
+
+            context = _operator_issue_context({"packet_path": str(packet_path)})
+
+            protected = context["protected_supported_citation_items"]
+            protected_by_id = {item["id"]: item for item in protected}
+            self.assertIn("legacy-pass", protected_by_id)
+            self.assertEqual(protected_by_id["legacy-pass"]["citation_keys"], ["safeLegacy"])
+            self.assertEqual(protected_by_id["legacy-pass"]["sentence"], "Legacy supported fact \\cite{safeLegacy}.")
+            self.assertIn("C-safe-v3", protected_by_id)
+            self.assertEqual(protected_by_id["C-safe-v3"]["citation_keys"], ["safeV3"])
+            self.assertEqual(protected_by_id["C-safe-v3"]["anchor"], "V3 supported fact \\cite{safeV3}.")
+            self.assertIn("C-shared-pass-v3", protected_by_id)
+            self.assertEqual(protected_by_id["C-shared-pass-v3"]["citation_keys"], ["sharedKey"])
+            self.assertIn("C-target-fallback-v3", protected_by_id)
+            self.assertEqual(protected_by_id["C-target-fallback-v3"]["citation_keys"], ["targetOnlyKey"])
+            self.assertEqual(protected_by_id["C-target-fallback-v3"]["anchor"], "V3 target fallback fact \\cite{targetOnlyKey}.")
+            self.assertNotIn("legacy-weak", protected_by_id)
+            self.assertNotIn("legacy-unsupported", protected_by_id)
+            self.assertNotIn("legacy-supported-same-sentence", protected_by_id)
+            self.assertNotIn("legacy-dup-pass", protected_by_id)
+            self.assertNotIn("legacy-density-pass", protected_by_id)
+            self.assertNotIn("C-weak-v3", protected_by_id)
+            self.assertNotIn("C-fail-v3", protected_by_id)
+            self.assertNotIn("C-human-v3", protected_by_id)
+            self.assertNotIn("C-exact-pass-v3", protected_by_id)
+            self.assertIn("protected", context["writer_instruction"].lower())
+            self.assertIn("preserve", context["writer_instruction"].lower())
+
+    def test_operator_attempt_with_protected_citation_regression_is_not_human_review_ready(self) -> None:
+        from paperorchestra.operator_feedback import _candidate_attempt_ready_for_human_review
+
+        with tempfile.TemporaryDirectory() as tmp:
+            candidate = Path(tmp) / "candidate.tex"
+            candidate.write_text("candidate", encoding="utf-8")
+            self.assertFalse(
+                _candidate_attempt_ready_for_human_review(
+                    {
+                        "resolved_active_failures": ["high_risk_uncited_claim"],
+                        "candidate_path": str(candidate),
+                        "gate_reasons": ["protected_supported_citation_regression"],
+                        "new_tier2_failures": [],
+                    }
+                )
+            )
+
+    def test_operator_feedback_rejects_candidate_that_rewrites_protected_v3_supported_citation_anchor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            original = (
+                "\\documentclass{article}\n"
+                "\\begin{document}\n"
+                "\\section{Intro}\n"
+                "Protected source-backed fact \\cite{safeV3}.\n"
+                "High-risk claim needs scope.\n"
+                "\\end{document}\n"
+            )
+            candidate_text = (
+                "\\documentclass{article}\n"
+                "\\begin{document}\n"
+                "\\section{Intro}\n"
+                "Rewritten protected fact \\cite{safeV3}.\n"
+                "Scoped repairmarker claim.\n"
+                "\\end{document}\n"
+            )
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(original, encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            manuscript_sha = hashlib.sha256(paper.read_bytes()).hexdigest()
+            artifact_path(root, "citation_support_review.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "citation-support-review/3",
+                        "manuscript_sha256": manuscript_sha,
+                        "cases": [
+                            {
+                                "id": "C-protected",
+                                "key": "safeV3",
+                                "anchor": "Protected source-backed fact \\cite{safeV3}.",
+                                "verdict": "pass",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            artifact_path(root, "quality-eval.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "quality-eval/1",
+                        "session_id": state.session_id,
+                        "manuscript_hash": "sha256:" + manuscript_sha,
+                        "mode": "claim_safe",
+                        "tiers": {
+                            "tier_0_preconditions": {"status": "pass"},
+                            "tier_1_structural": {"status": "pass"},
+                            "tier_2_claim_safety": {
+                                "status": "fail",
+                                "failing_codes": ["high_risk_uncited_claim"],
+                                "checks": {"high_risk_claim_sweep": {"item_count": 1}},
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self._write_terminal_human_needed_plan(root)
+            packet_path, packet = build_operator_review_packet(root, review_scope="tex_only")
+            issue_id = derive_operator_issue_id(
+                packet["packet_sha256"],
+                source_artifact_role="quality_eval",
+                source_item_key="high-risk-1",
+                target_section="Intro",
+                rationale="High-risk claim needs scoped repairmarker wording.",
+                suggested_action="Add scoped repairmarker wording without touching protected citations.",
+            )
+            feedback_path = root / "operator-feedback.json"
+            feedback_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-feedback/1",
+                        "source": "codex_operator",
+                        "not_independent_human_review": True,
+                        "intent": "generate_new_operator_candidate",
+                        "packet_sha256": packet["packet_sha256"],
+                        "manuscript_sha256": packet["manuscript_sha256"],
+                        "issues": [
+                            {
+                                "id": issue_id,
+                                "source_artifact_role": "quality_eval",
+                                "source_item_key": "high-risk-1",
+                                "target_section": "Intro",
+                                "severity": "major",
+                                "rationale": "High-risk claim needs scoped repairmarker wording.",
+                                "suggested_action": "Add scoped repairmarker wording without touching protected citations.",
+                                "authority_class": "author_feedback",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            imported_path, _ = import_operator_feedback(root, packet_path=packet_path, feedback_path=feedback_path)
+            candidate = artifact_path(root, "candidate-protected-regression.tex")
+            candidate.write_text(candidate_text, encoding="utf-8")
+
+            def fake_refine(cwd, provider, **kwargs):
+                return [
+                    {
+                        "iteration": 1,
+                        "candidate_path": str(candidate),
+                        "candidate_sha256": "sha256:" + hashlib.sha256(candidate.read_bytes()).hexdigest(),
+                        "score_before": 70,
+                        "score_after": 70,
+                        "axis_scores_before": {},
+                        "axis_scores_after": {},
+                    }
+                ]
+
+            candidate_quality = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "tiers": {
+                    "tier_0_preconditions": {"status": "pass"},
+                    "tier_1_structural": {"status": "pass"},
+                    "tier_2_claim_safety": {"status": "pass", "failing_codes": [], "checks": {"high_risk_claim_sweep": {"item_count": 0}}},
+                },
+            }
+            with patch("paperorchestra.operator_feedback.refine_current_paper", side_effect=fake_refine):
+                with patch("paperorchestra.operator_feedback.record_current_validation_report", return_value=(root / "validation.json", {"ok": True})):
+                    with patch("paperorchestra.operator_feedback.write_section_review", return_value=root / "section.json"):
+                        with patch("paperorchestra.operator_feedback.write_citation_support_review", return_value=root / "citation.json"):
+                            with patch("paperorchestra.operator_feedback.review_current_paper", return_value=root / "review.json"):
+                                with patch("paperorchestra.operator_feedback.write_quality_eval", return_value=(root / "quality.json", candidate_quality)):
+                                    with patch("paperorchestra.operator_feedback.write_quality_loop_plan", return_value=(root / "plan.json", {"verdict": "continue"})):
+                                        _execution_path, execution = apply_operator_feedback(root, MockProvider(), imported_feedback_path=imported_path)
+
+            self.assertEqual(execution["promotion_status"], "rolled_back")
+            attempt = execution["attempts"][-1]
+            self.assertIn("protected_supported_citation_regression", attempt["gate_reasons"])
+            self.assertEqual(attempt["protected_supported_citation_regressions"][0]["id"], "C-protected")
+            self.assertEqual(attempt["protected_supported_citation_regressions"][0]["citation_keys"], ["safeV3"])
+            protected_attempt_evidence = json.dumps(attempt["protected_supported_citation_regressions"])
+            self.assertNotIn("sentence", protected_attempt_evidence)
+            self.assertNotIn("anchor", protected_attempt_evidence)
+            self.assertNotIn("Protected source-backed fact", protected_attempt_evidence)
+            self.assertNotIn("Protected source-backed fact", json.dumps(execution["actionable_failure"]))
+            incorporation = json.loads(Path(execution["incorporation_report"]).read_text(encoding="utf-8"))
+            self.assertNotIn("Protected source-backed fact", json.dumps(incorporation["actionable_failure"]))
+            history_path = root / ".paper-orchestra" / "qa-loop-history.jsonl"
+            history = [json.loads(line) for line in history_path.read_text(encoding="utf-8").splitlines()]
+            self.assertNotIn("Protected source-backed fact", json.dumps(history[-1]["actionable_failure"]))
+            self.assertEqual(paper.read_text(encoding="utf-8"), original)
+
+
+    def test_operator_feedback_checks_protected_citation_regression_beyond_prompt_context_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            protected_cases = []
+            original_lines = []
+            candidate_lines = []
+            for index in range(1, 27):
+                key = f"safeKey{index}"
+                anchor = f"Protected fact {index} \\cite{{{key}}}."
+                protected_cases.append({"id": f"C-protected-{index:02d}", "key": key, "anchor": anchor, "verdict": "pass"})
+                original_lines.append(anchor)
+                candidate_lines.append(anchor)
+            candidate_lines[-1] = "Rewritten late protected fact \\cite{safeKey26}."
+            original = "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\n" + "\n".join(original_lines) + "\nHigh-risk claim needs scope.\n\\end{document}\n"
+            candidate_text = "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\n" + "\n".join(candidate_lines) + "\nScoped repairmarker claim.\n\\end{document}\n"
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(original, encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            manuscript_sha = hashlib.sha256(paper.read_bytes()).hexdigest()
+            artifact_path(root, "citation_support_review.json").write_text(
+                json.dumps({"schema": "citation-support-review/3", "manuscript_sha256": manuscript_sha, "cases": protected_cases}),
+                encoding="utf-8",
+            )
+            artifact_path(root, "quality-eval.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "quality-eval/1",
+                        "session_id": state.session_id,
+                        "manuscript_hash": "sha256:" + manuscript_sha,
+                        "mode": "claim_safe",
+                        "tiers": {
+                            "tier_0_preconditions": {"status": "pass"},
+                            "tier_1_structural": {"status": "pass"},
+                            "tier_2_claim_safety": {
+                                "status": "fail",
+                                "failing_codes": ["high_risk_uncited_claim"],
+                                "checks": {"high_risk_claim_sweep": {"item_count": 1}},
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self._write_terminal_human_needed_plan(root)
+            packet_path, packet = build_operator_review_packet(root, review_scope="tex_only")
+            issue_id = derive_operator_issue_id(
+                packet["packet_sha256"],
+                source_artifact_role="quality_eval",
+                source_item_key="high-risk-late",
+                target_section="Intro",
+                rationale="High-risk claim needs scoped repairmarker wording.",
+                suggested_action="Add scoped repairmarker wording without touching protected citations.",
+            )
+            feedback_path = root / "operator-feedback.json"
+            feedback_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-feedback/1",
+                        "source": "codex_operator",
+                        "not_independent_human_review": True,
+                        "intent": "generate_new_operator_candidate",
+                        "packet_sha256": packet["packet_sha256"],
+                        "manuscript_sha256": packet["manuscript_sha256"],
+                        "issues": [
+                            {
+                                "id": issue_id,
+                                "source_artifact_role": "quality_eval",
+                                "source_item_key": "high-risk-late",
+                                "target_section": "Intro",
+                                "severity": "major",
+                                "rationale": "High-risk claim needs scoped repairmarker wording.",
+                                "suggested_action": "Add scoped repairmarker wording without touching protected citations.",
+                                "authority_class": "author_feedback",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            imported_path, _ = import_operator_feedback(root, packet_path=packet_path, feedback_path=feedback_path)
+            candidate = artifact_path(root, "candidate-late-protected-regression.tex")
+            candidate.write_text(candidate_text, encoding="utf-8")
+
+            def fake_refine(cwd, provider, **kwargs):
+                return [
+                    {
+                        "iteration": 1,
+                        "candidate_path": str(candidate),
+                        "candidate_sha256": "sha256:" + hashlib.sha256(candidate.read_bytes()).hexdigest(),
+                        "score_before": 70,
+                        "score_after": 70,
+                        "axis_scores_before": {},
+                        "axis_scores_after": {},
+                    }
+                ]
+
+            candidate_quality = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "tiers": {
+                    "tier_0_preconditions": {"status": "pass"},
+                    "tier_1_structural": {"status": "pass"},
+                    "tier_2_claim_safety": {"status": "pass", "failing_codes": [], "checks": {"high_risk_claim_sweep": {"item_count": 0}}},
+                },
+            }
+            with patch("paperorchestra.operator_feedback.refine_current_paper", side_effect=fake_refine):
+                with patch("paperorchestra.operator_feedback.record_current_validation_report", return_value=(root / "validation.json", {"ok": True})):
+                    with patch("paperorchestra.operator_feedback.write_section_review", return_value=root / "section.json"):
+                        with patch("paperorchestra.operator_feedback.write_citation_support_review", return_value=root / "citation.json"):
+                            with patch("paperorchestra.operator_feedback.review_current_paper", return_value=root / "review.json"):
+                                with patch("paperorchestra.operator_feedback.write_quality_eval", return_value=(root / "quality.json", candidate_quality)):
+                                    with patch("paperorchestra.operator_feedback.write_quality_loop_plan", return_value=(root / "plan.json", {"verdict": "continue"})):
+                                        _execution_path, execution = apply_operator_feedback(root, MockProvider(), imported_feedback_path=imported_path)
+
+            self.assertEqual(execution["promotion_status"], "rolled_back")
+            attempt = execution["attempts"][-1]
+            self.assertIn("protected_supported_citation_regression", attempt["gate_reasons"])
+            ids = {item["id"] for item in attempt["protected_supported_citation_regressions"]}
+            self.assertIn("C-protected-26", ids)
+            self.assertEqual(attempt["protected_supported_citation_regression_count"], 1)
+            self.assertEqual(paper.read_text(encoding="utf-8"), original)
+
+    def test_operator_feedback_allows_rewriting_duplicate_target_supported_citation_sentence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            original = (
+                "\\documentclass{article}\n"
+                "\\begin{document}\n"
+                "\\section{Intro}\n"
+                "Duplicate target fact \\cite{dupKey}.\n"
+                "High-risk claim needs scope.\n"
+                "\\end{document}\n"
+            )
+            candidate_text = (
+                "\\documentclass{article}\n"
+                "\\begin{document}\n"
+                "\\section{Intro}\n"
+                "Duplicate target fact rewritten without the repeated citation.\n"
+                "Scoped repairmarker claim.\n"
+                "\\end{document}\n"
+            )
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(original, encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            manuscript_sha = hashlib.sha256(paper.read_bytes()).hexdigest()
+            artifact_path(root, "citation_support_review.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "citation-support-review/3",
+                        "manuscript_sha256": manuscript_sha,
+                        "cases": [
+                            {
+                                "id": "C-duplicate-target",
+                                "key": "dupKey",
+                                "anchor": "Duplicate target fact \\cite{dupKey}.",
+                                "verdict": "pass",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            artifact_path(root, "citation_integrity.audit.json").write_text(
+                json.dumps(
+                    {
+                        "manuscript_sha256": manuscript_sha,
+                        "checks": {"duplicate_support": {"duplicate_keys": ["dupKey"]}},
+                        "failing_codes": ["citation_duplicate_support"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            artifact_path(root, "quality-eval.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "quality-eval/1",
+                        "session_id": state.session_id,
+                        "manuscript_hash": "sha256:" + manuscript_sha,
+                        "mode": "claim_safe",
+                        "tiers": {
+                            "tier_0_preconditions": {"status": "pass"},
+                            "tier_1_structural": {"status": "pass"},
+                            "tier_2_claim_safety": {
+                                "status": "fail",
+                                "failing_codes": ["citation_duplicate_support"],
+                                "checks": {"citation_quality_gate": {"counts": {"duplicate_reference_count": 1}}},
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self._write_terminal_human_needed_plan(root)
+            packet_path, packet = build_operator_review_packet(root, review_scope="tex_only")
+            issue_id = derive_operator_issue_id(
+                packet["packet_sha256"],
+                source_artifact_role="citation_integrity_audit",
+                source_item_key="duplicate:dupKey",
+                target_section="Intro",
+                rationale="Duplicate citation support needs scoped repairmarker wording.",
+                suggested_action="Remove redundant duplicate support with scoped repairmarker wording.",
+            )
+            feedback_path = root / "operator-feedback.json"
+            feedback_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-feedback/1",
+                        "source": "codex_operator",
+                        "not_independent_human_review": True,
+                        "intent": "generate_new_operator_candidate",
+                        "packet_sha256": packet["packet_sha256"],
+                        "manuscript_sha256": packet["manuscript_sha256"],
+                        "issues": [
+                            {
+                                "id": issue_id,
+                                "source_artifact_role": "citation_integrity_audit",
+                                "source_item_key": "duplicate:dupKey",
+                                "target_section": "Intro",
+                                "severity": "major",
+                                "rationale": "Duplicate citation support needs scoped repairmarker wording.",
+                                "suggested_action": "Remove redundant duplicate support with scoped repairmarker wording.",
+                                "authority_class": "citation_support",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            imported_path, _ = import_operator_feedback(root, packet_path=packet_path, feedback_path=feedback_path)
+            candidate = artifact_path(root, "candidate-duplicate-target.tex")
+            candidate.write_text(candidate_text, encoding="utf-8")
+
+            def fake_refine(cwd, provider, **kwargs):
+                return [
+                    {
+                        "iteration": 1,
+                        "candidate_path": str(candidate),
+                        "candidate_sha256": "sha256:" + hashlib.sha256(candidate.read_bytes()).hexdigest(),
+                        "score_before": 70,
+                        "score_after": 70,
+                        "axis_scores_before": {},
+                        "axis_scores_after": {},
+                    }
+                ]
+
+            candidate_quality = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "tiers": {
+                    "tier_0_preconditions": {"status": "pass"},
+                    "tier_1_structural": {"status": "pass"},
+                    "tier_2_claim_safety": {
+                        "status": "pass",
+                        "failing_codes": [],
+                        "checks": {"citation_quality_gate": {"counts": {"duplicate_reference_count": 0}}},
+                    },
+                },
+            }
+            with patch("paperorchestra.operator_feedback.refine_current_paper", side_effect=fake_refine):
+                with patch("paperorchestra.operator_feedback.record_current_validation_report", return_value=(root / "validation.json", {"ok": True})):
+                    with patch("paperorchestra.operator_feedback.write_section_review", return_value=root / "section.json"):
+                        with patch("paperorchestra.operator_feedback.write_citation_support_review", return_value=root / "citation.json"):
+                            with patch("paperorchestra.operator_feedback.review_current_paper", return_value=root / "review.json"):
+                                with patch("paperorchestra.operator_feedback.write_quality_eval", return_value=(root / "quality.json", candidate_quality)):
+                                    with patch("paperorchestra.operator_feedback.write_quality_loop_plan", return_value=(root / "plan.json", {"verdict": "continue"})):
+                                        _execution_path, execution = apply_operator_feedback(root, MockProvider(), imported_feedback_path=imported_path)
+
+            self.assertEqual(execution["promotion_status"], "promoted")
+            self.assertNotIn("protected_supported_citation_regression", execution["attempts"][-1]["gate_reasons"])
+            self.assertEqual(paper.read_text(encoding="utf-8"), candidate_text)
+
     def test_qa_loop_plan_surfaces_citation_integrity_density_failures(self) -> None:
         quality_eval = {
             "tiers": {
