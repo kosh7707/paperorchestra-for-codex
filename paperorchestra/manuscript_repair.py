@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from .boundary import is_material_packet_section_title, normalized_claim_projection
-from .validator import extract_citation_keys
+from .validator import canonical_citation_key, canonical_citation_map, extract_citation_keys
 
 SECTION_COMMAND_RE = re.compile(r"\\section\{([^}]+)\}")
 SUBSECTION_COMMAND_RE = re.compile(r"\\subsection\{([^}]+)\}")
@@ -599,6 +599,7 @@ def _citation_map_for_selected_sections(source_latex: str, citation_map: dict[st
         block = source_latex[section_range[0] : section_range[1]]
         selected_keys.update(extract_citation_keys(block))
     if not selected_keys:
-        return citation_map
-    subset = {key: value for key, value in citation_map.items() if key in selected_keys}
-    return subset or citation_map
+        return canonical_citation_map(citation_map)
+    canonical_selected = {canonical_citation_key(key, citation_map) for key in selected_keys if key in citation_map}
+    subset = {key: value for key, value in canonical_citation_map(citation_map).items() if key in canonical_selected}
+    return subset or canonical_citation_map(citation_map)

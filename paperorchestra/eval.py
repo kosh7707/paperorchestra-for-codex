@@ -8,6 +8,7 @@ from typing import Any
 from .io_utils import read_json
 from .literature import title_match_ratio
 from .session import load_session
+from .validator import canonical_citation_keys, citation_entry_for_key
 
 EXPECTED_LITERATURE_REVIEW_AXES = [
     "coverage_and_completeness",
@@ -241,7 +242,7 @@ def build_session_eval_summary(cwd: str | Path | None) -> dict[str, Any]:
         "refinement_iteration": state.refinement_iteration,
         "review_overall_score": latest_review.get("overall_score") if isinstance(latest_review, dict) else None,
         "review_axis_scores": latest_review.get("axis_scores") if isinstance(latest_review, dict) else None,
-        "verified_citation_count": len(citation_map) if isinstance(citation_map, dict) else 0,
+        "verified_citation_count": len(canonical_citation_keys(citation_map)) if isinstance(citation_map, dict) else 0,
         "candidate_discovery_sources": discovery_sources,
         "candidate_discovery_source_counts": source_counts,
         "candidate_discovery_attempted_sources": attempted_sources,
@@ -356,7 +357,7 @@ def build_generated_citation_titles(cwd: str | Path | None) -> dict[str, Any]:
     resolved_entries: list[dict[str, Any]] = []
     seen_titles: set[str] = set()
     for key in cited_keys:
-        entry = citation_map.get(key, {}) if isinstance(citation_map, dict) else {}
+        entry = citation_entry_for_key(citation_map, key) if isinstance(citation_map, dict) else {}
         title = entry.get("title") if isinstance(entry, dict) else None
         if not isinstance(title, str) or not title.strip():
             continue

@@ -66,6 +66,10 @@ from .validator import (
     LABEL_RE,
     ValidationIssue,
     build_figure_placement_review,
+    allowed_citation_keys,
+    canonical_citation_key,
+    canonical_citation_keys,
+    canonical_citation_map,
     canonicalize_citation_keys,
     extract_citation_keys,
     validate_manuscript,
@@ -491,7 +495,7 @@ def _source_critical_context_for_prompt(inputs: dict[str, str], *, window_chars:
 def _unknown_citation_key_counts(latex: str, citation_map: dict[str, Any]) -> dict[str, int]:
     if not citation_map:
         return {}
-    allowed = set(citation_map)
+    allowed = allowed_citation_keys(citation_map)
     counts: dict[str, int] = {}
     for match in CITE_COMMAND_RE.finditer(latex):
         for key in [key.strip() for key in match.group(2).split(",") if key.strip()]:
@@ -640,6 +644,7 @@ def _compact_citation_map_for_prompt(
     include_origin: bool = True,
     include_matched_query: bool = True,
 ) -> dict[str, Any]:
+    citation_map = canonical_citation_map(citation_map)
     compact: dict[str, Any] = {}
     for key, value in citation_map.items():
         if not isinstance(value, dict):
@@ -753,7 +758,7 @@ def _drop_unknown_citation_keys(latex: str, citation_map: dict[str, Any]) -> tup
 
     if not citation_map:
         return latex, {}
-    allowed = set(citation_map)
+    allowed = allowed_citation_keys(citation_map)
     dropped: dict[str, int] = {}
 
     def _replace(match: re.Match[str]) -> str:
@@ -1149,7 +1154,7 @@ def _selected_section_template(source_latex: str, selected_sections: list[str]) 
 
 
 def _citation_coverage_target(citation_map: dict[str, Any]) -> int:
-    population = len(citation_map)
+    population = len(canonical_citation_keys(citation_map))
     if population <= 0:
         return 0
     if population <= 10:
@@ -1183,9 +1188,10 @@ def _ensure_minimum_citation_coverage(
     target_count = _citation_coverage_target(citation_map) if target is None else max(0, target)
     if target_count <= 0:
         return latex
-    known_keys = [str(key) for key in citation_map.keys()]
+    known_keys = [str(key) for key in canonical_citation_keys(citation_map)]
     cited = extract_citation_keys(latex)
-    cited_known = {key for key in cited if key in citation_map}
+    allowed = allowed_citation_keys(citation_map)
+    cited_known = {canonical_citation_key(key, citation_map) if key in citation_map else key for key in cited if key in allowed}
     needed = target_count - len(cited_known)
     if needed <= 0:
         return latex
@@ -2433,8 +2439,11 @@ def _record_verification_errors(
     return path
 
 
-def _registry_entry_payload(paper: VerifiedPaper) -> dict[str, Any]:
+def _registry_entry_payload(paper: VerifiedPaper, *, citation_key_role: str = "canonical") -> dict[str, Any]:
     return {
+        "canonical_bibtex_key": paper.bibtex_key,
+        "alias_bibtex_keys": list(paper.alias_bibtex_keys),
+        "citation_key_role": citation_key_role,
         "title": paper.title,
         "abstract": paper.abstract,
         "authors": paper.authors,
@@ -2773,10 +2782,11 @@ def _citation_map_from_registry(registry: list[VerifiedPaper]) -> dict[str, Any]
     for paper in registry:
         if not is_citable_paper(paper):
             continue
-        entry = _registry_entry_payload(paper)
-        for key in [paper.bibtex_key, *paper.alias_bibtex_keys]:
+        if paper.bibtex_key:
+            payload[paper.bibtex_key] = _registry_entry_payload(paper, citation_key_role="canonical")
+        for key in paper.alias_bibtex_keys:
             if key:
-                payload[key] = entry
+                payload[key] = _registry_entry_payload(paper, citation_key_role="alias")
     return payload
 
 
@@ -3083,9 +3093,10 @@ def import_prior_work(
 
 
 def _min_cite_count(citation_map: dict[str, Any]) -> int:
-    if not citation_map:
+    count = len(canonical_citation_keys(citation_map))
+    if count <= 0:
         return 0
-    return max(1, int(round(len(citation_map) * 0.9)))
+    return max(1, int(round(count * 0.9)))
 
 
 def _expected_section_titles_from_outline(outline: dict[str, Any]) -> list[str]:
@@ -3175,11 +3186,11 @@ def write_intro_related(
 
 {_data_block('source_critical_context.json', json.dumps(source_critical_context, indent=2, ensure_ascii=False))}
 
-{_data_block('citation_checklist', json.dumps(sorted(citation_map.keys()), indent=2, ensure_ascii=False))}
+{_data_block('citation_checklist', json.dumps(sorted(canonical_citation_keys(citation_map)), indent=2, ensure_ascii=False))}
 
 {_data_block('collected_papers', json.dumps(prompt_citation_map, indent=2, ensure_ascii=False))}
 
-{_data_block('paper_count', str(len(citation_map)))}
+{_data_block('paper_count', str(len(canonical_citation_keys(citation_map))))}
 
 {_data_block('min_cite_paper_count', str(min_citation_coverage))}
 
@@ -3188,7 +3199,7 @@ def write_intro_related(
     response, lane_type, fallback_used, lane_notes = _complete_with_runtime_mode(
         _build_completion_request(
             system_prompt=PROMPTS.render_intro_related_system(
-                paper_count=len(citation_map),
+                paper_count=len(canonical_citation_keys(citation_map)),
                 min_cite_paper_count=min_citation_coverage,
                 cutoff_date=state.inputs.cutoff_date,
             ),
@@ -3246,7 +3257,7 @@ Repair Instructions:
             retry_response, retry_lane_type, retry_fallback_used, retry_lane_notes = _complete_with_runtime_mode(
                 _build_completion_request(
                     system_prompt=PROMPTS.render_intro_related_system(
-                        paper_count=len(citation_map),
+                        paper_count=len(canonical_citation_keys(citation_map)),
                         min_cite_paper_count=min_citation_coverage,
                         cutoff_date=state.inputs.cutoff_date,
                     ),
@@ -3518,7 +3529,7 @@ def write_sections(
 
 {_data_block('citation_map.json', json.dumps(prompt_citation_map_compact, indent=2, ensure_ascii=False))}
 
-{_data_block('citation_coverage_target.json', json.dumps({'min_distinct_verified_citations': min_citation_coverage, 'available_verified_citations': len(citation_map)}, ensure_ascii=False))}
+{_data_block('citation_coverage_target.json', json.dumps({'min_distinct_verified_citations': min_citation_coverage, 'available_verified_citations': len(canonical_citation_keys(citation_map))}, ensure_ascii=False))}
 
 {_data_block('plot_manifest.json', json.dumps(prompt_plot_manifest, indent=2, ensure_ascii=False))}
 
@@ -3878,7 +3889,7 @@ def review_current_paper(
 
 {_data_block('cutoff_date', state.inputs.cutoff_date or 'null')}
 """.strip()
-    avg_citation_count = max(1, len(citation_map))
+    avg_citation_count = max(1, len(canonical_citation_keys(citation_map)))
     response, lane_type, fallback_used, lane_notes = _complete_with_runtime_mode(
         _build_completion_request(system_prompt=PROMPTS.render_review_system(avg_citation_count=avg_citation_count), user_prompt=user_prompt),
         provider=provider,

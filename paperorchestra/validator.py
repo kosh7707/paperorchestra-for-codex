@@ -123,14 +123,85 @@ def _citation_key_aliases(key: str) -> set[str]:
     return aliases
 
 
+def canonical_citation_key(key: str, citation_map: dict[str, Any]) -> str:
+    entry = citation_map.get(key) if isinstance(citation_map, dict) else None
+    if isinstance(entry, dict):
+        canonical = entry.get("canonical_bibtex_key")
+        if isinstance(canonical, str) and canonical.strip():
+            return canonical.strip()
+    return key
+
+
+def canonical_citation_keys(citation_map: dict[str, Any]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    if not isinstance(citation_map, dict):
+        return result
+    for raw_key in citation_map:
+        if not isinstance(raw_key, str) or not raw_key.strip():
+            continue
+        canonical = canonical_citation_key(raw_key, citation_map)
+        if canonical not in seen:
+            seen.add(canonical)
+            result.append(canonical)
+    return result
+
+
+def canonical_citation_map(citation_map: dict[str, Any]) -> dict[str, Any]:
+    compact: dict[str, Any] = {}
+    if not isinstance(citation_map, dict):
+        return compact
+    for canonical in canonical_citation_keys(citation_map):
+        entry = citation_map.get(canonical)
+        if entry is None:
+            for raw_key, raw_entry in citation_map.items():
+                if isinstance(raw_key, str) and canonical_citation_key(raw_key, citation_map) == canonical:
+                    entry = raw_entry
+                    break
+        compact[canonical] = entry if entry is not None else {}
+    return compact
+
+
+
+
+def allowed_citation_keys(citation_map: dict[str, Any]) -> set[str]:
+    if not isinstance(citation_map, dict):
+        return set()
+    raw_keys = {key for key in citation_map if isinstance(key, str) and key.strip()}
+    return raw_keys | set(canonical_citation_keys(citation_map))
+
+
+def citation_entry_for_key(citation_map: dict[str, Any], key: str) -> dict[str, Any]:
+    if not isinstance(citation_map, dict):
+        return {}
+    raw = citation_map.get(key)
+    if isinstance(raw, dict):
+        return raw
+    canonical_entry = canonical_citation_map(citation_map).get(key)
+    return canonical_entry if isinstance(canonical_entry, dict) else {}
+
+def noncanonical_citation_aliases(latex: str, citation_map: dict[str, Any]) -> dict[str, str]:
+    aliases: dict[str, str] = {}
+    if not isinstance(citation_map, dict):
+        return aliases
+    for key in extract_citation_keys(latex):
+        canonical = canonical_citation_key(key, citation_map)
+        if canonical != key:
+            aliases[key] = canonical
+    return aliases
+
+
 def canonicalize_citation_keys(latex: str, citation_map: dict[str, Any]) -> tuple[str, dict[str, str]]:
     alias_map: dict[str, str | None] = {}
     for key in citation_map:
+        if not isinstance(key, str):
+            continue
+        canonical_key = canonical_citation_key(key, citation_map)
         for alias in _citation_key_aliases(key):
             lowered = alias.lower()
             if lowered not in alias_map:
-                alias_map[lowered] = key
-            elif alias_map[lowered] != key:
+                alias_map[lowered] = canonical_key
+            elif alias_map[lowered] != canonical_key:
                 alias_map[lowered] = None
 
     replacements: dict[str, str] = {}
@@ -141,6 +212,12 @@ def canonicalize_citation_keys(latex: str, citation_map: dict[str, Any]) -> tupl
         changed = False
         for raw_key in raw_keys:
             if not raw_key:
+                continue
+            canonical = canonical_citation_key(raw_key, citation_map) if raw_key in citation_map else None
+            if canonical and canonical != raw_key:
+                replacements[raw_key] = canonical
+                updated.append(canonical)
+                changed = True
                 continue
             if raw_key in citation_map:
                 updated.append(raw_key)
@@ -181,7 +258,7 @@ def _sanitize_layout_numbers(latex: str) -> str:
 
 def check_unknown_citations(latex: str, citation_map: dict[str, Any]) -> list[ValidationIssue]:
     cited_keys = extract_citation_keys(latex)
-    unknown_keys = sorted(key for key in cited_keys if key not in citation_map)
+    unknown_keys = sorted(key for key in cited_keys if key not in allowed_citation_keys(citation_map))
     if not unknown_keys:
         return []
     return [
@@ -193,27 +270,34 @@ def check_unknown_citations(latex: str, citation_map: dict[str, Any]) -> list[Va
     ]
 
 
+def _citation_coverage_requirement(population: int) -> int:
+    if population <= 0:
+        return 0
+    if population <= 10:
+        return population
+    if population <= 25:
+        return max(1, int(round(population * 0.85)))
+    if population <= 50:
+        return max(1, int(round(population * 0.8)))
+    return max(1, int(round(population * 0.7)))
+
+
 def check_citation_coverage(latex: str, citation_map: dict[str, Any]) -> list[ValidationIssue]:
     if not citation_map:
         return []
     cited_keys = extract_citation_keys(latex)
-    population = len(citation_map)
-    if population <= 10:
-        required_citation_count = population
-    elif population <= 25:
-        required_citation_count = max(1, int(round(population * 0.85)))
-    elif population <= 50:
-        required_citation_count = max(1, int(round(population * 0.8)))
-    else:
-        required_citation_count = max(1, int(round(population * 0.7)))
-    if len(cited_keys) >= required_citation_count:
+    allowed = allowed_citation_keys(citation_map)
+    cited_canonical = {canonical_citation_key(key, citation_map) if key in citation_map else key for key in cited_keys if key in allowed}
+    population = len(canonical_citation_keys(citation_map))
+    required_citation_count = _citation_coverage_requirement(population)
+    if len(cited_canonical) >= required_citation_count:
         return []
     return [
         ValidationIssue(
             code="citation_coverage_insufficient",
             severity="error",
             message=(
-                f"Insufficient citation coverage: cited {len(cited_keys)} verified papers, "
+                f"Insufficient citation coverage: cited {len(cited_canonical)} verified papers, "
                 f"need at least {required_citation_count}."
             ),
         )
@@ -1304,6 +1388,16 @@ def validate_manuscript(
     issues: list[ValidationIssue] = []
     issues.extend(check_prompt_meta_leakage(latex))
     issues.extend(check_unknown_citations(latex, citation_map))
+    aliases = noncanonical_citation_aliases(latex, citation_map)
+    if aliases:
+        detail = ", ".join(f"{src}->{dst}" for src, dst in sorted(aliases.items()))
+        issues.append(
+            ValidationIssue(
+                code="noncanonical_citation_aliases",
+                severity="error",
+                message=f"Noncanonical citation aliases must be rewritten before validation/compile: {detail}.",
+            )
+        )
     issues.extend(check_citation_coverage(latex, citation_map))
     issues.extend(check_figure_file_coverage(latex, figures_dir))
     issues.extend(check_plot_plan_coverage(latex, plot_manifest))

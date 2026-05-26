@@ -29,7 +29,7 @@ from .ralph_bridge_state import (
 )
 from .session import artifact_path, load_session, save_session
 from .source_obligations import evaluate_source_obligations, source_obligations_path
-from .validator import extract_citation_keys
+from .validator import allowed_citation_keys, canonical_citation_map, canonicalize_citation_keys, extract_citation_keys
 
 
 def _non_supported_citation_items(citation_review: dict[str, Any]) -> list[dict[str, Any]]:
@@ -474,9 +474,10 @@ def repair_citation_claims(
     citation_map = _read_json(state.artifacts.citation_map_json) if state.artifacts.citation_map_json else {}
     if not isinstance(citation_map, dict):
         citation_map = {}
+    prompt_citation_map = canonical_citation_map(citation_map)
     system_prompt, user_prompt = _repair_prompt(
         original,
-        citation_map,
+        prompt_citation_map,
         issues,
         claim_safety_issues,
         _source_obligation_repair_context(cwd),
@@ -490,7 +491,8 @@ def repair_citation_claims(
         trace_stage="citation_claim_repair",
     )
     candidate = extract_latex(response)
-    allowed_keys = set(citation_map.keys())
+    candidate, citation_replacements = canonicalize_citation_keys(candidate, citation_map)
+    allowed_keys = allowed_citation_keys(citation_map)
     unknown = sorted(set(extract_citation_keys(candidate)) - allowed_keys)
     candidate_path = artifact_path(cwd, "paper.citation-repair.candidate.tex")
     candidate_path.write_text(candidate, encoding="utf-8")
@@ -501,6 +503,7 @@ def repair_citation_claims(
             "fallback_used": fallback_used,
             "lane_notes": lane_notes,
             "unknown_citation_keys": unknown,
+            "citation_replacements": citation_replacements,
         }
     )
     if unknown:

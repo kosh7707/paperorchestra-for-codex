@@ -817,10 +817,8 @@ def registry_to_bibtex(registry: list[VerifiedPaper]) -> str:
             lines.append("}")
             return "\n".join(lines)
 
-        for bibtex_key in [paper.bibtex_key, *paper.alias_bibtex_keys]:
-            if not bibtex_key:
-                continue
-            entries.append(render_entry(bibtex_key))
+        if paper.bibtex_key:
+            entries.append(render_entry(paper.bibtex_key))
     return "\n\n".join(entries) + ("\n" if entries else "")
 
 

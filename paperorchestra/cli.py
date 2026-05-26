@@ -47,6 +47,7 @@ from .intake import (
 )
 from .jobs import cancel_job, get_job_status, list_jobs, start_run_job, tail_job_log
 from .models import InputBundle
+from .validator import canonical_citation_map
 from .omx_bridge import cleanup_omx_tmp
 from .omx_diagnostics import export_omx_evidence, write_omx_review_handoff
 from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
@@ -635,7 +636,7 @@ def _write_full_fidelity_artifacts(cwd: Path, reference_case: str | None) -> dic
         citation_map = json.loads(Path(state.artifacts.citation_map_json).read_text(encoding="utf-8"))
         references = [
             {"title": entry.get("title"), "citation_key": key}
-            for key, entry in citation_map.items()
+            for key, entry in canonical_citation_map(citation_map).items()
             if isinstance(entry, dict) and isinstance(entry.get("title"), str) and entry.get("title", "").strip()
         ]
         paths["citation_partition_request"] = str(

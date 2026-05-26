@@ -18,7 +18,7 @@ from .domains import get_domain
 from .io_utils import ExtractionError, extract_json, read_json
 from .providers import BaseProvider, CompletionRequest, ShellProvider, provider_web_search_capability_proof, provider_supports_web_search
 from .session import artifact_path, load_session, save_session
-from .validator import CITE_COMMAND_RE, extract_citation_keys
+from .validator import CITE_COMMAND_RE, allowed_citation_keys, citation_entry_for_key, extract_citation_keys
 
 SECTION_RE = re.compile(r"\\section\*?\{([^}]+)\}")
 IMPORTANT_SECTIONS = {
@@ -256,8 +256,7 @@ def _citation_keys_in_text(text: str) -> list[str]:
 def _citation_entry_payload(citation_map: dict[str, Any], keys: list[str]) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     for key in keys:
-        raw = citation_map.get(key, {}) if isinstance(citation_map, dict) else {}
-        entry = raw if isinstance(raw, dict) else {}
+        entry = citation_entry_for_key(citation_map, key) if isinstance(citation_map, dict) else {}
         entries.append(
             {
                 "key": key,
@@ -302,8 +301,7 @@ def _source_type_for_entry(entry: dict[str, Any]) -> str:
 
 
 def _lean_source_payload(key: str, citation_map: dict[str, Any]) -> dict[str, Any]:
-    raw = citation_map.get(key, {}) if isinstance(citation_map, dict) else {}
-    entry = raw if isinstance(raw, dict) else {}
+    entry = citation_entry_for_key(citation_map, key) if isinstance(citation_map, dict) else {}
     payload: dict[str, Any] = {"type": _source_type_for_entry(entry)}
     for out_key, fields in {
         "title": ("title",),
@@ -1223,11 +1221,11 @@ def _heuristic_citation_items(latex: str, citation_map: dict[str, Any]) -> list[
     for idx, sentence in enumerate(_extract_cited_sentences(latex), start=1):
         keys = []
         keys = _citation_keys_in_text(sentence)
-        unknown = [key for key in keys if key not in citation_map]
+        unknown = [key for key in keys if key not in allowed_citation_keys(citation_map)]
         overlaps = []
         sentence_terms = _sentence_terms(sentence)
         for key in keys:
-            entry = citation_map.get(key, {}) if isinstance(citation_map, dict) else {}
+            entry = citation_entry_for_key(citation_map, key) if isinstance(citation_map, dict) else {}
             title = entry.get("title", "") if isinstance(entry, dict) else ""
             overlap = sorted(sentence_terms & _title_terms(title))
             if overlap:

@@ -348,9 +348,13 @@ class SearchGroundingTests(unittest.TestCase):
             self.assertIn("LiveAlpha", citation_map)
             self.assertIn("PriorBeta", citation_map)
             self.assertEqual(citation_map["PriorAlpha"]["venue"], "Verified Venue")
+            self.assertEqual(citation_map["PriorAlpha"].get("citation_key_role"), "canonical")
+            self.assertEqual(citation_map["PriorAlpha"].get("canonical_bibtex_key"), "PriorAlpha")
+            self.assertEqual(citation_map["LiveAlpha"].get("citation_key_role"), "alias")
+            self.assertEqual(citation_map["LiveAlpha"].get("canonical_bibtex_key"), "PriorAlpha")
             self.assertEqual(len(registry), 2)
             self.assertIn("{PriorAlpha,", bib)
-            self.assertIn("{LiveAlpha,", bib)
+            self.assertNotIn("{LiveAlpha,", bib)
             self.assertIn("{PriorBeta,", bib)
 
     def test_experimental_log_search_queries_extract_baselines_and_datasets(self) -> None:

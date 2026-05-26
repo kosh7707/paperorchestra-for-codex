@@ -10,6 +10,7 @@ from .boundary import is_material_packet_control_section_title, is_material_pack
 from .domains import detect_domain_for_text, get_domain
 from .io_utils import read_json, write_json
 from .session import artifact_path, load_session, save_session
+from .validator import canonical_citation_key, canonical_citation_map
 
 NARRATIVE_PLAN_SCHEMA_VERSION = "narrative-plan/1"
 CLAIM_MAP_SCHEMA_VERSION = "claim-map/1"
@@ -133,7 +134,7 @@ def _claim(
         "required": required,
         "coverage_terms": sorted({term for group in coverage_groups for term in group}),
         "coverage_groups": coverage_groups,
-        "evidence_anchors": [_anchor(source_path, excerpt)] if required else [],
+        "evidence_anchors": [_anchor(source_path, excerpt)] if (required or excerpt) else [],
     }
     if machine_obligation:
         claim["machine_obligation"] = machine_obligation
@@ -206,7 +207,7 @@ def _section_titles(outline: dict[str, Any], template_text: str) -> list[str]:
 
 
 def _first_key(citation_map: dict[str, Any]) -> str | None:
-    for key in citation_map:
+    for key in canonical_citation_map(citation_map):
         if isinstance(key, str) and key.strip():
             return key
     return None
@@ -318,7 +319,16 @@ def build_planning_payloads(cwd: str | Path | None) -> tuple[dict[str, Any], dic
         idx += 1
     citation_key = _first_key(citation_map if isinstance(citation_map, dict) else {})
     positioning_section = next((s for s in sections if re.search(r"related|introduction", s, re.I)), "")
+    if citation_key and not positioning_section:
+        # Some minimal/generated outlines omit Introduction/Related Work even when the
+        # template has them.  Keep verified-citation positioning available instead of
+        # dropping the planning obligation, while still preferring explicit
+        # intro/related sections when present.
+        positioning_section = next((s for s in sections if isinstance(s, str) and s.strip()), "Introduction")
     if citation_key and positioning_section:
+        citation_entry = canonical_citation_map(citation_map).get(citation_key, {})
+        if isinstance(citation_entry, dict):
+            citation_entry = {key: value for key, value in citation_entry.items() if key != "provenance"}
         claims.append(
             _claim(
                 idx=idx,
@@ -328,7 +338,7 @@ def build_planning_payloads(cwd: str | Path | None) -> tuple[dict[str, Any], dic
                 grounding="verified_citation",
                 target_section=positioning_section,
                 source_path=state.artifacts.citation_map_json,
-                excerpt=json.dumps(citation_map.get(citation_key, {}), ensure_ascii=False)[:400],
+                excerpt=json.dumps(citation_entry, ensure_ascii=False)[:400],
                 coverage_groups=[["related", "work"], ["background"]],
                 required=False,
                 citation_keys=[],

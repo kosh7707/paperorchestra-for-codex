@@ -10,6 +10,7 @@ from .providers import ShellProvider, exec_argv_prefix_proves_web_search, get_ci
 from .quality_loop_policy import CITATION_SUPPORT_STATUSES
 from .quality_loop_utils import _file_sha256, _read_json_if_exists
 from .session import artifact_path
+from .validator import citation_entry_for_key
 
 
 def _citation_support_path(cwd: str | Path | None, state) -> Path:
@@ -131,7 +132,7 @@ def _citation_support_check(cwd: str | Path | None, state, *, quality_mode: str 
         updated = dict(item)
         entries = []
         for key in item.get("citation_keys") or []:
-            entry = current_citation_map.get(key, {}) if isinstance(current_citation_map, dict) else {}
+            entry = citation_entry_for_key(current_citation_map, key) if isinstance(current_citation_map, dict) else {}
             entry_payload = dict(entry) if isinstance(entry, dict) else {}
             entry_payload["key"] = key
             entries.append(entry_payload)

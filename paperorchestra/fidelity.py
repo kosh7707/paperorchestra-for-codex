@@ -19,7 +19,7 @@ from .io_utils import read_json, write_json
 from . import prompts as prompt_module
 from .runtime_parity import build_lane_manifest_summary, write_lane_manifest_summary
 from .session import artifact_path, load_session, save_session
-from .validator import extract_citation_keys
+from .validator import canonical_citation_key, canonical_citation_keys, canonical_citation_map, extract_citation_keys
 
 
 @dataclass(frozen=True)
@@ -116,7 +116,7 @@ def _ensure_default_citation_partition_request(state, session_artifact_dir: Path
         return None
     references = [
         {"title": entry.get("title"), "citation_key": key}
-        for key, entry in citation_map.items()
+        for key, entry in canonical_citation_map(citation_map).items()
         if isinstance(entry, dict) and isinstance(entry.get("title"), str) and entry.get("title", "").strip()
     ]
     if not references:
@@ -587,7 +587,9 @@ def _citation_surface_health(state) -> dict[str, Any]:
     citation_map_count = None
     references_bib_entry_count = 0
     registry_keys: set[str] = set()
+    registry_alias_keys: set[str] = set()
     citation_map_keys: set[str] = set()
+    citation_map_canonical_keys: set[str] = set()
     bib_keys: set[str] = set()
     manuscript_citation_keys = _citation_keys_from_latex(state.artifacts.paper_full_tex)
 
@@ -620,7 +622,7 @@ def _citation_surface_health(state) -> dict[str, Any]:
                     aliases = item.get("alias_bibtex_keys") or []
                     if isinstance(key, str) and key.strip():
                         registry_keys.add(key.strip())
-                    registry_keys.update(alias.strip() for alias in aliases if isinstance(alias, str) and alias.strip())
+                    registry_alias_keys.update(alias.strip() for alias in aliases if isinstance(alias, str) and alias.strip())
                 else:
                     invalid_registry_entries += 1
             registry_count = valid_registry_entries
@@ -640,6 +642,7 @@ def _citation_surface_health(state) -> dict[str, Any]:
                 if _is_valid_citation_map_entry(key, entry):
                     valid_citation_map_entries += 1
                     citation_map_keys.add(key.strip())
+                    citation_map_canonical_keys.add(canonical_citation_key(key.strip(), citation_map_payload))
                 else:
                     invalid_citation_map_entries += 1
             citation_map_count = valid_citation_map_entries
@@ -667,8 +670,9 @@ def _citation_surface_health(state) -> dict[str, Any]:
                     issues.append("references.bib contains BibTeX entries without extractable keys.")
 
     if registry_keys and citation_map_keys:
-        missing_from_map = sorted(registry_keys - citation_map_keys)
-        extra_in_map = sorted(citation_map_keys - registry_keys)
+        missing_from_map = sorted((registry_keys | registry_alias_keys) - citation_map_keys)
+        allowed_map_keys = registry_keys | registry_alias_keys
+        extra_in_map = sorted(citation_map_keys - allowed_map_keys)
         if missing_from_map:
             issues.append("citation_map.json is missing registry key(s): " + ", ".join(missing_from_map[:10]))
         if extra_in_map:
@@ -704,7 +708,9 @@ def _citation_surface_health(state) -> dict[str, Any]:
         "citation_map_entry_count": citation_map_count or 0,
         "references_bib_entry_count": references_bib_entry_count,
         "registry_keys": sorted(registry_keys),
+        "registry_alias_keys": sorted(registry_alias_keys),
         "citation_map_keys": sorted(citation_map_keys),
+        "citation_map_canonical_keys": sorted(citation_map_canonical_keys),
         "references_bib_keys": sorted(bib_keys),
         "manuscript_citation_keys": sorted(manuscript_citation_keys),
     }
