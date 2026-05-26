@@ -1389,12 +1389,95 @@ PY_LIVE
 
 write_operator_pdf_review_evidence() {
   local cycle="$1"
+  local packet="${2:-}"
   local pdf="$ARTIFACTS/paper.full.pdf"
   local pdf_text="$OPFB/rendered-pdf-review.cycle-${cycle}.txt"
   local pdf_info="$OPFB/rendered-pdf-review.cycle-${cycle}.pdfinfo.txt"
   local page_dir="$OPFB/rendered-pdf-pages.cycle-${cycle}"
   local manifest="$OPFB/rendered-pdf-review.cycle-${cycle}.manifest.json"
   mkdir -p "$page_dir"
+  if [[ -n "$packet" ]]; then
+    if ! pdf="$(python3 - "$packet" "$EVIDENCE_ROOT" "$pdf" <<'PY_SELECT_OPERATOR_PACKET_PDF'
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+packet_path, evidence_root, mutable_pdf = sys.argv[1:]
+packet = Path(packet_path)
+root = Path(evidence_root).resolve()
+fallback = Path(mutable_pdf)
+
+def resolve_under_root(raw: str) -> Path | None:
+    if not raw:
+        return None
+    original = Path(raw)
+    candidates: list[Path] = []
+    if original.is_absolute():
+        candidates.append(original)
+        if "operator-feedback" in original.parts:
+            idx = original.parts.index("operator-feedback")
+            candidates.append(root / Path(*original.parts[idx:]))
+    else:
+        candidates.append(root / original)
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            continue
+        try:
+            rel = resolved.relative_to(root)
+        except ValueError:
+            continue
+        if str(rel).startswith("operator-feedback/") and resolved.is_file():
+            return resolved
+    return None
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+if not packet.is_file():
+    print(f"operator review packet missing: {packet}", file=sys.stderr)
+    raise SystemExit(2)
+try:
+    payload = json.loads(packet.read_text(encoding="utf-8"))
+except Exception as exc:
+    print(f"operator review packet unreadable: {exc}", file=sys.stderr)
+    raise SystemExit(2)
+
+packet_review_scope = str(payload.get("review_scope") or "")
+if packet_review_scope != "pdf_and_tex":
+    print(str(fallback))
+    raise SystemExit(0)
+
+compiled = None
+for artifact in payload.get("artifacts") or []:
+    if isinstance(artifact, dict) and artifact.get("role") == "compiled_pdf":
+        compiled = artifact
+        break
+if not compiled:
+    print("pdf_and_tex packet missing compiled_pdf artifact", file=sys.stderr)
+    raise SystemExit(2)
+
+selected = resolve_under_root(str(compiled.get("snapshot_path") or compiled.get("path") or ""))
+packet_pdf_sha256 = str(compiled.get("sha256") or "")
+if not selected or not packet_pdf_sha256 or sha256(selected) != packet_pdf_sha256:
+    print("pdf_and_tex packet compiled_pdf snapshot is missing or stale", file=sys.stderr)
+    raise SystemExit(2)
+
+print(str(selected))
+PY_SELECT_OPERATOR_PACKET_PDF
+)"; then
+      printf 'compiled PDF packet snapshot invalid; rendered PDF review evidence unavailable\n' > "$pdf_text"
+      printf 'compiled PDF packet snapshot invalid\n' > "$pdf_info"
+      return 1
+    fi
+  fi
   if [[ ! -f "$pdf" ]]; then
     printf 'compiled PDF missing; rendered PDF review evidence unavailable\n' > "$pdf_text"
     printf 'compiled PDF missing\n' > "$pdf_info"
@@ -1449,7 +1532,7 @@ write_operator_review_packet() {
   else
     run_step "operator_packet_cycle_${cycle}" "${CLI[@]}" build-operator-review-packet --output "$packet" --review-scope tex_only || return 1
   fi
-  write_operator_pdf_review_evidence "$cycle"
+  write_operator_pdf_review_evidence "$cycle" "$packet"
 }
 
 write_manual_operator_handoff() {

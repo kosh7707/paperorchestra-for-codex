@@ -207,6 +207,49 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
         if root_execution_only:
             (root / "artifacts" / f"operator_feedback.execution.cycle-{cycle}.json").write_text(json.dumps(execution_payload), encoding="utf-8")
 
+    def _write_rendered_pdf_review_manifest(
+        self,
+        root: Path,
+        *,
+        cycle: int,
+        compiled_pdf_rel: str,
+        compiled_pdf_sha: str,
+    ) -> str:
+        pdf_text = root / "operator-feedback" / f"rendered-pdf-review.cycle-{cycle}.txt"
+        pdf_info = root / "operator-feedback" / f"rendered-pdf-review.cycle-{cycle}.pdfinfo.txt"
+        page_dir = root / "operator-feedback" / f"rendered-pdf-pages.cycle-{cycle}"
+        page_dir.mkdir(exist_ok=True)
+        page = page_dir / "page-1.png"
+        pdf_text.write_text("Rendered paper page text.\n", encoding="utf-8")
+        pdf_info.write_text("Pages: 1\n", encoding="utf-8")
+        page.write_bytes(b"png")
+        manifest = root / "operator-feedback" / f"rendered-pdf-review.cycle-{cycle}.manifest.json"
+        manifest.write_text(
+            json.dumps(
+                {
+                    "schema_version": "operator-rendered-pdf-review-evidence/1",
+                    "cycle": cycle,
+                    "compiled_pdf": compiled_pdf_rel,
+                    "compiled_pdf_sha256": compiled_pdf_sha,
+                    "pdf_text": f"operator-feedback/rendered-pdf-review.cycle-{cycle}.txt",
+                    "pdf_text_sha256": hashlib.sha256(pdf_text.read_bytes()).hexdigest(),
+                    "pdf_info": f"operator-feedback/rendered-pdf-review.cycle-{cycle}.pdfinfo.txt",
+                    "pdf_info_sha256": hashlib.sha256(pdf_info.read_bytes()).hexdigest(),
+                    "page_images_dir": f"operator-feedback/rendered-pdf-pages.cycle-{cycle}",
+                    "page_image_count": 1,
+                    "page_images": [
+                        {
+                            "path": f"operator-feedback/rendered-pdf-pages.cycle-{cycle}/page-1.png",
+                            "sha256": hashlib.sha256(page.read_bytes()).hexdigest(),
+                            "size_bytes": page.stat().st_size,
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return hashlib.sha256(manifest.read_bytes()).hexdigest()
+
     def test_actionable_candidate_approval_ignores_already_promoted_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -2994,6 +3037,120 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
             self.assertNotIn("operator_cycle_artifact_missing", result["failing_codes"])
             self.assertNotIn("operator_rendered_pdf_review_missing", result["failing_codes"])
             self.assertNotIn("operator_rendered_pdf_review_unattested", result["failing_codes"])
+
+    def test_completed_manual_operator_cycle_accepts_immutable_packet_pdf_snapshot_after_mutable_pdf_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_minimal_fresh_smoke_evidence_root(root)
+            mutable_pdf = root / "artifacts" / "paper.full.pdf"
+            mutable_pdf.write_bytes(b"%PDF-1.5\nmutable-initial\n")
+            snapshot_dir = root / "operator-feedback" / "operator-review-packet.cycle-1.artifacts"
+            snapshot_dir.mkdir(exist_ok=True)
+            snapshot_pdf = snapshot_dir / "compiled_pdf.immutable.full.pdf"
+            snapshot_pdf.write_bytes(mutable_pdf.read_bytes())
+            snapshot_sha = hashlib.sha256(snapshot_pdf.read_bytes()).hexdigest()
+            packet = {
+                "schema_version": "operator-review-packet/1",
+                "review_scope": "pdf_and_tex",
+                "artifacts": [
+                    {
+                        "role": "compiled_pdf",
+                        "path": "operator-feedback/operator-review-packet.cycle-1.artifacts/compiled_pdf.immutable.full.pdf",
+                        "snapshot_path": "operator-feedback/operator-review-packet.cycle-1.artifacts/compiled_pdf.immutable.full.pdf",
+                        "original_path": str(mutable_pdf),
+                        "sha256": snapshot_sha,
+                        "size_bytes": snapshot_pdf.stat().st_size,
+                    }
+                ],
+            }
+            (root / "operator-feedback" / "operator-review-packet.cycle-1.json").write_text(json.dumps(packet), encoding="utf-8")
+            self._write_rendered_pdf_review_manifest(
+                root,
+                cycle=1,
+                compiled_pdf_rel="operator-feedback/operator-review-packet.cycle-1.artifacts/compiled_pdf.immutable.full.pdf",
+                compiled_pdf_sha=snapshot_sha,
+            )
+            self._write_completed_manual_operator_cycle(root)
+            mutable_pdf.write_bytes(b"%PDF-1.5\nmutable-later-final-compile\n")
+
+            result = validate_evidence_completeness(root)
+
+            self.assertEqual(result["status"], "pass", result)
+            self.assertNotIn("operator_rendered_pdf_review_manifest_invalid", result["failing_codes"])
+            self.assertNotIn("operator_packet_artifact_snapshot_invalid", result["failing_codes"])
+
+    def test_completed_manual_operator_cycle_rejects_stale_packet_pdf_snapshot_even_when_mutable_pdf_matches(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_minimal_fresh_smoke_evidence_root(root)
+            mutable_pdf = root / "operator-feedback" / "paper.full.pdf"
+            mutable_pdf.write_bytes(b"%PDF-1.5\nmutable-current\n")
+            mutable_sha = hashlib.sha256(mutable_pdf.read_bytes()).hexdigest()
+            packet = {
+                "schema_version": "operator-review-packet/1",
+                "review_scope": "pdf_and_tex",
+                "artifacts": [
+                    {
+                        "role": "compiled_pdf",
+                        "path": "operator-feedback/operator-review-packet.cycle-1.artifacts/missing.full.pdf",
+                        "snapshot_path": "operator-feedback/operator-review-packet.cycle-1.artifacts/missing.full.pdf",
+                        "sha256": mutable_sha,
+                        "size_bytes": mutable_pdf.stat().st_size,
+                    }
+                ],
+            }
+            (root / "operator-feedback" / "operator-review-packet.cycle-1.json").write_text(json.dumps(packet), encoding="utf-8")
+            self._write_rendered_pdf_review_manifest(
+                root,
+                cycle=1,
+                compiled_pdf_rel="operator-feedback/paper.full.pdf",
+                compiled_pdf_sha=mutable_sha,
+            )
+            self._write_completed_manual_operator_cycle(root)
+
+            result = validate_evidence_completeness(root)
+
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("operator_packet_artifact_snapshot_invalid", result["failing_codes"])
+
+    def test_completed_manual_operator_cycle_rejects_manifest_bound_to_mutable_pdf_instead_of_packet_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_minimal_fresh_smoke_evidence_root(root)
+            mutable_pdf = root / "artifacts" / "paper.full.pdf"
+            mutable_pdf.write_bytes(b"%PDF-1.5\nmutable-final\n")
+            mutable_sha = hashlib.sha256(mutable_pdf.read_bytes()).hexdigest()
+            snapshot_dir = root / "operator-feedback" / "operator-review-packet.cycle-1.artifacts"
+            snapshot_dir.mkdir(exist_ok=True)
+            snapshot_pdf = snapshot_dir / "compiled_pdf.immutable.full.pdf"
+            snapshot_pdf.write_bytes(b"%PDF-1.5\nimmutable-cycle-pdf\n")
+            snapshot_sha = hashlib.sha256(snapshot_pdf.read_bytes()).hexdigest()
+            packet = {
+                "schema_version": "operator-review-packet/1",
+                "review_scope": "pdf_and_tex",
+                "artifacts": [
+                    {
+                        "role": "compiled_pdf",
+                        "path": "operator-feedback/operator-review-packet.cycle-1.artifacts/compiled_pdf.immutable.full.pdf",
+                        "snapshot_path": "operator-feedback/operator-review-packet.cycle-1.artifacts/compiled_pdf.immutable.full.pdf",
+                        "sha256": snapshot_sha,
+                        "size_bytes": snapshot_pdf.stat().st_size,
+                    }
+                ],
+            }
+            (root / "operator-feedback" / "operator-review-packet.cycle-1.json").write_text(json.dumps(packet), encoding="utf-8")
+            self._write_rendered_pdf_review_manifest(
+                root,
+                cycle=1,
+                compiled_pdf_rel="artifacts/paper.full.pdf",
+                compiled_pdf_sha=mutable_sha,
+            )
+            self._write_completed_manual_operator_cycle(root)
+
+            result = validate_evidence_completeness(root)
+
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("operator_rendered_pdf_review_manifest_invalid", result["failing_codes"])
 
     def test_evidence_completeness_rejects_completed_manual_operator_cycle_missing_draft(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

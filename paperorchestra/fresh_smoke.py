@@ -1071,30 +1071,38 @@ def _check_operator_cycle_artifacts(
                 failing_codes.add("operator_packet_artifact_snapshot_invalid")
             else:
                 packet_failures: list[dict[str, Any]] = []
+                packet_compiled_pdf_rel: str | None = None
+                packet_compiled_pdf_sha256: str | None = None
                 for artifact in packet.get("artifacts") or []:
                     if not isinstance(artifact, dict):
                         packet_failures.append({"reason": "artifact_entry_not_object"})
                         continue
-                    raw_path = str(artifact.get("path") or "")
+                    role = artifact.get("role")
+                    raw_path = str(artifact.get("snapshot_path") or artifact.get("path") or "")
                     artifact_path, rel_path = _resolve_operator_packet_snapshot_path(root, raw_path)
                     if artifact_path is None or rel_path is None:
-                        packet_failures.append({"role": artifact.get("role"), "path": raw_path, "reason": "not_snapshotted_under_evidence_root"})
+                        packet_failures.append({"role": role, "path": raw_path, "reason": "not_snapshotted_under_evidence_root"})
                         continue
                     if not str(rel_path).startswith("operator-feedback/"):
-                        packet_failures.append({"role": artifact.get("role"), "path": str(rel_path), "reason": "snapshot_outside_operator_feedback"})
+                        packet_failures.append({"role": role, "path": str(rel_path), "reason": "snapshot_outside_operator_feedback"})
                         continue
                     digest = _sha256_file(artifact_path) if artifact_path.exists() and artifact_path.is_file() else None
                     expected = str(artifact.get("sha256") or "")
                     if not digest or digest != expected:
                         packet_failures.append(
                             {
-                                "role": artifact.get("role"),
+                                "role": role,
                                 "path": str(rel_path),
                                 "expected_sha256": expected,
                                 "actual_sha256": digest,
                                 "reason": "sha256_mismatch",
                             }
                         )
+                    elif role == "compiled_pdf":
+                        packet_compiled_pdf_rel = str(rel_path)
+                        packet_compiled_pdf_sha256 = expected
+                if packet.get("review_scope") == "pdf_and_tex" and not packet_compiled_pdf_rel:
+                    packet_failures.append({"role": "compiled_pdf", "reason": "missing_valid_compiled_pdf_snapshot"})
                 if packet_failures:
                     inconsistent.append({"check": "operator_packet_artifact_snapshot_integrity", "cycle": n, "failures": packet_failures})
                     failing_codes.add("operator_packet_artifact_snapshot_invalid")
@@ -1128,6 +1136,22 @@ def _check_operator_cycle_artifacts(
                                     "check": "operator_rendered_pdf_review_manifest",
                                     "cycle": n,
                                     "invalid_fields": manifest_failures,
+                                }
+                            )
+                            failing_codes.add("operator_rendered_pdf_review_manifest_invalid")
+                        elif (
+                            manifest
+                            and packet_compiled_pdf_rel
+                            and (
+                                (root / str(manifest.get("compiled_pdf") or "")).resolve() != (root / packet_compiled_pdf_rel).resolve()
+                                or str(manifest.get("compiled_pdf_sha256") or "") != str(packet_compiled_pdf_sha256 or "")
+                            )
+                        ):
+                            inconsistent.append(
+                                {
+                                    "check": "operator_rendered_pdf_review_manifest",
+                                    "cycle": n,
+                                    "invalid_fields": ["compiled_pdf_packet_binding"],
                                 }
                             )
                             failing_codes.add("operator_rendered_pdf_review_manifest_invalid")

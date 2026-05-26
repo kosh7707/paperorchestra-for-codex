@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -265,9 +266,23 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         subprocess.run(["bash", "-n", "scripts/fresh-full-live-smoke-loop.sh"], check=True)
 
         self.assertIn("write_operator_pdf_review_evidence() {", text)
+        pdf_review_start = text.index("write_operator_pdf_review_evidence() {")
+        pdf_review_end = text.index("\n}\n\nwrite_operator_review_packet", pdf_review_start) + 3
+        pdf_review_function = text[pdf_review_start:pdf_review_end]
+        packet_start = text.index("write_operator_review_packet() {")
+        packet_end = text.index("\n}\n\nwrite_manual_operator_handoff", packet_start) + 3
+        packet_function = text[packet_start:packet_end]
+
         self.assertIn('pdftotext -layout "$pdf" "$pdf_text"', text)
         self.assertIn('pdfinfo "$pdf" > "$pdf_info"', text)
         self.assertIn('pdftoppm -png -r 110 "$pdf" "$page_dir/page"', text)
+        self.assertIn('local packet="${2:-}"', pdf_review_function)
+        self.assertIn('"snapshot_path"', pdf_review_function)
+        self.assertIn('"compiled_pdf"', pdf_review_function)
+        self.assertIn("review_scope", pdf_review_function)
+        self.assertIn("pdf_and_tex", pdf_review_function)
+        self.assertIn("hashlib.sha256", pdf_review_function)
+        self.assertIn('write_operator_pdf_review_evidence "$cycle" "$packet"', packet_function)
         self.assertIn('rendered-pdf-review.cycle-${cycle}.txt', text)
         self.assertIn('rendered-pdf-review.cycle-${cycle}.pdfinfo.txt', text)
         self.assertIn('rendered-pdf-pages.cycle-${cycle}', text)
@@ -279,8 +294,149 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         self.assertIn("rendered_pdf_no_issues", text)
         self.assertIn("rendered_pdf_manifest_sha256", text)
         self.assertIn("reviewed_page_count", text)
-        self.assertLess(text.index("build-operator-review-packet"), text.index('write_operator_pdf_review_evidence "$cycle"'))
-        self.assertLess(text.index('write_operator_pdf_review_evidence "$cycle"'), text.index("cat > \"$prompt\" <<PROMPT"))
+        self.assertLess(text.index("build-operator-review-packet"), text.index('write_operator_pdf_review_evidence "$cycle" "$packet"'))
+        self.assertLess(text.index('write_operator_pdf_review_evidence "$cycle" "$packet"'), text.index("cat > \"$prompt\" <<PROMPT"))
+
+    def test_fresh_full_live_smoke_pdf_review_does_not_fallback_for_pdf_packet(self) -> None:
+        text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+        subprocess.run(["bash", "-n", "scripts/fresh-full-live-smoke-loop.sh"], check=True)
+
+        pdf_review_start = text.index("write_operator_pdf_review_evidence() {")
+        pdf_review_end = text.index("\n}\n\nwrite_operator_review_packet", pdf_review_start) + 3
+        pdf_review_function = text[pdf_review_start:pdf_review_end]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifacts = root / "artifacts"
+            opfb = root / "operator-feedback"
+            logs = root / "logs"
+            artifacts.mkdir()
+            opfb.mkdir()
+            logs.mkdir()
+            (artifacts / "paper.full.pdf").write_bytes(b"%PDF-1.5\nmutable pdf must not be used\n")
+            snapshot_dir = opfb / "operator-review-packet.cycle-1.artifacts"
+            snapshot_dir.mkdir()
+            stale_snapshot = snapshot_dir / "compiled_pdf.stale.full.pdf"
+            stale_snapshot.write_bytes(b"%PDF-1.5\nstale snapshot bytes\n")
+            packet = opfb / "operator-review-packet.cycle-1.json"
+            packet.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-review-packet/1",
+                        "review_scope": "pdf_and_tex",
+                        "artifacts": [
+                            {
+                                "role": "compiled_pdf",
+                                "path": "operator-feedback/operator-review-packet.cycle-1.artifacts/compiled_pdf.stale.full.pdf",
+                                "snapshot_path": "operator-feedback/operator-review-packet.cycle-1.artifacts/compiled_pdf.stale.full.pdf",
+                                "sha256": "0" * 64,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            harness = root / "harness.sh"
+            harness.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        f"ARTIFACTS={artifacts!s}",
+                        f"OPFB={opfb!s}",
+                        f"LOGS={logs!s}",
+                        f"EVIDENCE_ROOT={root!s}",
+                        pdf_review_function,
+                        f"write_operator_pdf_review_evidence 1 {packet!s}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            harness.chmod(0o755)
+
+            result = subprocess.run(["bash", str(harness)], text=True, capture_output=True)
+
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            manifest = opfb / "rendered-pdf-review.cycle-1.manifest.json"
+            if manifest.exists():
+                payload = json.loads(manifest.read_text(encoding="utf-8"))
+                self.assertNotEqual(payload.get("compiled_pdf"), "artifacts/paper.full.pdf")
+
+    def test_fresh_full_live_smoke_pdf_review_uses_packet_snapshot_for_manifest(self) -> None:
+        text = Path("scripts/fresh-full-live-smoke-loop.sh").read_text(encoding="utf-8")
+        subprocess.run(["bash", "-n", "scripts/fresh-full-live-smoke-loop.sh"], check=True)
+
+        pdf_review_start = text.index("write_operator_pdf_review_evidence() {")
+        pdf_review_end = text.index("\n}\n\nwrite_operator_review_packet", pdf_review_start) + 3
+        pdf_review_function = text[pdf_review_start:pdf_review_end]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bin_dir = root / "bin"
+            artifacts = root / "artifacts"
+            opfb = root / "operator-feedback"
+            logs = root / "logs"
+            snapshot_dir = opfb / "operator-review-packet.cycle-1.artifacts"
+            for path in [bin_dir, artifacts, opfb, logs, snapshot_dir]:
+                path.mkdir(parents=True, exist_ok=True)
+            (artifacts / "paper.full.pdf").write_bytes(b"%PDF-1.5\nmutable later pdf\n")
+            snapshot = snapshot_dir / "compiled_pdf.immutable.full.pdf"
+            snapshot.write_bytes(b"%PDF-1.5\nimmutable packet snapshot\n")
+            snapshot_sha = hashlib.sha256(snapshot.read_bytes()).hexdigest()
+            packet = opfb / "operator-review-packet.cycle-1.json"
+            packet.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-review-packet/1",
+                        "review_scope": "pdf_and_tex",
+                        "artifacts": [
+                            {
+                                "role": "compiled_pdf",
+                                "path": str(snapshot),
+                                "snapshot_path": str(snapshot),
+                                "sha256": snapshot_sha,
+                                "size_bytes": snapshot.stat().st_size,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            for tool in ["pdfinfo", "pdftoppm"]:
+                tool_path = bin_dir / tool
+                tool_path.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+                tool_path.chmod(0o755)
+            pdftotext = bin_dir / "pdftotext"
+            pdftotext.write_text("#!/usr/bin/env bash\nout=\"${@: -1}\"\nprintf 'snapshot text\\n' > \"$out\"\n", encoding="utf-8")
+            pdftotext.chmod(0o755)
+            harness = root / "harness.sh"
+            harness.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        f"PATH={bin_dir!s}:$PATH",
+                        f"ARTIFACTS={artifacts!s}",
+                        f"OPFB={opfb!s}",
+                        f"LOGS={logs!s}",
+                        f"EVIDENCE_ROOT={root!s}",
+                        pdf_review_function,
+                        f"write_operator_pdf_review_evidence 1 {packet!s}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            harness.chmod(0o755)
+
+            result = subprocess.run(["bash", str(harness)], text=True, capture_output=True)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            manifest = json.loads((opfb / "rendered-pdf-review.cycle-1.manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["compiled_pdf"], "operator-feedback/operator-review-packet.cycle-1.artifacts/compiled_pdf.immutable.full.pdf")
+            self.assertEqual(manifest["compiled_pdf_sha256"], snapshot_sha)
+            self.assertNotEqual(manifest["compiled_pdf"], "artifacts/paper.full.pdf")
 
     def test_fresh_full_live_smoke_exposes_manual_operator_feedback_mode(self) -> None:
         result = subprocess.run(
@@ -330,7 +486,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
         packet_end = text.index("\n}\n\nwrite_manual_operator_handoff", packet_start) + 3
         packet_function = text[packet_start:packet_end]
         self.assertIn("build-operator-review-packet", packet_function)
-        self.assertIn('write_operator_pdf_review_evidence "$cycle"', packet_function)
+        self.assertIn('write_operator_pdf_review_evidence "$cycle" "$packet"', packet_function)
         self.assertNotIn("run_codex_last_message", packet_function)
         self.assertNotIn("import-operator-feedback", packet_function)
         self.assertNotIn("apply-operator-feedback", packet_function)
