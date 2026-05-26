@@ -18,6 +18,7 @@ from .session import artifact_path, load_session
 
 CITATION_QUALITY_GATE_SCHEMA_VERSION = "citation-quality-gate/2"
 CITATION_QUALITY_GATE_FILENAME = "citation_quality_gate.json"
+CITATION_QUALITY_GATE_INTERNAL_FILENAME = "citation_quality_gate.internal.json"
 _HIGH_CRITICAL_TOKENS = {
     "critical",
     "high",
@@ -139,6 +140,10 @@ class CitationQualityGateReport:
 
 def citation_quality_gate_path(cwd: str | Path | None) -> Path:
     return artifact_path(cwd, CITATION_QUALITY_GATE_FILENAME)
+
+
+def citation_quality_gate_internal_path(cwd: str | Path | None) -> Path:
+    return artifact_path(cwd, CITATION_QUALITY_GATE_INTERNAL_FILENAME)
 
 
 def build_citation_quality_gate(cwd: str | Path | None, *, quality_mode: str = "ralph") -> dict[str, Any]:
@@ -291,9 +296,13 @@ def write_citation_quality_gate(
     quality_mode: str = "ralph",
     output_path: str | Path | None = None,
 ) -> tuple[Path, dict[str, Any]]:
-    payload = build_citation_quality_gate(cwd, quality_mode=quality_mode)
-    path = Path(output_path).resolve() if output_path else citation_quality_gate_path(cwd)
+    internal_payload = build_citation_quality_gate_internal(cwd, quality_mode=quality_mode)
+    payload = internal_payload["public_report"]
+    canonical_path = citation_quality_gate_path(cwd)
+    path = Path(output_path).resolve() if output_path else canonical_path
     write_json(path, payload)
+    if path.resolve() == canonical_path.resolve():
+        write_json(citation_quality_gate_internal_path(cwd), internal_payload)
     return path, payload
 
 
