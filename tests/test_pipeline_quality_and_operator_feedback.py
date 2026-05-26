@@ -2811,6 +2811,50 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             encoding="utf-8",
         )
 
+    def _write_v3_citation_support_review(self, path: Path, cases: list[dict]) -> None:
+        summary = {"pass": 0, "weak": 0, "fail": 0, "human_needed": 0}
+        for case in cases:
+            verdict = str(case.get("verdict") or "human_needed")
+            summary[verdict if verdict in summary else "human_needed"] += 1
+        path.write_text(
+            json.dumps(
+                {
+                    "schema": "citation-support-review/3",
+                    "mode": "source",
+                    "summary": summary,
+                    "cases": cases,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    def _citation_action_codes(self, actions: list[dict]) -> set[str]:
+        return {str(action.get("code")) for action in actions}
+
+    def _public_action_text(self, actions: list[dict]) -> str:
+        public_fields = ["action_id", "code", "target", "automation", "reason", "ralph_instruction", "why_not_automatic"]
+        parts: list[str] = []
+        for action in actions:
+            for field in public_fields:
+                parts.append(str(action.get(field, "")))
+            parts.extend(str(command) for command in action.get("suggested_commands") or [])
+        return "\n".join(parts)
+
+    def _assert_no_private_citation_case_text_in_actions(self, actions: list[dict], *extra_markers: str) -> None:
+        public_text = self._public_action_text(actions)
+        for marker in [
+            "PRIVATE_PARAGRAPH",
+            "PRIVATE_ANCHOR",
+            "PRIVATE_TARGET",
+            "PRIVATE_SOURCE_TITLE",
+            "PRIVATE_NOTE",
+            "PRIVATE_ASK",
+            "PRIVATE_RESOLUTION",
+            "private-source",
+            *extra_markers,
+        ]:
+            self.assertNotIn(marker, public_text)
+
     def _machine_solvable_manual_item(self) -> dict:
         return {
             "id": "manual-1",
@@ -2829,6 +2873,186 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
                 }
             ],
         }
+
+
+    def test_v3_weak_case_without_legacy_items_does_not_route_to_false_human_needed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            self._write_v3_citation_support_review(
+                review_path,
+                [
+                    {
+                        "id": "C1",
+                        "key": "RefA",
+                        "loc": "Background ¶1",
+                        "paragraph": "PRIVATE_PARAGRAPH Claim text \\cite{RefA}.",
+                        "anchor": "PRIVATE_ANCHOR Claim text \\cite{RefA}.",
+                        "target": "PRIVATE_TARGET Claim text",
+                        "source": {
+                            "type": "paper",
+                            "title": "PRIVATE_SOURCE_TITLE",
+                            "url": "https://example.invalid/private-source",
+                        },
+                        "evidence": {"status": "metadata"},
+                        "verdict": "weak",
+                        "note": "PRIVATE_NOTE Metadata only.",
+                    }
+                ],
+            )
+
+            actions = _quality_eval_actions(self._manual_check_quality_eval(review_path, ["citation_support_weak"]))
+
+        codes = self._citation_action_codes(actions)
+        self.assertNotIn("citation_support_manual_check_requires_author_judgment", codes)
+        self.assertNotIn("citation_support_evidence_research_needed", codes)
+        self._assert_no_private_citation_case_text_in_actions(actions)
+
+    def test_v3_human_needed_blocked_source_routes_to_author_judgment_without_payload_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            self._write_v3_citation_support_review(
+                review_path,
+                [
+                    {
+                        "id": "C1",
+                        "key": "RefA",
+                        "loc": "Background ¶1",
+                        "paragraph": "PRIVATE_PARAGRAPH blocked source \\cite{RefA}.",
+                        "anchor": "PRIVATE_ANCHOR blocked source \\cite{RefA}.",
+                        "target": "PRIVATE_TARGET blocked source",
+                        "source": {
+                            "type": "paper",
+                            "title": "PRIVATE_SOURCE_TITLE",
+                            "url": "https://example.invalid/private-source",
+                        },
+                        "evidence": {"status": "blocked", "why": "login_required"},
+                        "verdict": "human_needed",
+                        "note": "PRIVATE_NOTE source blocked.",
+                        "ask": "PRIVATE_ASK provide a source.",
+                        "resolution": {"note": "PRIVATE_RESOLUTION not yet provided."},
+                    }
+                ],
+            )
+
+            actions = _quality_eval_actions(self._manual_check_quality_eval(review_path))
+
+        codes = self._citation_action_codes(actions)
+        self.assertIn("citation_support_manual_check_requires_author_judgment", codes)
+        action = [action for action in actions if action.get("code") == "citation_support_manual_check_requires_author_judgment"][0]
+        self.assertIn("1 citation-support manual-check item", action["reason"])
+        self.assertNotIn("payload is unavailable", action["reason"])
+        self._assert_no_private_citation_case_text_in_actions(actions)
+
+    def test_v3_weak_case_with_author_marker_routes_to_human_needed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            self._write_v3_citation_support_review(
+                review_path,
+                [
+                    {
+                        "id": "C1",
+                        "key": "RefA",
+                        "paragraph": "PRIVATE_PARAGRAPH author-owned weak claim \\cite{RefA}.",
+                        "anchor": "PRIVATE_ANCHOR author-owned weak claim \\cite{RefA}.",
+                        "target": "PRIVATE_TARGET author-owned weak claim",
+                        "source": {"title": "PRIVATE_SOURCE_TITLE", "url": "https://example.invalid/private-source"},
+                        "evidence": {"status": "metadata"},
+                        "verdict": "weak",
+                        "requires_author_judgment": True,
+                    }
+                ],
+            )
+
+            actions = _quality_eval_actions(self._manual_check_quality_eval(review_path, ["citation_support_weak"]))
+
+        codes = self._citation_action_codes(actions)
+        self.assertIn("citation_support_manual_check_requires_author_judgment", codes)
+        self.assertNotIn("citation_support_evidence_research_needed", codes)
+        self.assertNotIn("citation_support_critic_failed", codes)
+        self._assert_no_private_citation_case_text_in_actions(actions)
+
+    def test_v3_human_needed_with_concrete_unbound_surface_routes_to_research(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            self._write_v3_citation_support_review(
+                review_path,
+                [
+                    {
+                        "id": "C2",
+                        "key": "RefB",
+                        "paragraph": "PRIVATE_PARAGRAPH_B should not leak \\cite{RefB}.",
+                        "anchor": "PRIVATE_ANCHOR_B should not leak \\cite{RefB}.",
+                        "target": "PRIVATE_TARGET_B should not leak",
+                        "source": {
+                            "type": "paper",
+                            "title": "PRIVATE_SOURCE_TITLE_B",
+                            "url": "https://example.invalid/private-source-b",
+                        },
+                        "evidence": {"status": "metadata"},
+                        "verdict": "human_needed",
+                        "suggested_fix": "Refresh evidence before rewriting.",
+                        "note": "PRIVATE_NOTE_B source surface needs research.",
+                        "ask": "PRIVATE_ASK_B inspect the source.",
+                        "resolution": {"note": "PRIVATE_RESOLUTION_B not yet provided."},
+                        "evidence_surfaces": [
+                            {
+                                "url": "https://example.invalid/private-source-b",
+                                "evidence_quote_or_summary": (
+                                    "Concrete unverified surface exists; it must be researched before repair."
+                                ),
+                            }
+                        ],
+                    }
+                ],
+            )
+
+            actions = _quality_eval_actions(self._manual_check_quality_eval(review_path))
+
+        codes = self._citation_action_codes(actions)
+        self.assertIn("citation_support_evidence_research_needed", codes)
+        self.assertNotIn("citation_support_critic_failed", codes)
+        self.assertNotIn("citation_support_manual_check_requires_author_judgment", codes)
+        self._assert_no_private_citation_case_text_in_actions(actions, "PRIVATE_PARAGRAPH_B", "PRIVATE_ANCHOR_B", "PRIVATE_TARGET_B", "PRIVATE_SOURCE_TITLE_B", "PRIVATE_NOTE_B", "PRIVATE_ASK_B", "PRIVATE_RESOLUTION_B", "private-source-b")
+
+    def test_v3_verified_support_false_string_does_not_route_to_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            review_path = Path(tmp) / "citation_support_review.json"
+            self._write_v3_citation_support_review(
+                review_path,
+                [
+                    {
+                        "id": "C3",
+                        "key": "RefC",
+                        "paragraph": "PRIVATE_PARAGRAPH_C should not leak \\cite{RefC}.",
+                        "anchor": "PRIVATE_ANCHOR_C should not leak \\cite{RefC}.",
+                        "target": "PRIVATE_TARGET_C should not leak",
+                        "source": {
+                            "type": "paper",
+                            "title": "PRIVATE_SOURCE_TITLE_C",
+                            "url": "https://example.invalid/private-source-c",
+                        },
+                        "evidence": {"status": "metadata"},
+                        "verdict": "human_needed",
+                        "suggested_fix": "Scope claim before rewriting.",
+                        "support_evidence": [
+                            {
+                                "citation_key": "RefC",
+                                "source_title": "PRIVATE_SOURCE_TITLE_C",
+                                "url": "https://example.invalid/private-source-c",
+                                "evidence_quote_or_summary": "This source explicitly does not support the claim.",
+                                "supports_claim": "false",
+                            }
+                        ],
+                    }
+                ],
+            )
+
+            actions = _quality_eval_actions(self._manual_check_quality_eval(review_path))
+
+        codes = self._citation_action_codes(actions)
+        self.assertNotIn("citation_support_critic_failed", codes)
+        self.assertIn("citation_support_evidence_research_needed", codes)
+        self._assert_no_private_citation_case_text_in_actions(actions, "PRIVATE_PARAGRAPH_C", "PRIVATE_ANCHOR_C", "PRIVATE_TARGET_C", "PRIVATE_SOURCE_TITLE_C", "private-source-c")
 
 
     def test_v3_case_context_mismatch_routes_to_citation_review_refresh_only(self) -> None:
