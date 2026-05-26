@@ -1533,6 +1533,46 @@ def _compact_operator_attempt_failure(attempts: list[dict[str, Any]]) -> dict[st
     executor_failure = str(latest.get("executor_failure_category") or "").strip()
     if executor_failure:
         payload["executor_failure_category"] = executor_failure
+    blocked_progress = _compact_blocked_candidate_progress(latest)
+    if blocked_progress:
+        payload["blocked_candidate_progress"] = blocked_progress
+    return payload
+
+
+def _compact_blocked_candidate_progress(attempt: dict[str, Any]) -> dict[str, Any] | None:
+    """Return safe diagnostics for candidates that improved but could not promote.
+
+    The payload is intentionally code/count-only.  It must not include candidate
+    paths, manuscript text, source excerpts, or raw source-obligation item ids.
+    """
+    if not isinstance(attempt, dict) or attempt.get("gate_passed") is True:
+        return None
+    metric_delta = attempt.get("active_tier2_metric_delta")
+    if not isinstance(metric_delta, dict):
+        metric_delta = {}
+    improvements = _compact_metric_delta_records(metric_delta.get("improvements"))
+    regressions = _compact_metric_delta_records(metric_delta.get("regressions"))
+    resolved = sorted(dict.fromkeys(str(code) for code in attempt.get("resolved_active_failures") or [] if str(code).strip()))
+    gate_reasons = sorted(dict.fromkeys(str(reason) for reason in attempt.get("gate_reasons") or [] if str(reason).strip()))
+    new_tier2 = sorted(dict.fromkeys(str(code) for code in attempt.get("new_tier2_failures") or [] if str(code).strip()))
+    total_improved = metric_delta.get("total_improved") is True
+    if not (improvements or resolved or total_improved):
+        return None
+    base_total = metric_delta.get("base_total")
+    candidate_total = metric_delta.get("candidate_total")
+    payload: dict[str, Any] = {
+        "kind": "active_metric_improved_but_blocked",
+        "blocking_gate_reasons": gate_reasons,
+        "new_tier2_failures": new_tier2,
+        "resolved_active_failures": resolved,
+        "metric_improvements": improvements,
+        "metric_regressions": regressions,
+        "base_total": base_total if isinstance(base_total, int) else None,
+        "candidate_total": candidate_total if isinstance(candidate_total, int) else None,
+        "total_improved": total_improved,
+    }
+    if new_tier2:
+        payload["recommended_next_focus"] = new_tier2
     return payload
 
 

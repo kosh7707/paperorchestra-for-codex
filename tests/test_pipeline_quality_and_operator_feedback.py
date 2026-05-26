@@ -6144,13 +6144,16 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(failure["code"], "operator_candidate_failed_hard_gate")
             self.assertIn("no_textual_change", failure["latest_gate_reasons"])
             self.assertIn("executor_returned_identical_content", failure["latest_gate_reasons"])
+            self.assertNotIn("blocked_candidate_progress", failure)
             incorporation = json.loads(Path(execution["incorporation_report"]).read_text(encoding="utf-8"))
             self.assertEqual(incorporation["actionable_failure"]["latest_gate_reasons"], failure["latest_gate_reasons"])
+            self.assertNotIn("blocked_candidate_progress", incorporation["actionable_failure"])
             history_path = root / ".paper-orchestra" / "qa-loop-history.jsonl"
             history = [json.loads(line) for line in history_path.read_text(encoding="utf-8").splitlines()]
             history_failure = history[-1]["actionable_failure"]
             self.assertEqual(history_failure["category"], "operator_candidate_failed_hard_gate")
             self.assertIn("no_textual_change", history_failure["latest_gate_reasons"])
+            self.assertNotIn("blocked_candidate_progress", history_failure)
             self.assertNotIn("Draft", json.dumps(history_failure))
             self.assertEqual(paper.read_text(encoding="utf-8"), original)
 
@@ -6224,6 +6227,185 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(with_new["attempts"][-1]["new_tier2_failures"], ["new_claim_issue"])
             self.assertEqual(with_new["actionable_failure"]["new_tier2_failures"], ["new_claim_issue"])
             self.assertIn("tier2_claim_safety_new_failures", with_new["actionable_failure"]["latest_gate_reasons"])
+
+    def test_operator_feedback_reports_progress_blocked_by_new_tier2_failures(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nDraft.\n\\end{document}\n",
+                encoding="utf-8",
+            )
+            review = review_path(root, "review.latest.json")
+            review.write_text(
+                json.dumps(
+                    {
+                        "overall_score": 70,
+                        "axis_scores": {},
+                        "summary": {"weaknesses": [], "top_improvements": []},
+                        "questions": [],
+                        "penalties": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            state.artifacts.latest_review_json = str(review)
+            save_session(root, state)
+            self._write_terminal_human_needed_plan(root)
+            base_quality = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "tiers": {
+                    "tier_0_preconditions": {"status": "pass"},
+                    "tier_1_structural": {"status": "pass"},
+                    "tier_2_claim_safety": {
+                        "status": "fail",
+                        "failing_codes": ["citation_support_weak", "critical_unsupported_citation"],
+                        "checks": {
+                            "citation_support_critic": {"weakly_supported_count": 5},
+                            "citation_quality_gate": {"counts": {"critical_unsupported_count": 1}},
+                        },
+                    },
+                },
+            }
+            artifact_path(root, "quality-eval.json").write_text(json.dumps(base_quality), encoding="utf-8")
+            packet_path, packet = build_operator_review_packet(root, review_scope="tex_only")
+            issue_id = derive_operator_issue_id(
+                packet["packet_sha256"],
+                source_artifact_role="paper_full_tex",
+                source_item_key="Intro:p1",
+                target_section="Intro",
+                rationale="Citation repair needs a local edit.",
+                suggested_action="Make the local citation repair without adding source-obligation failures.",
+            )
+            feedback_path = root / "operator-feedback.json"
+            feedback_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "operator-feedback/1",
+                        "source": "codex_operator",
+                        "not_independent_human_review": True,
+                        "intent": "generate_new_operator_candidate",
+                        "packet_sha256": packet["packet_sha256"],
+                        "manuscript_sha256": packet["manuscript_sha256"],
+                        "issues": [
+                            {
+                                "id": issue_id,
+                                "source_artifact_role": "paper_full_tex",
+                                "source_item_key": "Intro:p1",
+                                "target_section": "Intro",
+                                "severity": "major",
+                                "rationale": "Citation repair needs a local edit.",
+                                "suggested_action": "Make the local citation repair without adding source-obligation failures.",
+                                "authority_class": "citation_support",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            imported_path, _ = import_operator_feedback(root, packet_path=packet_path, feedback_path=feedback_path)
+            candidate = artifact_path(root, "candidate-progress-blocked.tex")
+            candidate.write_text(
+                "\\documentclass{article}\n\\begin{document}\n\\section{Intro}\nDraft. Citation repair.\n\\end{document}\n",
+                encoding="utf-8",
+            )
+
+            candidate_quality = {
+                "session_id": state.session_id,
+                "mode": "claim_safe",
+                "tiers": {
+                    "tier_0_preconditions": {"status": "pass"},
+                    "tier_1_structural": {"status": "pass"},
+                    "tier_2_claim_safety": {
+                        "status": "fail",
+                        "failing_codes": ["citation_support_weak", "source_obligation_missing"],
+                        "checks": {
+                            "citation_support_critic": {"weakly_supported_count": 3},
+                            "citation_quality_gate": {"counts": {"critical_unsupported_count": 0}},
+                            "source_obligations": {"unsatisfied": [{"id": "synthetic-source-obligation"}]},
+                        },
+                    },
+                },
+            }
+
+            def fake_refine(cwd, provider, **kwargs):
+                return [
+                    {
+                        "iteration": 1,
+                        "candidate_path": str(candidate),
+                        "candidate_sha256": "sha256:" + hashlib.sha256(candidate.read_bytes()).hexdigest(),
+                        "score_before": 70,
+                        "score_after": 70,
+                        "axis_scores_before": {},
+                        "axis_scores_after": {},
+                    }
+                ]
+
+            with patch("paperorchestra.operator_feedback.refine_current_paper", side_effect=fake_refine):
+                with patch("paperorchestra.operator_feedback.write_section_review", return_value=root / "section.json"):
+                    with patch("paperorchestra.operator_feedback.write_citation_support_review", return_value=root / "citation.json"):
+                        with patch("paperorchestra.operator_feedback.review_current_paper", return_value=root / "review.json"):
+                            with patch("paperorchestra.operator_feedback.write_quality_eval", return_value=(root / "quality.json", candidate_quality)):
+                                with patch("paperorchestra.operator_feedback.write_quality_loop_plan", return_value=(root / "plan.json", {"verdict": "human_needed"})):
+                                    _, execution = apply_operator_feedback(root, MockProvider(), imported_feedback_path=imported_path)
+
+            self.assertEqual(execution["promotion_status"], "rolled_back")
+            self.assertIn("tier2_claim_safety_new_failures", execution["attempts"][-1]["gate_reasons"])
+            self.assertEqual(execution["attempts"][-1]["resolved_active_failures"], ["critical_unsupported_citation"])
+            failure = execution["actionable_failure"]
+            self.assertEqual(failure["latest_gate_reasons"], ["tier2_claim_safety_new_failures"])
+            self.assertEqual(failure["new_tier2_failures"], ["source_obligation_missing"])
+            self.assertEqual(failure["resolved_active_failures"], ["critical_unsupported_citation"])
+            self.assertIn("citation_support_weak", failure["candidate_active_failures"])
+            self.assertIn("source_obligation_missing", failure["candidate_active_failures"])
+            self.assertEqual(failure["base_active_failures"], ["citation_support_weak", "critical_unsupported_citation"])
+            self.assertEqual(failure["executor_failure_category"], "none")
+            progress = failure["blocked_candidate_progress"]
+            self.assertLessEqual(
+                set(progress),
+                {
+                    "kind",
+                    "blocking_gate_reasons",
+                    "new_tier2_failures",
+                    "resolved_active_failures",
+                    "metric_improvements",
+                    "metric_regressions",
+                    "base_total",
+                    "candidate_total",
+                    "total_improved",
+                    "recommended_next_focus",
+                },
+            )
+            self.assertEqual(progress["kind"], "active_metric_improved_but_blocked")
+            self.assertEqual(progress["blocking_gate_reasons"], ["tier2_claim_safety_new_failures"])
+            self.assertEqual(progress["new_tier2_failures"], ["source_obligation_missing"])
+            self.assertEqual(progress["resolved_active_failures"], ["critical_unsupported_citation"])
+            self.assertEqual(progress["base_total"], 6)
+            self.assertEqual(progress["candidate_total"], 3)
+            self.assertTrue(progress["total_improved"])
+            self.assertEqual(progress["metric_regressions"], [])
+            self.assertEqual(
+                progress["metric_improvements"],
+                [
+                    {"code": "citation_support_weak", "before": 5, "after": 3, "delta": -2},
+                    {"code": "critical_unsupported_citation", "before": 1, "after": 0, "delta": -1},
+                ],
+            )
+            serialized_failure = json.dumps(failure)
+            self.assertNotIn("candidate_path", serialized_failure)
+            self.assertNotIn("candidate_text", serialized_failure)
+            self.assertNotIn(str(root), serialized_failure)
+            self.assertNotIn(candidate.name, serialized_failure)
+            self.assertNotIn("Draft. Citation repair", serialized_failure)
+            self.assertNotIn("synthetic-source-obligation", serialized_failure)
+            incorporation = json.loads(Path(execution["incorporation_report"]).read_text(encoding="utf-8"))
+            self.assertEqual(incorporation["actionable_failure"]["blocked_candidate_progress"], progress)
+            history_path = root / ".paper-orchestra" / "qa-loop-history.jsonl"
+            history = [json.loads(line) for line in history_path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(history[-1]["actionable_failure"]["blocked_candidate_progress"], progress)
 
     def test_operator_feedback_hard_gate_rejects_active_tier2_metric_regression(self) -> None:
         from paperorchestra.operator_feedback import _candidate_hard_gate
