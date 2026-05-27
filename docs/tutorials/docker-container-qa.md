@@ -37,7 +37,7 @@ scripts/container-run.sh --privileged --with-codex-auth \
 
 Use `PAPERO_UPDATE_CONTAINER_AI_CLIS=0` only after an updater-on proof succeeded in the same image/workflow. Re-enable updates before release, final smoke, or any run whose purpose is to prove current Codex/OMX surfaces.
 
-The fresh QA summary should be at:
+The fresh QA summary is written inside the container at `/artifacts/fresh-qa-start/summary.json`. With the default `scripts/container-run.sh` mount, the same file is visible on the host at:
 
 ```text
 .paper-orchestra/container-artifacts/fresh-qa-start/summary.json
@@ -65,7 +65,7 @@ scripts/container-run.sh --privileged --with-codex-auth \
 
 PDF must exist before using [`rendered-pdf-human-qa.md`](rendered-pdf-human-qa.md). If no PDF is produced, record that as the blocker and do not claim the QA loop complete.
 
-Expected export bundle:
+Expected host-visible export bundle:
 
 ```text
 .paper-orchestra/container-artifacts/fresh-qa-start/export/paper.full.tex

@@ -8,7 +8,7 @@ Scope: claim-safe QA tutorial for stricter review loops. This is for operators w
 - `complete` means a compiled PDF exists; it is not submission-ready.
 - `pass_loop_verified` is system-loop/evidence-bundle verification, not manuscript readiness.
 - mock artifacts and fallback artifacts are audit evidence, not claim or citation proof.
-- `ready_for_human_finalization` is the best automated terminal state; human authors still own final claims, figures, bibliography, and submission.
+- `ready_for_human_finalization` is the best automated terminal state; human authors still own final claims, figures, bibliography, citation density, title suitability, and submission.
 
 ## Refresh evidence before judging
 
@@ -58,4 +58,4 @@ Only use `ralph-start --launch` when you intentionally want a long-running OMX R
 
 ## Human boundaries
 
-Machine-solvable search/evidence gaps should go to the research/engine path before `human_needed`. True author choices, final figures, unsupported critical claims, and domain judgments must remain visible blockers until a human supplies grounded approval.
+Machine-solvable search/evidence gaps should go to the research/engine path before `human_needed`. True author choices, final figures, unsupported critical claims, citation-density decisions, title/positioning decisions, and domain judgments must remain visible blockers until a human supplies grounded approval.

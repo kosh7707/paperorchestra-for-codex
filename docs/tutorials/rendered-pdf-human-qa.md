@@ -7,6 +7,7 @@ Scope: human-only rendered-PDF QA tutorial for acting as the operator who inspec
 - A compiled `paper.full.pdf` exists.
 - You know which session/run produced it.
 - The review is grounded in rendered pages, not only JSON or TeX.
+- `pdfinfo`, `pdftotext`, and `pdftoppm` are installed; on many Linux systems they come from `poppler-utils`.
 
 ## Extract inspectable evidence
 
@@ -26,7 +27,7 @@ Open every page image. Check at least:
 - title/top matter;
 - section order and readability;
 - figure bodies, table bodies, captions, and references to them;
-- overflow, clipping, unreadable text, excessive whitespace, and page breaks;
+- wide tables crossing page margins, overflow, clipping, unreadable text, excessive whitespace, and page breaks;
 - prompt/meta leakage in rendered text;
 - whether generated placeholder figures are still being treated as final figures.
 
@@ -48,4 +49,4 @@ Write a review artifact even when there are no findings. Include `compiled_pdf_s
 
 If you find an issue, cite `source_artifact_role=compiled_pdf` and a concrete page/locator. If no layout-only issue exists, a `rendered_pdf_no_issues` attestation is valid only after all pages were inspected.
 
-In short: author/domain judgments remain blockers. Do not approve unsupported claims, scientific meaning, bibliography correctness, or final figure adequacy merely because the PDF layout is readable.
+In short: author/domain judgments remain blockers. Do not approve unsupported claims, scientific meaning, bibliography correctness, title suitability, citation density, or final figure adequacy merely because the PDF layout is readable.

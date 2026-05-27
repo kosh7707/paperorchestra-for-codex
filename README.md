@@ -57,6 +57,11 @@ The known limitations for this alpha include:
 - quality failures must remain visible as `BLOCK`, `not_ready`, warnings, or
   explicit audit records; hiding them as success is a false readiness bug.
 
+Current checkpoint semantics: the `v0.2.3` tag marks a loop/evidence
+checkpoint where a private-material fresh live smoke verified the system loop
+while the generated manuscript correctly remained `human_needed`. Treat that as
+engine evidence, not as publication readiness.
+
 ### If you are using Codex
 
 A good first prompt after opening Codex is:
@@ -831,7 +836,7 @@ Supported seed formats:
 
 - JSON list, or an object with `references`, `papers`, `prior_work`, or `entries`
 - BibTeX entries with `title`, `author`, `year`, `journal`/`booktitle`, `doi`, and `url` fields
-- simple Markdown bullet lists, including `[Title](url) — Year` style entries
+- simple Markdown bullet lists, including `[Title](https://example.com/source) — 2024` style entries
 
 The import writes `candidate_papers.json`, `citation_registry.json`, `citation_map.json`, and `references.bib`. Imported entries are marked with provenance such as `codex_web_seed` or `manual_seed`; they are curated metadata, not live Semantic Scholar verification unless separately checked.
 
