@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.feedback.operator_feedback import (
+from paperorchestra.feedback.operator_contract import (
     ACTIONABLE_FAILURE_OWNER_CATEGORIES,
     HUMAN_NEEDED_ANSWER_SCHEMA_VERSIONS,
     OPERATOR_FEEDBACK_INTENTS,

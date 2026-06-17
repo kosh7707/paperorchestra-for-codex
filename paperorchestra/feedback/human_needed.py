@@ -8,11 +8,11 @@ from typing import Any
 
 from paperorchestra.core.io import read_json, write_json
 from paperorchestra.core.models import utc_now_iso
-from paperorchestra.feedback.operator_feedback import (
-    apply_operator_feedback,
+from paperorchestra.feedback.operator_feedback import apply_operator_feedback
+from paperorchestra.feedback.operator_contract import (
+    _read_packet,
     build_operator_review_packet,
     import_operator_feedback,
-    _read_packet,
 )
 from paperorchestra.feedback.normalization import (
     actionable_candidate_approval_role,

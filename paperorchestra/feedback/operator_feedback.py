@@ -40,25 +40,7 @@ from paperorchestra.feedback.operator_records import (
 )
 from paperorchestra.feedback.operator_snapshots import _restore_session_snapshot, _session_snapshot
 from paperorchestra.feedback.operator_contexts.citations import _protected_supported_citation_regressions
-from paperorchestra.feedback.operator_contract import (
-    ACTIONABLE_FAILURE_OWNER_CATEGORIES,
-    AXIS_CATASTROPHIC_DROP,
-    HUMAN_NEEDED_ANSWER_SCHEMA_VERSIONS,
-    HUMAN_REVIEWABLE_NEW_TIER2_CODES,
-    OPERATOR_FEEDBACK_EXECUTION_SCHEMA_VERSION,
-    OPERATOR_FEEDBACK_INCORPORATION_SCHEMA_VERSION,
-    OPERATOR_FEEDBACK_INTENTS,
-    OPERATOR_FEEDBACK_SCHEMA_VERSION,
-    OPERATOR_REFINEMENT_FORBIDDEN_NEW_TIER2_CODES,
-    OPERATOR_SOURCE,
-    OVERALL_CATASTROPHIC_DROP,
-    _load_imported_feedback,
-    _read_packet,
-    build_operator_review_packet,
-    derive_operator_issue_id,
-    import_operator_feedback,
-    validate_operator_review_notes,
-)
+from paperorchestra.feedback.operator_contract import _load_imported_feedback
 from paperorchestra.feedback.packets import (
     _file_sha256,
     _sha256_digest,
