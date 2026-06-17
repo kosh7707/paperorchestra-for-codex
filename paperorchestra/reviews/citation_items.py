@@ -5,7 +5,7 @@ from typing import Any
 
 from paperorchestra.domains import get_domain
 from paperorchestra.manuscript.validator import allowed_citation_keys, citation_entry_for_key
-from paperorchestra.reviews.source_support import (
+from paperorchestra.reviews.citation_sentences import (
     _citation_entry_payload,
     _citation_keys_in_text,
     _extract_cited_sentences,
