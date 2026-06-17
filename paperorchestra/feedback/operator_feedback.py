@@ -8,23 +8,19 @@ from paperorchestra.core.io import write_json
 from paperorchestra.runtime.providers import BaseProvider
 from paperorchestra.loop_engine.quality.loop import append_quality_loop_history
 from paperorchestra.core.session import artifact_path, load_session, save_session
-from paperorchestra.feedback.operator_execution import (
-    _verification_snapshot,
-    _verification_block,
+from paperorchestra.feedback.operator_candidates import (
+    _candidate_approval_source_role,
+    _failed_operator_candidate_result,
+    _generate_operator_candidate,
     _load_packet_from_imported,
     _packet_artifact_payload,
     _packet_prior_operator_attempts,
-    _candidate_approval_source_role,
-    _ready_candidate_from_packet,
-    _stage_candidate_text_for_verification,
     _preserve_operator_candidate_for_attempt,
     _promote_candidate_text,
-    _generate_operator_candidate,
-    _failed_operator_candidate_result,
+    _ready_candidate_from_packet,
+    _stage_candidate_text_for_verification,
 )
-from paperorchestra.feedback.operator_context import (
-    _write_operator_review_for_refiner,
-)
+from paperorchestra.feedback.operator_verification import _verification_block, _verification_snapshot
 from paperorchestra.feedback.operator_gates import (
     _active_tier2_metric_delta,
     _attach_candidate_approval_from_attempt,
