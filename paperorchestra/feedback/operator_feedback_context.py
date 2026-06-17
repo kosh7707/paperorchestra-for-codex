@@ -75,3 +75,11 @@ def load_operator_feedback_context(
         execution=execution,
         owner_categories=owner_categories,
     )
+
+
+def operator_feedback_attempt_count(*, intent: str, max_supervised_iterations: int) -> int:
+    if intent == "reject_candidate_with_reason":
+        return 0
+    if intent == "approve_existing_candidate":
+        return 1
+    return max_supervised_iterations

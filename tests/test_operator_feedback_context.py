@@ -69,3 +69,18 @@ def test_load_operator_feedback_context_rejects_stale_feedback(monkeypatch: pyte
             imported_feedback_path=imported_path,
             max_supervised_iterations=1,
         )
+
+
+def test_operator_feedback_attempt_count_matches_intent() -> None:
+    assert operator_feedback_context.operator_feedback_attempt_count(
+        intent="reject_candidate_with_reason",
+        max_supervised_iterations=3,
+    ) == 0
+    assert operator_feedback_context.operator_feedback_attempt_count(
+        intent="approve_existing_candidate",
+        max_supervised_iterations=3,
+    ) == 1
+    assert operator_feedback_context.operator_feedback_attempt_count(
+        intent="generate_new_operator_candidate",
+        max_supervised_iterations=3,
+    ) == 3

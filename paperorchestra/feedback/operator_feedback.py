@@ -42,7 +42,7 @@ from paperorchestra.feedback.operator_completion import (
 )
 from paperorchestra.feedback.operator_snapshots import _restore_session_snapshot, _session_snapshot
 from paperorchestra.feedback.operator_contexts.citations import _protected_supported_citation_regressions
-from paperorchestra.feedback.operator_feedback_context import load_operator_feedback_context
+from paperorchestra.feedback.operator_feedback_context import load_operator_feedback_context, operator_feedback_attempt_count
 from paperorchestra.feedback.packets import (
     _file_sha256,
     _sha256_digest,
@@ -92,7 +92,7 @@ def apply_operator_feedback(
     final_candidate_result: dict[str, Any] | None = None
 
     try:
-        attempts = 0 if intent == "reject_candidate_with_reason" else 1 if intent == "approve_existing_candidate" else max_supervised_iterations
+        attempts = operator_feedback_attempt_count(intent=intent, max_supervised_iterations=max_supervised_iterations)
         for attempt_index in range(1, attempts + 1):
             _restore_session_snapshot(cwd, snapshot)
             if intent == "approve_existing_candidate":
