@@ -21,12 +21,11 @@ from paperorchestra.engine.research_registry import (
     _merge_live_verified_with_prior_registry,
 )
 from paperorchestra.engine.schemas import PRIOR_WORK_SEED_SCHEMA
+from paperorchestra.research.bibtex import ensure_unique_bibtex_keys, registry_to_bibtex
 from paperorchestra.research.literature import (
-    ensure_unique_bibtex_keys,
     load_prior_work_seed,
     mock_verified_paper,
     prior_work_entries_to_verified_papers,
-    registry_to_bibtex,
     serialize_registry,
     verify_candidate_title,
 )

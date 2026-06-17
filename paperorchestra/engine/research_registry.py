@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from paperorchestra.core.models import VerifiedPaper
-from paperorchestra.research.literature import ensure_unique_bibtex_keys, is_citable_paper
+from paperorchestra.research.bibtex import ensure_unique_bibtex_keys, is_citable_paper
 
 
 def _registry_entry_payload(paper: VerifiedPaper, *, citation_key_role: str = "canonical") -> dict[str, Any]:

@@ -9,66 +9,28 @@ import time
 import urllib.parse
 import urllib.request
 from dataclasses import asdict
-from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Callable
 from urllib.error import HTTPError
 
 from paperorchestra.core.models import VerifiedPaper
 from paperorchestra.research.s2_api import SemanticScholarClient, SemanticScholarError, get_default_semantic_scholar_client
+from paperorchestra.research.bibtex import (
+    ensure_unique_bibtex_keys,
+    is_citable_paper,
+    make_bibtex_key,
+    paper_citable_metadata_failures,
+    registry_to_bibtex,
+)
+from paperorchestra.research.matching import (
+    _is_exact_seed_query,
+    _seed_query_matches_result,
+    grounded_result_is_relevant,
+    normalize_title,
+    title_match_ratio,
+)
 
 OPENALEX_WORKS_SEARCH = "https://api.openalex.org/works"
-SEARCH_QUERY_STOPWORDS = {
-    "a",
-    "an",
-    "and",
-    "are",
-    "as",
-    "before",
-    "beyond",
-    "by",
-    "do",
-    "does",
-    "establish",
-    "find",
-    "focusing",
-    "for",
-    "from",
-    "help",
-    "how",
-    "in",
-    "introduce",
-    "introducing",
-    "justify",
-    "long",
-    "made",
-    "need",
-    "new",
-    "not",
-    "of",
-    "on",
-    "or",
-    "papers",
-    "paper",
-    "post",
-    "prioritize",
-    "published",
-    "reviews",
-    "search",
-    "seeking",
-    "systems",
-    "that",
-    "the",
-    "their",
-    "these",
-    "to",
-    "use",
-    "why",
-    "with",
-    "writing",
-}
-
-
 def _cache_dir(service: str) -> Path:
     path = Path(".paper-orchestra") / "cache" / service
     path.mkdir(parents=True, exist_ok=True)
@@ -99,71 +61,6 @@ def _http_get_json(url: str, *, service: str = "semantic_scholar") -> dict[str, 
                 f"{service_label} rate-limited the request (HTTP 429). Set SEMANTIC_SCHOLAR_API_KEY, reduce request volume, or retry later."
             ) from exc
         raise SemanticScholarError(f"{service_label} request failed with HTTP {exc.code}.") from exc
-
-
-def title_match_ratio(a: str, b: str) -> float:
-    return SequenceMatcher(None, normalize_title(a), normalize_title(b)).ratio() * 100.0
-
-
-def normalize_title(text: str) -> str:
-    return " ".join("".join(ch.lower() if ch.isalnum() else " " for ch in text).split())
-
-
-def _query_keywords(text: str) -> list[str]:
-    tokens = normalize_title(text).split()
-    return [
-        token
-        for token in tokens
-        if (token == "ai" or len(token) >= 3) and token not in SEARCH_QUERY_STOPWORDS
-    ]
-
-
-def _result_overlap_score(query: str, title: str, abstract: str = "") -> int:
-    query_terms = set(_query_keywords(query))
-    if not query_terms:
-        return 0
-    result_terms = set(_query_keywords(f"{title} {abstract}"))
-    return len(query_terms & result_terms)
-
-
-def grounded_result_is_relevant(query: str, title: str, abstract: str = "") -> bool:
-    query_terms = _query_keywords(query)
-    if not query_terms:
-        return True
-    if len(query_terms) <= 2:
-        return True
-    if title_match_ratio(query, title) >= 55.0:
-        return True
-    overlap = _result_overlap_score(query, title, abstract)
-    if len(query_terms) <= 4:
-        return overlap >= 1
-    if len(query_terms) <= 8:
-        return overlap >= 2
-    return overlap >= 3
-
-
-def _is_exact_seed_query(query: str) -> bool:
-    words = [re.sub(r"[^A-Za-z0-9-]+", "", token) for token in query.split()]
-    words = [word for word in words if word]
-    if not words:
-        return False
-    has_exact_seed_markers = any(char.isdigit() for char in query) or "-" in query or "(" in query or ")" in query
-    if has_exact_seed_markers:
-        return len(words) <= 12
-    if len(words) > 8:
-        return False
-    if has_exact_seed_markers:
-        return True
-    titled = sum(1 for word in words if word[:1].isupper())
-    return len(words) <= 4 and titled >= max(1, len(words) - 1)
-
-
-def _seed_query_matches_result(query: str, title: str) -> bool:
-    if title_match_ratio(query, title) >= 70.0:
-        return True
-    normalized_query = normalize_title(query)
-    normalized_title = normalize_title(title)
-    return normalized_query == normalized_title
 
 
 def parse_cutoff(cutoff_date: str | None) -> dt.date | None:
@@ -685,141 +582,6 @@ def verify_candidate_title(
     )
     paper.bibtex_key = make_bibtex_key(paper)
     return paper
-
-
-def _safe_bibtex_key_part(text: str, *, fallback: str) -> str:
-    normalized = "".join(ch for ch in normalize_title(text).title() if ch.isalnum())
-    return normalized or fallback
-
-
-def make_bibtex_key(paper: VerifiedPaper) -> str:
-    author_source = paper.authors[0].split()[-1] if paper.authors else ""
-    author = _safe_bibtex_key_part(author_source, fallback="Anon")
-    year = str(paper.year or "nd")
-    slug_words = normalize_title(paper.title).split()[:3]
-    slug = "".join(word.capitalize() for word in slug_words if word.isalnum()) or "Paper"
-    return f"{author.lower()}{year}{slug}"
-
-
-def ensure_unique_bibtex_keys(registry: list[VerifiedPaper]) -> list[VerifiedPaper]:
-    seen: set[str] = set()
-    for paper in registry:
-        base_key = paper.bibtex_key or make_bibtex_key(paper)
-        candidate = base_key
-        suffix = 2
-        while candidate in seen:
-            candidate = f"{base_key}{suffix}"
-            suffix += 1
-        paper.bibtex_key = candidate
-        seen.add(candidate)
-    return registry
-
-
-_BIBTEX_ESCAPED_VALUE_CHARS = frozenset("&%_$#")
-
-
-def _validate_bibtex_value(value: str, *, field: str) -> None:
-    depth = 0
-    trailing_backslashes = 0
-    for index, ch in enumerate(value):
-        if ord(ch) < 32 and ch not in "\t\n":
-            raise ValueError(f"BibTeX field '{field}' contains an unsupported control character at position {index}.")
-        if ch == "\\":
-            trailing_backslashes += 1
-            continue
-        escaped = trailing_backslashes % 2 == 1
-        trailing_backslashes = 0
-        if ch == "{" and not escaped:
-            depth += 1
-        elif ch == "}" and not escaped:
-            if depth == 0:
-                raise ValueError(f"BibTeX field '{field}' contains an unmatched closing brace.")
-            depth -= 1
-    if depth:
-        raise ValueError(f"BibTeX field '{field}' contains unbalanced braces.")
-    if trailing_backslashes % 2 == 1:
-        raise ValueError(f"BibTeX field '{field}' ends with a dangling backslash.")
-
-
-def _escape_bibtex_value(value: str, *, field: str) -> str:
-    _validate_bibtex_value(value, field=field)
-    escaped: list[str] = []
-    trailing_backslashes = 0
-    for ch in value:
-        if ch == "\\":
-            escaped.append(ch)
-            trailing_backslashes += 1
-            continue
-        is_escaped = trailing_backslashes % 2 == 1
-        trailing_backslashes = 0
-        if ch in _BIBTEX_ESCAPED_VALUE_CHARS and not is_escaped:
-            escaped.append("\\")
-        escaped.append(ch)
-    return "".join(escaped)
-
-
-_UNKNOWN_METADATA_VALUES = {"", "unknown", "unknown venue", "n/a", "na", "none", "null", "tbd", "todo", "anonymous"}
-
-
-def _metadata_unknownish(value: Any) -> bool:
-    normalized = re.sub(r"\s+", " ", str(value or "").strip()).lower()
-    return normalized in _UNKNOWN_METADATA_VALUES
-
-
-def paper_citable_metadata_failures(paper: VerifiedPaper) -> list[str]:
-    """Return reasons a registry entry must not be exposed as citable.
-
-    A missing citation is safer than a bibliography entry rendered with
-    ``Unknown`` placeholders.  Keep incomplete entries in the registry for
-    diagnostics/repair, but exclude them from ``references.bib`` and
-    ``citation_map.json`` until enough metadata is available to make the source
-    traceable by a reader.
-    """
-
-    failures: list[str] = []
-    if _metadata_unknownish(paper.title):
-        failures.append("title_unknown")
-    if paper.authors and all(_metadata_unknownish(author) for author in paper.authors):
-        failures.append("author_or_organization_unknown")
-    if paper.year is None and _metadata_unknownish(paper.publication_date):
-        failures.append("year_unknown")
-    return sorted(dict.fromkeys(failures))
-
-
-def is_citable_paper(paper: VerifiedPaper) -> bool:
-    return not paper_citable_metadata_failures(paper)
-
-
-def registry_to_bibtex(registry: list[VerifiedPaper]) -> str:
-    entries = []
-    for paper in registry:
-        if not is_citable_paper(paper):
-            continue
-        authors = " and ".join(author for author in paper.authors if not _metadata_unknownish(author))
-        is_journal = bool(paper.venue and any(token in paper.venue.lower() for token in ["journal", "transactions"]))
-        entry_type = "article" if is_journal else "inproceedings"
-        venue_field = "journal" if is_journal else "booktitle"
-        venue_value = paper.venue if not _metadata_unknownish(paper.venue) else None
-        def render_entry(bibtex_key: str) -> str:
-            lines = [
-                f"@{entry_type}{{{bibtex_key},",
-                f"  title = {{{_escape_bibtex_value(paper.title, field='title')}}},",
-                f"  year = {{{_escape_bibtex_value(str(paper.year or ''), field='year')}}},",
-            ]
-            if authors:
-                lines.append(f"  author = {{{_escape_bibtex_value(authors, field='author')}}},")
-            if venue_value:
-                lines.append(f"  {venue_field} = {{{_escape_bibtex_value(venue_value, field=venue_field)}}},")
-            if paper.url:
-                lines.append(f"  url = {{{_escape_bibtex_value(paper.url, field='url')}}},")
-            if paper.external_ids.get("DOI"):
-                lines.append(f"  doi = {{{_escape_bibtex_value(paper.external_ids['DOI'], field='doi')}}},")
-            lines.append("}")
-            return "\n".join(lines)
-
-        if paper.bibtex_key:
-            entries.append(render_entry(paper.bibtex_key))
-    return "\n\n".join(entries) + ("\n" if entries else "")
 
 
 def serialize_registry(path: str | Path, registry: list[VerifiedPaper]) -> None:

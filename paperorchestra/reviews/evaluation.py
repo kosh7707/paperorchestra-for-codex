@@ -6,9 +6,9 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.io import read_json
-from paperorchestra.research.literature import title_match_ratio
 from paperorchestra.core.session import load_session
 from paperorchestra.manuscript.validator import canonical_citation_keys, citation_entry_for_key
+from paperorchestra.research.matching import title_match_ratio
 
 EXPECTED_LITERATURE_REVIEW_AXES = [
     "coverage_and_completeness",
