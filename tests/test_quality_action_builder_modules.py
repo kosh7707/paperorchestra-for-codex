@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from paperorchestra.loop_engine.quality import action_builders
-from paperorchestra.loop_engine.quality.action_plan import citation_integrity, citation_quality, citation_support, claim_safety, figure_grounding, preconditions, scholarly
+from paperorchestra.loop_engine.quality.action_plan import citation_integrity, citation_quality, citation_support, claim_safety, figure_grounding, preconditions, scholarly, source_material
 
 
 def test_action_builders_facade_reexports_tier_helpers() -> None:
@@ -14,6 +14,8 @@ def test_action_builders_facade_reexports_tier_helpers() -> None:
     assert action_builders._append_citation_integrity_actions is citation_integrity._append_citation_integrity_actions
     assert claim_safety._append_citation_quality_actions is citation_quality._append_citation_quality_actions
     assert claim_safety._append_figure_grounding_actions is figure_grounding._append_figure_grounding_actions
+    assert claim_safety._append_source_material_fidelity_actions is source_material._append_source_material_fidelity_actions
+    assert claim_safety._append_source_obligation_actions is source_material._append_source_obligation_actions
     assert action_builders._append_tier3_scholarly_actions is scholarly._append_tier3_scholarly_actions
 
 
