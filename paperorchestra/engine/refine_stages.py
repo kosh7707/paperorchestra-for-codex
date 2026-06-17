@@ -31,6 +31,7 @@ from paperorchestra.engine.planning_stages import (
     _planning_payloads_for_prompt,
     _writer_brief_from_planning,
 )
+from paperorchestra.engine.refine_prompt import build_refinement_user_prompt
 from paperorchestra.engine.prompt_context import (
     _compact_citation_map_for_prompt,
     _data_block,
@@ -128,26 +129,17 @@ def refine_current_paper(
             if isinstance(plot_assets_index, dict)
             else plot_assets_index
         )
-        writer_review_payload = _redact_review_scores_for_writer(review_payload)
-        user_prompt = f"""
-{_data_block('paper.tex', prompt_paper_text)}
-
-{_data_block('reviewer_feedback', json.dumps(writer_review_payload, indent=2, ensure_ascii=False))}
-
-{_author_facing_writer_brief_block(writer_brief)}
-
-{_data_block('experimental_log.md', prompt_experimental_log)}
-
-{_data_block('source_critical_context.json', json.dumps(source_critical_context, indent=2, ensure_ascii=False))}
-
-{_data_block('citation_map.json', json.dumps(prompt_citation_map, indent=2, ensure_ascii=False))}
-
-{_data_block('plot_manifest.json', json.dumps(prompt_plot_manifest, indent=2, ensure_ascii=False))}
-
-{_data_block('plot_assets.json', json.dumps(prompt_plot_assets_index, indent=2, ensure_ascii=False))}
-
-{_data_block('worklog.json', previous_worklog)}
-""".strip()
+        user_prompt = build_refinement_user_prompt(
+            paper_text=prompt_paper_text,
+            review_payload=review_payload,
+            writer_brief=writer_brief,
+            experimental_log_text=prompt_experimental_log,
+            source_critical_context=source_critical_context,
+            citation_map=prompt_citation_map,
+            plot_manifest=prompt_plot_manifest,
+            plot_assets_index=prompt_plot_assets_index,
+            previous_worklog=previous_worklog,
+        )
         response, lane_type, fallback_used, lane_notes = _complete_with_runtime_mode(
             _build_completion_request(system_prompt=PROMPTS.render_refine_system(), user_prompt=user_prompt),
             provider=provider,
