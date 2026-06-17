@@ -1019,6 +1019,63 @@ class StrictQualityGateHardeningTests(unittest.TestCase):
         self.assertEqual(sweep["status"], "pass")
         self.assertEqual(sweep["items"], [])
 
+    def test_high_risk_claim_sweep_skips_structural_table_boilerplate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Evaluation}\n"
+                "Table~\\ref{tab:rq1} reports the full-scale evaluation result for the benchmark.\n"
+                "\\begin{table}\n"
+                "\\caption{Full OWASP benchmark evaluation result.}\n"
+                "\\end{table}\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            obligations = artifact_path(root, "source-obligations.json")
+            obligations.write_text(json.dumps({"obligations": []}), encoding="utf-8")
+
+            sweep = _high_risk_claim_sweep(state, {"status": "pass", "path": str(obligations)})
+
+        self.assertEqual(sweep["status"], "pass")
+        self.assertEqual(sweep["items"], [])
+
+    def test_high_risk_claim_sweep_accepts_method_claims_supported_by_source_obligations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text(
+                "\\section{Method}\n"
+                "The scoring gate enforces a source-finality guarantee by rejecting reports whose "
+                "selected sink-bound value does not match the alert evidence.\n",
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            obligations = artifact_path(root, "source-obligations.json")
+            obligations.write_text(
+                json.dumps(
+                    {
+                        "obligations": [
+                            {
+                                "type": "method_core",
+                                "required_terms": ["scoring gate", "source-finality", "alert", "evidence"],
+                                "numeric_tokens": [],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            sweep = _high_risk_claim_sweep(state, {"status": "pass", "path": str(obligations)})
+
+        self.assertEqual(sweep["status"], "pass")
+        self.assertEqual(sweep["items"], [])
+
     def test_high_risk_claim_sweep_flags_positive_claims_even_with_stated_assumptions_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

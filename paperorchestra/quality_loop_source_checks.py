@@ -40,6 +40,15 @@ PAPER_SPECIFIC_SELF_CLAIM_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+STRUCTURAL_REFERENCE_RE = re.compile(
+    r"^(?:[A-Za-z][^.]{0,80}\.\s+)?(?:Table|Figure|Listing|Algorithm)~?\s*(?:\S+\s+)?"
+    r"(?:reports?|shows?|presents?|summari[sz]es|lists?|contains?|defines?|gives?)\b",
+    re.IGNORECASE,
+)
+STRUCTURAL_STRONG_CLAIM_RE = re.compile(
+    r"\b(\d+(?:\.\d+)?\s*(?:x|×|%|ms|s|jobs/s|qps)|faster|slower|outperform|better than|stronger|weaker|novel|first|secure|guarantee|baseline)\b",
+    re.IGNORECASE,
+)
 
 def _read_text_if_exists(path: str | Path | None) -> str:
     if not path:
@@ -165,6 +174,16 @@ def _plainish_sentences(latex: str) -> list[tuple[int, str, str]]:
         offset += max(len(part), 1)
     return result
 
+def _structural_boilerplate_sentence(raw_sentence: str, sentence: str) -> bool:
+    raw = raw_sentence.strip()
+    if re.match(r"\\(?:title|author|date)\*?(?:\[[^]]*\])?\{", raw):
+        return True
+    if "\\caption" in raw:
+        return not STRUCTURAL_STRONG_CLAIM_RE.search(sentence)
+    if STRUCTURAL_REFERENCE_RE.search(sentence):
+        return not STRUCTURAL_STRONG_CLAIM_RE.search(sentence)
+    return False
+
 def _sentence_supported_by_obligation(sentence: str, obligation: dict[str, Any]) -> bool:
     lowered = sentence.lower()
     obligation_type = str(obligation.get("type") or "")
@@ -232,6 +251,8 @@ def _high_risk_claim_sweep(state, source_obligations: dict[str, Any]) -> dict[st
         if LIMITATION_SCOPE_RE.search(sentence):
             continue
         if PROOF_INTERNAL_SCOPE_RE.search(sentence):
+            continue
+        if _structural_boilerplate_sentence(raw_sentence, sentence):
             continue
         if not HIGH_RISK_CLAIM_RE.search(sentence):
             continue
