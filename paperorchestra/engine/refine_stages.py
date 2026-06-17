@@ -47,6 +47,12 @@ from paperorchestra.engine.reports import (
     _record_validation_report,
     collect_paper_contract_issues,
 )
+from paperorchestra.engine.refine_results import (
+    accepted_refinement_result,
+    candidate_only_result,
+    contract_validation_failed_result,
+    rejected_refinement_result,
+)
 from paperorchestra.engine.refine_review import _accept_review_delta, _redact_review_scores_for_writer
 from paperorchestra.engine.review_stages import _extract_axis_scores, review_current_paper
 from paperorchestra.engine.section_scope import _expected_section_titles_from_outline
@@ -259,18 +265,14 @@ def refine_current_paper(
         blocking_issues = _blocking_issues(validation_issues)
         if blocking_issues:
             accepted_results.append(
-                {
-                    "iteration": state.refinement_iteration + 1,
-                    "accepted": False,
-                    "score_before": state.review_history[-1].overall_score if state.review_history else float(review_payload.get("overall_score", 0.0)),
-                    "score_after": None,
-                    "paper_path": state.artifacts.paper_full_tex,
-                    "worklog_path": None,
-                    "reason": "contract_validation_failed",
-                    "issues": _issue_messages(blocking_issues),
-                    "validation_report_path": str(validation_path),
-                    "validation_report": validation_payload,
-                }
+                contract_validation_failed_result(
+                    iteration=state.refinement_iteration + 1,
+                    score_before=state.review_history[-1].overall_score if state.review_history else float(review_payload.get("overall_score", 0.0)),
+                    paper_path=state.artifacts.paper_full_tex,
+                    issues=_issue_messages(blocking_issues),
+                    validation_path=validation_path,
+                    validation_payload=validation_payload,
+                )
             )
             state.notes.append(
                 f"Rejected refinement iteration {state.refinement_iteration + 1} due to contract validation failure."
@@ -367,29 +369,25 @@ def refine_current_paper(
             state.artifacts.latest_validation_json = str(validation_path)
             state.review_history = state.review_history[:temp_review_history_len]
             save_session(cwd, state)
-            candidate_result = {
-                "iteration": candidate_iter,
-                "accepted": False,
-                "candidate_only": True,
-                "reason": "candidate_ready_without_generic_acceptance",
-                "score_before": previous_score,
-                "score_after": candidate_score,
-                "axis_scores_before": previous_axes,
-                "axis_scores_after": candidate_axes,
-                "paper_path": temp_state_paper,
-                "candidate_path": str(candidate_tex_path),
-                "candidate_sha256": _file_sha256(candidate_tex_path),
-                "worklog_path": str(worklog_path),
-                "compile_error": compile_error,
-                "validation_report_path": str(validation_path),
-                "validation_report": validation_payload,
-                "review_path": str(candidate_review_path) if candidate_review_path else None,
-                "no_op_refinement": no_op_refinement,
-            }
-            if contract_regression_preservation:
-                candidate_result.update(contract_regression_preservation)
-                candidate_result["reason"] = "contract_regression_preserved_prior"
-            accepted_results.append(candidate_result)
+            accepted_results.append(
+                candidate_only_result(
+                    iteration=candidate_iter,
+                    score_before=previous_score,
+                    score_after=candidate_score,
+                    axis_scores_before=previous_axes,
+                    axis_scores_after=candidate_axes,
+                    paper_path=temp_state_paper,
+                    candidate_path=candidate_tex_path,
+                    candidate_sha256=_file_sha256(candidate_tex_path),
+                    worklog_path=worklog_path,
+                    compile_error=compile_error,
+                    validation_path=validation_path,
+                    validation_payload=validation_payload,
+                    review_path=candidate_review_path,
+                    no_op_refinement=no_op_refinement,
+                    contract_regression_preservation=contract_regression_preservation,
+                )
+            )
             break
         accept = compile_error is None and (no_op_refinement or _accept_review_delta(candidate_score, previous_score, candidate_axes, previous_axes))
         if (
@@ -458,22 +456,20 @@ def refine_current_paper(
             state.notes.append(f"Lane manifest recorded: {lane_path.name}")
             save_session(cwd, state)
             accepted_results.append(
-                {
-                    "iteration": candidate_iter,
-                    "accepted": True,
-                    "preservation": compile_preservation,
-                    "reason": "compile_failed_preserved_previous" if compile_preservation else "accepted_non_regressive_revision",
-                    "score_before": previous_score,
-                    "score_after": candidate_score,
-                    "paper_path": str(final_path),
-                    "worklog_path": str(worklog_path),
-                    "compile_error": preserved_compile_error,
-                    "validation_report_path": str(validation_path),
-                    "validation_report": validation_payload,
-                    "lane_manifest_path": str(lane_path),
-                    "review_retry_paths": review_retry_paths,
-                    "review_retry_scores": review_retry_scores,
-                }
+                accepted_refinement_result(
+                    iteration=candidate_iter,
+                    compile_preservation=compile_preservation,
+                    score_before=previous_score,
+                    score_after=candidate_score,
+                    paper_path=final_path,
+                    worklog_path=worklog_path,
+                    compile_error=preserved_compile_error,
+                    validation_path=validation_path,
+                    validation_payload=validation_payload,
+                    lane_manifest_path=lane_path,
+                    review_retry_paths=review_retry_paths,
+                    review_retry_scores=review_retry_scores,
+                )
             )
         else:
             lane_path = record_lane_manifest(
@@ -511,21 +507,19 @@ def refine_current_paper(
             state.notes.append(f"Lane manifest recorded: {lane_path.name}")
             save_session(cwd, state)
             accepted_results.append(
-                {
-                    "iteration": candidate_iter,
-                    "accepted": False,
-                    "score_before": previous_score,
-                    "score_after": candidate_score,
-                    "paper_path": temp_state_paper,
-                    "worklog_path": str(worklog_path),
-                    "reason": "compile_failed" if compile_error else "score_regressed_or_tie_break_failed",
-                    "compile_error": compile_error,
-                    "validation_report_path": str(validation_path),
-                    "validation_report": validation_payload,
-                    "lane_manifest_path": str(lane_path),
-                    "review_retry_paths": review_retry_paths,
-                    "review_retry_scores": review_retry_scores,
-                }
+                rejected_refinement_result(
+                    iteration=candidate_iter,
+                    score_before=previous_score,
+                    score_after=candidate_score,
+                    paper_path=temp_state_paper,
+                    worklog_path=worklog_path,
+                    compile_error=compile_error,
+                    validation_path=validation_path,
+                    validation_payload=validation_payload,
+                    lane_manifest_path=lane_path,
+                    review_retry_paths=review_retry_paths,
+                    review_retry_scores=review_retry_scores,
+                )
             )
             break
 
