@@ -11,9 +11,6 @@ from paperorchestra.feedback.operator_candidates import (
     _candidate_approval_source_role,
     _failed_operator_candidate_result,
     _generate_operator_candidate,
-    _load_packet_from_imported,
-    _packet_artifact_payload,
-    _packet_prior_operator_attempts,
     _preserve_operator_candidate_for_attempt,
     _promote_candidate_text,
     _ready_candidate_from_packet,
@@ -32,7 +29,6 @@ from paperorchestra.feedback.operator_gates import (
 from paperorchestra.feedback.operator_incorporation import _issue_incorporation_detailed
 from paperorchestra.feedback.operator_records import (
     _build_operator_attempt_record,
-    _build_operator_execution_record,
     _build_operator_incorporation_report,
 )
 from paperorchestra.feedback.operator_completion import (
@@ -46,7 +42,7 @@ from paperorchestra.feedback.operator_completion import (
 )
 from paperorchestra.feedback.operator_snapshots import _restore_session_snapshot, _session_snapshot
 from paperorchestra.feedback.operator_contexts.citations import _protected_supported_citation_regressions
-from paperorchestra.feedback.operator_contract import _load_imported_feedback
+from paperorchestra.feedback.operator_feedback_context import load_operator_feedback_context
 from paperorchestra.feedback.packets import (
     _file_sha256,
     _sha256_digest,
@@ -73,29 +69,24 @@ def apply_operator_feedback(
 ) -> tuple[Path, dict[str, Any]]:
     if max_supervised_iterations < 1:
         raise ContractError("max_supervised_iterations must be >= 1")
-    imported_path = Path(imported_feedback_path).resolve()
-    imported = _load_imported_feedback(imported_path)
-    packet = _load_packet_from_imported(imported)
-    intent = str(imported.get("intent") or "")
-    state = load_session(cwd)
-    current_sha = _file_sha256(state.artifacts.paper_full_tex)
-    if current_sha != imported.get("manuscript_sha256"):
-        raise ContractError("imported operator feedback is stale for the current manuscript")
-    base_quality_eval = _packet_artifact_payload(packet, "quality_eval")
-    packet_prior_attempts = _packet_prior_operator_attempts(packet)
-    base_tier2_failures = set(_tier_failing_codes(base_quality_eval, "tier_2_claim_safety"))
-    base_active_failures = set(_quality_failing_codes(base_quality_eval or {}))
-
-    execution = _build_operator_execution_record(
-        imported_path,
-        imported,
-        current_sha=current_sha,
+    context = load_operator_feedback_context(
+        cwd=cwd,
+        imported_feedback_path=imported_feedback_path,
         max_supervised_iterations=max_supervised_iterations,
-        intent=intent,
     )
+    imported_path = context.imported_path
+    imported = context.imported
+    packet = context.packet
+    intent = context.intent
+    current_sha = context.current_sha
+    base_quality_eval = context.base_quality_eval
+    packet_prior_attempts = context.packet_prior_attempts
+    base_tier2_failures = context.base_tier2_failures
+    base_active_failures = context.base_active_failures
+    execution = context.execution
     snapshot = _session_snapshot(cwd)
     before_text = snapshot.get("paper_text") or ""
-    owner_categories = [str(issue.get("owner_category") or "author") for issue in imported.get("issues") or []]
+    owner_categories = context.owner_categories
     final_incorporation: list[dict[str, Any]] = []
     final_verification: dict[str, Any] | None = None
     final_candidate_result: dict[str, Any] | None = None

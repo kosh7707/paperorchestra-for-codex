@@ -39,7 +39,8 @@ def test_human_needed_only_imports_apply_from_operator_feedback() -> None:
     }
 
 
-def test_operator_feedback_does_not_reexport_operator_contract_facade() -> None:
-    assert _imports_from("paperorchestra/feedback/operator_feedback.py", "paperorchestra.feedback.operator_contract") == [
+def test_operator_feedback_routes_imported_contract_loading_through_context() -> None:
+    assert _imports_from("paperorchestra/feedback/operator_feedback.py", "paperorchestra.feedback.operator_contract") == []
+    assert _imports_from("paperorchestra/feedback/operator_feedback_context.py", "paperorchestra.feedback.operator_contract") == [
         "_load_imported_feedback"
     ]
