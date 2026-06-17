@@ -38,6 +38,12 @@ from .inputs import (
     _stage_explicit_citation_support_review,
     _validate_plan_quality_eval_identity,
 )
+from .bridge_records import (
+    build_candidate_state,
+    build_initial_execution_record,
+    build_restored_current_state,
+    build_verification_record,
+)
 from .action_dispatch import QaLoopActionDispatchContext, dispatch_qa_loop_actions
 from .artifacts import (
     _refresh_citation_integrity_for_current_manuscript,
@@ -121,24 +127,15 @@ def run_qa_loop_step(
         )
     before_summary = _citation_summary(cwd)
     initial_verdict = str(before_plan.get("verdict"))
-    execution: dict[str, Any] = {
-        "schema_version": QA_LOOP_EXECUTION_SCHEMA_VERSION,
-        "started_at": started,
-        "_reserved_execution_path": str(_next_execution_path(cwd)[1]),
-        "input_quality_eval": str(before_eval_path),
-        "input_plan": str(before_plan_path),
-        "input_citation_support_review": (
-            str(explicit_citation_support_path) if explicit_citation_support_path else None
-        ),
-        "input_artifacts": {
-            "quality_eval": str(before_eval_path),
-            "qa_loop_plan": str(before_plan_path),
-            "citation_support_review": str(explicit_citation_support_path) if explicit_citation_support_path else None,
-        },
-        "actions_attempted": [],
-        "actions_skipped": [],
-        "before": {"failing_codes": _failing_codes(before_eval), "citation_support_summary": before_summary},
-    }
+    execution = build_initial_execution_record(
+        cwd=cwd,
+        started_at=started,
+        before_eval_path=before_eval_path,
+        before_plan_path=before_plan_path,
+        explicit_citation_support_path=explicit_citation_support_path,
+        before_eval=before_eval,
+        before_summary=before_summary,
+    )
     actions = _executable_actions(before_plan)
     if initial_verdict in TERMINAL_VERDICTS:
         execution.update({"completed_at": utc_now_iso(), "verdict": initial_verdict, "terminal_noop": True})
@@ -234,52 +231,37 @@ def run_qa_loop_step(
         after_summary = _citation_summary(cwd)
         progress = compute_progress_delta(before_eval, after_eval, before_summary, after_summary)
         verdict = str(after_plan.get("verdict"))
+        verification = build_verification_record(
+            validation_path=validation_path,
+            validation_payload=validation_payload,
+            compile_payload=compile_payload,
+            section_review_path=section_review_path,
+            figure_review_path=figure_review_path,
+            figure_review_payload=figure_review_payload,
+            citation_review_path=citation_review_path,
+            refreshed_citation_integrity=refreshed_citation_integrity,
+            quality_eval_path=after_eval_path,
+            qa_loop_plan_path=after_plan_path,
+        )
         candidate_state: dict[str, Any] | None = None
         if citation_candidate_applied:
-            candidate_state = {
-                "manuscript_path": citation_candidate_path,
-                "verification": {
-                    "validate_current": {"path": str(validation_path), "ok": validation_payload.get("ok")},
-                    "compile": compile_payload,
-                    "section_review": {"path": str(section_review_path)},
-                    "figure_placement_review": {
-                        "path": str(figure_review_path),
-                        "manuscript_sha256": figure_review_payload.get("manuscript_sha256")
-                        if isinstance(figure_review_payload, dict)
-                        else None,
-                    },
-                    "citation_support_review": {"path": str(citation_review_path)},
-                    "citation_integrity": refreshed_citation_integrity,
-                    "quality_eval": {"path": str(after_eval_path)},
-                    "qa_loop_plan": {"path": str(after_plan_path)},
-                },
-                "after": {"failing_codes": _failing_codes(after_eval), "citation_support_summary": after_summary},
-                "quality_eval_path": str(after_eval_path),
-                "qa_loop_plan_path": str(after_plan_path),
-                "qa_loop_plan_verdict": verdict,
-                "progress": progress,
-            }
+            candidate_state = build_candidate_state(
+                manuscript_path=citation_candidate_path,
+                verification=verification,
+                after_eval=after_eval,
+                after_summary=after_summary,
+                quality_eval_path=after_eval_path,
+                qa_loop_plan_path=after_plan_path,
+                qa_loop_plan_verdict=verdict,
+                progress=progress,
+            )
         final_eval = after_eval
         final_plan = after_plan
         final_eval_path = after_eval_path
         final_plan_path = after_plan_path
         final_summary = after_summary
         final_progress = progress
-        final_verification = {
-            "validate_current": {"path": str(validation_path), "ok": validation_payload.get("ok")},
-            "compile": compile_payload,
-            "section_review": {"path": str(section_review_path)},
-            "figure_placement_review": {
-                "path": str(figure_review_path),
-                "manuscript_sha256": figure_review_payload.get("manuscript_sha256")
-                if isinstance(figure_review_payload, dict)
-                else None,
-            },
-            "citation_support_review": {"path": str(citation_review_path)},
-            "citation_integrity": refreshed_citation_integrity,
-            "quality_eval": {"path": str(final_eval_path)},
-            "qa_loop_plan": {"path": str(final_plan_path)},
-        }
+        final_verification = verification
         after_codes = set(_failing_codes(after_eval))
         residual_citation_failures = sorted(code for code in after_codes if code.startswith("citation_support_"))
         auto_commit_allowed, auto_commit_reason = (
@@ -339,14 +321,15 @@ def run_qa_loop_step(
                 final_progress = restored["progress"]
                 final_verification = restored["verification"]
                 execution["restored_current_verification"] = restored["verification"]
-                execution["restored_current_state"] = {
-                    "verification": restored["verification"],
-                    "after": {"failing_codes": _failing_codes(final_eval), "citation_support_summary": final_summary},
-                    "quality_eval_path": str(final_eval_path),
-                    "qa_loop_plan_path": str(final_plan_path),
-                    "qa_loop_plan_verdict": str(final_plan.get("verdict")),
-                    "progress": final_progress,
-                }
+                execution["restored_current_state"] = build_restored_current_state(
+                    verification=restored["verification"],
+                    final_eval=final_eval,
+                    final_summary=final_summary,
+                    quality_eval_path=final_eval_path,
+                    qa_loop_plan_path=final_plan_path,
+                    qa_loop_plan_verdict=str(final_plan.get("verdict")),
+                    progress=final_progress,
+                )
             verdict = "human_needed"
             execution["candidate_rollback"] = {
                 "reason": "citation_support_approval_failed",
@@ -389,14 +372,15 @@ def run_qa_loop_step(
                 final_progress = restored["progress"]
                 final_verification = restored["verification"]
                 execution["restored_current_verification"] = restored["verification"]
-                execution["restored_current_state"] = {
-                    "verification": restored["verification"],
-                    "after": {"failing_codes": _failing_codes(final_eval), "citation_support_summary": final_summary},
-                    "quality_eval_path": str(final_eval_path),
-                    "qa_loop_plan_path": str(final_plan_path),
-                    "qa_loop_plan_verdict": str(final_plan.get("verdict")),
-                    "progress": final_progress,
-                }
+                execution["restored_current_state"] = build_restored_current_state(
+                    verification=restored["verification"],
+                    final_eval=final_eval,
+                    final_summary=final_summary,
+                    quality_eval_path=final_eval_path,
+                    qa_loop_plan_path=final_plan_path,
+                    qa_loop_plan_verdict=str(final_plan.get("verdict")),
+                    progress=final_progress,
+                )
             verdict = "human_needed"
             execution["candidate_rollback"] = {
                 "reason": "citation_candidate_auto_commit_blocked",
