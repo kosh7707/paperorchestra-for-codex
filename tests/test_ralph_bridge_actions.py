@@ -1,6 +1,22 @@
 from __future__ import annotations
 
-from paperorchestra.loop_engine.ralph.bridge import _executable_actions, _unsupported_executable_actions
+from paperorchestra.loop_engine.ralph import bridge, bridge_actions, bridge_restore
+
+
+def test_bridge_facade_reexports_split_helpers() -> None:
+    assert bridge._executable_actions is bridge_actions._executable_actions
+    assert bridge._unsupported_executable_actions is bridge_actions._unsupported_executable_actions
+    assert bridge._restore_current_after_uncommitted_candidate is bridge_restore._restore_current_after_uncommitted_candidate
+
+
+def test_bridge_facade_preserves_legacy_aliases() -> None:
+    from paperorchestra.loop_engine.quality.loop import QA_LOOP_SUPPORTED_HANDLER_CODES, build_quality_loop_plan
+    from paperorchestra.loop_engine.ralph.state import SUPPORTED_HANDLER_CODES, _restore_file_content_snapshot
+
+    assert bridge.QA_LOOP_SUPPORTED_HANDLER_CODES is QA_LOOP_SUPPORTED_HANDLER_CODES
+    assert bridge.build_quality_loop_plan is build_quality_loop_plan
+    assert bridge.SUPPORTED_HANDLER_CODES is SUPPORTED_HANDLER_CODES
+    assert bridge._restore_file_content_snapshot is _restore_file_content_snapshot
 
 
 def test_bridge_action_partition_respects_supported_handlers() -> None:
@@ -12,8 +28,8 @@ def test_bridge_action_partition_respects_supported_handlers() -> None:
         ]
     }
 
-    executable = _executable_actions(plan)
-    unsupported = _unsupported_executable_actions(plan)
+    executable = bridge_actions._executable_actions(plan)
+    unsupported = bridge_actions._unsupported_executable_actions(plan)
 
     assert [action["code"] for action in executable] == ["review_score_missing"]
     assert [action["code"] for action in unsupported] == ["unsupported_future_handler"]
