@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from paperorchestra.loop_engine.quality.action_plan.citation_integrity import _append_citation_integrity_actions
+from paperorchestra.loop_engine.quality.action_plan.claim_review import (
+    _append_high_risk_claim_actions,
+    _append_planning_satisfaction_actions,
+)
 from paperorchestra.loop_engine.quality.action_plan.citation_quality import _append_citation_quality_actions
 from paperorchestra.loop_engine.quality.action_plan.figure_grounding import _append_figure_grounding_actions
 from paperorchestra.loop_engine.quality.action_plan.source_material import (
@@ -116,3 +120,25 @@ def test_source_obligation_actions_emit_refresh_and_satisfaction_repair() -> Non
     assert actions[1]["id"] == "quality-eval:source-obligation-satisfaction"
     assert actions[1]["automation"] == "semi_auto"
     assert actions[1]["approval_required_from"] == "source_material_critic"
+
+
+def test_high_risk_claim_actions_emit_semiautomatic_claim_repair() -> None:
+    actions: list[dict] = []
+
+    _append_high_risk_claim_actions(actions, {"status": "fail"})
+
+    assert [action["code"] for action in actions] == ["high_risk_uncited_claim"]
+    assert actions[0]["id"] == "quality-eval:high-risk-claim-sweep"
+    assert actions[0]["automation"] == "semi_auto"
+    assert actions[0]["approval_required_from"] == "claim_safety_critic"
+
+
+def test_planning_satisfaction_actions_emit_human_needed_plan_repair() -> None:
+    actions: list[dict] = []
+
+    _append_planning_satisfaction_actions(actions, {"status": "fail"})
+
+    assert [action["code"] for action in actions] == ["planning_satisfaction_failed"]
+    assert actions[0]["id"] == "quality-eval:planning-satisfaction"
+    assert actions[0]["automation"] == "human_needed"
+    assert actions[0]["approval_required_from"] == "plan_satisfaction_critic"
