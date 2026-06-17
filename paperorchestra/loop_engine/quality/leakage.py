@@ -90,10 +90,6 @@ def _pdf_text_prompt_leakage_scan(path: str | Path | None) -> dict[str, list[str
     }
 
 
-def _pdf_text_for_prompt_leakage(path: str | Path | None) -> list[str]:
-    return _pdf_text_prompt_leakage_scan(path)["markers"]
-
-
 def _manuscript_prompt_leakage_report(state) -> dict[str, list[str]]:
     pdf_scan = _pdf_text_prompt_leakage_scan(state.artifacts.compiled_pdf)
     found: list[str] = []
