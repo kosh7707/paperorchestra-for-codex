@@ -51,6 +51,10 @@ from paperorchestra.engine.refine_context import (
     RefinementIterationContext,
     build_refinement_iteration_context,
 )
+from paperorchestra.engine.refine_contracts import (
+    RefinementContractCheckResult,
+    apply_contract_regression_preservation,
+)
 from paperorchestra.engine.refine_compile import (
     RefinementCompileGateResult,
     apply_compile_acceptance_gate,
@@ -161,50 +165,31 @@ def refine_current_paper(
             claim_map=claim_map,
             citation_placement_plan=citation_placement_plan,
         )
-        blocking_issues = _blocking_issues(validation_issues)
-        contract_regression_preservation: dict[str, Any] | None = None
-        if blocking_issues:
-            preserved_issues = collect_paper_contract_issues(
-                iteration.current_paper,
-                citation_map=iteration.citation_map,
-                figures_dir=state.inputs.figures_dir,
-                plot_manifest=iteration.plot_manifest,
-                plot_assets_index=iteration.plot_assets_index,
-                experimental_log_text=iteration.experimental_log_text,
-                expected_section_titles=iteration.expected_section_titles,
-                narrative_plan=narrative_plan,
-                claim_map=claim_map,
-                citation_placement_plan=citation_placement_plan,
-            )
-            if not _blocking_issues(preserved_issues):
-                rejected_candidate_path = artifact_path(cwd, f"paper.refined.iter-{iteration.candidate_iter:02d}.rejected-contract.tex")
-                write_text(rejected_candidate_path, latex)
-                rejected_validation_path, _rejected_validation_payload = _record_validation_report(
-                    cwd,
-                    stage="refinement_rejected_contract_regression",
-                    issues=validation_issues,
-                    name=f"validation.refine.iter-{iteration.candidate_iter:02d}.rejected-contract.json",
-                    manuscript_text=latex,
-                )
-                contract_regression_preservation = {
-                    "preserved_prior_after_contract_regression": True,
-                    "rejected_candidate_path": str(rejected_candidate_path),
-                    "rejected_candidate_sha256": _file_sha256(rejected_candidate_path),
-                    "contract_regression_issue_count": len(_blocking_issues(validation_issues)),
-                    "contract_regression_validation_report_path": str(rejected_validation_path),
-                }
-                latex = iteration.current_paper
-                validation_issues = preserved_issues
-                blocking_issues = []
-                worklog.setdefault("actions_taken", []).append(
-                    "Preserved the pre-refinement manuscript because the generated revision regressed citation/grounding contract checks."
-                )
-                lane_notes = lane_notes + ["Refinement draft regressed contract checks; preserved prior validated manuscript."]
-                print(
-                    f"Refinement iter {state.refinement_iteration + 1} preserved prior manuscript after contract regression.",
-                    file=sys.stderr,
-                )
-        elif citation_replacements:
+        contract_check = apply_contract_regression_preservation(
+            cwd=cwd,
+            iteration=iteration,
+            state=state,
+            latex=latex,
+            validation_issues=validation_issues,
+            worklog=worklog,
+            lane_notes=lane_notes,
+            citation_map=iteration.citation_map,
+            figures_dir=state.inputs.figures_dir,
+            plot_manifest=iteration.plot_manifest,
+            plot_assets_index=iteration.plot_assets_index,
+            experimental_log_text=iteration.experimental_log_text,
+            expected_section_titles=iteration.expected_section_titles,
+            narrative_plan=narrative_plan,
+            claim_map=claim_map,
+            citation_placement_plan=citation_placement_plan,
+        )
+        latex = contract_check.latex
+        validation_issues = contract_check.validation_issues
+        blocking_issues = contract_check.blocking_issues
+        contract_regression_preservation = contract_check.contract_regression_preservation
+        worklog = contract_check.worklog
+        lane_notes = contract_check.lane_notes
+        if not blocking_issues and citation_replacements and contract_regression_preservation is None:
             lane_notes.append(
                 "Canonicalized citation-key aliases in refinement draft: "
                 + ", ".join(f"{src}->{dst}" for src, dst in sorted(citation_replacements.items()))
