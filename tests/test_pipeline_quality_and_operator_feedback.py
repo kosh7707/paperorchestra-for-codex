@@ -3347,6 +3347,68 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
         self.assertEqual(trust["level"], "live")
         self.assertNotIn("citation_registry_seed_only_count=1", trust["mixed_evidence"])
 
+    def test_provenance_trust_names_missing_registry_verification_separately_from_live_review(self) -> None:
+        from paperorchestra.quality_loop import _provenance_trust
+
+        trust = _provenance_trust(
+            {
+                "verdict": "OK",
+                "verification_invoked": False,
+                "semantic_scholar_required": False,
+                "citation_support_review_live": True,
+                "prompt_trace_file_count": 1,
+                "lane_manifest_summary": {"manifest_count": 1},
+                "citation_live_provenance": {
+                    "registry_count": 0,
+                    "live_verified_count": 0,
+                    "seed_only_count": 0,
+                    "status": "missing",
+                },
+            }
+        )
+
+        self.assertTrue(trust["citation_support_review_live"])
+        self.assertFalse(trust["citation_registry_verification_invoked"])
+        self.assertFalse(trust["semantic_scholar_required"])
+        self.assertEqual(trust["citation_registry_live_verified_count"], 0)
+        self.assertIn("citation_registry_live_verification_not_invoked", trust["mixed_evidence"])
+        self.assertNotIn("live_verification_not_invoked", trust["mixed_evidence"])
+
+    def test_reproducibility_audit_records_live_citation_support_review_separately(self) -> None:
+        from paperorchestra.fidelity import build_reproducibility_audit
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\section{Intro}\nBackground~\\cite{A}.\n", encoding="utf-8")
+            review = artifact_path(root, "citation_support_review.json")
+            review.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "citation-support-review/2",
+                        "review_mode": "web",
+                        "evidence_provenance": {
+                            "mode": "web",
+                            "provider_name": "shell",
+                            "model_review_used": True,
+                            "web_search_required": True,
+                            "semantic_scholar_required": False,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+
+            audit = build_reproducibility_audit(root)
+
+        self.assertTrue(audit["citation_support_review_live"])
+        self.assertFalse(audit["semantic_scholar_required"])
+        self.assertEqual(audit["citation_support_review_provenance"]["mode"], "web")
+        self.assertEqual(audit["citation_registry_live_verified_count"], 0)
+
     def test_provenance_trust_marks_mixed_cited_provenance_as_mixed(self) -> None:
         from paperorchestra.quality_loop import _provenance_trust
 

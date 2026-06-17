@@ -572,6 +572,38 @@ def _file_sha256(path: str | Path | None) -> str | None:
     return hashlib.sha256(candidate.read_bytes()).hexdigest()
 
 
+def _citation_support_review_provenance(cwd: str | Path | None, state, session_artifact_dir: Path | None) -> dict[str, Any]:
+    candidates: list[Path] = [artifact_path(cwd, "citation_support_review.json")]
+    if session_artifact_dir is not None:
+        candidates.append(session_artifact_dir / "citation_support_review.json")
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        payload = _read_json_if_exists(candidate)
+        if not isinstance(payload, dict):
+            continue
+        provenance = payload.get("evidence_provenance") if isinstance(payload.get("evidence_provenance"), dict) else {}
+        mode = str(payload.get("review_mode") or provenance.get("mode") or "")
+        provider_name = provenance.get("provider_name")
+        model_review_used = bool(provenance.get("model_review_used"))
+        live = mode in {"model", "web"} and model_review_used and provider_name != "mock"
+        return {
+            "status": "present",
+            "path": str(candidate),
+            "sha256": _file_sha256(candidate),
+            "mode": mode,
+            "provider_name": provider_name,
+            "web_search_required": bool(provenance.get("web_search_required")),
+            "model_review_used": model_review_used,
+            "semantic_scholar_required": bool(provenance.get("semantic_scholar_required")),
+            "live": live,
+        }
+    return {"status": "missing", "path": str(candidates[0]), "live": False, "semantic_scholar_required": False}
+
+
 def _citation_surface_health(state) -> dict[str, Any]:
     registry_path = state.artifacts.citation_registry_json
     citation_map_path = state.artifacts.citation_map_json
@@ -1112,6 +1144,7 @@ def build_reproducibility_audit(cwd: str | Path | None, *, require_live_verifica
         state.artifacts.citation_registry_json,
         state.artifacts.paper_full_tex,
     )
+    citation_support_review_provenance = _citation_support_review_provenance(cwd, state, session_artifact_dir)
     citation_surface = _citation_surface_health(state)
     validation_warning_reports = _validation_warning_reports(state, session_artifact_dir)
     validation_warning_count = sum(item["warning_count"] for item in validation_warning_reports)
@@ -1249,7 +1282,11 @@ def build_reproducibility_audit(cwd: str | Path | None, *, require_live_verifica
         'latest_verify_fallback_used': state.latest_verify_fallback_used,
         'prompt_trace_file_count': len(prompt_files),
         'mock_registry_entry_count': mock_registry_count,
+        'semantic_scholar_required': bool(citation_support_review_provenance.get("semantic_scholar_required")),
+        'citation_support_review_live': bool(citation_support_review_provenance.get("live")),
+        'citation_support_review_provenance': citation_support_review_provenance,
         'citation_live_provenance': citation_live_provenance,
+        'citation_registry_live_verified_count': citation_live_provenance.get("live_verified_count", 0),
         'citation_registry_entry_count': citation_surface["registry_entry_count"],
         'citation_map_entry_count': citation_surface["citation_map_entry_count"],
         'references_bib_entry_count': citation_surface["references_bib_entry_count"],
