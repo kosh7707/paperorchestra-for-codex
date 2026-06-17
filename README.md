@@ -10,7 +10,7 @@ Two commands are the intended path:
 
 ```bash
 git clone https://github.com/kosh7707/paperorchestra-for-codex.git
-cd paperorchestra-for-codex && ./install.sh
+cd paperorchestra-for-codex && ./scripts/install.sh
 ```
 
 The installer creates the local environment, installs PaperOrchestra, installs the bundled Codex skills, registers the PaperOrchestra MCP server by default, prepares a generic shell-provider command, and runs `omx setup` when `omx` is available. It does not pin a model version or reasoning level; choose those in your own Codex/OMX configuration.
@@ -55,7 +55,7 @@ Use `paperorchestra environment` for the canonical inventory.
 
 Common knobs:
 
-- `PAPERO_MODEL_CMD`: shell provider command for live model-backed stages. `./install.sh` writes a generic Codex search command locally and into the MCP server environment; override it when you want a specific model, provider, or runtime policy.
+- `PAPERO_MODEL_CMD`: shell provider command for live model-backed stages. `./scripts/install.sh` writes a generic Codex search command locally and into the MCP server environment; override it when you want a specific model, provider, or runtime policy.
 - `PAPERO_ALLOW_TEX_COMPILE=1`: enable intentional PDF compilation.
 - `PAPERO_DOMAIN`: select a registered domain profile.
 

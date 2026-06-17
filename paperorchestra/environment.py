@@ -435,7 +435,7 @@ def build_readiness_profiles(
     shell_steps: list[str] = []
     if not provider_command_configured:
         shell_missing.append("Set PAPERO_MODEL_CMD for shell-provider runs.")
-        shell_steps.append("Run ./install.sh for the generic Codex provider command or set PAPERO_MODEL_CMD to your Codex/OpenAI/Ollama command.")
+        shell_steps.append("Run ./scripts/install.sh for the generic Codex provider command or set PAPERO_MODEL_CMD to your Codex/OpenAI/Ollama command.")
     profiles.append(
         _profile(
             "shell_provider_ready",

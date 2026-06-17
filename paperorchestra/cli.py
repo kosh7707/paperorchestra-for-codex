@@ -1117,7 +1117,7 @@ def main(argv: list[str] | None = None) -> int:
                     "3. Continue with write-intro-related, write-sections, compile, review, and refine.",
                 ],
                 "environment": [
-                    "1. Run: ./install.sh",
+                    "1. Run: ./scripts/install.sh",
                     "2. Restart Codex/OMX so MCP tools reload.",
                     "3. Run: paperorchestra environment  # canonical inventory + readiness profiles",
                     "4. Run: paperorchestra doctor       # what is missing on this machine right now?",
