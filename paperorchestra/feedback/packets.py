@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.io import read_json
-from paperorchestra.engine.pipeline import ContractError
+from paperorchestra.core.errors import ContractError
 from paperorchestra.core.session import artifact_path, load_session, runtime_root
 
 def _sha256_bytes(data: bytes) -> str:

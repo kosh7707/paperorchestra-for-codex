@@ -8,10 +8,12 @@ from typing import Any
 from paperorchestra.reviews.citation_integrity import build_citation_integrity_audit
 from paperorchestra.core.io import extract_latex, write_json
 from paperorchestra.core.models import utc_now_iso
-from paperorchestra.engine.pipeline import (
-    ContractError,
+from paperorchestra.core.errors import ContractError
+from paperorchestra.engine.completion import (
     _build_completion_request,
     _complete_with_runtime_mode,
+)
+from paperorchestra.engine.pipeline import (
     compile_current_paper,
     record_current_validation_report,
 )

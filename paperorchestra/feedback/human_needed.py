@@ -19,7 +19,7 @@ from paperorchestra.feedback.normalization import (
     normalize_operator_feedback_draft,
 )
 from paperorchestra.feedback.packets import _artifact_by_role, _file_sha256, _validate_operator_packet_artifact_bindings
-from paperorchestra.engine.pipeline import ContractError
+from paperorchestra.core.errors import ContractError
 from paperorchestra.runtime.providers import BaseProvider, MockProvider
 from paperorchestra.core.session import artifact_path, load_session, project_root, run_dir, runtime_root
 

@@ -39,8 +39,8 @@ from paperorchestra.feedback.packets import (
     _validate_current_operator_plan,
     _validate_operator_packet_artifact_bindings,
 )
+from paperorchestra.core.errors import ContractError
 from paperorchestra.engine.pipeline import (
-    ContractError,
     compile_current_paper,
     refine_current_paper,
     record_current_validation_report,

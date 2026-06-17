@@ -13,7 +13,7 @@ from paperorchestra.feedback.operator_feedback import (
     derive_operator_issue_id,
     validate_operator_review_notes,
 )
-from paperorchestra.engine.pipeline import ContractError
+from paperorchestra.core.errors import ContractError
 
 _MAX_GENERATED_OPERATOR_ISSUES = 3
 _OPERATOR_ISSUE_SEVERITY_RANK = {
