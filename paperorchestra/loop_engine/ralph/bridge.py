@@ -1,19 +1,13 @@
 from __future__ import annotations
 
 import json
-import hashlib
 import shlex
 import subprocess
 from pathlib import Path
 from typing import Any
 
 from paperorchestra.reviews.critics import write_citation_support_review, write_section_review
-from paperorchestra.reviews.citation_integrity import (
-    write_citation_integrity_audit,
-    write_citation_integrity_critic,
-    write_rendered_reference_audit,
-)
-from paperorchestra.core.io import extract_latex, write_json
+from paperorchestra.core.io import extract_latex
 from paperorchestra.core.models import utc_now_iso
 from paperorchestra.core.errors import ContractError
 from paperorchestra.engine.completion import (
@@ -22,7 +16,6 @@ from paperorchestra.engine.completion import (
 )
 from paperorchestra.engine.pipeline import (
     compile_current_paper,
-    build_bib,
     plan_narrative_and_claims,
     refine_current_paper,
     record_current_validation_report,
@@ -55,6 +48,11 @@ from .inputs import (
     _quality_eval_path_from_plan,
     _stage_explicit_citation_support_review,
     _validate_plan_quality_eval_identity,
+)
+from .artifacts import (
+    _refresh_citation_integrity_for_current_manuscript,
+    _try_rebuild_bib_for_citation_quality,
+    _write_execution_artifact,
 )
 from .semantic_recheck import _citation_repair_failure_payload
 from .repair import (
@@ -173,76 +171,6 @@ def _restore_current_after_uncommitted_candidate(
         "citation_summary": final_summary,
         "progress": final_progress,
     }
-
-
-def _refresh_citation_integrity_for_current_manuscript(
-    cwd: str | Path | None,
-    *,
-    quality_mode: str,
-) -> dict[str, Any]:
-    """Regenerate citation-integrity artifacts after manuscript/citation-review changes.
-
-    `write_quality_eval()` intentionally treats stale citation-integrity artifacts
-    as hard claim-safe failures.  Candidate verification therefore must refresh
-    the rendered-reference audit, source-match/intent/integrity audit, and the
-    deterministic citation critic after staging a candidate manuscript and after
-    restoring the original manuscript.
-    """
-
-    rendered_path, rendered_payload = write_rendered_reference_audit(cwd, quality_mode=quality_mode)
-    audit_path, audit_payload = write_citation_integrity_audit(cwd, quality_mode=quality_mode)
-    critic_path, critic_payload = write_citation_integrity_critic(cwd, quality_mode=quality_mode)
-    return {
-        "rendered_reference_audit": {
-            "path": str(rendered_path),
-            "status": rendered_payload.get("status") if isinstance(rendered_payload, dict) else None,
-            "manuscript_sha256": rendered_payload.get("manuscript_sha256") if isinstance(rendered_payload, dict) else None,
-            "failing_codes": rendered_payload.get("failing_codes") if isinstance(rendered_payload, dict) else None,
-        },
-        "citation_integrity_audit": {
-            "path": str(audit_path),
-            "status": audit_payload.get("status") if isinstance(audit_payload, dict) else None,
-            "manuscript_sha256": audit_payload.get("manuscript_sha256") if isinstance(audit_payload, dict) else None,
-            "failing_codes": audit_payload.get("failing_codes") if isinstance(audit_payload, dict) else None,
-        },
-        "citation_integrity_critic": {
-            "path": str(critic_path),
-            "status": critic_payload.get("status") if isinstance(critic_payload, dict) else None,
-            "manuscript_sha256": critic_payload.get("manuscript_sha256") if isinstance(critic_payload, dict) else None,
-            "failing_codes": critic_payload.get("failing_codes") if isinstance(critic_payload, dict) else None,
-        },
-    }
-
-
-def _try_rebuild_bib_for_citation_quality(cwd: str | Path | None) -> dict[str, Any]:
-    """Best-effort bibliography regeneration before weak-reference re-audit.
-
-    Weak rendered-reference identity can be caused by stale `references.bib`
-    after the registry has better metadata.  Rebuilding is safe and reversible
-    because `build_bib()` derives from the session registry; if the registry is
-    absent or incomplete, keep the QA-loop action machine-owned and record the
-    failure instead of routing to `unsupported_handler`.
-    """
-
-    try:
-        path = build_bib(cwd)
-    except Exception as exc:
-        return {"ok": False, "error_type": exc.__class__.__name__, "error": str(exc)}
-    return {"ok": True, "path": str(path)}
-
-
-def _write_execution_artifact(cwd: str | Path | None, payload: dict[str, Any]) -> Path:
-    reserved = payload.pop("_reserved_execution_path", None)
-    path = Path(reserved) if reserved else _next_execution_path(cwd)[1]
-    approval = payload.get("candidate_approval")
-    if isinstance(approval, dict) and approval.get("source_execution_sha256") == "pending_until_execution_write":
-        payload_for_hash = json.loads(json.dumps(payload, sort_keys=True))
-        payload_for_hash.get("candidate_approval", {}).pop("source_execution_sha256", None)
-        approval["source_execution_sha256"] = "sha256:" + hashlib.sha256(
-            json.dumps(payload_for_hash, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-        ).hexdigest()
-    write_json(path, payload)
-    return path
 
 
 def _executable_actions(plan: dict[str, Any]) -> list[dict[str, Any]]:
