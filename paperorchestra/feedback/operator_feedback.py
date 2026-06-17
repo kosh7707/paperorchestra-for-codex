@@ -6,26 +6,15 @@ from typing import Any
 from paperorchestra.core.io import write_json
 from paperorchestra.runtime.providers import BaseProvider
 from paperorchestra.loop_engine.quality.loop import append_quality_loop_history
-from paperorchestra.core.session import artifact_path, load_session
+from paperorchestra.core.session import artifact_path
 from paperorchestra.feedback.operator_candidates import (
     _promote_candidate_text,
 )
 from paperorchestra.feedback.operator_verification import _verification_block, _verification_snapshot
-from paperorchestra.feedback.operator_gates import (
-    _attach_candidate_approval_from_attempt,
-    _best_human_review_candidate_attempt,
-)
-from paperorchestra.feedback.operator_records import (
-    _build_operator_incorporation_report,
-)
 from paperorchestra.feedback.operator_completion import (
-    _non_promoted_actionable_failure,
     _operator_exception_actionable_failures,
     _operator_exception_execution_update,
     _operator_exception_history_extra,
-    _operator_executor_crashed,
-    _operator_final_execution_update,
-    _operator_history_extra,
 )
 from paperorchestra.feedback.operator_snapshots import _restore_session_snapshot, _session_snapshot
 from paperorchestra.feedback.operator_contexts.citations import _protected_supported_citation_regressions
@@ -33,9 +22,7 @@ from paperorchestra.feedback.operator_feedback_attempts import prepare_operator_
 from paperorchestra.feedback.operator_feedback_evaluation import evaluate_operator_candidate_attempt
 from paperorchestra.feedback.operator_feedback_rollback import rollback_operator_feedback_candidate
 from paperorchestra.feedback.operator_feedback_context import load_operator_feedback_context, operator_feedback_attempt_count
-from paperorchestra.feedback.packets import (
-    _file_sha256,
-)
+from paperorchestra.feedback.operator_feedback_finalization import finalize_operator_feedback_execution
 from paperorchestra.core.errors import ContractError
 
 
@@ -62,7 +49,6 @@ def apply_operator_feedback(
         imported_feedback_path=imported_feedback_path,
         max_supervised_iterations=max_supervised_iterations,
     )
-    imported_path = context.imported_path
     imported = context.imported
     packet = context.packet
     intent = context.intent
@@ -172,10 +158,7 @@ def apply_operator_feedback(
             )
             final_verification = rollback.verification
 
-        execution_path = artifact_path(cwd, "operator_feedback.execution.json")
-        promoted = execution["promotion_status"] == "promoted"
-        executor_crashed = _operator_executor_crashed(execution)
-        if not promoted and final_verification is None:
+        if execution["promotion_status"] != "promoted" and final_verification is None:
             final_verification = _verification_snapshot(
                 cwd,
                 provider=provider,
@@ -190,64 +173,19 @@ def apply_operator_feedback(
                 citation_provider_command=citation_provider_command,
                 validation_name="validation.operator-feedback.no-promotion.json",
             )
-        final_state = load_session(cwd)
-        after_sha = _file_sha256(final_state.artifacts.paper_full_tex)
-        non_promoted_actionable_failure = _non_promoted_actionable_failure(
-            promoted=promoted,
-            executor_crashed=executor_crashed,
-            intent=intent,
-            execution=execution,
-            owner_categories=owner_categories,
-        )
-        incorporation_report = _build_operator_incorporation_report(
+        finalized = finalize_operator_feedback_execution(
+            cwd=cwd,
             imported=imported,
             current_sha=current_sha,
-            after_sha=after_sha,
-            promotion_status=execution["promotion_status"],
-            actionable_failure=non_promoted_actionable_failure,
-            issues=final_incorporation,
-        )
-        incorporation_path = artifact_path(cwd, "operator_feedback.incorporation.json")
-        write_json(incorporation_path, incorporation_report)
-        plan = final_verification["plan"] if final_verification else {}
-        final_update = _operator_final_execution_update(
             execution=execution,
-            promoted=promoted,
-            executor_crashed=executor_crashed,
-            plan=plan,
-            max_supervised_iterations=max_supervised_iterations,
-            after_sha=after_sha,
+            final_verification=final_verification,
             final_candidate_result=final_candidate_result,
-            incorporation_path=str(incorporation_path),
-            verification_block=_verification_block(final_verification) if final_verification else {},
-            actionable_failure=non_promoted_actionable_failure,
+            final_incorporation=final_incorporation,
+            owner_categories=owner_categories,
+            intent=intent,
+            max_supervised_iterations=max_supervised_iterations,
         )
-        execution.update(final_update)
-        verdict = str(final_update["verdict"])
-        if not promoted:
-            best_attempt = _best_human_review_candidate_attempt(execution.get("attempts") or [])
-            if best_attempt is not None:
-                _attach_candidate_approval_from_attempt(
-                    execution,
-                    best_attempt,
-                    execution_path=execution_path,
-                )
-        if executor_crashed:
-            execution["error"] = "operator executor crashed during supervised feedback application"
-        write_json(execution_path, execution)
-        if final_verification:
-            append_quality_loop_history(
-                cwd,
-                final_verification["quality_eval"],
-                verdict=verdict,
-                plan_path=final_verification["plan_path"],
-                quality_eval_path=final_verification["quality_path"],
-                execution_path=execution_path,
-                event_type="operator_feedback_cycle",
-                consumes_budget=False,
-                extra=_operator_history_extra(execution, non_promoted_actionable_failure),
-            )
-        return execution_path, execution
+        return finalized.execution_path, finalized.execution
     except Exception as exc:
         _restore_session_snapshot(cwd, snapshot)
         rollback_verification: dict[str, Any] | None = None
