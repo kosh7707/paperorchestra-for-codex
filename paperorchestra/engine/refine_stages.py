@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
+import sys
 from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.core.io import extract_json, extract_latex, read_json, read_text, write_json, write_text
+from paperorchestra.core.io import ExtractionError, extract_json, extract_latex, read_json, read_text, write_json, write_text
 from paperorchestra.core.session import artifact_path, build_path, load_session, review_path, save_session
 from paperorchestra.engine.authoring_common import _append_unique_note, _apply_mock_watermark
 from paperorchestra.engine.completion import (
@@ -22,6 +22,8 @@ from paperorchestra.engine.latex_postprocess import (
     _ensure_generated_plot_usage,
     _normalize_generated_plot_paths,
     _normalize_source_figure_paths,
+    _reviewable_plot_assets_index,
+    _reviewable_plot_manifest,
     _stabilize_figure_float_placement,
 )
 from paperorchestra.engine.planning_stages import (
@@ -34,8 +36,8 @@ from paperorchestra.engine.prompt_context import (
     _data_block,
     _prompt_compact_text,
     _read_inputs,
+    _raise_if_strict_source_citations_unmapped,
     _source_critical_context_for_prompt,
-    _source_grounding_text,
     _strict_content_gates_enabled,
     _unknown_citation_key_counts,
 )
@@ -45,6 +47,7 @@ from paperorchestra.engine.reports import (
     _record_validation_report,
     collect_paper_contract_issues,
 )
+from paperorchestra.engine.refine_review import _accept_review_delta, _redact_review_scores_for_writer
 from paperorchestra.engine.review_stages import _extract_axis_scores, review_current_paper
 from paperorchestra.engine.section_scope import _expected_section_titles_from_outline
 from paperorchestra.manuscript.latex import compile_latex
@@ -52,43 +55,11 @@ from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.manuscript.repair import (
     _ensure_discussion_section_for_claim_boundaries,
     _ensure_required_claim_scope_notes,
-    _ensure_text_safe_math_macros,
     _remove_material_packet_sections,
-    _restore_missing_referenced_labels,
-    _sanitize_manuscript_control_prose,
 )
-from paperorchestra.manuscript.validator import canonicalize_citation_keys, validate_manuscript
+from paperorchestra.manuscript.validator import canonicalize_citation_keys
 from paperorchestra.runtime.parity import record_lane_manifest
 from paperorchestra.runtime.providers import BaseProvider
-
-
-def _redact_review_scores_for_writer(review_payload: dict[str, Any]) -> dict[str, Any]:
-    """Remove numeric reviewer scores before feeding critique back to a writer/refiner.
-
-    The acceptance gate still uses scores internally after the candidate is
-    produced, but the generative writer should optimize against structured
-    issues, not the reviewer scorecard itself.
-    """
-    redacted = dict(review_payload)
-    redacted.pop("overall_score", None)
-    redacted.pop("axis_scores", None)
-    redacted["score_redaction"] = {
-        "overall_score_removed": "writer_blind_to_reviewer_scores",
-        "axis_scores_removed": "writer_blind_to_reviewer_scores",
-    }
-    return redacted
-
-
-def _accept_review_delta(candidate_score: float, previous_score: float, candidate_axes: dict[str, float], previous_axes: dict[str, float]) -> bool:
-    if candidate_score < previous_score:
-        return False
-    raw_tolerance = os.environ.get("PAPERO_REFINE_AXIS_TOLERANCE")
-    try:
-        tolerance = max(0.0, float(raw_tolerance)) if raw_tolerance is not None else 0.0
-    except ValueError:
-        tolerance = 0.0
-    keys = set(candidate_axes) & set(previous_axes)
-    return not keys or all(candidate_axes.get(key, 0.0) >= previous_axes.get(key, 0.0) - tolerance for key in keys)
 
 
 def refine_current_paper(
