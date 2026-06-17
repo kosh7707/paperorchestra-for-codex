@@ -23,6 +23,7 @@ from paperorchestra.engine.research_registry import (
     _citation_map_from_registry,
     _merge_live_verified_with_prior_registry,
 )
+from paperorchestra.engine.research_verification_errors import _record_verification_errors
 from paperorchestra.engine.schemas import PRIOR_WORK_SEED_SCHEMA
 from paperorchestra.research.bibtex import ensure_unique_bibtex_keys, registry_to_bibtex
 from paperorchestra.research.literature import (
@@ -81,36 +82,6 @@ def discover_papers(
     state.notes.append(f"Candidate papers discovered via {mode} mode.")
     state.notes.append(f"Lane manifest recorded: {lane_path.name}")
     save_session(cwd, state)
-    return path
-
-
-def _record_verification_errors(
-    cwd: str | Path | None,
-    state,
-    errors: list[dict[str, Any]],
-    *,
-    mode: str,
-    on_error: str,
-) -> Path | None:
-    if not errors:
-        return None
-    path = artifact_path(cwd, "verification_errors.json")
-    write_json(
-        path,
-        {
-            "mode": mode,
-            "on_error": on_error,
-            "error_count": len(errors),
-            "errors": errors,
-            "recovery_hints": [
-                "Set SEMANTIC_SCHOLAR_API_KEY for more reliable live verification.",
-                "Retry `paperorchestra run --provider shell --discovery-mode search-grounded` to keep any candidates that verify successfully.",
-                "Use `paperorchestra run --provider mock` only for demos or offline dry runs.",
-            ],
-        },
-    )
-    state.artifacts.latest_verification_errors_json = str(path)
-    state.notes.append(f"Recorded {len(errors)} live verification error(s): {path.name}")
     return path
 
 
