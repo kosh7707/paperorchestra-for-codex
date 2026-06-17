@@ -1,0 +1,4 @@
+interface:
+  display_name: "PaperOrchestra Status"
+  short_description: "Inspect current paper materials, trust, stale artifacts, and next safe round."
+  default_prompt: "Use $paperorchestra-status to inspect this PaperOrchestra project and recommend the next safe workflow."

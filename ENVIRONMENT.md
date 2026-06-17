@@ -363,6 +363,8 @@ Below is the operator-facing inventory. Variables not listed here are either aut
 | `PAPERO_OMX_CONTROL_TIMEOUT_SECONDS` | Optional | `60` | Bound OMX control-plane calls like `omx status` / `omx state` |
 | `PAPERO_OMX_TIMEOUT_GRACE_SECONDS` | Optional | `0` | Extra wait for OMX/Codex reconnects before treating timeout as failed |
 | `PAPERO_OMX_RETRY_ATTEMPTS` | Optional | `0` | Retry read-only OMX control-plane transport failures (`status`, `team status`, `state read --json`); LLM-backed `explore` and OMX exec remain grace-only and are not replayed |
+
+OMX exec is grace-only and never replayed; only read-only OMX control calls with transport evidence may be retried.
 | `PAPERO_OMX_RETRY_BACKOFF_SECONDS` | Optional | `2` | Backoff between retryable OMX replays |
 | `PAPERO_OMX_RETRY_JITTER_SECONDS` | Optional | `0` | Optional random jitter added to OMX retry backoff |
 | `PAPERO_STRICT_OMX_NATIVE` | Claim-safe only | `0` | Refuse OMX-native fallback when fidelity matters |
@@ -406,6 +408,8 @@ closed instead of silently falling back to `generic`.
 | `PAPERO_PROVIDER_RETRY_BACKOFF_SECONDS` | Optional | `2` | Backoff between retryable provider prompt replays |
 | `PAPERO_PROVIDER_RETRY_JITTER_SECONDS` | Optional | `0` | Optional random jitter added to provider retry backoff |
 | `PAPERO_PROVIDER_RETRY_SAFE` | Optional | `0` | Required declaration before a provider command may be replayed after transport evidence |
+
+Requires BOTH PAPERO_PROVIDER_RETRY_SAFE=1 AND PAPERO_PROVIDER_RETRY_ATTEMPTS>0 before provider prompt replay is enabled.
 | `PAPERO_PROVIDER_RETRY_TRACE_DIR` | Optional | unset | Optional JSONL audit trail for provider retry/grace attempts |
 | `PAPERO_CODEX_RETRY_ATTEMPTS` | Fresh smoke optional | `1` | Fresh full live smoke's single retry owner for direct Codex calls and provider-wrapper calls; the script forces provider/OMX retry layers off to avoid nesting |
 | `PAPERO_CODEX_RETRY_BACKOFF_SECONDS` | Fresh smoke optional | `15` | Backoff between retryable Codex transport attempts owned by the fresh full live smoke wrapper |

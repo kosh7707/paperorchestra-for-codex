@@ -608,7 +608,7 @@ def environment_guide_path() -> Path:
 
 
 def env_example_path() -> Path:
-    return PROJECT_ROOT / "README.md"
+    return PROJECT_ROOT / "ENVIRONMENT.md"
 
 
 def grouped_environment_variables() -> list[dict[str, Any]]:

@@ -42,7 +42,7 @@ TUTORIALS = {
 }
 
 
-PUBLIC_DOC_GLOBS = ["README.md", "ENVIRONMENT.md", "skills/paperorchestra/SKILL.md", "docs/**/*.md"]
+PUBLIC_DOC_GLOBS = ["README.md", "ENVIRONMENT.md", "skills/*/SKILL.md", "docs/**/*.md"]
 PRIVATE_PATH_PATTERNS = ["/home/kosh", "/Users/", "C:\\Users"]
 PRIVATE_DOMAIN_MARKERS = ["CCI_MATERIALS", "paperorchestra-for-codex-qa-evidence"]
 FALSE_READY_PATTERNS = [
@@ -67,7 +67,7 @@ class TutorialDocsTests(unittest.TestCase):
 
     def test_readme_is_router_with_tutorial_map_not_full_runbook(self) -> None:
         text = self._read("README.md")
-        self.assertLessEqual(len(text.splitlines()), 1450)
+        self.assertLessEqual(len(text.splitlines()), 450)
         self.assertIn("## Tutorials", text)
         for path in TUTORIALS:
             self.assertIn(path, text)

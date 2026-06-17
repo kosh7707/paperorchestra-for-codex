@@ -1,0 +1,4 @@
+interface:
+  display_name: "PaperOrchestra Live Review"
+  short_description: "Run real live/model/web critic review without silently using mock or heuristic paths."
+  default_prompt: "Use $paperorchestra-live-review to run a live trust-checked PaperOrchestra critic pass."

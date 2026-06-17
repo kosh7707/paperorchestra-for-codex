@@ -1,0 +1,4 @@
+interface:
+  display_name: "PaperOrchestra Quality Gate"
+  short_description: "Run bounded validation, quality-eval, qa-loop-plan, and qa-loop-step state checks."
+  default_prompt: "Use $paperorchestra-quality-gate to evaluate the current manuscript state and stop condition."

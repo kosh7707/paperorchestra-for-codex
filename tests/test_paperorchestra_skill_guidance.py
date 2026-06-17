@@ -1,7 +1,20 @@
 from __future__ import annotations
 
+import json
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
+
+
+EXPECTED_SKILLS = [
+    "paperorchestra",
+    "paperorchestra-status",
+    "paperorchestra-setup",
+    "paperorchestra-live-review",
+    "paperorchestra-quality-gate",
+    "paperorchestra-authoring-round",
+]
 
 
 class PaperOrchestraSkillGuidanceTests(unittest.TestCase):
@@ -11,87 +24,139 @@ class PaperOrchestraSkillGuidanceTests(unittest.TestCase):
     def _environment(self) -> str:
         return Path("ENVIRONMENT.md").read_text(encoding="utf-8")
 
-    def _skill(self) -> str:
-        return Path("skills/paperorchestra/SKILL.md").read_text(encoding="utf-8")
+    def _skill(self, name: str = "paperorchestra") -> str:
+        return Path("skills") .joinpath(name, "SKILL.md").read_text(encoding="utf-8")
 
-    def test_skill_guides_first_use_to_high_level_orchestrator_not_readme_dump(self) -> None:
-        text = self._skill()
-        for phrase in ["first_use_guide", "inspect_state", "orchestrate", "continue_project", "answer_human_needed", "export_results"]:
-            self.assertIn(phrase, text)
-        self.assertIn("Do not dump README", text)
-        self.assertIn("write_evidence", text)
-        self.assertIn("evidence bundle", text)
+    def test_all_operational_skills_exist_with_matching_frontmatter(self) -> None:
+        for name in EXPECTED_SKILLS:
+            with self.subTest(skill=name):
+                path = Path("skills") / name / "SKILL.md"
+                self.assertTrue(path.exists(), f"missing {path}")
+                text = path.read_text(encoding="utf-8")
+                self.assertIn(f"name: {name}", text)
+                self.assertIn("description:", text)
+                self.assertNotIn("TODO", text)
 
-    def test_skill_blocks_insufficient_material_and_preserves_mcp_attachment_distinction(self) -> None:
-        text = self._skill()
-        self.assertIn("insufficient material", text)
-        self.assertIn("blocks drafting", text)
-        self.assertIn("registration", text)
-        self.assertIn("active attachment", text)
-
-    def test_skill_documents_execute_local_as_one_step_not_full_pipeline(self) -> None:
-        text = self._skill()
-        self.assertIn("execute_local", text)
-        self.assertIn("one deterministic local step", text)
-        self.assertIn("not a full pipeline", text)
-        self.assertIn("Execution status", text)
-        self.assertIn("next action", text)
-
-    def test_skill_routes_machine_solvable_search_to_autoresearch_not_user_homework(self) -> None:
-        text = self._skill()
-        self.assertIn("machine-solvable citation/search", text)
-        self.assertIn("start_autoresearch", text)
-        self.assertIn("$autoresearch", text)
-        self.assertIn("do not ask the user", text)
-
-    def test_readme_documents_execute_local_no_live_boundary_and_next_action(self) -> None:
-        text = self._readme()
-        self.assertIn("paperorchestra orchestrate --material ./my-material --execute-local --write-evidence --json", text)
-        self.assertIn("execute_local", text)
-        self.assertIn("one deterministic local step", text)
-        self.assertIn("not a full paper run", text)
-        self.assertIn("No live model/search, OMX, compile/export, or drafting", text)
-        self.assertIn("start_autoresearch", text)
-        self.assertIn("material_input_required", text)
-
-    def test_readme_has_codex_first_setup_path_with_mcp_restart_boundary(self) -> None:
-        text = self._readme()
-        self.assertIn("## Codex-first setup path", text)
+    def test_router_skill_routes_first_use_to_specific_operational_skills(self) -> None:
+        text = self._skill("paperorchestra")
         for phrase in [
-            "paperorchestra first-use --intent setup",
-            "./scripts/install-skill.sh",
-            "./scripts/register-codex-mcp.sh --use-local-venv",
-            "scripts/smoke-paperorchestra-mcp.py --transport newline --json",
-            "Do not run the full repository test suite",
-            "Restart Codex completely",
-            "new Codex session",
-            "mcp__paperorchestra__",
-            "CLI fallback",
+            "first_use_guide",
+            "inspect_state",
+            "orchestrate",
+            "continue_project",
+            "answer_human_needed",
+            "export_results",
+            "Do not dump README",
+            "insufficient material",
+            "blocks drafting",
+            "registration",
+            "active attachment",
+            "execute_local",
+            "one deterministic local step",
+            "not a full pipeline",
+            "Execution status",
+            "next action",
+            "machine-solvable citation/search",
+            "start_autoresearch",
+            "$autoresearch",
+            "reject unsafe drafting",
+            "paperorchestra first-use",
         ]:
             self.assertIn(phrase, text)
-        self.assertIn("codex mcp list", text)
-        self.assertIn("does not prove active attachment", text)
+        for skill in EXPECTED_SKILLS[1:]:
+            self.assertIn(f"${skill}", text)
 
-    def test_readme_and_skill_say_evidence_bundles_are_not_readiness_passes(self) -> None:
-        combined = self._readme() + "\n" + self._skill()
-        self.assertIn("diagnostic artifact", combined)
-        self.assertIn("not a readiness pass", combined)
+    def test_status_skill_is_state_card_and_round_advisor(self) -> None:
+        text = self._skill("paperorchestra-status")
+        for phrase in [
+            "status card",
+            "Materials",
+            "Current trust",
+            "Latest artifacts",
+            "Recommended next round",
+            "setup needed",
+            "live-review recommended",
+            "quality-gate recommended",
+            "authoring-round recommended",
+            "human-needed answer required",
+            "materials missing",
+            "stale",
+            "manuscript hash",
+        ]:
+            self.assertIn(phrase, text)
 
-    def test_environment_mentions_no_live_local_step_check(self) -> None:
-        text = self._environment()
-        self.assertIn("no-live local-step check", text)
-        self.assertIn("--execute-local", text)
-        self.assertIn("execute_local", text)
+    def test_setup_skill_covers_preflight_without_requiring_s2(self) -> None:
+        text = self._skill("paperorchestra-setup")
+        for phrase in [
+            "paperorchestra doctor",
+            "paperorchestra environment",
+            "paperorchestra status --json",
+            "paperorchestra critic-preflight",
+            "PAPERO_MODEL_CMD",
+            "S2 API key is optional",
+            "mock",
+            "heuristic",
+            "shell-live",
+            "claim-safe-live",
+        ]:
+            self.assertIn(phrase, text)
 
-    def test_skill_uses_first_use_guide_for_natural_language_first_use(self) -> None:
-        text = self._skill()
-        self.assertIn("first_use_guide", text)
-        self.assertIn("paperorchestra first-use", text)
-        self.assertIn("바로 써줘", text)
-        self.assertIn("reject unsafe drafting", text)
+    def test_live_review_skill_cannot_silently_use_mock_or_heuristic(self) -> None:
+        text = self._skill("paperorchestra-live-review")
+        for phrase in [
+            "critic-preflight --live",
+            "critique --live",
+            "review-citations --evidence-mode web",
+            "progress JSONL",
+            "mock_smoke",
+            "local_diagnostic",
+            "heuristic_citation",
+            "live_model_review",
+            "web_citation_review",
+            "claim_safe_live",
+            "never claim live",
+        ]:
+            self.assertIn(phrase, text)
 
-    def test_readme_environment_and_skill_disclose_v1_alpha_limitations(self) -> None:
-        combined = self._readme() + "\n" + self._environment() + "\n" + self._skill()
+    def test_quality_gate_skill_is_bounded_and_preserves_human_needed(self) -> None:
+        text = self._skill("paperorchestra-quality-gate")
+        for phrase in [
+            "validate-current",
+            "build-source-obligations",
+            "compile",
+            "review-citations --evidence-mode web",
+            "quality-eval --quality-mode",
+            "qa-loop-plan",
+            "qa-loop-step",
+            "bounded",
+            "human_needed",
+            "failed",
+            "ready_for_human_finalization",
+            "not submission-ready",
+        ]:
+            self.assertIn(phrase, text)
+
+    def test_authoring_round_skill_composes_review_gate_and_edit_artifacts(self) -> None:
+        text = self._skill("paperorchestra-authoring-round")
+        for phrase in [
+            "$paperorchestra-status",
+            "$paperorchestra-live-review",
+            "$paperorchestra-quality-gate",
+            "round directory",
+            "only if the user asked for edits",
+            "compile/validate",
+            "artifact manifest",
+            "do not edit on human_needed",
+        ]:
+            self.assertIn(phrase, text)
+
+    def test_readme_is_short_router_for_skills_not_full_runbook(self) -> None:
+        text = self._readme()
+        self.assertLessEqual(len(text.splitlines()), 450)
+        self.assertIn("## Skill-first workflow", text)
+        self.assertIn("## Tutorials", text)
+        for skill in EXPECTED_SKILLS:
+            self.assertIn(f"${skill}", text)
         for phrase in [
             "v1-alpha",
             "not submission-ready",
@@ -100,5 +165,29 @@ class PaperOrchestraSkillGuidanceTests(unittest.TestCase):
             "figure finalization",
             "operator repair convergence",
             "false readiness",
+            "diagnostic artifact",
+            "not a readiness pass",
         ]:
-            self.assertIn(phrase, combined)
+            self.assertIn(phrase, text)
+
+    def test_install_script_copies_all_repository_skills(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "skills"
+            subprocess.run(["bash", "scripts/install-skill.sh", str(target)], check=True, cwd=Path.cwd())
+            for skill in EXPECTED_SKILLS:
+                with self.subTest(skill=skill):
+                    self.assertTrue((target / skill / "SKILL.md").exists())
+
+    def test_readme_copyable_model_command_remains_valid_json(self) -> None:
+        text = self._readme()
+        line = next(line for line in text.splitlines() if line.startswith("export PAPERO_MODEL_CMD="))
+        value = line.split("=", 1)[1].strip().strip("'")
+        parsed = json.loads(value)
+        self.assertIsInstance(parsed, list)
+        self.assertIn("codex", parsed[0])
+
+    def test_environment_mentions_no_live_local_step_check(self) -> None:
+        text = self._environment()
+        self.assertIn("no-live local-step check", text)
+        self.assertIn("--execute-local", text)
+        self.assertIn("execute_local", text)

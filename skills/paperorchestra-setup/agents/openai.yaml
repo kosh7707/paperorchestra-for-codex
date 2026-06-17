@@ -1,0 +1,4 @@
+interface:
+  display_name: "PaperOrchestra Setup"
+  short_description: "Preflight session, provider, compile, MCP, and live-review readiness."
+  default_prompt: "Use $paperorchestra-setup to verify this PaperOrchestra environment before a live run."
