@@ -33,6 +33,7 @@ from .plan_logic import (
     _quality_eval_actions,
     _quality_eval_summary_for_plan,
 )
+from .plan_sources import build_quality_eval_for_plan
 from .policy import (
     BUDGET_CONSUMING_HISTORY_EVENTS,
     CITATION_SUPPORT_REVIEW_REFRESH_CODES,
@@ -66,26 +67,10 @@ def build_quality_loop_plan(
         fidelity=fidelity,
     )
     citation_support_review_path = _citation_support_path(cwd, state)
-    citation_review_expected_sha256 = (
-        (quality_eval.get("source_artifacts") or {}).get("citation_review_sha256")
-        if isinstance(quality_eval.get("source_artifacts"), dict)
-        else None
+    quality_eval_for_plan, citation_review_identity = build_quality_eval_for_plan(
+        quality_eval,
+        citation_support_review_path,
     )
-    citation_review_current_sha256 = _file_sha256(citation_support_review_path)
-    if citation_review_expected_sha256 and citation_review_current_sha256:
-        citation_review_identity_status = (
-            "pass" if citation_review_expected_sha256 == citation_review_current_sha256 else "stale_or_divergent"
-        )
-    elif citation_review_expected_sha256 or citation_review_current_sha256:
-        citation_review_identity_status = "missing_expected_or_current"
-    else:
-        citation_review_identity_status = "missing"
-    quality_eval_for_plan = dict(quality_eval)
-    quality_eval_for_plan["source_artifacts"] = {
-        **(quality_eval.get("source_artifacts") if isinstance(quality_eval.get("source_artifacts"), dict) else {}),
-        "citation_review_current_sha256": citation_review_current_sha256,
-        "citation_review_identity_status": citation_review_identity_status,
-    }
     provenance_for_plan = dict(quality_eval.get("provenance_trust") if isinstance(quality_eval.get("provenance_trust"), dict) else {})
     if provenance_for_plan.get("level") == "mixed" and accept_mixed_provenance:
         provenance_for_plan["mixed_acceptance"] = _mixed_provenance_acceptance(cwd, quality_eval)
@@ -101,7 +86,7 @@ def build_quality_loop_plan(
         + _fidelity_actions(fidelity)
         + _quality_eval_actions(quality_eval_for_plan)
     )
-    if citation_review_identity_status != "pass":
+    if citation_review_identity.status != "pass":
         detailed_actions.append(
             _action(
                 action_id="quality-eval:citation-support-identity",
@@ -211,9 +196,9 @@ def build_quality_loop_plan(
             "source_obligations": str(source_obligations_path(cwd)),
             "quality_eval": str(quality_eval_path) if quality_eval_path else None,
             "operator_review_packet": str(operator_packet_path) if operator_packet_sha else None,
-            "citation_review_sha256": citation_review_expected_sha256,
-            "citation_review_current_sha256": citation_review_current_sha256,
-            "citation_review_identity_status": citation_review_identity_status,
+            "citation_review_sha256": citation_review_identity.expected_sha256,
+            "citation_review_current_sha256": citation_review_identity.current_sha256,
+            "citation_review_identity_status": citation_review_identity.status,
         },
         "mixed_provenance_acceptance": provenance_for_plan.get("mixed_acceptance"),
         "audit_snapshots": {
