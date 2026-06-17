@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +22,7 @@ from paperorchestra.engine.research_registry import (
     _citation_map_from_registry,
     _merge_live_verified_with_prior_registry,
 )
+from paperorchestra.engine.research_registry_io import load_prior_citation_registry
 from paperorchestra.engine.research_verification_errors import _record_verification_errors
 from paperorchestra.engine.schemas import PRIOR_WORK_SEED_SCHEMA
 from paperorchestra.research.bibtex import ensure_unique_bibtex_keys, registry_to_bibtex
@@ -158,18 +158,10 @@ def verify_papers(
             registry.append(paper)
             seen_ids.add(paper.paper_id)
 
-    prior_registry: list[VerifiedPaper] = []
-    if state.artifacts.citation_registry_json and Path(state.artifacts.citation_registry_json).exists():
-        try:
-            prior_payload = read_json(state.artifacts.citation_registry_json)
-            if isinstance(prior_payload, list):
-                prior_registry = [VerifiedPaper(**item) for item in prior_payload if isinstance(item, dict)]
-        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
-            prior_registry = []
-            state.notes.append(
-                "Existing citation registry could not be loaded and was treated as empty: "
-                f"{exc.__class__.__name__}."
-            )
+    prior_registry = load_prior_citation_registry(
+        state,
+        note_prefix="Existing citation registry could not be loaded",
+    )
 
     verified_registry_count = len(registry)
     registry = _merge_live_verified_with_prior_registry(prior_registry, registry)
@@ -349,18 +341,10 @@ def import_prior_work(
                 f"Rejected entries are recorded in {rejection_report_path}."
             )
         raise ContractError(f"No usable prior-work entries were imported from {seed_file}.")
-    prior_registry: list[VerifiedPaper] = []
-    if state.artifacts.citation_registry_json and Path(state.artifacts.citation_registry_json).exists():
-        try:
-            prior_payload = read_json(state.artifacts.citation_registry_json)
-            if isinstance(prior_payload, list):
-                prior_registry = [VerifiedPaper(**item) for item in prior_payload if isinstance(item, dict)]
-        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
-            prior_registry = []
-            state.notes.append(
-                "Existing citation registry could not be loaded during prior-work import and was treated as empty: "
-                f"{exc.__class__.__name__}."
-            )
+    prior_registry = load_prior_citation_registry(
+        state,
+        note_prefix="Existing citation registry could not be loaded during prior-work import",
+    )
     if prior_registry:
         imported_count = len(registry)
         registry = _merge_live_verified_with_prior_registry(prior_registry, registry)
