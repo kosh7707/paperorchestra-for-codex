@@ -25,13 +25,10 @@ from .actions import (
 from .citation_support import _citation_support_path
 from .eval import _mixed_provenance_acceptance, build_quality_eval
 from .history import _failing_codes_from_quality_eval, _tier_statuses, quality_loop_history_path
+from .plan_payload import QualityLoopPlanPayloadInput, build_quality_loop_plan_payload
 from .plan_logic import (
-    _human_handoff,
-    _next_ralph_instruction,
-    _plan_reads,
     _plan_verdict,
     _quality_eval_actions,
-    _quality_eval_summary_for_plan,
 )
 from .plan_sources import build_quality_eval_for_plan
 from .policy import (
@@ -105,9 +102,6 @@ def build_quality_loop_plan(
     ]
     actions = _dedupe_actions(detailed_actions + strict_fallback_actions)
 
-    automatic = [action for action in actions if action.get("automation") == "automatic"]
-    semi_auto = [action for action in actions if action.get("automation") == "semi_auto"]
-    human_needed = [action for action in actions if action.get("automation") == "human_needed"]
     verdict, verdict_rationale = _plan_verdict(
         quality_eval_for_plan,
         actions,
@@ -122,102 +116,26 @@ def build_quality_loop_plan(
                 operator_packet_sha = packet_payload.get("packet_sha256")
         except Exception:
             operator_packet_sha = None
-    supervised_handoff = None
-    if verdict == "human_needed":
-        owner_categories = sorted(
-            {
-                "proof" if "proof" in str(action.get("code") or "").lower() or "security" in str(action.get("code") or "").lower()
-                else "bibliography" if "citation" in str(action.get("code") or "").lower() or "reference" in str(action.get("code") or "").lower()
-                else "experiment" if "benchmark" in str(action.get("code") or "").lower() or "experiment" in str(action.get("code") or "").lower()
-                else "implementation" if "compile" in str(action.get("code") or "").lower() or "validation" in str(action.get("code") or "").lower()
-                else "author"
-                for action in human_needed
-            }
+    return build_quality_loop_plan_payload(
+        QualityLoopPlanPayloadInput(
+            cwd=cwd,
+            state=state,
+            reproducibility=reproducibility,
+            fidelity=fidelity,
+            quality_eval=quality_eval,
+            quality_eval_for_plan=quality_eval_for_plan,
+            quality_eval_path=quality_eval_path,
+            actions=actions,
+            verdict=verdict,
+            verdict_rationale=verdict_rationale,
+            provenance_for_plan=provenance_for_plan,
+            citation_support_review_path=citation_support_review_path,
+            citation_review_identity=citation_review_identity,
+            operator_packet_path=operator_packet_path,
+            operator_packet_sha=operator_packet_sha,
+            source_obligations_path=source_obligations_path(cwd),
         )
-        supervised_handoff = {
-            "schema_version": "supervised-handoff/1",
-            "operator_feedback_entry": {
-                "kind": "metadata_only",
-                "source": "codex_operator",
-                "not_independent_human_review": True,
-                "allowed_entrypoints": [
-                    "build-operator-review-packet",
-                    "import-operator-feedback",
-                    "apply-operator-feedback",
-                ],
-                "packet_path": str(operator_packet_path) if operator_packet_sha else None,
-                "packet_sha256": operator_packet_sha,
-            },
-            "supervised_budget": {
-                "event_type": "operator_feedback_cycle",
-                "separate_from_automatic_budget": True,
-            },
-            "actionable_failure_summary": {
-                "owner_categories": owner_categories,
-            },
-        }
-
-    plan_payload = {
-        "schema_version": QA_LOOP_PLAN_SCHEMA_VERSION,
-        "generated_at": utc_now_iso(),
-        "session_id": state.session_id,
-        "reads": _plan_reads(quality_eval_path, quality_eval_for_plan),
-        "verdict": verdict,
-        "verdict_rationale": verdict_rationale,
-        "quality_eval_summary": _quality_eval_summary_for_plan(quality_eval_for_plan),
-        "next_iteration_target_hash": None,
-        "summary": {
-            "action_count": len(actions),
-            "automatic_count": len(automatic),
-            "semi_auto_count": len(semi_auto),
-            "human_needed_count": len(human_needed),
-            "manual_count": len(human_needed),  # backwards-readable alias for older operators
-            "reproducibility_verdict": reproducibility.get("verdict"),
-            "fidelity_status": fidelity.get("overall_status"),
-        },
-        "stop_conditions": {
-            "ready_for_human_finalization": "Tier 0, 1, and 2 pass; Tier 3 scorecard passes without anti-inflation; provenance is live or explicitly accepted mixed; Tier 4 remains human-owned.",
-            "continue": "automatic or semi-automatic repair actions remain and the loop still has iteration budget.",
-            "human_needed": "remaining actions require HITL/domain judgment, critic disagreement resolution, provenance acceptance, or Tier 4 ownership.",
-            "failed": "budget is exhausted, repeated hard-gate failures show no progress, non-reviewable structural artifacts such as prompt/meta leakage are present, or oscillation/regression makes autonomous continuation unsafe.",
-        },
-        "source_artifacts": {
-            "paper_full_tex": state.artifacts.paper_full_tex,
-            "compiled_pdf": state.artifacts.compiled_pdf,
-            "reproducibility_audit": state.artifacts.latest_reproducibility_json,
-            "fidelity_audit": state.artifacts.latest_fidelity_json,
-            "figure_placement_review": state.artifacts.latest_figure_placement_review_json,
-            "latest_validation": state.artifacts.latest_validation_json,
-            "latest_section_review": getattr(state.artifacts, "latest_section_review_json", None),
-            "citation_support_review": str(citation_support_review_path),
-            "narrative_plan": state.artifacts.narrative_plan_json,
-            "claim_map": state.artifacts.claim_map_json,
-            "citation_placement_plan": state.artifacts.citation_placement_plan_json,
-            "source_obligations": str(source_obligations_path(cwd)),
-            "quality_eval": str(quality_eval_path) if quality_eval_path else None,
-            "operator_review_packet": str(operator_packet_path) if operator_packet_sha else None,
-            "citation_review_sha256": citation_review_identity.expected_sha256,
-            "citation_review_current_sha256": citation_review_identity.current_sha256,
-            "citation_review_identity_status": citation_review_identity.status,
-        },
-        "mixed_provenance_acceptance": provenance_for_plan.get("mixed_acceptance"),
-        "audit_snapshots": {
-            "reproducibility": reproducibility,
-            "fidelity": fidelity,
-        },
-        "blocking_reasons": reproducibility.get("blocking_reasons", []),
-        "warning_reasons": reproducibility.get("warning_reasons", []),
-        "repair_actions": actions,
-        "human_handoff": _human_handoff(verdict, actions, quality_eval),
-        "next_ralph_instruction": _next_ralph_instruction(verdict, actions),
-    }
-    if supervised_handoff is not None:
-        plan_payload["supervised_handoff"] = supervised_handoff
-    return plan_payload
-
-
-
-
+    )
 
 
 def append_quality_loop_history(
