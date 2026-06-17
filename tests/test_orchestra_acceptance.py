@@ -59,6 +59,22 @@ def test_final_audit_bug_ledger_rejects_private_paths_commands_and_missing_resol
         acceptance.build_final_audit_bug_ledger({"bugs": [{**_bug(), "actual": "TOKEN leaked"}]})
 
 
+
+
+def test_acceptance_module_keeps_public_acceptance_ledger_compatibility() -> None:
+    from paperorchestra.orchestra import acceptance_ledger
+
+    assert acceptance.SCHEMA_VERSION == acceptance_ledger.SCHEMA_VERSION
+    assert acceptance.ACCEPTANCE_GATE_IDS == acceptance_ledger.ACCEPTANCE_GATE_IDS
+    assert acceptance.AcceptanceGate is acceptance_ledger.AcceptanceGate
+    assert acceptance.AcceptanceLedger is acceptance_ledger.AcceptanceLedger
+    from paperorchestra.orchestra.acceptance import build_acceptance_ledger, render_acceptance_ledger_summary
+
+    assert acceptance.build_acceptance_ledger is acceptance_ledger.build_acceptance_ledger
+    assert acceptance.render_acceptance_ledger_summary is acceptance_ledger.render_acceptance_ledger_summary
+    assert build_acceptance_ledger is acceptance_ledger.build_acceptance_ledger
+    assert render_acceptance_ledger_summary is acceptance_ledger.render_acceptance_ledger_summary
+
 def test_acceptance_module_keeps_public_final_audit_compatibility() -> None:
     from paperorchestra.orchestra import final_audit_bug_ledger
 
