@@ -22,6 +22,13 @@ from paperorchestra.feedback.operator_answer_metadata import (
     HUMAN_NEEDED_METADATA_SCHEMA_VERSION,
     HUMAN_NEEDED_PUBLIC_SCHEMA_VERSION,
 )
+from paperorchestra.feedback.human_needed_records import (
+    _action_id,
+    _artifact_source,
+    _metadata_without_targets,
+    public_answer_payload,
+    public_result_payload,
+)
 from paperorchestra.feedback.packets import _artifact_by_role, _file_sha256, _validate_operator_packet_artifact_bindings
 from paperorchestra.core.errors import ContractError
 from paperorchestra.runtime.providers import BaseProvider, MockProvider
@@ -61,18 +68,6 @@ def _packet_file_sha256_after_canonical_validation(packet_path: Path, packet: di
     if text != _canonical_json(packet):
         raise ContractError("operator review packet file hash does not match canonical contents")
     return _sha256_file(packet_path)
-
-
-def _artifact_source(packet: dict[str, Any], role: str | None) -> dict[str, str] | None:
-    if not role:
-        return None
-    record = _artifact_by_role(packet, role)
-    if not record:
-        return None
-    return {
-        "role": str(record.get("role") or role),
-        "sha256": str(record.get("sha256") or ""),
-    }
 
 
 def _load_artifact_payload(packet: dict[str, Any], role: str) -> dict[str, Any] | None:
@@ -183,12 +178,6 @@ def _select_action(actions: list[dict[str, Any]], action_id: str | None, *, cand
     return None
 
 
-def _action_id(action: dict[str, Any] | None) -> str:
-    if not isinstance(action, dict):
-        return ""
-    return str(action.get("id") or action.get("action_id") or "").strip()
-
-
 def _project_root_for_path(cwd: str | Path | None) -> Path:
     return project_root(cwd).resolve()
 
@@ -262,34 +251,6 @@ def _draft_issue_for_action(
         "suggested_action": suggested,
         "authority_class": "author_feedback",
         "owner_category": "author",
-    }
-
-
-def _metadata_without_targets(
-    *,
-    packet: dict[str, Any],
-    packet_file_sha256: str,
-    answer_sha256: str,
-    private_answer_artifact_sha256: str | None,
-    decision_kind: str,
-    handoff_type: str,
-    action: dict[str, Any] | None,
-    candidate_role: str | None,
-) -> dict[str, Any]:
-    selected = _artifact_source(packet, candidate_role or "qa_loop_plan")
-    return {
-        "schema_version": HUMAN_NEEDED_METADATA_SCHEMA_VERSION,
-        "session_id": packet.get("session_id"),
-        "packet_sha256": packet.get("packet_sha256"),
-        "packet_file_sha256": packet_file_sha256,
-        "manuscript_sha256": packet.get("manuscript_sha256"),
-        "answer_sha256": answer_sha256,
-        "private_answer_artifact_sha256": private_answer_artifact_sha256,
-        "decision_kind": decision_kind,
-        "handoff_type": handoff_type,
-        "target_action_id": _action_id(action) or None,
-        "selected_handoff_source": selected,
-        "answer": "redacted",
     }
 
 
@@ -421,13 +382,10 @@ def record_human_needed_answer(
     write_json(feedback_path, feedback)
 
     public_answer_artifact = artifact_path(cwd, "human_needed.answer.public.json")
-    public_payload = dict(metadata)
-    public_payload["schema_version"] = HUMAN_NEEDED_PUBLIC_SCHEMA_VERSION
+    public_payload = public_answer_payload(metadata)
     write_json(public_answer_artifact, public_payload)
 
-    result = dict(public_payload)
-    result["answer"] = "redacted"
-    result["execution"] = "human_needed_answer_recorded"
+    result = public_result_payload(public_payload)
     _attach_public_path_or_label(result, cwd, "feedback_path", feedback_path)
     result["feedback_sha256"] = _sha256_file(feedback_path)
     _attach_public_path_or_label(result, cwd, "packet_path", packet_path_obj)
