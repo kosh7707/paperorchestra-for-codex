@@ -593,7 +593,6 @@ def _citation_support_review_provenance(cwd: str | Path | None, state, session_a
         return {
             "status": "present",
             "path": str(candidate),
-            "sha256": _file_sha256(candidate),
             "mode": mode,
             "provider_name": provider_name,
             "web_search_required": bool(provenance.get("web_search_required")),
