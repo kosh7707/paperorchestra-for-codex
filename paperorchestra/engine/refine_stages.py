@@ -13,7 +13,6 @@ from paperorchestra.engine.completion import (
     _build_completion_request,
     _complete_with_runtime_mode,
     _file_sha256,
-    _lane_owner,
     _provider_name,
 )
 from paperorchestra.engine.latex_postprocess import (
@@ -59,6 +58,10 @@ from paperorchestra.engine.refine_results import (
     contract_validation_failed_result,
     rejected_refinement_result,
 )
+from paperorchestra.engine.refine_manifests import (
+    record_accepted_refinement_lane_manifest,
+    record_rejected_refinement_lane_manifest,
+)
 from paperorchestra.engine.refine_review import (
     _accept_review_delta,
     _redact_review_scores_for_writer,
@@ -75,7 +78,6 @@ from paperorchestra.manuscript.repair import (
     _remove_material_packet_sections,
 )
 from paperorchestra.manuscript.validator import canonicalize_citation_keys
-from paperorchestra.runtime.parity import record_lane_manifest
 from paperorchestra.runtime.providers import BaseProvider
 
 
@@ -375,17 +377,13 @@ def refine_current_paper(
         if accept:
             final_path = artifact_path(cwd, "paper.full.tex")
             write_text(final_path, latex)
-            lane_path = record_lane_manifest(
+            lane_path = record_accepted_refinement_lane_manifest(
                 cwd,
-                stage="refinement",
-                role="Content Refinement Agent",
                 runtime_mode=runtime_mode,
                 lane_type=lane_type,
-                owner=_lane_owner(lane_type, fallback_used),
-                status="fallback_completed" if fallback_used else "completed",
+                fallback_used=fallback_used,
                 input_artifacts=[temp_state_paper, temp_latest_review or ""],
                 output_artifacts=[str(final_path), str(worklog_path), str(validation_path)],
-                fallback_used=fallback_used,
                 notes=lane_notes,
             )
             state = load_session(cwd)
@@ -430,17 +428,14 @@ def refine_current_paper(
                 )
             )
         else:
-            lane_path = record_lane_manifest(
+            lane_path = record_rejected_refinement_lane_manifest(
                 cwd,
-                stage="refinement",
-                role="Content Refinement Agent",
                 runtime_mode=runtime_mode,
                 lane_type=lane_type,
-                owner=_lane_owner(lane_type, fallback_used),
-                status="blocked" if compile_error else "failed",
+                fallback_used=fallback_used,
+                compile_error=compile_error,
                 input_artifacts=[temp_state_paper, temp_latest_review or ""],
                 output_artifacts=[str(worklog_path), str(validation_path)],
-                fallback_used=fallback_used,
                 notes=lane_notes,
             )
             state = load_session(cwd)
