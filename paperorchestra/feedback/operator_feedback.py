@@ -12,17 +12,10 @@ from paperorchestra.feedback.operator_candidates import (
 )
 from paperorchestra.feedback.operator_verification import _verification_block, _verification_snapshot
 from paperorchestra.feedback.operator_gates import (
-    _active_tier2_metric_delta,
     _attach_candidate_approval_from_attempt,
     _best_human_review_candidate_attempt,
-    _candidate_hard_gate,
-    _quality_failing_codes,
-    _repeats_non_promotable_candidate,
-    _tier_failing_codes,
 )
-from paperorchestra.feedback.operator_incorporation import _issue_incorporation_detailed
 from paperorchestra.feedback.operator_records import (
-    _build_operator_attempt_record,
     _build_operator_incorporation_report,
 )
 from paperorchestra.feedback.operator_completion import (
@@ -37,11 +30,10 @@ from paperorchestra.feedback.operator_completion import (
 from paperorchestra.feedback.operator_snapshots import _restore_session_snapshot, _session_snapshot
 from paperorchestra.feedback.operator_contexts.citations import _protected_supported_citation_regressions
 from paperorchestra.feedback.operator_feedback_attempts import prepare_operator_candidate_attempt
+from paperorchestra.feedback.operator_feedback_evaluation import evaluate_operator_candidate_attempt
 from paperorchestra.feedback.operator_feedback_context import load_operator_feedback_context, operator_feedback_attempt_count
 from paperorchestra.feedback.packets import (
     _file_sha256,
-    _sha256_digest,
-    _sha256_prefixed,
 )
 from paperorchestra.core.errors import ContractError
 
@@ -108,9 +100,22 @@ def apply_operator_feedback(
             candidate_text = prepared_attempt.candidate_text
             require_issue_progress = prepared_attempt.require_issue_progress
 
-            verification = _verification_snapshot(
-                cwd,
+            evaluated_attempt = evaluate_operator_candidate_attempt(
+                cwd=cwd,
                 provider=provider,
+                imported=imported,
+                before_text=before_text,
+                current_sha=current_sha,
+                base_quality_eval=base_quality_eval,
+                base_tier2_failures=base_tier2_failures,
+                base_active_failures=base_active_failures,
+                packet_prior_attempts=packet_prior_attempts,
+                execution=execution,
+                intent=intent,
+                attempt_index=attempt_index,
+                candidate_result=candidate_result,
+                candidate_text=candidate_text,
+                require_issue_progress=require_issue_progress,
                 require_compile=require_compile,
                 quality_mode=quality_mode,
                 max_iterations=max_iterations,
@@ -120,67 +125,12 @@ def apply_operator_feedback(
                 citation_evidence_mode=citation_evidence_mode,
                 citation_provider_name=citation_provider_name,
                 citation_provider_command=citation_provider_command,
-                validation_name=f"validation.operator-feedback.attempt-{attempt_index:02d}.json",
             )
-            blocking_codes = _quality_failing_codes(verification["quality_eval"])
-            candidate_tier2_failures = set(_tier_failing_codes(verification["quality_eval"], "tier_2_claim_safety"))
-            candidate_active_failures = set(blocking_codes)
-            new_tier2_failures = sorted(candidate_tier2_failures - base_tier2_failures)
-            resolved_active_failures = sorted(base_active_failures - candidate_active_failures)
-            incorporation_blocking_codes = [code for code in blocking_codes if code not in base_tier2_failures]
-            incorporation = _issue_incorporation_detailed(imported.get("issues") or [], before_text, candidate_text, blocking_codes=incorporation_blocking_codes)
-            candidate_sha = _file_sha256(load_session(cwd).artifacts.paper_full_tex)
-            protected_regressions = _protected_supported_citation_regressions(imported, candidate_text)
-            ok, gate_reasons = _candidate_hard_gate(
-                validation_payload=verification["validation_payload"],
-                compile_payload=verification["compile_payload"],
-                quality_eval=verification["quality_eval"],
-                base_quality_eval=base_quality_eval,
-                quality_mode=quality_mode,
-                incorporation=incorporation,
-                candidate_result=candidate_result,
-                require_issue_progress=require_issue_progress,
-                manuscript_changed=candidate_sha != current_sha,
-                new_tier2_failures=new_tier2_failures,
-                base_active_failures=sorted(base_active_failures),
-                resolved_active_failures=resolved_active_failures,
-                allow_human_reviewable_new_tier2=intent == "approve_existing_candidate",
-                protected_supported_citation_regressions=protected_regressions,
-            )
-            if candidate_result.get("preserved_prior_after_contract_regression") is True:
-                gate_reasons = list(dict.fromkeys([*gate_reasons, "contract_regression_preserved_prior"]))
-                ok = False
-            candidate_sha_for_attempt = _sha256_prefixed(_sha256_digest(str(candidate_result.get("candidate_sha256") or "")) or _file_sha256(candidate_result.get("candidate_path")))
-            if not ok and _repeats_non_promotable_candidate([*packet_prior_attempts, *(execution.get("attempts") or [])], candidate_sha_for_attempt):
-                gate_reasons = list(dict.fromkeys([*gate_reasons, "repeated_non_promotable_candidate"]))
-                ok = False
-            attempt_record = _build_operator_attempt_record(
-                attempt_index=attempt_index,
-                intent=intent,
-                candidate_result=candidate_result,
-                candidate_sha_for_attempt=candidate_sha_for_attempt,
-                gate_passed=ok,
-                gate_reasons=gate_reasons,
-                base_tier2_failures=base_tier2_failures,
-                candidate_tier2_failures=candidate_tier2_failures,
-                new_tier2_failures=new_tier2_failures,
-                base_active_failures=base_active_failures,
-                candidate_active_failures=candidate_active_failures,
-                resolved_active_failures=resolved_active_failures,
-                active_tier2_metric_delta=_active_tier2_metric_delta(
-                    base_quality_eval,
-                    verification["quality_eval"],
-                    base_active_failures=sorted(base_active_failures),
-                ),
-                protected_regressions=protected_regressions,
-                verification_block=_verification_block(verification),
-                incorporation=incorporation,
-            )
-            execution["attempts"].append(attempt_record)
-            final_incorporation = incorporation
-            final_verification = verification
-            final_candidate_result = candidate_result
-            if ok:
+            execution["attempts"].append(evaluated_attempt.attempt_record)
+            final_incorporation = evaluated_attempt.incorporation
+            final_verification = evaluated_attempt.verification
+            final_candidate_result = evaluated_attempt.candidate_result
+            if evaluated_attempt.gate_passed:
                 execution["promotion_status"] = "promoted"
                 execution["promotion_reason"] = "operator_candidate_passed_hard_gate"
                 _promote_candidate_text(cwd, candidate_result["candidate_path"], snapshot.get("paper_path"))
@@ -200,7 +150,7 @@ def apply_operator_feedback(
                 )
                 final_verification = promoted_verification
                 execution["post_promotion_qa_verdict"] = str(promoted_verification["plan"].get("verdict"))
-                attempt_record["promoted_canonical_verification"] = _verification_block(promoted_verification)
+                evaluated_attempt.attempt_record["promoted_canonical_verification"] = _verification_block(promoted_verification)
                 break
         else:
             _restore_session_snapshot(cwd, snapshot)
