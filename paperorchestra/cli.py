@@ -494,6 +494,9 @@ def build_parser() -> argparse.ArgumentParser:
     qa_loop_step_parser.add_argument("--require-live-verification", action="store_true")
     qa_loop_step_parser.add_argument("--require-compile", action="store_true")
     qa_loop_step_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web", "source"])
+    qa_loop_step_parser.add_argument("--quality-eval", help="Consume an explicit quality-eval artifact instead of regenerating the input snapshot.")
+    qa_loop_step_parser.add_argument("--qa-loop-plan", help="Consume an explicit QA-loop plan artifact instead of regenerating the input plan.")
+    qa_loop_step_parser.add_argument("--citation-support-review", help="Use and stage an explicit citation-support review artifact for this step.")
     _runtime_mode_args(qa_loop_step_parser, strict_flag=True)
     _common_provider_args(qa_loop_step_parser)
     _citation_provider_args(qa_loop_step_parser)
@@ -1627,6 +1630,9 @@ def main(argv: list[str] | None = None) -> int:
                     citation_evidence_mode=args.citation_evidence_mode,
                     citation_provider_name=args.citation_provider or args.provider,
                     citation_provider_command=args.citation_provider_command if args.citation_provider_command is not None else args.provider_command,
+                    quality_eval_input_path=args.quality_eval,
+                    qa_loop_plan_input_path=args.qa_loop_plan,
+                    citation_support_review_path=args.citation_support_review,
                 )
             print(json.dumps({"path": str(result.path), "execution": result.payload}, indent=2, ensure_ascii=False))
             return result.exit_code

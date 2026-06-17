@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import shutil
 import shlex
 import subprocess
 from pathlib import Path
@@ -498,6 +499,107 @@ def _auto_commit_progressive_citation_candidate(
     return True, "strict_progress_without_new_failures"
 
 
+def _current_manuscript_hash(cwd: str | Path | None) -> tuple[str | None, str | None]:
+    state = load_session(cwd)
+    if not state.artifacts.paper_full_tex:
+        return None, None
+    paper = Path(state.artifacts.paper_full_tex)
+    if not paper.exists():
+        return None, None
+    bare = hashlib.sha256(paper.read_bytes()).hexdigest()
+    return bare, f"sha256:{bare}"
+
+
+def _load_explicit_quality_eval(cwd: str | Path | None, path: str | Path) -> tuple[Path, dict[str, Any]]:
+    quality_path = Path(path).resolve()
+    payload = _read_json(quality_path)
+    if not isinstance(payload, dict):
+        raise ValueError(f"quality-eval input is not a JSON object: {quality_path}")
+    _, expected = _current_manuscript_hash(cwd)
+    if payload.get("manuscript_hash") != expected:
+        raise ValueError(
+            "quality-eval input is stale for the current manuscript: "
+            f"{quality_path} has {payload.get('manuscript_hash')!r}, expected {expected!r}"
+        )
+    return quality_path, payload
+
+
+def _load_explicit_qa_loop_plan(cwd: str | Path | None, path: str | Path) -> dict[str, Any]:
+    plan_path = Path(path).resolve()
+    payload = _read_json(plan_path)
+    if not isinstance(payload, dict):
+        raise ValueError(f"qa-loop-plan input is not a JSON object: {plan_path}")
+    _, expected = _current_manuscript_hash(cwd)
+    summary = payload.get("quality_eval_summary") if isinstance(payload.get("quality_eval_summary"), dict) else {}
+    if summary.get("manuscript_hash") != expected:
+        raise ValueError(
+            "qa-loop-plan input is stale for the current manuscript: "
+            f"{plan_path} has {summary.get('manuscript_hash')!r}, expected {expected!r}"
+        )
+    return payload
+
+
+def _split_path_ref(ref: Any) -> tuple[Path | None, str | None]:
+    if not isinstance(ref, str) or not ref:
+        return None, None
+    path_text, sep, sha = ref.partition("@sha256:")
+    return (Path(path_text).resolve() if path_text else None), (sha if sep else None)
+
+
+def _quality_eval_path_from_plan(plan: dict[str, Any]) -> str | None:
+    source_artifacts = plan.get("source_artifacts") if isinstance(plan.get("source_artifacts"), dict) else {}
+    if source_artifacts.get("quality_eval"):
+        return str(source_artifacts["quality_eval"])
+    reads = plan.get("reads") if isinstance(plan.get("reads"), dict) else {}
+    path, _ = _split_path_ref(reads.get("quality_eval"))
+    return str(path) if path else None
+
+
+def _validate_plan_quality_eval_identity(plan: dict[str, Any], quality_eval_path: Path) -> None:
+    expected_sha = hashlib.sha256(quality_eval_path.read_bytes()).hexdigest()
+    source_artifacts = plan.get("source_artifacts") if isinstance(plan.get("source_artifacts"), dict) else {}
+    source_quality_eval = source_artifacts.get("quality_eval")
+    if source_quality_eval and Path(str(source_quality_eval)).resolve() != quality_eval_path.resolve():
+        raise ValueError(f"qa-loop-plan input references a different quality-eval artifact: {source_quality_eval}")
+    reads = plan.get("reads") if isinstance(plan.get("reads"), dict) else {}
+    read_path, read_sha = _split_path_ref(reads.get("quality_eval"))
+    if read_path and read_path != quality_eval_path.resolve():
+        raise ValueError(f"qa-loop-plan input references a different quality-eval artifact: {read_path}")
+    if read_sha and read_sha != expected_sha:
+        raise ValueError(f"qa-loop-plan input is stale for the provided quality-eval artifact: {quality_eval_path}")
+
+
+def _default_citation_support_review_path(cwd: str | Path | None) -> Path:
+    state = load_session(cwd)
+    if state.artifacts.paper_full_tex:
+        return Path(state.artifacts.paper_full_tex).resolve().parent / "citation_support_review.json"
+    return artifact_path(cwd, "citation_support_review.json")
+
+
+def _stage_explicit_citation_support_review(cwd: str | Path | None, path: str | Path | None) -> Path | None:
+    if not path:
+        return None
+    source = Path(path).resolve()
+    payload = _read_json(source)
+    if not isinstance(payload, dict):
+        raise ValueError(f"citation-support review input is not a JSON object: {source}")
+    expected_bare, _ = _current_manuscript_hash(cwd)
+    observed = payload.get("manuscript_sha256")
+    if observed != expected_bare:
+        raise ValueError(
+            "citation-support review input is stale for the current manuscript: "
+            f"{source} has {observed!r}, expected {expected_bare!r}"
+        )
+    target = _default_citation_support_review_path(cwd)
+    if source != target.resolve():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        source_trace = source.with_name(source.stem + ".trace.json")
+        if source_trace.exists():
+            shutil.copyfile(source_trace, target.with_name(target.stem + ".trace.json"))
+    return source
+
+
 def run_qa_loop_step(
     cwd: str | Path | None,
     provider: BaseProvider,
@@ -511,23 +613,39 @@ def run_qa_loop_step(
     citation_evidence_mode: str = "web",
     citation_provider_name: str | None = None,
     citation_provider_command: str | None = None,
+    quality_eval_input_path: str | Path | None = None,
+    qa_loop_plan_input_path: str | Path | None = None,
+    citation_support_review_path: str | Path | None = None,
 ) -> StepResult:
     recover_pending_manuscript_write(cwd)
     started = utc_now_iso()
-    before_eval_path, before_eval = write_quality_eval(
-        cwd,
-        require_live_verification=require_live_verification,
-        quality_mode=quality_mode,
-        max_iterations=max_iterations,
-    )
-    before_plan_path, before_plan = write_quality_loop_plan(
-        cwd,
-        require_live_verification=require_live_verification,
-        quality_mode=quality_mode,
-        max_iterations=max_iterations,
-        accept_mixed_provenance=accept_mixed_provenance,
-        quality_eval_input_path=before_eval_path,
-    )
+    explicit_citation_support_path = _stage_explicit_citation_support_review(cwd, citation_support_review_path)
+    if qa_loop_plan_input_path:
+        before_plan_path = Path(qa_loop_plan_input_path).resolve()
+        before_plan = _load_explicit_qa_loop_plan(cwd, before_plan_path)
+        quality_eval_input_path = quality_eval_input_path or _quality_eval_path_from_plan(before_plan)
+        if not quality_eval_input_path:
+            raise ValueError(f"qa-loop-plan input does not identify a quality-eval artifact: {before_plan_path}")
+        before_eval_path, before_eval = _load_explicit_quality_eval(cwd, quality_eval_input_path)
+        _validate_plan_quality_eval_identity(before_plan, before_eval_path)
+    else:
+        if quality_eval_input_path:
+            before_eval_path, before_eval = _load_explicit_quality_eval(cwd, quality_eval_input_path)
+        else:
+            before_eval_path, before_eval = write_quality_eval(
+                cwd,
+                require_live_verification=require_live_verification,
+                quality_mode=quality_mode,
+                max_iterations=max_iterations,
+            )
+        before_plan_path, before_plan = write_quality_loop_plan(
+            cwd,
+            require_live_verification=require_live_verification,
+            quality_mode=quality_mode,
+            max_iterations=max_iterations,
+            accept_mixed_provenance=accept_mixed_provenance,
+            quality_eval_input_path=before_eval_path,
+        )
     before_summary = _citation_summary(cwd)
     initial_verdict = str(before_plan.get("verdict"))
     execution: dict[str, Any] = {
@@ -536,6 +654,12 @@ def run_qa_loop_step(
         "_reserved_execution_path": str(_next_execution_path(cwd)[1]),
         "input_quality_eval": str(before_eval_path),
         "input_plan": str(before_plan_path),
+        "input_citation_support_review": str(explicit_citation_support_path) if explicit_citation_support_path else None,
+        "input_artifacts": {
+            "quality_eval": str(before_eval_path),
+            "qa_loop_plan": str(before_plan_path),
+            "citation_support_review": str(explicit_citation_support_path) if explicit_citation_support_path else None,
+        },
         "actions_attempted": [],
         "actions_skipped": [],
         "before": {"failing_codes": _failing_codes(before_eval), "citation_support_summary": before_summary},

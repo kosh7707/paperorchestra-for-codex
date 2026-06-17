@@ -4322,6 +4322,79 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertEqual(result.payload["actions_skipped"], [])
             review_citations.assert_not_called()
 
+    def test_qa_loop_step_uses_explicit_quality_eval_and_plan_without_regenerating(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\documentclass{article}\\begin{document}Current.\\end{document}\n", encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            manuscript_hash = "sha256:" + hashlib.sha256(paper.read_bytes()).hexdigest()
+            quality_eval_path = artifact_path(root, "quality-eval.custom.json")
+            quality_eval_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "quality-eval/1",
+                        "session_id": state.session_id,
+                        "mode": "claim_safe",
+                        "manuscript_hash": manuscript_hash,
+                        "tiers": {"tier_2_claim_safety": {"status": "pass", "failing_codes": []}},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            plan_path = artifact_path(root, "qa-loop.plan.custom.json")
+            plan_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "qa-loop-plan/1",
+                        "session_id": state.session_id,
+                        "verdict": "human_needed",
+                        "quality_eval_summary": {"manuscript_hash": manuscript_hash},
+                        "source_artifacts": {"quality_eval": str(quality_eval_path)},
+                        "reads": {
+                            "quality_eval": f"{quality_eval_path}@sha256:{hashlib.sha256(quality_eval_path.read_bytes()).hexdigest()}"
+                        },
+                        "repair_actions": [{"code": "citation_support_review_missing", "automation": "automatic"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("paperorchestra.ralph_bridge.write_quality_eval", side_effect=AssertionError("regenerated quality eval")):
+                with patch("paperorchestra.ralph_bridge.write_quality_loop_plan", side_effect=AssertionError("regenerated plan")):
+                    with patch("paperorchestra.ralph_bridge._citation_summary", return_value={}):
+                        result = run_qa_loop_step(
+                            root,
+                            MockProvider(),
+                            quality_eval_input_path=quality_eval_path,
+                            qa_loop_plan_input_path=plan_path,
+                        )
+
+        self.assertEqual(result.payload["verdict"], "human_needed")
+        self.assertTrue(result.payload["terminal_noop"])
+        self.assertEqual(result.payload["input_quality_eval"], str(quality_eval_path.resolve()))
+        self.assertEqual(result.payload["input_plan"], str(plan_path.resolve()))
+
+    def test_qa_loop_step_rejects_stale_explicit_citation_support_review(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("\\documentclass{article}\\begin{document}Current.\\end{document}\n", encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            review = root / "round-2" / "citation_support_review.json"
+            review.parent.mkdir()
+            review.write_text(
+                json.dumps({"schema_version": "citation-support-review/2", "manuscript_sha256": "not-current"}),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "citation-support review input is stale for the current manuscript"):
+                run_qa_loop_step(root, MockProvider(), citation_support_review_path=review)
+
     def test_operator_review_packet_requires_terminal_human_needed_plan(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -7769,12 +7842,21 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
                         "shell",
                         "--provider-command",
                         '["codex","exec"]',
+                        "--quality-eval",
+                        "quality.custom.json",
+                        "--qa-loop-plan",
+                        "plan.custom.json",
+                        "--citation-support-review",
+                        "citation.custom.json",
                     ]
                 )
 
         self.assertEqual(code, 10)
         self.assertEqual(runner.call_args.kwargs["citation_provider_name"], "shell")
         self.assertEqual(runner.call_args.kwargs["citation_provider_command"], '["codex","exec"]')
+        self.assertEqual(runner.call_args.kwargs["quality_eval_input_path"], "quality.custom.json")
+        self.assertEqual(runner.call_args.kwargs["qa_loop_plan_input_path"], "plan.custom.json")
+        self.assertEqual(runner.call_args.kwargs["citation_support_review_path"], "citation.custom.json")
 
     def test_qa_loop_step_model_evidence_defaults_to_shell_provider(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
