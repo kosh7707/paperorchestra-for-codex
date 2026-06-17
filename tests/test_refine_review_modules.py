@@ -14,7 +14,18 @@ def test_refine_stages_binds_runtime_dependencies_used_inside_refinement_loop() 
     assert refine_stages._reviewable_plot_assets_index is latex_postprocess._reviewable_plot_assets_index
     assert refine_stages._reviewable_plot_manifest is latex_postprocess._reviewable_plot_manifest
     assert refine_stages._raise_if_strict_source_citations_unmapped is prompt_context._raise_if_strict_source_citations_unmapped
-    assert refine_stages.sys.stderr is not None
+
+
+def test_refine_stages_preserves_legacy_iteration_runtime_reexports() -> None:
+    from paperorchestra.engine import completion, reports
+    from paperorchestra.manuscript.prompts import PROMPTS
+
+    assert refine_stages._complete_with_runtime_mode is completion._complete_with_runtime_mode
+    assert refine_stages._build_completion_request is completion._build_completion_request
+    assert refine_stages._provider_name is completion._provider_name
+    assert refine_stages._record_validation_report is reports._record_validation_report
+    assert refine_stages.collect_paper_contract_issues is reports.collect_paper_contract_issues
+    assert refine_stages.PROMPTS is PROMPTS
 
 
 def test_refine_stages_preserves_legacy_review_helper_reexports() -> None:
