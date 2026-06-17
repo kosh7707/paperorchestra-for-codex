@@ -74,7 +74,6 @@ def test_review_refinement_candidate_reuses_prior_review_for_no_op(monkeypatch) 
 
     assert review.no_op_refinement is True
     assert review.candidate_review_path == Path("snapshot-review.json")
-    assert review.candidate_review == {"overall_score": 4.0}
     assert review.candidate_score == 4.0
     assert review.candidate_axes == {"clarity": 4.0}
 

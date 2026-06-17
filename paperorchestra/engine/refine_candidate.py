@@ -21,7 +21,6 @@ class RefinementStateSnapshot:
 @dataclass(frozen=True)
 class RefinementCandidateReview:
     candidate_review_path: Path
-    candidate_review: dict[str, Any]
     candidate_score: float
     candidate_axes: dict[str, float]
     no_op_refinement: bool
@@ -53,7 +52,6 @@ def review_refinement_candidate(
     if no_op_refinement:
         return RefinementCandidateReview(
             candidate_review_path=Path(snapshot.temp_latest_review or state.artifacts.latest_review_json or ""),
-            candidate_review=iteration.review_payload,
             candidate_score=snapshot.previous_score,
             candidate_axes=snapshot.previous_axes,
             no_op_refinement=True,
@@ -70,7 +68,6 @@ def review_refinement_candidate(
     candidate_review = read_json(candidate_review_path)
     return RefinementCandidateReview(
         candidate_review_path=Path(candidate_review_path),
-        candidate_review=candidate_review,
         candidate_score=float(candidate_review.get("overall_score", 0.0)),
         candidate_axes=_extract_axis_scores(candidate_review),
         no_op_refinement=False,

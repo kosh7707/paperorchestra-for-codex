@@ -26,11 +26,9 @@ def test_compile_gate_disabled_preserves_candidate_without_compiling(monkeypatch
         latex="candidate",
         current_paper="previous",
         previous_review_path="review.latest.json",
-        previous_review_payload={"overall_score": 4.0},
         previous_score=4.0,
         previous_axes={"clarity": 4.0},
         candidate_review_path=Path("review.candidate.json"),
-        candidate_review={"overall_score": 4.2},
         candidate_score=4.2,
         candidate_axes={"clarity": 4.2},
         no_op_refinement=False,
@@ -73,11 +71,9 @@ def test_compile_gate_preserves_prior_clean_compile_after_candidate_compile_fail
         latex="candidate",
         current_paper="previous",
         previous_review_path="review.latest.json",
-        previous_review_payload={"overall_score": 4.0},
         previous_score=4.0,
         previous_axes={"clarity": 4.0},
         candidate_review_path=Path("review.candidate.json"),
-        candidate_review={"overall_score": 2.0},
         candidate_score=2.0,
         candidate_axes={"clarity": 2.0},
         no_op_refinement=False,
@@ -94,7 +90,6 @@ def test_compile_gate_preserves_prior_clean_compile_after_candidate_compile_fail
     assert result.compile_preservation is True
     assert result.no_op_refinement is True
     assert result.candidate_review_path == Path("review.latest.json")
-    assert result.candidate_review == {"overall_score": 4.0}
     assert result.candidate_score == 4.0
     assert result.candidate_axes == {"clarity": 4.0}
     assert "Preserved the pre-refinement compiled manuscript" in worklog["actions_taken"][0]

@@ -17,6 +17,13 @@ def test_refine_stages_binds_runtime_dependencies_used_inside_refinement_loop() 
     assert refine_stages.sys.stderr is not None
 
 
+def test_refine_stages_preserves_legacy_review_helper_reexports() -> None:
+    from paperorchestra.engine import review_stages
+
+    assert refine_stages.review_current_paper is review_stages.review_current_paper
+    assert refine_stages._extract_axis_scores is review_stages._extract_axis_scores
+
+
 def test_redact_review_scores_for_writer_removes_scorecard_without_mutating_source() -> None:
     payload = {
         "overall_score": 4.0,

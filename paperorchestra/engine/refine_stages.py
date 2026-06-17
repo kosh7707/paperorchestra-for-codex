@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.core.io import ExtractionError, extract_json, extract_latex, read_json, read_text, write_json, write_text
+from paperorchestra.core.io import ExtractionError, extract_json, extract_latex, read_text, write_json, write_text
 from paperorchestra.core.session import artifact_path, load_session, review_path, save_session
 from paperorchestra.engine.authoring_common import _apply_mock_watermark
 from paperorchestra.engine.completion import (
@@ -77,6 +77,10 @@ from paperorchestra.engine.refine_persistence import (
     apply_accepted_refinement_state,
     apply_candidate_only_refinement_state,
     apply_rejected_refinement_state,
+)
+from paperorchestra.engine.refine_retry import (
+    RefinementRetryReviewResult,
+    maybe_retry_refinement_review,
 )
 from paperorchestra.engine.refine_review import (
     _accept_review_delta,
@@ -271,7 +275,6 @@ def refine_current_paper(
             snapshot=candidate_snapshot,
         )
         candidate_review_path = candidate_review_state.candidate_review_path
-        candidate_review = candidate_review_state.candidate_review
         candidate_score = candidate_review_state.candidate_score
         candidate_axes = candidate_review_state.candidate_axes
         no_op_refinement = candidate_review_state.no_op_refinement
@@ -283,11 +286,9 @@ def refine_current_paper(
             latex=latex,
             current_paper=iteration.current_paper,
             previous_review_path=temp_latest_review or state.artifacts.latest_review_json or "",
-            previous_review_payload=iteration.review_payload,
             previous_score=previous_score,
             previous_axes=previous_axes,
             candidate_review_path=candidate_review_path,
-            candidate_review=candidate_review,
             candidate_score=candidate_score,
             candidate_axes=candidate_axes,
             no_op_refinement=no_op_refinement,
@@ -302,15 +303,12 @@ def refine_current_paper(
         compile_preservation = compile_gate.compile_preservation
         preserved_compile_error = compile_gate.preserved_compile_error
         candidate_review_path = compile_gate.candidate_review_path
-        candidate_review = compile_gate.candidate_review
         candidate_score = compile_gate.candidate_score
         candidate_axes = compile_gate.candidate_axes
         no_op_refinement = compile_gate.no_op_refinement
         worklog = compile_gate.worklog
         lane_notes = compile_gate.lane_notes
 
-        review_retry_paths: list[str] = []
-        review_retry_scores: list[float] = []
         if candidate_only:
             state = load_session(cwd)
             apply_candidate_only_refinement_state(
@@ -349,37 +347,24 @@ def refine_current_paper(
             candidate_axes=candidate_axes,
             previous_axes=previous_axes,
         )
-        if should_retry_refinement_review(
+        retry_review = maybe_retry_refinement_review(
+            cwd=cwd,
+            provider=provider,
+            runtime_mode=runtime_mode,
+            candidate_iter=iteration.candidate_iter,
             accept=accept,
             no_op_refinement=no_op_refinement,
             compile_error=compile_error,
             previous_score=previous_score,
             candidate_score=candidate_score,
-        ):
-            retry_review_path = review_current_paper(
-                cwd,
-                provider,
-                review_name=f"review.iter-{iteration.candidate_iter:02d}.retry-01.json",
-                runtime_mode=runtime_mode,
-            )
-            retry_review = read_json(retry_review_path)
-            retry_score = float(retry_review.get("overall_score", 0.0))
-            retry_axes = _extract_axis_scores(retry_review)
-            review_retry_paths.append(str(retry_review_path))
-            review_retry_scores.append(retry_score)
-            if should_accept_refinement_candidate(
-                compile_error=None,
-                no_op_refinement=False,
-                candidate_score=retry_score,
-                previous_score=previous_score,
-                candidate_axes=retry_axes,
-                previous_axes=previous_axes,
-            ):
-                candidate_review_path = retry_review_path
-                candidate_review = retry_review
-                candidate_score = retry_score
-                candidate_axes = retry_axes
-                accept = True
+            previous_axes=previous_axes,
+            candidate_review_path=candidate_review_path,
+        )
+        accept = retry_review.accept
+        candidate_review_path = retry_review.candidate_review_path
+        candidate_score = retry_review.candidate_score
+        review_retry_paths = retry_review.review_retry_paths
+        review_retry_scores = retry_review.review_retry_scores
 
         if accept:
             final_path = artifact_path(cwd, "paper.full.tex")

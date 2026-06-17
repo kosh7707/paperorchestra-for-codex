@@ -18,7 +18,6 @@ class RefinementCompileGateResult:
     compile_preservation: bool
     preserved_compile_error: str | None
     candidate_review_path: Path
-    candidate_review: dict[str, Any]
     candidate_score: float
     candidate_axes: dict[str, float]
     no_op_refinement: bool
@@ -49,11 +48,9 @@ def apply_compile_acceptance_gate(
     latex: str,
     current_paper: str,
     previous_review_path: str | Path | None,
-    previous_review_payload: dict[str, Any],
     previous_score: float,
     previous_axes: dict[str, float],
     candidate_review_path: str | Path,
-    candidate_review: dict[str, Any],
     candidate_score: float,
     candidate_axes: dict[str, float],
     no_op_refinement: bool,
@@ -84,7 +81,6 @@ def apply_compile_acceptance_gate(
                 compile_preservation = True
                 no_op_refinement = True
                 candidate_review_path = Path(previous_review_path or "")
-                candidate_review = previous_review_payload
                 candidate_score = previous_score
                 candidate_axes = previous_axes
                 worklog.setdefault("actions_taken", []).append(
@@ -103,7 +99,6 @@ def apply_compile_acceptance_gate(
         compile_preservation=compile_preservation,
         preserved_compile_error=preserved_compile_error,
         candidate_review_path=Path(candidate_review_path),
-        candidate_review=candidate_review,
         candidate_score=candidate_score,
         candidate_axes=candidate_axes,
         no_op_refinement=no_op_refinement,
