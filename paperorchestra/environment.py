@@ -604,11 +604,11 @@ CATEGORY_LABELS = {
 
 
 def environment_guide_path() -> Path:
-    return PROJECT_ROOT / "ENVIRONMENT.md"
+    return PROJECT_ROOT / "README.md"
 
 
 def env_example_path() -> Path:
-    return PROJECT_ROOT / "ENVIRONMENT.md"
+    return PROJECT_ROOT / "README.md"
 
 
 def grouped_environment_variables() -> list[dict[str, Any]]:

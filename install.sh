@@ -5,7 +5,6 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
 DRY_RUN=0
-WITH_DEMO=0
 WITH_MCP=1
 WITH_OMX=1
 SKIP_SKILLS=0
@@ -30,7 +29,6 @@ What it does by default:
   - prints the restart/check command
 
 Options:
-  --demo         compatibility option: also run the safe mock demo after install
   --mcp          compatibility no-op: MCP registration is already on by default
   --skip-mcp     skip Codex MCP registration
   --skip-omx     skip omx setup even when omx is available
@@ -42,7 +40,6 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --demo) WITH_DEMO=1 ;;
     --mcp) WITH_MCP=1 ;;
     --skip-mcp|--no-mcp) WITH_MCP=0 ;;
     --skip-omx|--no-omx) WITH_OMX=0 ;;
@@ -146,12 +143,6 @@ if [[ "$WITH_OMX" -eq 1 ]]; then
   fi
 else
   print_step "Skip OMX setup"
-fi
-
-if [[ "$WITH_DEMO" -eq 1 ]]; then
-  print_step "Run safe mock demo"
-  echo "plan: scripts/demo-mock.sh --in-repo"
-  run bash "$ROOT/scripts/demo-mock.sh" --in-repo
 fi
 
 cat <<EOF_NEXT

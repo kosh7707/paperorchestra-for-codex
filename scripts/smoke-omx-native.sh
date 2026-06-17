@@ -50,10 +50,17 @@ if [[ "$COMPILE_FLAG" == "1" && -z "${PAPERO_ALLOW_TEX_COMPILE:-}" ]]; then
   export PAPERO_ALLOW_TEX_COMPILE=1
 fi
 
-mkdir -p "$WORKDIR/assets" "$WORKDIR/.omx/state" "$WORKDIR/_smoke"
-cp "$ROOT/examples/minimal/template.tex" "$WORKDIR/assets/template.tex"
-rm -rf "$WORKDIR/assets/figures"
-cp -R "$ROOT/examples/minimal/figures" "$WORKDIR/assets/figures"
+mkdir -p "$WORKDIR/assets/figures" "$WORKDIR/.omx/state" "$WORKDIR/_smoke"
+cat > "$WORKDIR/assets/template.tex" <<'TEX'
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\begin{document}
+\title{PaperOrchestra Smoke}
+\maketitle
+{{CONTENT}}
+\end{document}
+TEX
 
 if [[ -n "$RESULTS_MARKDOWN_FILE" ]]; then
   cp "$RESULTS_MARKDOWN_FILE" "$WORKDIR/results.md"

@@ -49,23 +49,21 @@ Keep these status meanings separate:
 
 Evidence bundles are a diagnostic artifact, not a readiness pass. They record state, commands, blockers, and outputs for review.
 
-## Environment and domains
+## Runtime knobs
 
-Use `ENVIRONMENT.md` for the full operator setup sheet and `paperorchestra environment` for the canonical inventory.
+Use `paperorchestra environment` for the canonical inventory.
 
 Common knobs:
 
 - `PAPERO_MODEL_CMD`: shell provider command for live model-backed stages. `./install.sh` writes a generic Codex search command locally and into the MCP server environment; override it when you want a specific model, provider, or runtime policy.
 - `PAPERO_ALLOW_TEX_COMPILE=1`: enable intentional PDF compilation.
-- `PAPERO_TESTSET_SMOKE_WORKDIR`: testset smoke work directory.
-- `PAPERO_TESTSET_SMOKE_PROVIDER_TIMEOUT_SECONDS`: testset smoke provider timeout.
 - `PAPERO_DOMAIN`: select a registered domain profile.
 
 External domain profiles can be added in code with `register_domain`; keep domain plugins generic and avoid private paths in public docs.
 
 ## References
 
-The clone-facing surface is intentionally small: README for usage, `ENVIRONMENT.md` for runtime knobs, and `paperorchestra --help` for command details. Long architecture notes, historical reports, and maintainer test suites are intentionally not shipped as primary user documentation.
+The clone-facing surface is intentionally small: README for usage and `paperorchestra --help` for command details. Long architecture notes, historical reports, example papers, and maintainer test suites are intentionally not shipped as primary user documentation.
 
 Useful commands:
 

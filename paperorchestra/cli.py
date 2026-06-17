@@ -1108,11 +1108,9 @@ def main(argv: list[str] | None = None) -> int:
                     "6. Run: paperorchestra audit-reproducibility  # classify whether the current run is claim-safe",
                 ],
                 "testset": [
-                    "1. Run: paperorchestra init --idea examples/minimal/idea.md --experimental-log examples/minimal/experimental_log.md --template examples/minimal/template.tex --guidelines examples/minimal/conference_guidelines.md",
-                    "2. Optional: paperorchestra research-prior-work --provider mock --source codex_web_seed --import",
-                    "3. Run: paperorchestra run --provider mock --verify-mode mock --runtime-mode compatibility --compile --full-fidelity",
-                    "4. Run: paperorchestra review-sections --provider mock && paperorchestra review-citations --provider mock",
-                    "5. Run: paperorchestra audit-reproducibility",
+                    "1. Prepare your own idea.md, experimental_log.md, template.tex, and conference_guidelines.md.",
+                    "2. Run: paperorchestra init --idea ... --experimental-log ... --template ... --guidelines ...",
+                    "3. Run the PaperOrchestra skills from Codex for status, setup, review, quality gate, and authoring rounds.",
                 ],
                 "curated-prior-work": [
                     "1. Use Codex/web/manual review to create prior_work.json, references.bib, or prior_work.md.",
@@ -1120,11 +1118,10 @@ def main(argv: list[str] | None = None) -> int:
                     "3. Continue with write-intro-related, write-sections, compile, review, and refine.",
                 ],
                 "environment": [
-                    "1. Read: ENVIRONMENT.md",
-                    "2. Copy the README 'Copyable environment template' block into a local .env (or export only what you need)",
+                    "1. Run: ./install.sh",
+                    "2. Restart Codex/OMX so MCP tools reload.",
                     "3. Run: paperorchestra environment  # canonical inventory + readiness profiles",
                     "4. Run: paperorchestra doctor       # what is missing on this machine right now?",
-                    "5. If you need PDFs: paperorchestra check-compile-env && paperorchestra bootstrap-compile-env",
                 ],
             }
             print(json.dumps({"scenario": args.scenario, "steps": guides[args.scenario]}, indent=2, ensure_ascii=False))

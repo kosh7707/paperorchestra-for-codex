@@ -11,7 +11,7 @@ Use this skill as the thin front door for the packaged **PaperOrchestra** system
 
 PaperOrchestra is **v1-alpha**. A successful run is an auditable draft/evidence result, **not submission-ready** approval. Known limitations remain around citation/claim quality, figure finalization, and operator repair convergence. Never convert `BLOCK`, `not_ready`, `human_needed`, warnings, or a diagnostic artifact into false readiness.
 
-If there is insufficient material, that blocks drafting. Do not fabricate claims, citations, figures, or results. Offer guided intake, material upload/path, safe mock demo, or `$paperorchestra-status` instead. For “바로 써줘”, reject unsafe drafting when factual materials are missing.
+If there is insufficient material, that blocks drafting. Do not fabricate claims, citations, figures, or results. Offer guided intake, material upload/path, or `$paperorchestra-status` instead. For “바로 써줘”, reject unsafe drafting when factual materials are missing.
 
 ## Route by intent
 
