@@ -31,6 +31,7 @@ from paperorchestra.feedback.operator_snapshots import _restore_session_snapshot
 from paperorchestra.feedback.operator_contexts.citations import _protected_supported_citation_regressions
 from paperorchestra.feedback.operator_feedback_attempts import prepare_operator_candidate_attempt
 from paperorchestra.feedback.operator_feedback_evaluation import evaluate_operator_candidate_attempt
+from paperorchestra.feedback.operator_feedback_rollback import rollback_operator_feedback_candidate
 from paperorchestra.feedback.operator_feedback_context import load_operator_feedback_context, operator_feedback_attempt_count
 from paperorchestra.feedback.packets import (
     _file_sha256,
@@ -153,10 +154,12 @@ def apply_operator_feedback(
                 evaluated_attempt.attempt_record["promoted_canonical_verification"] = _verification_block(promoted_verification)
                 break
         else:
-            _restore_session_snapshot(cwd, snapshot)
-            rollback_verification = _verification_snapshot(
-                cwd,
+            rollback = rollback_operator_feedback_candidate(
+                cwd=cwd,
                 provider=provider,
+                snapshot=snapshot,
+                execution=execution,
+                intent=intent,
                 require_compile=require_compile,
                 quality_mode=quality_mode,
                 max_iterations=max_iterations,
@@ -166,16 +169,8 @@ def apply_operator_feedback(
                 citation_evidence_mode=citation_evidence_mode,
                 citation_provider_name=citation_provider_name,
                 citation_provider_command=citation_provider_command,
-                validation_name="validation.operator-feedback.rollback.json",
             )
-            final_verification = rollback_verification
-            explicit_rejection = intent == "reject_candidate_with_reason"
-            execution["promotion_status"] = "rolled_back"
-            execution["promotion_reason"] = "operator_rejected_candidate" if explicit_rejection else "operator_candidate_failed_hard_gate"
-            execution["candidate_rollback"] = {
-                "reason": "operator_rejected_candidate" if explicit_rejection else "supervised_candidate_failed_hard_gate",
-                "restored_verification": _verification_block(rollback_verification),
-            }
+            final_verification = rollback.verification
 
         execution_path = artifact_path(cwd, "operator_feedback.execution.json")
         promoted = execution["promotion_status"] == "promoted"
