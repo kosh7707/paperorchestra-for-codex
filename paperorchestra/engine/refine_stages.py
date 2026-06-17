@@ -48,6 +48,10 @@ from paperorchestra.engine.reports import (
     _record_validation_report,
     collect_paper_contract_issues,
 )
+from paperorchestra.engine.refine_context import (
+    RefinementIterationContext,
+    build_refinement_iteration_context,
+)
 from paperorchestra.engine.refine_drafts import normalize_refinement_latex, parse_refinement_response
 from paperorchestra.engine.refine_results import (
     accepted_refinement_result,
@@ -94,59 +98,14 @@ def refine_current_paper(
     accepted_results: list[dict[str, Any]] = []
     for _ in range(iterations):
         state = load_session(cwd)
-        current_paper = read_text(state.artifacts.paper_full_tex)
-        review_payload = read_json(state.artifacts.latest_review_json)
-        citation_map = read_json(state.artifacts.citation_map_json) if state.artifacts.citation_map_json else {}
-        raw_plot_manifest = read_json(state.artifacts.plot_manifest_json) if state.artifacts.plot_manifest_json else {"figures": []}
-        raw_plot_assets_index = read_json(state.artifacts.plot_assets_json) if state.artifacts.plot_assets_json else {"assets": []}
-        plot_assets_index = _reviewable_plot_assets_index(raw_plot_assets_index)
-        plot_manifest = _reviewable_plot_manifest(raw_plot_manifest, raw_plot_assets_index)
-        outline = read_json(state.artifacts.outline_json) if state.artifacts.outline_json else {"section_plan": []}
-        expected_section_titles = _expected_section_titles_from_outline(outline)
-        inputs = _read_inputs(state)
-        strict_claim_safe_prompt = _strict_content_gates_enabled(claim_safe=claim_safe)
-        _raise_if_strict_source_citations_unmapped(
-            inputs,
-            citation_map,
-            stage="refinement",
-            strict_claim_safe=strict_claim_safe_prompt,
-        )
-        experimental_log_text = read_text(state.inputs.experimental_log_path)
-        candidate_iter = state.refinement_iteration + 1
-        previous_worklog_path = review_path(cwd, f"refinement_worklog.iter-{state.refinement_iteration:02d}.json")
-        previous_worklog = read_text(previous_worklog_path) if previous_worklog_path.exists() else "{}"
-        prompt_paper_text = _prompt_compact_text(current_paper, head_chars=22000, tail_chars=4000)
-        prompt_citation_map = _compact_citation_map_for_prompt(
-            citation_map,
-            include_abstract=strict_claim_safe_prompt,
-            include_authors=False,
-            include_year=strict_claim_safe_prompt,
-            include_venue=strict_claim_safe_prompt,
-            include_provenance=False,
-            include_origin=False,
-            include_matched_query=False,
-        )
-        prompt_experimental_log = _prompt_compact_text(experimental_log_text, head_chars=8000, tail_chars=1500)
-        source_critical_context = _source_critical_context_for_prompt(inputs)
-        prompt_plot_manifest = {"figures": plot_manifest.get("figures", [])[:8]} if isinstance(plot_manifest, dict) else plot_manifest
-        prompt_plot_assets_index = (
-            {"assets": plot_assets_index.get("assets", [])[:8]}
-            if isinstance(plot_assets_index, dict)
-            else plot_assets_index
-        )
-        user_prompt = build_refinement_user_prompt(
-            paper_text=prompt_paper_text,
-            review_payload=review_payload,
+        iteration = build_refinement_iteration_context(
+            cwd,
+            state,
+            claim_safe=claim_safe,
             writer_brief=writer_brief,
-            experimental_log_text=prompt_experimental_log,
-            source_critical_context=source_critical_context,
-            citation_map=prompt_citation_map,
-            plot_manifest=prompt_plot_manifest,
-            plot_assets_index=prompt_plot_assets_index,
-            previous_worklog=previous_worklog,
         )
         response, lane_type, fallback_used, lane_notes = _complete_with_runtime_mode(
-            _build_completion_request(system_prompt=PROMPTS.render_refine_system(), user_prompt=user_prompt),
+            _build_completion_request(system_prompt=PROMPTS.render_refine_system(), user_prompt=iteration.user_prompt),
             provider=provider,
             runtime_mode=runtime_mode,
             cwd=cwd,
@@ -156,27 +115,27 @@ def refine_current_paper(
         worklog, latex, lane_notes = parse_refinement_response(response, lane_notes=lane_notes)
         latex, citation_replacements = normalize_refinement_latex(
             latex,
-            citation_map=citation_map,
-            plot_assets_index=plot_assets_index,
+            citation_map=iteration.citation_map,
+            plot_assets_index=iteration.plot_assets_index,
             figures_dir=state.inputs.figures_dir,
             claim_map=claim_map,
         )
-        if strict_claim_safe_prompt:
-            dropped_citations = _unknown_citation_key_counts(latex, citation_map)
+        if iteration.strict_claim_safe_prompt:
+            dropped_citations = _unknown_citation_key_counts(latex, iteration.citation_map)
         else:
-            latex, dropped_citations = _drop_unknown_citation_keys(latex, citation_map)
+            latex, dropped_citations = _drop_unknown_citation_keys(latex, iteration.citation_map)
         state.latest_provider_name = _provider_name(provider)
         state.latest_runtime_mode = runtime_mode
         save_session(cwd, state)
         latex = _apply_mock_watermark(latex, state, provider_name=_provider_name(provider))
         validation_issues = collect_paper_contract_issues(
             latex,
-            citation_map=citation_map,
+            citation_map=iteration.citation_map,
             figures_dir=state.inputs.figures_dir,
-            plot_manifest=plot_manifest,
-            plot_assets_index=plot_assets_index,
-            experimental_log_text=experimental_log_text,
-            expected_section_titles=expected_section_titles,
+            plot_manifest=iteration.plot_manifest,
+            plot_assets_index=iteration.plot_assets_index,
+            experimental_log_text=iteration.experimental_log_text,
+            expected_section_titles=iteration.expected_section_titles,
             narrative_plan=narrative_plan,
             claim_map=claim_map,
             citation_placement_plan=citation_placement_plan,
@@ -185,25 +144,25 @@ def refine_current_paper(
         contract_regression_preservation: dict[str, Any] | None = None
         if blocking_issues:
             preserved_issues = collect_paper_contract_issues(
-                current_paper,
-                citation_map=citation_map,
+                iteration.current_paper,
+                citation_map=iteration.citation_map,
                 figures_dir=state.inputs.figures_dir,
-                plot_manifest=plot_manifest,
-                plot_assets_index=plot_assets_index,
-                experimental_log_text=experimental_log_text,
-                expected_section_titles=expected_section_titles,
+                plot_manifest=iteration.plot_manifest,
+                plot_assets_index=iteration.plot_assets_index,
+                experimental_log_text=iteration.experimental_log_text,
+                expected_section_titles=iteration.expected_section_titles,
                 narrative_plan=narrative_plan,
                 claim_map=claim_map,
                 citation_placement_plan=citation_placement_plan,
             )
             if not _blocking_issues(preserved_issues):
-                rejected_candidate_path = artifact_path(cwd, f"paper.refined.iter-{candidate_iter:02d}.rejected-contract.tex")
+                rejected_candidate_path = artifact_path(cwd, f"paper.refined.iter-{iteration.candidate_iter:02d}.rejected-contract.tex")
                 write_text(rejected_candidate_path, latex)
                 rejected_validation_path, _rejected_validation_payload = _record_validation_report(
                     cwd,
                     stage="refinement_rejected_contract_regression",
                     issues=validation_issues,
-                    name=f"validation.refine.iter-{candidate_iter:02d}.rejected-contract.json",
+                    name=f"validation.refine.iter-{iteration.candidate_iter:02d}.rejected-contract.json",
                     manuscript_text=latex,
                 )
                 contract_regression_preservation = {
@@ -213,7 +172,7 @@ def refine_current_paper(
                     "contract_regression_issue_count": len(_blocking_issues(validation_issues)),
                     "contract_regression_validation_report_path": str(rejected_validation_path),
                 }
-                latex = current_paper
+                latex = iteration.current_paper
                 validation_issues = preserved_issues
                 blocking_issues = []
                 worklog.setdefault("actions_taken", []).append(
@@ -232,7 +191,7 @@ def refine_current_paper(
         if dropped_citations:
             note_prefix = (
                 "Blocked unsupported citation keys in strict refinement draft: "
-                if strict_claim_safe_prompt
+                if iteration.strict_claim_safe_prompt
                 else "Dropped unsupported citation keys in refinement draft: "
             )
             lane_notes.append(note_prefix + ", ".join(f"{key}({count})" for key, count in sorted(dropped_citations.items())))
@@ -251,7 +210,7 @@ def refine_current_paper(
             accepted_results.append(
                 contract_validation_failed_result(
                     iteration=state.refinement_iteration + 1,
-                    score_before=state.review_history[-1].overall_score if state.review_history else float(review_payload.get("overall_score", 0.0)),
+                    score_before=state.review_history[-1].overall_score if state.review_history else float(iteration.review_payload.get("overall_score", 0.0)),
                     paper_path=state.artifacts.paper_full_tex,
                     issues=_issue_messages(blocking_issues),
                     validation_path=validation_path,
@@ -273,8 +232,8 @@ def refine_current_paper(
                 + " | ".join(_issue_messages(validation_issues))
             )
 
-        candidate_tex_path = artifact_path(cwd, f"paper.refined.iter-{candidate_iter:02d}.tex")
-        worklog_path = review_path(cwd, f"refinement_worklog.iter-{candidate_iter:02d}.json")
+        candidate_tex_path = artifact_path(cwd, f"paper.refined.iter-{iteration.candidate_iter:02d}.tex")
+        worklog_path = review_path(cwd, f"refinement_worklog.iter-{iteration.candidate_iter:02d}.json")
         write_text(candidate_tex_path, latex)
         write_json(worklog_path, worklog)
 
@@ -282,12 +241,12 @@ def refine_current_paper(
         temp_latest_review = state.artifacts.latest_review_json
         temp_review_history_len = len(state.review_history)
         previous_snapshot = state.review_history[-1] if state.review_history else None
-        previous_score = previous_snapshot.overall_score if previous_snapshot else float(review_payload.get("overall_score", 0.0))
-        previous_axes = previous_snapshot.axes if previous_snapshot else _extract_axis_scores(review_payload)
-        no_op_refinement = latex == current_paper
+        previous_score = previous_snapshot.overall_score if previous_snapshot else float(iteration.review_payload.get("overall_score", 0.0))
+        previous_axes = previous_snapshot.axes if previous_snapshot else _extract_axis_scores(iteration.review_payload)
+        no_op_refinement = latex == iteration.current_paper
         if no_op_refinement:
             candidate_review_path = Path(temp_latest_review or state.artifacts.latest_review_json or "")
-            candidate_review = review_payload
+            candidate_review = iteration.review_payload
             candidate_score = previous_score
             candidate_axes = previous_axes
         else:
@@ -296,7 +255,7 @@ def refine_current_paper(
             candidate_review_path = review_current_paper(
                 cwd,
                 provider,
-                review_name=f"review.iter-{candidate_iter:02d}.json",
+                review_name=f"review.iter-{iteration.candidate_iter:02d}.json",
                 runtime_mode=runtime_mode,
             )
             candidate_review = read_json(candidate_review_path)
@@ -310,8 +269,8 @@ def refine_current_paper(
             try:
                 candidate_pdf_path = compile_latex(
                     candidate_tex_path,
-                    workdir=build_path(cwd, f"compiled-iter-{candidate_iter:02d}"),
-                    output_log=build_path(cwd, f"latex-build.iter-{candidate_iter:02d}.log"),
+                    workdir=build_path(cwd, f"compiled-iter-{iteration.candidate_iter:02d}"),
+                    output_log=build_path(cwd, f"latex-build.iter-{iteration.candidate_iter:02d}.log"),
                 )
             except Exception as exc:  # pragma: no cover - compile availability is environment-dependent
                 compile_error = str(exc)
@@ -326,13 +285,13 @@ def refine_current_paper(
                     and previous_compile_report.get("clean")
                     and previous_compile_report.get("pdf_exists")
                 ):
-                    latex = current_paper
+                    latex = iteration.current_paper
                     candidate_pdf_path = state.artifacts.compiled_pdf
                     compile_error = None
                     compile_preservation = True
                     no_op_refinement = True
                     candidate_review_path = Path(temp_latest_review or state.artifacts.latest_review_json or "")
-                    candidate_review = review_payload
+                    candidate_review = iteration.review_payload
                     candidate_score = previous_score
                     candidate_axes = previous_axes
                     worklog.setdefault("actions_taken", []).append(
@@ -340,7 +299,7 @@ def refine_current_paper(
                     )
                     lane_notes = lane_notes + ["Refinement revision failed compile acceptance; preserved prior compiled manuscript."]
                     print(
-                        f"Refinement iter {candidate_iter} preserved prior compiled manuscript after compile failure.",
+                        f"Refinement iter {iteration.candidate_iter} preserved prior compiled manuscript after compile failure.",
                         file=sys.stderr,
                     )
 
@@ -355,7 +314,7 @@ def refine_current_paper(
             save_session(cwd, state)
             accepted_results.append(
                 candidate_only_result(
-                    iteration=candidate_iter,
+                    iteration=iteration.candidate_iter,
                     score_before=previous_score,
                     score_after=candidate_score,
                     axis_scores_before=previous_axes,
@@ -391,7 +350,7 @@ def refine_current_paper(
             retry_review_path = review_current_paper(
                 cwd,
                 provider,
-                review_name=f"review.iter-{candidate_iter:02d}.retry-01.json",
+                review_name=f"review.iter-{iteration.candidate_iter:02d}.retry-01.json",
                 runtime_mode=runtime_mode,
             )
             retry_review = read_json(retry_review_path)
@@ -438,14 +397,14 @@ def refine_current_paper(
                 state.active_artifact = Path(candidate_pdf_path).name
             else:
                 state.active_artifact = final_path.name
-            state.refinement_iteration = candidate_iter
+            state.refinement_iteration = iteration.candidate_iter
             state.notes.append(
-                f"Accepted refinement iteration {candidate_iter} (score {previous_score} -> {candidate_score})."
+                f"Accepted refinement iteration {iteration.candidate_iter} (score {previous_score} -> {candidate_score})."
             )
             if compile_preservation:
                 _append_unique_note(
                     state,
-                    f"Compile-failed refinement iteration {candidate_iter} preserved the prior compiled manuscript.",
+                    f"Compile-failed refinement iteration {iteration.candidate_iter} preserved the prior compiled manuscript.",
                 )
             if review_retry_scores:
                 state.notes.append(
@@ -456,7 +415,7 @@ def refine_current_paper(
             save_session(cwd, state)
             accepted_results.append(
                 accepted_refinement_result(
-                    iteration=candidate_iter,
+                    iteration=iteration.candidate_iter,
                     compile_preservation=compile_preservation,
                     score_before=previous_score,
                     score_after=candidate_score,
@@ -491,11 +450,11 @@ def refine_current_paper(
             state.review_history = state.review_history[:temp_review_history_len]
             _append_unique_note(
                 state,
-                f"Rejected refinement iteration {candidate_iter} (score {previous_score} -> {candidate_score}).",
+                f"Rejected refinement iteration {iteration.candidate_iter} (score {previous_score} -> {candidate_score}).",
             )
             reason = compile_error or "score_regressed_or_tie_break_failed"
             print(
-                f"Refinement iter {candidate_iter} rejected: score {previous_score} -> {candidate_score}; reason={reason}",
+                f"Refinement iter {iteration.candidate_iter} rejected: score {previous_score} -> {candidate_score}; reason={reason}",
                 file=sys.stderr,
             )
             if review_retry_scores:
@@ -507,7 +466,7 @@ def refine_current_paper(
             save_session(cwd, state)
             accepted_results.append(
                 rejected_refinement_result(
-                    iteration=candidate_iter,
+                    iteration=iteration.candidate_iter,
                     score_before=previous_score,
                     score_after=candidate_score,
                     paper_path=temp_state_paper,
