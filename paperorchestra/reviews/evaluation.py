@@ -1,16 +1,32 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.io import read_json
 from paperorchestra.core.session import load_session
-from paperorchestra.manuscript.validator import canonical_citation_keys, citation_entry_for_key
+from paperorchestra.manuscript.validator import canonical_citation_keys
 from paperorchestra.reviews.citation_partition import (
     build_citation_partition_request,
     compute_partitioned_citation_coverage,
+)
+from paperorchestra.reviews.evaluation_constants import (
+    EXPECTED_CITATION_STATISTICS_KEYS,
+    EXPECTED_LITERATURE_REVIEW_AXES,
+    EXPECTED_REVIEW_SUMMARY_KEYS,
+    EXPECTED_SEARCH_GROUNDED_SOURCES,
+    IGNORED_DISCOVERY_SOURCES,
+)
+from paperorchestra.reviews.evaluation_io import _write_json_artifact
+from paperorchestra.reviews.generated_citations import (
+    _CITE_RE,
+    build_generated_citation_titles,
+    write_generated_citation_titles,
+)
+from paperorchestra.reviews.review_gate_comparison import (
+    build_review_gate_comparison,
+    write_review_gate_comparison,
 )
 from paperorchestra.reviews.eval_text import (
     _compact_eval_title,
@@ -19,32 +35,6 @@ from paperorchestra.reviews.eval_text import (
     normalize_eval_title,
     parse_reported_margin_ranges,
 )
-
-EXPECTED_LITERATURE_REVIEW_AXES = [
-    "coverage_and_completeness",
-    "relevance_and_focus",
-    "critical_analysis_and_synthesis",
-    "positioning_and_novelty",
-    "organization_and_writing",
-    "citation_practices_and_rigor",
-]
-EXPECTED_CITATION_STATISTICS_KEYS = [
-    "estimated_unique_citations",
-    "citation_density_assessment",
-    "breadth_across_subareas",
-    "comparison_to_baseline",
-    "notes",
-]
-EXPECTED_REVIEW_SUMMARY_KEYS = ["strengths", "weaknesses", "top_improvements"]
-EXPECTED_SEARCH_GROUNDED_SOURCES = ["semantic_scholar", "openalex"]
-IGNORED_DISCOVERY_SOURCES = {"model"}
-
-
-def _write_json_artifact(payload: dict[str, Any], output_path: str | Path) -> Path:
-    path = Path(output_path).resolve()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    return path
 
 
 def _session_artifact_dir(state) -> Path | None:
@@ -72,9 +62,6 @@ def _attempted_grounded_sources(session_artifact_dir: Path | None) -> list[str]:
     if "openalex grounded query" in joined and "openalex" not in attempted:
         attempted.append("openalex")
     return attempted
-
-
-_CITE_RE = re.compile(r"\\cite[a-zA-Z*]*\s*(?:\[[^\]]*\]){0,2}\{([^}]+)\}")
 
 
 def build_reference_benchmark_case(reference_dir: str | Path, *, source_pdf: str | Path | None = None) -> dict[str, Any]:
@@ -201,132 +188,6 @@ def build_session_eval_summary(cwd: str | Path | None) -> dict[str, Any]:
 
 def write_session_eval_summary(cwd: str | Path | None, output_path: str | Path) -> Path:
     payload = build_session_eval_summary(cwd)
-    return _write_json_artifact(payload, output_path)
-
-
-def build_review_gate_comparison(cwd: str | Path | None) -> dict[str, Any]:
-    state = load_session(cwd)
-    latest_review = read_json(state.artifacts.latest_review_json) if state.artifacts.latest_review_json and Path(state.artifacts.latest_review_json).exists() else {}
-    axis_scores = latest_review.get("axis_scores") if isinstance(latest_review, dict) else {}
-    present_axes = list(axis_scores.keys()) if isinstance(axis_scores, dict) else []
-    missing_axes = [axis for axis in EXPECTED_LITERATURE_REVIEW_AXES if axis not in present_axes]
-    extra_axes = [axis for axis in present_axes if axis not in EXPECTED_LITERATURE_REVIEW_AXES]
-    citation_statistics = latest_review.get("citation_statistics") if isinstance(latest_review, dict) else {}
-    summary = latest_review.get("summary") if isinstance(latest_review, dict) else {}
-    questions = latest_review.get("questions") if isinstance(latest_review, dict) else []
-    missing_citation_statistics_keys = [key for key in EXPECTED_CITATION_STATISTICS_KEYS if key not in citation_statistics] if isinstance(citation_statistics, dict) else EXPECTED_CITATION_STATISTICS_KEYS[:]
-    missing_summary_keys = [key for key in EXPECTED_REVIEW_SUMMARY_KEYS if key not in summary] if isinstance(summary, dict) else EXPECTED_REVIEW_SUMMARY_KEYS[:]
-    questions_count = len(questions) if isinstance(questions, list) else 0
-    overall_score = latest_review.get("overall_score") if isinstance(latest_review, dict) else None
-    axis_scores_for_numeric = axis_scores if isinstance(axis_scores, dict) else {}
-    numeric_axis_scores = {
-        key: value.get("score")
-        for key, value in axis_scores_for_numeric.items()
-        if isinstance(value, dict) and isinstance(value.get("score"), (int, float))
-    }
-    anti_inflation_violations: list[str] = []
-    if isinstance(overall_score, (int, float)):
-        if any(isinstance(score, (int, float)) and score < 50 for score in numeric_axis_scores.values()) and overall_score > 75:
-            anti_inflation_violations.append("overall_score_above_75_with_sub50_axis")
-        if overall_score > 90:
-            anti_inflation_violations.append("overall_score_above_90_requires_exceptional_evidence")
-    critical_score = numeric_axis_scores.get("critical_analysis_and_synthesis")
-    if isinstance(critical_score, (int, float)) and critical_score > 60 and isinstance(overall_score, (int, float)) and overall_score <= 55:
-        anti_inflation_violations.append("critical_analysis_above_60_with_low_overall_score")
-    return {
-        "session_id": state.session_id,
-        "review_path": state.artifacts.latest_review_json,
-        "overall_score": overall_score,
-        "expected_axes": EXPECTED_LITERATURE_REVIEW_AXES,
-        "present_axes": present_axes,
-        "missing_axes": missing_axes,
-        "extra_axes": extra_axes,
-        "overlap_count": len(present_axes) - len(extra_axes),
-        "has_citation_statistics": isinstance(latest_review, dict) and isinstance(citation_statistics, dict),
-        "has_penalties": isinstance(latest_review, dict) and isinstance(latest_review.get("penalties"), list),
-        "has_summary": isinstance(latest_review, dict) and isinstance(summary, dict),
-        "has_questions": isinstance(latest_review, dict) and isinstance(questions, list),
-        "missing_citation_statistics_keys": missing_citation_statistics_keys,
-        "missing_summary_keys": missing_summary_keys,
-        "questions_count": questions_count,
-        "anti_inflation_violations": anti_inflation_violations,
-        "comparability_status": (
-            "implemented"
-            if not missing_axes
-            and not missing_citation_statistics_keys
-            and not missing_summary_keys
-            and isinstance(latest_review, dict)
-            and isinstance(latest_review.get("penalties"), list)
-            and questions_count > 0
-            and not anti_inflation_violations
-            else "partial"
-            if latest_review
-            else "missing"
-        ),
-        "notes": [
-            "This artifact checks whether the current review surface matches the expected AgentReview-style literature-review autorater structure.",
-        ],
-    }
-
-
-def write_review_gate_comparison(cwd: str | Path | None, output_path: str | Path) -> Path:
-    payload = build_review_gate_comparison(cwd)
-    return _write_json_artifact(payload, output_path)
-
-
-def build_generated_citation_titles(cwd: str | Path | None) -> dict[str, Any]:
-    state = load_session(cwd)
-    if not state.artifacts.paper_full_tex or not Path(state.artifacts.paper_full_tex).exists():
-        return {"cited_keys": [], "generated_titles": [], "notes": ["No paper_full_tex artifact available."]}
-    if not state.artifacts.citation_map_json or not Path(state.artifacts.citation_map_json).exists():
-        return {"cited_keys": [], "generated_titles": [], "notes": ["No citation_map_json artifact available."]}
-
-    latex_text = Path(state.artifacts.paper_full_tex).read_text(encoding="utf-8")
-    citation_map = read_json(state.artifacts.citation_map_json)
-    cited_keys: list[str] = []
-    for match in _CITE_RE.findall(latex_text):
-        for key in [part.strip() for part in match.split(",") if part.strip()]:
-            if key not in cited_keys:
-                cited_keys.append(key)
-
-    generated_titles: list[str] = []
-    resolved_entries: list[dict[str, Any]] = []
-    seen_titles: set[str] = set()
-    for key in cited_keys:
-        entry = citation_entry_for_key(citation_map, key) if isinstance(citation_map, dict) else {}
-        title = entry.get("title") if isinstance(entry, dict) else None
-        if not isinstance(title, str) or not title.strip():
-            continue
-        clean_title = title.strip()
-        normalized = normalize_eval_title(clean_title)
-        if normalized in seen_titles:
-            continue
-        seen_titles.add(normalized)
-        generated_titles.append(clean_title)
-        resolved_entries.append(
-            {
-                "citation_key": key,
-                "title": clean_title,
-                "normalized_title": normalized,
-                "paper_id": entry.get("paper_id") if isinstance(entry, dict) else None,
-            }
-        )
-
-    return {
-        "session_id": state.session_id,
-        "cited_keys": cited_keys,
-        "generated_titles": generated_titles,
-        "resolved_entries": resolved_entries,
-        "count": len(generated_titles),
-        "notes": [
-            "Titles are resolved from the current paper's cite-style commands against citation_map.json.",
-            "Duplicate citation titles are collapsed by normalized title for scaffold comparisons.",
-        ],
-    }
-
-
-def write_generated_citation_titles(cwd: str | Path | None, output_path: str | Path) -> Path:
-    payload = build_generated_citation_titles(cwd)
     return _write_json_artifact(payload, output_path)
 
 
