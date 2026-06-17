@@ -1079,6 +1079,12 @@ def _boundary_negates_phrase(prefix: str) -> bool:
         prefix,
     ):
         return True
+    if re.search(
+        r"\bnor\s+do(?:es)?\s+(?:they|it|we|this|the\s+\w+)\s+guarantee\s+that\s+"
+        r"(?:[\w\s-]{0,80}\s+)?(?:is|are|would\s+be|will\s+be)\s*$",
+        prefix,
+    ):
+        return True
     direct_boundary_verb = r"(?:claim|assert|show|establish|demonstrate|imply|mean)"
     direct_boundary_modifier = r"(?:currently|directly|explicitly|actually|yet)"
     direct_boundary = re.search(

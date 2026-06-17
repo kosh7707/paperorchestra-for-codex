@@ -484,6 +484,10 @@ class NarrativePlanningTests(unittest.TestCase):
                 "human review is unnecessary",
                 "The evidence should not be interpreted as evidence that human review is unnecessary.",
             ),
+            (
+                "submission ready",
+                "The checks do not certify scientific correctness, nor do they guarantee that the resulting manuscript is submission-ready.",
+            ),
         ]
         for forbidden, sentence in cases:
             with self.subTest(forbidden=forbidden, sentence=sentence):
