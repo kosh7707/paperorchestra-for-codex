@@ -46,8 +46,8 @@ Environment:
   PAPERO_CONTAINER_AI_CLI_UPDATE_FORCE=1  Same as --force.
   PAPERO_CONTAINER_AI_CLI_INSTALL_PREREQS=0
                                            Do not apt-install xz-utils/bubblewrap.
-  NPM_BIN=/path/to/npm                    Override npm command for tests/debugging.
-  PYTHON_BIN=/path/to/python3             Override python command for tests/debugging.
+  NPM_BIN=/path/to/npm                    Override npm command for debugging.
+  PYTHON_BIN=/path/to/python3             Override python command for debugging.
 EOF_USAGE
 }
 

@@ -45,7 +45,7 @@ READY_MANUSCRIPT_READINESS_VALUES = {
     "camera_ready",
 }
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
-DEFAULT_EXPECTED_MATERIAL_ROOT = Path("examples/fresh-smoke-materials")
+DEFAULT_EXPECTED_MATERIAL_ROOT = None
 DEFAULT_MATERIAL_POINTER = Path(".omx/state/current-fresh-smoke-materials-root")
 
 FRESH_SMOKE_MANIFEST_PATH_KEYS = (
@@ -178,7 +178,7 @@ def validate_material_invariance(
     material_root: str | Path,
     *,
     repo_root: str | Path = ".",
-    expected_material_root: str | Path = DEFAULT_EXPECTED_MATERIAL_ROOT,
+    expected_material_root: str | Path | None = DEFAULT_EXPECTED_MATERIAL_ROOT,
     pointer_path: str | Path = DEFAULT_MATERIAL_POINTER,
 ) -> dict[str, Any]:
     """Validate an immutable smoke-test material packet without trusting path equality alone."""

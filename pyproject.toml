@@ -13,11 +13,6 @@ authors = [
 ]
 dependencies = []
 
-[project.optional-dependencies]
-dev = [
-  "pytest>=8",
-  "setuptools>=68",
-]
 
 [project.scripts]
 paperorchestra = "paperorchestra.cli:main"

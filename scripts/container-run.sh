@@ -34,7 +34,6 @@ Options:
 Examples:
   scripts/container-run.sh --privileged --with-codex-auth
   scripts/container-run.sh --privileged --with-codex-auth -- omx explore --prompt 'Return exactly OK'
-  scripts/container-run.sh -- scripts/fresh-qa.sh --skip-tests --skip-compile
 EOF_USAGE
 }
 

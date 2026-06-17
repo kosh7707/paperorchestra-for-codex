@@ -8,7 +8,6 @@ DRY_RUN=0
 WITH_DEMO=0
 WITH_MCP=1
 WITH_OMX=1
-DEV_INSTALL=0
 SKIP_SKILLS=0
 DEFAULT_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check"]'
 MODEL_CMD="${PAPERO_MODEL_CMD:-$DEFAULT_MODEL_CMD}"
@@ -19,7 +18,7 @@ usage() {
 PaperOrchestra installer
 
 Usage:
-  ./install.sh [--dev] [--skip-skills] [--skip-mcp] [--skip-omx] [--dry-run]
+  ./install.sh [--skip-skills] [--skip-mcp] [--skip-omx] [--dry-run]
 
 What it does by default:
   - creates .venv if needed
@@ -35,7 +34,6 @@ Options:
   --mcp          compatibility no-op: MCP registration is already on by default
   --skip-mcp     skip Codex MCP registration
   --skip-omx     skip omx setup even when omx is available
-  --dev          install dev extras for tests/contributor work
   --skip-skills  skip Codex skill installation
   --dry-run      print the plan without changing files
   -h, --help     show this help
@@ -48,7 +46,6 @@ while [[ $# -gt 0 ]]; do
     --mcp) WITH_MCP=1 ;;
     --skip-mcp|--no-mcp) WITH_MCP=0 ;;
     --skip-omx|--no-omx) WITH_OMX=0 ;;
-    --dev) DEV_INSTALL=1 ;;
     --skip-skills) SKIP_SKILLS=1 ;;
     --dry-run) DRY_RUN=1 ;;
     -h|--help) usage; exit 0 ;;
@@ -97,9 +94,6 @@ write_provider_env() {
 
 PYTHON_BIN="$(find_python)"
 INSTALL_TARGET="."
-if [[ "$DEV_INSTALL" -eq 1 ]]; then
-  INSTALL_TARGET=".[dev]"
-fi
 
 printf 'PaperOrchestra installer\n'
 printf 'Repository: %s\n' "$ROOT"
@@ -166,7 +160,6 @@ Next:
   .venv/bin/paperorchestra status --json
 
 Optional:
-  ./install.sh --dev       # install dev extras for tests
   ./install.sh --skip-mcp  # install without Codex MCP registration
   ./install.sh --skip-omx  # install without running omx setup
 

@@ -714,13 +714,13 @@ def build_readiness_profiles(
 
     profiles.append(
         _profile(
-            "demo_ready",
-            "Safe local mock/compatibility runs and most docs/CLI surfaces.",
+            "local_cli_ready",
+            "Local CLI/help/status surfaces are available.",
             True,
             [],
             [
-                "paperorchestra quickstart --scenario environment",
-                "paperorchestra run --provider mock --verify-mode mock --runtime-mode compatibility",
+                "paperorchestra status --json",
+                "paperorchestra doctor",
             ],
         )
     )

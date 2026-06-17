@@ -836,7 +836,7 @@ def _environment_summary_lines(payload: dict[str, object]) -> list[str]:
             f"  active Codex session attachment: not checked ({mcp_attachment.get('detail', 'cannot be verified from CLI')})",
             "",
             "Next:",
-            "  ./scripts/demo-mock.sh --in-repo",
+            "  paperorchestra status --json",
             "  paperorchestra doctor",
             "  scripts/smoke-paperorchestra-mcp.py",
         ]

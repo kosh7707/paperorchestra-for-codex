@@ -17,7 +17,7 @@ EOF
 }
 
 EVIDENCE_ROOT=""
-MATERIAL_ROOT="examples/fresh-smoke-materials"
+MATERIAL_ROOT=""
 EXPECTED_MATERIAL_ROOT=""
 MAX_OPERATOR_CYCLES=5
 MAX_ITER=8
@@ -49,7 +49,14 @@ if [[ -f "$REPO_ROOT/.env" ]]; then
   set +a
 fi
 
-EXPECTED_MATERIAL_ROOT="${EXPECTED_MATERIAL_ROOT:-examples/fresh-smoke-materials}"
+EXPECTED_MATERIAL_ROOT="${EXPECTED_MATERIAL_ROOT:-$MATERIAL_ROOT}"
+
+if [[ -z "$MATERIAL_ROOT" && "$DRY_RUN_CONTRACT" != "1" ]]; then
+  echo "ERROR: --material-root is required; this repository no longer ships fresh-smoke material packets." >&2
+  usage >&2
+  exit 2
+fi
+
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 EVIDENCE_ROOT="${EVIDENCE_ROOT:-review/fresh-full-live-smoke-loop-${TS}}"
 EVIDENCE_ROOT="$(python3 -c 'import os,sys; print(os.path.abspath(sys.argv[1]))' "$EVIDENCE_ROOT")"

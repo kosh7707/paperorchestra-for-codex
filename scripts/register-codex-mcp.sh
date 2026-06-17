@@ -21,8 +21,7 @@ Register the PaperOrchestra MCP server in Codex CLI's TOML config.
 Options:
   --use-local-venv
       Register this checkout's .venv/bin/paperorchestra-mcp absolute path.
-      Run `python -m pip install -e .` or `python -m pip install -e ".[dev]"`
-      first if the venv command does not exist.
+      Run `python -m pip install -e .` first if the venv command does not exist.
 
   --command PATH_OR_NAME
       Register an explicit command instead of paperorchestra-mcp.

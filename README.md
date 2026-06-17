@@ -63,22 +63,12 @@ Common knobs:
 
 External domain profiles can be added in code with `register_domain`; keep domain plugins generic and avoid private paths in public docs.
 
-## Tutorials
+## References
 
-Detailed references live outside this README. Use them only when the matching situation exists; the normal install path is still `git clone` followed by `./install.sh`.
+The clone-facing surface is intentionally small: README for usage, `ENVIRONMENT.md` for runtime knobs, and `paperorchestra --help` for command details. Long architecture notes, historical reports, and maintainer test suites are intentionally not shipped as primary user documentation.
 
-| Tutorial | Scope |
-| --- | --- |
-| [`docs/tutorials/index.md`](docs/tutorials/index.md) | Tutorial map and safety posture. |
-| [`docs/tutorials/start.md`](docs/tutorials/start.md) | First-use and stale install checks. |
-| [`docs/tutorials/mock-demo.md`](docs/tutorials/mock-demo.md) | Optional fixture/mock check. |
-| [`docs/tutorials/docker-container-qa.md`](docs/tutorials/docker-container-qa.md) | Fresh container QA. |
-| [`docs/tutorials/rendered-pdf-human-qa.md`](docs/tutorials/rendered-pdf-human-qa.md) | Human rendered-PDF QA. |
-| [`docs/tutorials/claim-safe-quality-loop.md`](docs/tutorials/claim-safe-quality-loop.md) | Claim-safe gate, `qa-loop-step`, and Ralph handoff semantics. |
+Useful commands:
 
-Other useful references:
-
-- [`docs/quality-gate-state-machine.md`](docs/quality-gate-state-machine.md)
 - `paperorchestra --help`
 - `paperorchestra doctor`
 - `paperorchestra environment`
