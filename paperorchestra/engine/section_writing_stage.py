@@ -15,12 +15,7 @@ from paperorchestra.engine.completion import (
     _provider_name,
 )
 from paperorchestra.engine.latex_postprocess import (
-    _drop_unknown_citation_keys,
-    _ensure_bibliography_hook,
-    _ensure_generated_plot_usage,
     _filter_plot_context_for_latex,
-    _normalize_generated_plot_paths,
-    _normalize_source_figure_paths,
     _reviewable_plot_assets_index,
     _reviewable_plot_manifest,
     _stabilize_figure_float_placement,
@@ -42,36 +37,34 @@ from paperorchestra.engine.prompt_context import (
     _raise_if_strict_source_citations_unmapped,
     _read_inputs,
     _source_critical_context_for_prompt,
-    _source_grounding_text,
     _strict_content_gates_enabled,
-    _unknown_citation_key_counts,
 )
 from paperorchestra.engine.reports import (
     _blocking_issues,
     _issue_messages,
     _record_validation_report,
-    collect_paper_contract_issues,
 )
 from paperorchestra.engine.section_scope import (
     _expected_section_titles_from_outline,
-    _filter_section_scoped_issues,
     _filtered_outline_for_sections,
     _normalize_section_selection,
-    _preserve_all_except_sections,
     _preserve_existing_sections,
     _resolve_selected_sections,
     _selected_section_template,
+)
+from paperorchestra.engine.section_writing_support import (
+    SECTION_REPAIRABLE_CODES,
+    SectionDraftContext,
+    SectionValidationContext,
+    normalize_section_draft,
+    validate_section_draft,
 )
 from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.manuscript.repair import (
     _canonical_generated_section_title,
     _citation_map_for_selected_sections,
-    _ensure_discussion_section_for_claim_boundaries,
-    _ensure_required_claim_scope_notes,
-    _remove_material_packet_sections,
-    _restore_missing_referenced_labels,
 )
-from paperorchestra.manuscript.validator import canonical_citation_keys, canonicalize_citation_keys
+from paperorchestra.manuscript.validator import canonical_citation_keys
 from paperorchestra.runtime.parity import record_lane_manifest
 from paperorchestra.runtime.providers import BaseProvider
 
@@ -91,7 +84,11 @@ def write_sections(
     selected_sections = _normalize_section_selection(only_sections)
     if selected_sections and not state.artifacts.paper_full_tex:
         raise ContractError("Need an existing paper.full.tex before rewriting only selected sections.")
-    current_source = read_text(state.artifacts.paper_full_tex) if selected_sections and state.artifacts.paper_full_tex else None
+    current_source = (
+        read_text(state.artifacts.paper_full_tex)
+        if selected_sections and state.artifacts.paper_full_tex
+        else None
+    )
     if current_source is not None:
         selected_sections = _resolve_selected_sections(current_source, selected_sections)
     narrative_plan, claim_map, citation_placement_plan = _planning_payloads_for_prompt(cwd)
@@ -106,13 +103,29 @@ def write_sections(
     raw_prompt_outline = _filtered_outline_for_sections(outline, selected_sections) if selected_sections else outline
     prompt_outline = _compact_outline_for_prompt(raw_prompt_outline)
     citation_map = read_json(state.artifacts.citation_map_json) if state.artifacts.citation_map_json else {}
-    prompt_citation_map = _citation_map_for_selected_sections(current_source, citation_map, selected_sections) if current_source is not None else citation_map
+    prompt_citation_map = (
+        _citation_map_for_selected_sections(current_source, citation_map, selected_sections)
+        if current_source is not None
+        else citation_map
+    )
     min_citation_coverage = _citation_coverage_target(citation_map)
-    raw_plot_manifest = read_json(state.artifacts.plot_manifest_json) if state.artifacts.plot_manifest_json else {"figures": []}
-    raw_plot_assets_index = read_json(state.artifacts.plot_assets_json) if state.artifacts.plot_assets_json else {"assets": []}
+    raw_plot_manifest = (
+        read_json(state.artifacts.plot_manifest_json)
+        if state.artifacts.plot_manifest_json
+        else {"figures": []}
+    )
+    raw_plot_assets_index = (
+        read_json(state.artifacts.plot_assets_json)
+        if state.artifacts.plot_assets_json
+        else {"assets": []}
+    )
     plot_assets_index = _reviewable_plot_assets_index(raw_plot_assets_index)
     plot_manifest = _reviewable_plot_manifest(raw_plot_manifest, raw_plot_assets_index)
-    selected_section_source = _selected_section_template(current_source, selected_sections) if selected_sections and current_source is not None else None
+    selected_section_source = (
+        _selected_section_template(current_source, selected_sections)
+        if selected_sections and current_source is not None
+        else None
+    )
     scoped_plot_manifest, scoped_plot_assets_index = (
         _filter_plot_context_for_latex(selected_section_source, plot_manifest, plot_assets_index)
         if selected_sections
@@ -147,6 +160,7 @@ def write_sections(
     prompt_experimental_log = _prompt_compact_text(inputs["experimental_log"], head_chars=5000, tail_chars=1000)
     source_critical_context = _source_critical_context_for_prompt(inputs)
     figures_dir = state.inputs.figures_dir or ""
+    intro_related_source = None
     if current_source is not None:
         template_content = _selected_section_template(current_source, selected_sections)
     else:
@@ -158,6 +172,29 @@ def write_sections(
                 intro_related_source,
                 section_names=["Introduction", "Related Work"],
             )
+    draft_context = SectionDraftContext(
+        current_source=current_source,
+        selected_sections=selected_sections,
+        intro_related_source=intro_related_source,
+        template_content=template_content,
+        citation_map=citation_map,
+        plot_assets_index=plot_assets_index,
+        figures_dir=state.inputs.figures_dir,
+        claim_map=claim_map,
+        strict_claim_safe_prompt=strict_claim_safe_prompt,
+    )
+    validation_context = SectionValidationContext(
+        selected_sections=selected_sections,
+        citation_map=citation_map,
+        figures_dir=state.inputs.figures_dir,
+        plot_manifest=scoped_plot_manifest if selected_sections else plot_manifest,
+        plot_assets_index=scoped_plot_assets_index if selected_sections else plot_assets_index,
+        inputs=inputs,
+        expected_section_titles=expected_section_titles,
+        narrative_plan=narrative_plan,
+        claim_map=claim_map,
+        citation_placement_plan=citation_placement_plan,
+    )
     prompt_template_content = _prompt_compact_text(template_content, head_chars=5000, tail_chars=1000)
     section_scope_instructions = ""
     if selected_sections:
@@ -189,7 +226,10 @@ def write_sections(
 
 {_data_block('citation_map.json', json.dumps(prompt_citation_map_compact, indent=2, ensure_ascii=False))}
 
-{_data_block('citation_coverage_target.json', json.dumps({'min_distinct_verified_citations': min_citation_coverage, 'available_verified_citations': len(canonical_citation_keys(citation_map))}, ensure_ascii=False))}
+{_data_block('citation_coverage_target.json', json.dumps({
+    'min_distinct_verified_citations': min_citation_coverage,
+    'available_verified_citations': len(canonical_citation_keys(citation_map)),
+}, ensure_ascii=False))}
 
 {_data_block('plot_manifest.json', json.dumps(prompt_plot_manifest, indent=2, ensure_ascii=False))}
 
@@ -202,7 +242,10 @@ def write_sections(
 {_data_block('figures_list', inputs['figures'])}
 
 {_data_block('figures_dir', figures_dir or 'null')}
-{_data_block('rewrite_scope.json', json.dumps({'only_sections': selected_sections, 'preserve_all_other_sections': bool(selected_sections)}, ensure_ascii=False))}
+{_data_block('rewrite_scope.json', json.dumps({
+    'only_sections': selected_sections,
+    'preserve_all_other_sections': bool(selected_sections),
+}, ensure_ascii=False))}
 
 {global_section_instructions}
 {section_scope_instructions}
@@ -216,70 +259,24 @@ def write_sections(
         trace_stage="section_writing",
     )
     latex = extract_latex(response)
-    if selected_sections and current_source is not None:
-        latex = _preserve_all_except_sections(
-            latex,
-            current_source,
-            rewritten_section_names=selected_sections,
-        )
-    elif state.artifacts.intro_related_tex and Path(state.artifacts.intro_related_tex).exists():
-        intro_related_source = read_text(state.artifacts.intro_related_tex)
-        latex = _preserve_existing_sections(
-            latex,
-            intro_related_source,
-            section_names=["Introduction", "Related Work"],
-        )
-    latex = _restore_missing_referenced_labels(latex, template_content)
-    latex = _ensure_bibliography_hook(latex, citation_map)
-    latex = _normalize_generated_plot_paths(latex, plot_assets_index)
-    latex = _normalize_source_figure_paths(latex, state.inputs.figures_dir)
-    latex = _ensure_generated_plot_usage(latex, plot_assets_index)
-    latex = _stabilize_figure_float_placement(latex)
-    latex = _remove_material_packet_sections(latex)
-    latex = _ensure_discussion_section_for_claim_boundaries(latex, claim_map)
-    latex = _ensure_required_claim_scope_notes(latex, claim_map)
-    latex, citation_replacements = canonicalize_citation_keys(latex, citation_map)
-    if strict_claim_safe_prompt:
-        dropped_citations = _unknown_citation_key_counts(latex, citation_map)
-    else:
-        latex, dropped_citations = _drop_unknown_citation_keys(latex, citation_map)
+    latex, citation_replacements, dropped_citations = normalize_section_draft(latex, draft_context)
     state.latest_provider_name = _provider_name(provider)
     state.latest_runtime_mode = runtime_mode
     save_session(cwd, state)
     latex = _apply_mock_watermark(latex, state, provider_name=_provider_name(provider))
-    validation_subject = _selected_section_template(latex, selected_sections) if selected_sections else latex
-    validation_issues = collect_paper_contract_issues(
-        validation_subject,
-        citation_map=citation_map,
-        figures_dir=state.inputs.figures_dir,
-        plot_manifest=scoped_plot_manifest if selected_sections else plot_manifest,
-        plot_assets_index=scoped_plot_assets_index if selected_sections else plot_assets_index,
-        experimental_log_text=_source_grounding_text(inputs),
-        expected_section_titles=expected_section_titles,
-        narrative_plan=narrative_plan,
-        claim_map=claim_map,
-        citation_placement_plan=citation_placement_plan,
-    )
-    validation_issues = _filter_section_scoped_issues(validation_issues, selected_sections=selected_sections)
+    validation_issues = validate_section_draft(latex, validation_context)
     blocking_issues = _blocking_issues(validation_issues)
     repairable_codes = {issue.code for issue in blocking_issues}
-    if blocking_issues and repairable_codes <= {
-        "unknown_citation_keys",
-        "citation_coverage_insufficient",
-        "numeric_grounding_mismatch",
-        "plot_plan_not_reflected",
-        "expected_section_missing",
-        "expected_section_too_shallow",
-        "required_claim_missing",
-        "required_claim_keyword_stuffing",
-        "narrative_section_role_missing",
-    }:
+    if blocking_issues and repairable_codes <= SECTION_REPAIRABLE_CODES:
         repair_prompt = f"""
 {user_prompt}
 
 {_data_block('current_draft.tex', _prompt_compact_text(latex, head_chars=10000, tail_chars=2000))}
 
-{_data_block('validation_issues.json', json.dumps([issue.to_dict() for issue in blocking_issues], indent=2, ensure_ascii=False))}
+{_data_block(
+    'validation_issues.json',
+    json.dumps([issue.to_dict() for issue in blocking_issues], indent=2, ensure_ascii=False),
+)}
 
 Repair Instructions:
 - Revise the existing manuscript draft to satisfy the validation issues above.
@@ -305,47 +302,11 @@ Repair Instructions:
             trace_stage="section_writing_repair",
         )
         retry_latex = extract_latex(retry_response)
-        if selected_sections and current_source is not None:
-            retry_latex = _preserve_all_except_sections(
-                retry_latex,
-                current_source,
-                rewritten_section_names=selected_sections,
-            )
-        elif state.artifacts.intro_related_tex and Path(state.artifacts.intro_related_tex).exists():
-            intro_related_source = read_text(state.artifacts.intro_related_tex)
-            retry_latex = _preserve_existing_sections(
-                retry_latex,
-                intro_related_source,
-                section_names=["Introduction", "Related Work"],
-            )
-        retry_latex = _restore_missing_referenced_labels(retry_latex, template_content)
-        retry_latex = _ensure_bibliography_hook(retry_latex, citation_map)
-        retry_latex = _normalize_generated_plot_paths(retry_latex, plot_assets_index)
-        retry_latex = _normalize_source_figure_paths(retry_latex, state.inputs.figures_dir)
-        retry_latex = _ensure_generated_plot_usage(retry_latex, plot_assets_index)
-        retry_latex = _stabilize_figure_float_placement(retry_latex)
-        retry_latex = _remove_material_packet_sections(retry_latex)
-        retry_latex = _ensure_discussion_section_for_claim_boundaries(retry_latex, claim_map)
-        retry_latex = _ensure_required_claim_scope_notes(retry_latex, claim_map)
-        retry_latex, retry_replacements = canonicalize_citation_keys(retry_latex, citation_map)
-        if strict_claim_safe_prompt:
-            retry_dropped_citations = _unknown_citation_key_counts(retry_latex, citation_map)
-        else:
-            retry_latex, retry_dropped_citations = _drop_unknown_citation_keys(retry_latex, citation_map)
-        retry_validation_subject = _selected_section_template(retry_latex, selected_sections) if selected_sections else retry_latex
-        retry_issues = collect_paper_contract_issues(
-            retry_validation_subject,
-            citation_map=citation_map,
-            figures_dir=state.inputs.figures_dir,
-            plot_manifest=scoped_plot_manifest if selected_sections else plot_manifest,
-            plot_assets_index=scoped_plot_assets_index if selected_sections else plot_assets_index,
-            experimental_log_text=_source_grounding_text(inputs),
-            expected_section_titles=expected_section_titles,
-            narrative_plan=narrative_plan,
-            claim_map=claim_map,
-            citation_placement_plan=citation_placement_plan,
+        retry_latex, retry_replacements, retry_dropped_citations = normalize_section_draft(
+            retry_latex,
+            draft_context,
         )
-        retry_issues = _filter_section_scoped_issues(retry_issues, selected_sections=selected_sections)
+        retry_issues = validate_section_draft(retry_latex, validation_context)
         retry_blocking = _blocking_issues(retry_issues)
         if (
             retry_blocking
@@ -365,26 +326,17 @@ Repair Instructions:
             )
             if bridged_retry_latex != retry_latex:
                 retry_latex = bridged_retry_latex
-                retry_validation_subject = _selected_section_template(retry_latex, selected_sections) if selected_sections else retry_latex
-                retry_issues = collect_paper_contract_issues(
-                    retry_validation_subject,
-                    citation_map=citation_map,
-                    figures_dir=state.inputs.figures_dir,
-                    plot_manifest=scoped_plot_manifest if selected_sections else plot_manifest,
-                    plot_assets_index=scoped_plot_assets_index if selected_sections else plot_assets_index,
-                    experimental_log_text=_source_grounding_text(inputs),
-                    expected_section_titles=expected_section_titles,
-                    narrative_plan=narrative_plan,
-                    claim_map=claim_map,
-                    citation_placement_plan=citation_placement_plan,
-                )
-                retry_issues = _filter_section_scoped_issues(retry_issues, selected_sections=selected_sections)
+                retry_issues = validate_section_draft(retry_latex, validation_context)
                 retry_blocking = _blocking_issues(retry_issues)
         if not retry_blocking:
             latex = retry_latex
             validation_issues = retry_issues
             blocking_issues = retry_blocking
-            lane_notes = lane_notes + ["Section writer draft was retried after section-contract validation failure."] + retry_lane_notes
+            lane_notes = (
+                lane_notes
+                + ["Section writer draft was retried after section-contract validation failure."]
+                + retry_lane_notes
+            )
             if citation_replacements:
                 lane_notes.append(
                     "Canonicalized citation-key aliases in section draft: "
@@ -401,30 +353,24 @@ Repair Instructions:
                     if strict_claim_safe_prompt
                     else "Dropped unsupported citation keys in section retry draft: "
                 )
-                lane_notes.append(note_prefix + ", ".join(f"{key}({count})" for key, count in sorted(retry_dropped_citations.items())))
+                lane_notes.append(
+                    note_prefix
+                    + ", ".join(f"{key}({count})" for key, count in sorted(retry_dropped_citations.items()))
+                )
             lane_type = retry_lane_type
             fallback_used = retry_fallback_used
         else:
             repaired_retry_latex = retry_latex
             repaired = False
             if any(issue.code == "plot_plan_not_reflected" for issue in retry_blocking):
-                repaired_retry_latex = _inject_missing_plot_assets(repaired_retry_latex, retry_blocking, plot_assets_index)
+                repaired_retry_latex = _inject_missing_plot_assets(
+                    repaired_retry_latex,
+                    retry_blocking,
+                    plot_assets_index,
+                )
                 repaired_retry_latex = _stabilize_figure_float_placement(repaired_retry_latex)
                 repaired = True
-            retry_validation_subject = _selected_section_template(repaired_retry_latex, selected_sections) if selected_sections else repaired_retry_latex
-            sanitized_issues = collect_paper_contract_issues(
-                retry_validation_subject,
-                citation_map=citation_map,
-                figures_dir=state.inputs.figures_dir,
-                plot_manifest=scoped_plot_manifest if selected_sections else plot_manifest,
-                plot_assets_index=scoped_plot_assets_index if selected_sections else plot_assets_index,
-                experimental_log_text=_source_grounding_text(inputs),
-                expected_section_titles=expected_section_titles,
-                narrative_plan=narrative_plan,
-                claim_map=claim_map,
-                citation_placement_plan=citation_placement_plan,
-            )
-            sanitized_issues = _filter_section_scoped_issues(sanitized_issues, selected_sections=selected_sections)
+            sanitized_issues = validate_section_draft(repaired_retry_latex, validation_context)
             if repaired and not _blocking_issues(sanitized_issues):
                 latex = repaired_retry_latex
                 validation_issues = sanitized_issues
@@ -445,7 +391,9 @@ Repair Instructions:
             if strict_claim_safe_prompt
             else "Dropped unsupported citation keys in section draft: "
         )
-        lane_notes.append(note_prefix + ", ".join(f"{key}({count})" for key, count in sorted(dropped_citations.items())))
+        lane_notes.append(
+            note_prefix + ", ".join(f"{key}({count})" for key, count in sorted(dropped_citations.items()))
+        )
 
     validation_path, _ = _record_validation_report(
         cwd,
