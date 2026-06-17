@@ -56,6 +56,12 @@ from paperorchestra.engine.refine_compile import (
     apply_compile_acceptance_gate,
     compile_latex,
 )
+from paperorchestra.engine.refine_candidate import (
+    RefinementCandidateReview,
+    RefinementStateSnapshot,
+    review_refinement_candidate,
+    snapshot_refinement_state,
+)
 from paperorchestra.engine.refine_drafts import normalize_refinement_latex, parse_refinement_response
 from paperorchestra.engine.refine_results import (
     accepted_refinement_result,
@@ -248,30 +254,27 @@ def refine_current_paper(
         write_text(candidate_tex_path, latex)
         write_json(worklog_path, worklog)
 
-        temp_state_paper = state.artifacts.paper_full_tex
-        temp_latest_review = state.artifacts.latest_review_json
-        temp_review_history_len = len(state.review_history)
-        previous_snapshot = state.review_history[-1] if state.review_history else None
-        previous_score = previous_snapshot.overall_score if previous_snapshot else float(iteration.review_payload.get("overall_score", 0.0))
-        previous_axes = previous_snapshot.axes if previous_snapshot else _extract_axis_scores(iteration.review_payload)
-        no_op_refinement = latex == iteration.current_paper
-        if no_op_refinement:
-            candidate_review_path = Path(temp_latest_review or state.artifacts.latest_review_json or "")
-            candidate_review = iteration.review_payload
-            candidate_score = previous_score
-            candidate_axes = previous_axes
-        else:
-            state.artifacts.paper_full_tex = str(candidate_tex_path)
-            save_session(cwd, state)
-            candidate_review_path = review_current_paper(
-                cwd,
-                provider,
-                review_name=f"review.iter-{iteration.candidate_iter:02d}.json",
-                runtime_mode=runtime_mode,
-            )
-            candidate_review = read_json(candidate_review_path)
-            candidate_score = float(candidate_review.get("overall_score", 0.0))
-            candidate_axes = _extract_axis_scores(candidate_review)
+        candidate_snapshot = snapshot_refinement_state(state, review_payload=iteration.review_payload)
+        temp_state_paper = candidate_snapshot.temp_state_paper
+        temp_latest_review = candidate_snapshot.temp_latest_review
+        temp_review_history_len = candidate_snapshot.temp_review_history_len
+        previous_score = candidate_snapshot.previous_score
+        previous_axes = candidate_snapshot.previous_axes
+        candidate_review_state = review_refinement_candidate(
+            cwd=cwd,
+            provider=provider,
+            state=state,
+            iteration=iteration,
+            candidate_tex_path=candidate_tex_path,
+            latex=latex,
+            runtime_mode=runtime_mode,
+            snapshot=candidate_snapshot,
+        )
+        candidate_review_path = candidate_review_state.candidate_review_path
+        candidate_review = candidate_review_state.candidate_review
+        candidate_score = candidate_review_state.candidate_score
+        candidate_axes = candidate_review_state.candidate_axes
+        no_op_refinement = candidate_review_state.no_op_refinement
         compile_gate = apply_compile_acceptance_gate(
             enabled=require_compile_for_accept,
             cwd=cwd,
