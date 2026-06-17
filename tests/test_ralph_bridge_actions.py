@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from paperorchestra.loop_engine.ralph import bridge, bridge_actions, bridge_restore
+from paperorchestra.loop_engine.ralph import bridge, bridge_actions
 
 
 def test_bridge_facade_reexports_split_helpers() -> None:
     assert bridge._executable_actions is bridge_actions._executable_actions
     assert bridge._unsupported_executable_actions is bridge_actions._unsupported_executable_actions
-    assert bridge._restore_current_after_uncommitted_candidate is bridge_restore._restore_current_after_uncommitted_candidate
 
 
 def test_bridge_facade_preserves_legacy_aliases() -> None:

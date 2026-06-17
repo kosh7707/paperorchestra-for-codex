@@ -24,13 +24,14 @@ from paperorchestra.loop_engine.ralph.bridge_actions import (
     _executable_actions,
     _unsupported_executable_actions,
 )
-from paperorchestra.loop_engine.ralph.bridge_restore import _restore_current_after_uncommitted_candidate
 from paperorchestra.loop_engine.ralph.candidate_outcomes import (
-    build_auto_commit_record,
-    build_auto_commit_rejection_records,
-    build_citation_support_rejection_records,
     classify_candidate_outcome,
     should_override_no_progress,
+)
+from paperorchestra.loop_engine.ralph.bridge_candidate_resolution import (
+    CandidateResolutionRequest,
+    PostActionState,
+    resolve_candidate_outcome,
 )
 from .handoff import (
     build_qa_loop_brief,
@@ -48,7 +49,6 @@ from .inputs import (
 from .bridge_records import (
     build_candidate_state,
     build_initial_execution_record,
-    build_restored_bridge_update,
     build_verification_record,
 )
 from .action_dispatch import QaLoopActionDispatchContext, dispatch_qa_loop_actions
@@ -58,23 +58,15 @@ from .artifacts import (
 )
 from .auto_commit import _auto_commit_progressive_citation_candidate
 from .state import (
-    EXIT_CODES,
-    OMX_TMUX_INJECT_MARKER,
-    OMX_TMUX_INJECT_PROMPT,
-    QA_LOOP_BRIEF_FILENAME,
     QA_LOOP_EXECUTION_SCHEMA_VERSION,
-    QA_LOOP_HANDOFF_FILENAME,
     SUPPORTED_HANDLER_CODES,
     TERMINAL_VERDICTS,
     StepResult,
     atomic_write_text,
-    _citation_issue_count,
     _citation_summary,
     _file_content_snapshot,
     _failing_codes,
     _next_execution_path,
-    _plan_path,
-    _qa_loop_step_command,
     _restore_file_content_snapshot,
     _restore_session_mutation_snapshot,
     _session_mutation_snapshot,
@@ -289,23 +281,9 @@ def run_qa_loop_step(
             auto_commit_allowed=auto_commit_allowed,
             after_codes=after_codes,
         )
-        if candidate_outcome == "auto_commit":
-            clear_pending_manuscript_write(
-                cwd,
-                status="resolved",
-                reason="qa_loop_progressive_citation_candidate_committed",
-            )
-            execution["candidate_state"] = candidate_state
-            execution["candidate_progress"] = progress
-            execution["candidate_auto_commit"] = build_auto_commit_record(
-                candidate_path=citation_candidate_path,
-                auto_commit_reason=auto_commit_reason,
-                residual_citation_failures=residual_citation_failures,
-                after_codes=after_codes,
-            )
-        elif candidate_outcome == "citation_support_rejected":
-            restored = _restore_current_after_uncommitted_candidate(
-                cwd,
+        resolution = resolve_candidate_outcome(
+            CandidateResolutionRequest(
+                cwd=cwd,
                 paper_path=paper_path,
                 original_paper=original_paper,
                 mutation_snapshot=mutation_snapshot,
@@ -319,66 +297,34 @@ def run_qa_loop_step(
                 before_eval=before_eval,
                 before_summary=before_summary,
                 actions_attempted=bool(execution["actions_attempted"]),
-                validation_name="validation.qa-loop-step.rollback.json",
-            )
-            if restored:
-                restored_update = build_restored_bridge_update(restored)
-                final_eval_path = restored_update["final_eval_path"]
-                final_eval = restored_update["final_eval"]
-                final_plan_path = restored_update["final_plan_path"]
-                final_plan = restored_update["final_plan"]
-                final_summary = restored_update["final_summary"]
-                final_progress = restored_update["final_progress"]
-                final_verification = restored_update["final_verification"]
-                execution.update(restored_update["execution_updates"])
-            verdict = "human_needed"
-            rejection = build_citation_support_rejection_records(
+                candidate_outcome=candidate_outcome,
                 candidate_path=citation_candidate_path,
+                candidate_state=candidate_state,
+                candidate_progress=progress,
+                auto_commit_reason=auto_commit_reason,
                 residual_citation_failures=residual_citation_failures,
-                auto_commit_reason=auto_commit_reason,
-            )
-            execution["candidate_rollback"] = rejection["rollback"]
-            execution["candidate_state"] = candidate_state
-            execution["candidate_progress"] = progress
-            execution["candidate_handoff"] = rejection["handoff"]
-        elif candidate_outcome == "auto_commit_gate_rejected":
-            restored = _restore_current_after_uncommitted_candidate(
-                cwd,
-                paper_path=paper_path,
-                original_paper=original_paper,
-                mutation_snapshot=mutation_snapshot,
-                citation_review_snapshot=citation_review_snapshot,
-                citation_trace_snapshot=citation_trace_snapshot,
-                require_compile=require_compile,
-                require_live_verification=require_live_verification,
-                quality_mode=quality_mode,
-                max_iterations=max_iterations,
-                accept_mixed_provenance=accept_mixed_provenance,
-                before_eval=before_eval,
-                before_summary=before_summary,
-                actions_attempted=bool(execution["actions_attempted"]),
-                validation_name="validation.qa-loop-step.candidate-approved-original-restored.json",
-            )
-            if restored:
-                restored_update = build_restored_bridge_update(restored)
-                final_eval_path = restored_update["final_eval_path"]
-                final_eval = restored_update["final_eval"]
-                final_plan_path = restored_update["final_plan_path"]
-                final_plan = restored_update["final_plan"]
-                final_summary = restored_update["final_summary"]
-                final_progress = restored_update["final_progress"]
-                final_verification = restored_update["final_verification"]
-                execution.update(restored_update["execution_updates"])
-            verdict = "human_needed"
-            rejection = build_auto_commit_rejection_records(
-                candidate_path=citation_candidate_path,
-                auto_commit_reason=auto_commit_reason,
                 after_codes=after_codes,
-            )
-            execution["candidate_rollback"] = rejection["rollback"]
-            execution["candidate_handoff"] = rejection["handoff"]
-            execution["candidate_state"] = candidate_state
-            execution["candidate_progress"] = progress
+            ),
+            PostActionState(
+                eval_path=final_eval_path,
+                eval_payload=final_eval,
+                plan_path=final_plan_path,
+                plan_payload=final_plan,
+                summary=final_summary,
+                progress=final_progress,
+                verification=final_verification,
+                verdict=verdict,
+            ),
+        )
+        final_eval_path = resolution.final_eval_path
+        final_eval = resolution.final_eval
+        final_plan_path = resolution.final_plan_path
+        final_plan = resolution.final_plan
+        final_summary = resolution.final_summary
+        final_progress = resolution.final_progress
+        final_verification = resolution.final_verification
+        verdict = resolution.verdict
+        execution.update(resolution.execution_updates)
         if should_override_no_progress(
             verdict=verdict,
             actions_attempted=execution["actions_attempted"],
