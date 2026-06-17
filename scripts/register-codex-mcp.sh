@@ -49,10 +49,6 @@ Options:
   --no-backup
       Do not create a timestamped .bak file before writing an existing config.
 
-  --codex-cli
-      Accepted as a compatibility no-op so callers can use the same option
-      shape as scripts/setup-codex-mcp.sh --codex-cli.
-
   -h, --help
       Show this help.
 
@@ -97,8 +93,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-backup)
       BACKUP=0
-      ;;
-    --codex-cli)
       ;;
     -h|--help)
       usage
@@ -238,9 +232,6 @@ sys.stderr.write(f"Command: {command}\n")
 sys.stderr.write("Next:\n")
 sys.stderr.write("  1. Restart Codex completely so it reloads MCP servers.\n")
 sys.stderr.write("  2. In the new session, verify that mcp__paperorchestra__status or mcp__paperorchestra__check_compile_environment is visible.\n")
-sys.stderr.write("  3. If tools are absent, run both raw transport smokes:\n")
-sys.stderr.write("       scripts/smoke-paperorchestra-mcp.py --transport content-length --json\n")
-sys.stderr.write("       scripts/smoke-paperorchestra-mcp.py --transport newline --json\n")
-sys.stderr.write("  4. For active Codex attach evidence, run: scripts/smoke-codex-mcp-attach.sh\n")
+sys.stderr.write("  3. If tools are absent, run `paperorchestra doctor` to separate server health from session attachment.\n")
 sys.stderr.write("Note: `codex mcp list` shows config registration, not active session attachment/tool injection.\n")
 PY

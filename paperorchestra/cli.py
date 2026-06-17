@@ -838,7 +838,6 @@ def _environment_summary_lines(payload: dict[str, object]) -> list[str]:
             "Next:",
             "  paperorchestra status --json",
             "  paperorchestra doctor",
-            "  scripts/smoke-paperorchestra-mcp.py",
         ]
     )
     return lines

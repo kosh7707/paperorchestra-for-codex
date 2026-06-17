@@ -24,15 +24,14 @@ If MCP is expected, distinguish registration from active attachment:
 
 ```bash
 codex mcp list
-scripts/smoke-paperorchestra-mcp.py --transport newline --json
-scripts/smoke-codex-mcp-attach.sh
+paperorchestra doctor
 ```
 
 ## Classify readiness
 
 Report one of:
 
-- `mock`: mock provider or safe demo only.
+- `mock`: mock provider or local checks only.
 - `heuristic`: offline citation/metadata checks only.
 - `shell-live`: shell provider can call a live model, but web citation trust may be absent.
 - `claim-safe-live`: live provider plus web/source citation evidence and strict gate prerequisites are ready.

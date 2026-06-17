@@ -326,7 +326,7 @@ def build_doctor_report(cwd: str | Path | None = None, *, omx_deep: bool = False
             'Set PAPERO_ALLOW_TEX_COMPILE=1 before compiling TeX sources.',
             'Set SEMANTIC_SCHOLAR_API_KEY for more reliable live citation verification.',
             'Use `paperorchestra audit-reproducibility` to classify whether the current run is suitable for reproducibility/fidelity claims.',
-            '`codex mcp list` confirms registration, not that the active Codex conversation received mcp__paperorchestra__ tools; run scripts/smoke-paperorchestra-mcp.py to separate server health from session attachment.',
+            '`codex mcp list` confirms registration, not that the active Codex conversation received mcp__paperorchestra__ tools; `paperorchestra doctor` checks stdio server health, while active-session attachment still requires a fresh Codex session with visible mcp__paperorchestra__ tools.',
         ],
     }
     if omx_deep:
