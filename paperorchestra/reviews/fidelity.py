@@ -6,13 +6,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.reviews.reproducibility import (
-    _citation_surface_health,
-    _file_sha256,
-    _read_json_if_exists,
-    build_reproducibility_audit,
-    write_reproducibility_audit,
-)
+from paperorchestra.reviews.reproducibility import build_reproducibility_audit, write_reproducibility_audit
+from paperorchestra.reviews.reproducibility_artifacts import _file_sha256, _read_json_if_exists
+from paperorchestra.reviews.reproducibility_citations import _citation_surface_health
 from paperorchestra.reviews.evaluation import (
     EXPECTED_LITERATURE_REVIEW_AXES,
     build_generated_citation_titles,
