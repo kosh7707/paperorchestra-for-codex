@@ -11,7 +11,7 @@ from paperorchestra.core.session import artifact_path, build_path, load_session,
 from paperorchestra.engine.completion import _build_completion_request, _complete_with_runtime_mode, _lane_owner
 from paperorchestra.engine.latex_postprocess import _escape_latex_text, _is_generated_placeholder_asset
 from paperorchestra.engine.prompt_context import _data_block, _prompt_compact_text, _read_inputs
-from paperorchestra.engine.research_stages import _build_candidate_payload, _write_candidate_artifacts
+from paperorchestra.engine.research_discovery import _build_candidate_payload, _write_candidate_artifacts
 from paperorchestra.engine.schemas import PLOT_SCHEMA, validate_plot_manifest
 from paperorchestra.manuscript.plot_assets import render_plot_assets
 from paperorchestra.manuscript.prompts import PROMPTS
