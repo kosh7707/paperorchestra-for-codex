@@ -8,7 +8,17 @@ from typing import Any
 from paperorchestra.core.io import read_json
 from paperorchestra.core.session import load_session
 from paperorchestra.manuscript.validator import canonical_citation_keys, citation_entry_for_key
-from paperorchestra.research.matching import title_match_ratio
+from paperorchestra.reviews.citation_partition import (
+    build_citation_partition_request,
+    compute_partitioned_citation_coverage,
+)
+from paperorchestra.reviews.eval_text import (
+    _compact_eval_title,
+    _extract_metric_range,
+    _title_matches_reference,
+    normalize_eval_title,
+    parse_reported_margin_ranges,
+)
 
 EXPECTED_LITERATURE_REVIEW_AXES = [
     "coverage_and_completeness",
@@ -64,74 +74,7 @@ def _attempted_grounded_sources(session_artifact_dir: Path | None) -> list[str]:
     return attempted
 
 
-def normalize_eval_title(text: str) -> str:
-    return " ".join("".join(ch.lower() if ch.isalnum() else " " for ch in text).split())
-
-
-def _compact_eval_title(text: str) -> str:
-    return "".join(ch.lower() for ch in text if ch.isalnum())
-
-
-def _title_matches_reference(reference_title: str, generated_title: str) -> tuple[bool, float, str]:
-    reference_normalized = normalize_eval_title(reference_title)
-    generated_normalized = normalize_eval_title(generated_title)
-    if reference_normalized == generated_normalized:
-        return True, 100.0, "exact"
-    reference_compact = _compact_eval_title(reference_title)
-    generated_compact = _compact_eval_title(generated_title)
-    compact_safe = (
-        min(len(reference_normalized.split()), len(generated_normalized.split())) == 1
-        or
-        min(len(reference_normalized.split()), len(generated_normalized.split())) >= 3
-        or min(len(reference_compact), len(generated_compact)) >= 18
-    )
-    if compact_safe and generated_compact and reference_compact and (
-        generated_compact in reference_compact or reference_compact in generated_compact
-    ):
-        return True, 95.0, "compact"
-    score = title_match_ratio(reference_title, generated_title)
-    if score >= 70.0:
-        return True, score, "fuzzy"
-    return False, score, ""
-
-
-_PERCENT_RANGE_RE = re.compile(r"(\d+(?:\.\d+)?)%\s*(?:–|-|to)\s*(\d+(?:\.\d+)?)%")
 _CITE_RE = re.compile(r"\\cite[a-zA-Z*]*\s*(?:\[[^\]]*\]){0,2}\{([^}]+)\}")
-
-
-def _extract_metric_range(text: str, metric_label: str) -> tuple[float, float] | None:
-    patterns = [
-        re.compile(
-            rf"(\d+(?:\.\d+)?)%\s*(?:–|-|to)\s*(\d+(?:\.\d+)?)%\s+in\s+{re.escape(metric_label)}",
-            re.IGNORECASE,
-        ),
-        re.compile(
-            rf"{re.escape(metric_label)}.{0,80}?(\d+(?:\.\d+)?)%\s*(?:–|-|to)\s*(\d+(?:\.\d+)?)%",
-            re.IGNORECASE | re.DOTALL,
-        ),
-    ]
-    for pattern in patterns:
-        match = pattern.search(text)
-        if match:
-            return float(match.group(1)), float(match.group(2))
-    return None
-
-
-def parse_reported_margin_ranges(text: str) -> dict[str, dict[str, Any]]:
-    results: dict[str, dict[str, Any]] = {}
-    for key, label in [
-        ("literature_review_quality", "literature review quality"),
-        ("overall_manuscript_quality", "overall manuscript quality"),
-    ]:
-        margin = _extract_metric_range(text, label)
-        if margin is not None:
-            results[key] = {
-                "min": margin[0],
-                "max": margin[1],
-                "unit": "absolute_win_rate_margin_percent",
-                "source_excerpt": label,
-            }
-    return results
 
 
 def build_reference_benchmark_case(reference_dir: str | Path, *, source_pdf: str | Path | None = None) -> dict[str, Any]:
@@ -481,108 +424,9 @@ def write_reference_case_partitioned_citation_coverage(reference_case_path: str 
     return _write_json_artifact(payload, output_path)
 
 
-def build_citation_partition_request(paper_text: str, references: list[dict[str, Any]]) -> dict[str, Any]:
-    reference_lines = []
-    for index, item in enumerate(references, start=1):
-        title = str(item.get("title") or "").strip()
-        if not title:
-            continue
-        reference_lines.append(f"[{index}] {title}")
-    return {
-        "paper_text": paper_text,
-        "references_str": "\n".join(reference_lines),
-        "reference_count": len(reference_lines),
-        "notes": [
-            "Use this artifact with the Citation F1 P0/P1 partition autorater prompt.",
-            "Reference numbering is synthetic and scoped only to this evaluation request.",
-        ],
-    }
-
-
 def write_citation_partition_request(paper_text: str, references: list[dict[str, Any]], output_path: str | Path) -> Path:
     payload = build_citation_partition_request(paper_text, references)
     return _write_json_artifact(payload, output_path)
-
-
-def compute_partitioned_citation_coverage(
-    reference_entries: list[dict[str, Any]],
-    partition_map: dict[str, str],
-    generated_titles: list[str],
-) -> dict[str, Any]:
-    generated_pool = [title.strip() for title in generated_titles if isinstance(title, str) and title.strip()]
-    generated_total = len(generated_pool)
-    partitions: dict[str, list[str]] = {"P0": [], "P1": []}
-    for idx, item in enumerate(reference_entries, start=1):
-        title = str(item.get("title") or "").strip()
-        if not title:
-            continue
-        label = partition_map.get(str(idx), "P1")
-        if label not in partitions:
-            continue
-        partitions[label].append(title)
-
-    unmatched_generated = list(generated_pool)
-    coverage: dict[str, Any] = {}
-    matched_pairs: list[dict[str, Any]] = []
-    for label, titles in partitions.items():
-        matched_titles: list[str] = []
-        missing_titles: list[str] = []
-        partition_pairs: list[dict[str, Any]] = []
-        for title in titles:
-            normalized = normalize_eval_title(title)
-            best_index = -1
-            best_score = -1.0
-            best_match_type = ""
-            for idx, candidate in enumerate(unmatched_generated):
-                matched, score, match_type = _title_matches_reference(title, candidate)
-                if matched and match_type == "exact":
-                    best_index = idx
-                    best_score = score
-                    best_match_type = match_type
-                    break
-                if matched and score > best_score:
-                    best_index = idx
-                    best_score = score
-                    best_match_type = match_type
-            if best_index >= 0:
-                candidate = unmatched_generated.pop(best_index)
-                matched_titles.append(title)
-                pair = {
-                    "reference_title": title,
-                    "generated_title": candidate,
-                    "match_type": best_match_type,
-                    "match_score": round(best_score, 2),
-                    "partition": label,
-                }
-                partition_pairs.append(pair)
-                matched_pairs.append(pair)
-            else:
-                missing_titles.append(title)
-        total = len(titles)
-        coverage[label] = {
-            "total": total,
-            "matched": len(matched_titles),
-            "recall": round(len(matched_titles) / total, 4) if total else None,
-            "matched_titles": matched_titles,
-            "missing_titles": missing_titles,
-            "matched_pairs": partition_pairs,
-        }
-    p0_recall = coverage["P0"]["recall"] or 0.0
-    p1_recall = coverage["P1"]["recall"] or 0.0
-    weighted = round((0.75 * p0_recall) + (0.25 * p1_recall), 4)
-    precision = round(len(matched_pairs) / generated_total, 4) if generated_total else None
-    return {
-        "partition_coverage": coverage,
-        "weighted_priority_recall": weighted,
-        "generated_title_count": generated_total,
-        "matched_generated_title_count": len(matched_pairs),
-        "generated_precision": precision,
-        "matched_pairs": matched_pairs,
-        "unmatched_generated_titles": unmatched_generated,
-        "notes": [
-            "This is a scaffold metric over normalized-title matching with bounded fuzzy fallback; it is not yet a full Semantic Scholar-ID-grounded Citation F1 implementation.",
-        ],
-    }
 
 
 def write_partitioned_citation_coverage(
