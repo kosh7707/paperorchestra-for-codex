@@ -1,41 +1,25 @@
 from __future__ import annotations
 
-import json
-import shlex
-import subprocess
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.reviews.critics import write_citation_support_review, write_section_review
-from paperorchestra.core.io import extract_latex
 from paperorchestra.core.models import utc_now_iso
-from paperorchestra.core.errors import ContractError
-from paperorchestra.engine.completion import (
-    _build_completion_request,
-    _complete_with_runtime_mode,
-)
 from paperorchestra.engine.pipeline import (
     compile_current_paper,
-    plan_narrative_and_claims,
-    refine_current_paper,
     record_current_validation_report,
-    review_current_paper,
     write_figure_placement_review,
 )
+from paperorchestra.reviews.critics import write_citation_support_review, write_section_review
 from paperorchestra.runtime.providers import BaseProvider, get_citation_support_provider
-from paperorchestra.manuscript.source_obligations import write_source_obligations
 from ..quality.loop import (
-    CITATION_SUPPORT_REVIEW_REFRESH_CODES,
     DEFAULT_MAX_ITERATIONS,
     QA_LOOP_SUPPORTED_HANDLER_CODES,
-    REVIEW_REFRESH_CODES,
     append_quality_loop_history,
     build_quality_loop_plan,
     write_quality_eval,
     write_quality_loop_plan,
 )
-from paperorchestra.core.session import artifact_path, load_session, save_session
-from paperorchestra.manuscript.validator import extract_citation_keys
+from paperorchestra.core.session import load_session
 from .handoff import (
     build_qa_loop_brief,
     build_ralph_start_payload,
@@ -49,21 +33,14 @@ from .inputs import (
     _stage_explicit_citation_support_review,
     _validate_plan_quality_eval_identity,
 )
+from .action_dispatch import QaLoopActionDispatchContext, dispatch_qa_loop_actions
 from .artifacts import (
     _refresh_citation_integrity_for_current_manuscript,
-    _try_rebuild_bib_for_citation_quality,
     _write_execution_artifact,
 )
-from .semantic_recheck import _citation_repair_failure_payload
 from .auto_commit import _auto_commit_progressive_citation_candidate
-from .repair import (
-    _non_supported_citation_items,
-    _repair_prompt,
-    repair_citation_claims,
-)
 from .state import (
     EXIT_CODES,
-    NON_SUPPORTED_CITATION_STATUSES,
     OMX_TMUX_INJECT_MARKER,
     OMX_TMUX_INJECT_PROMPT,
     QA_LOOP_BRIEF_FILENAME,
@@ -81,13 +58,11 @@ from .state import (
     _next_execution_path,
     _plan_path,
     _qa_loop_step_command,
-    _read_json,
     _restore_file_content_snapshot,
     _restore_session_mutation_snapshot,
     _session_mutation_snapshot,
     clear_pending_manuscript_write,
     compute_progress_delta,
-    guarded_replace_manuscript_text,
     qa_loop_exit_code,
     recover_pending_manuscript_write,
 )
@@ -195,22 +170,6 @@ def _unsupported_executable_actions(plan: dict[str, Any]) -> list[dict[str, Any]
     ]
 
 
-def _preserve_citation_candidate_for_approval(cwd: str | Path | None, candidate_path: str | Path | None) -> str | None:
-    if not candidate_path:
-        return None
-    source = Path(candidate_path).resolve()
-    if not source.exists() or not source.is_file():
-        return str(source)
-    digest = _artifact_sha(source)
-    if not digest:
-        return str(source)
-    short = digest.split(":", 1)[-1][:16]
-    preserved = artifact_path(cwd, f"paper.citation-repair.approval-{short}.candidate.tex")
-    if not preserved.exists() or _artifact_sha(preserved) != digest:
-        preserved.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
-    return str(preserved)
-
-
 def run_qa_loop_step(
     cwd: str | Path | None,
     provider: BaseProvider,
@@ -265,7 +224,9 @@ def run_qa_loop_step(
         "_reserved_execution_path": str(_next_execution_path(cwd)[1]),
         "input_quality_eval": str(before_eval_path),
         "input_plan": str(before_plan_path),
-        "input_citation_support_review": str(explicit_citation_support_path) if explicit_citation_support_path else None,
+        "input_citation_support_review": (
+            str(explicit_citation_support_path) if explicit_citation_support_path else None
+        ),
         "input_artifacts": {
             "quality_eval": str(before_eval_path),
             "qa_loop_plan": str(before_plan_path),
@@ -285,15 +246,27 @@ def run_qa_loop_step(
         execution["actions_skipped"].append({"code": action.get("code"), "reason": "unsupported_handler"})
 
     if not actions:
-        execution.update({"completed_at": utc_now_iso(), "verdict": "human_needed", "reason": "no_supported_executable_handlers"})
+        execution.update(
+            {
+                "completed_at": utc_now_iso(),
+                "verdict": "human_needed",
+                "reason": "no_supported_executable_handlers",
+            }
+        )
         path = _write_execution_artifact(cwd, execution)
         return StepResult(path=path, payload=execution, exit_code=qa_loop_exit_code("human_needed"))
 
     state_for_rollback = load_session(cwd)
-    paper_path = Path(state_for_rollback.artifacts.paper_full_tex) if state_for_rollback.artifacts.paper_full_tex else None
+    paper_path = (
+        Path(state_for_rollback.artifacts.paper_full_tex)
+        if state_for_rollback.artifacts.paper_full_tex
+        else None
+    )
     original_paper = paper_path.read_text(encoding="utf-8") if paper_path and paper_path.exists() else None
     mutation_snapshot = _session_mutation_snapshot(state_for_rollback)
-    citation_review_snapshot = _file_content_snapshot(paper_path.resolve().parent / "citation_support_review.json" if paper_path else None)
+    citation_review_snapshot = _file_content_snapshot(
+        paper_path.resolve().parent / "citation_support_review.json" if paper_path else None
+    )
     citation_trace_snapshot = _file_content_snapshot(
         paper_path.resolve().parent / "citation_support_review.trace.json" if paper_path else None
     )
@@ -302,172 +275,23 @@ def run_qa_loop_step(
         command=citation_provider_command,
         evidence_mode=citation_evidence_mode,
     )
-    citation_candidate_applied = False
-    citation_candidate_path: str | None = None
-    for action in actions:
-        code = str(action.get("code"))
-        if code in {
-            "narrative_plan_missing",
-            "claim_map_missing",
-            "citation_placement_plan_missing",
-            "narrative_plan_stale",
-            "claim_map_stale",
-            "citation_placement_plan_stale",
-        }:
-            paths = plan_narrative_and_claims(cwd, provider=None, runtime_mode=runtime_mode)
-            execution["actions_attempted"].append(
-                {
-                    "code": code,
-                    "handler": "plan_narrative",
-                    "paths": {key: str(path) for key, path in paths.items()},
-                }
-            )
-        elif code in {"validation_report_missing", "validation_report_stale"}:
-            validation_path, validation_payload = record_current_validation_report(
-                cwd,
-                name="validation.qa-loop-step.precondition.json",
-            )
-            execution["actions_attempted"].append(
-                {
-                    "code": code,
-                    "handler": "validate_current",
-                    "path": str(validation_path),
-                    "ok": validation_payload.get("ok"),
-                }
-            )
-        elif code in {"figure_placement_review_missing", "figure_placement_review_stale"}:
-            figure_path, figure_payload = write_figure_placement_review(cwd)
-            execution["actions_attempted"].append(
-                {
-                    "code": code,
-                    "handler": "review_figure_placement",
-                    "path": str(figure_path),
-                    "warning_count": (figure_payload.get("summary") or {}).get("warning_count")
-                    if isinstance(figure_payload, dict)
-                    else None,
-                }
-            )
-        elif code in CITATION_SUPPORT_REVIEW_REFRESH_CODES | {"citation_support_evidence_research_needed"}:
-            review_path = write_citation_support_review(cwd, provider=citation_provider, evidence_mode=citation_evidence_mode)
-            execution["actions_attempted"].append({"code": code, "handler": "critique_citations", "path": str(review_path)})
-        elif code in {
-            "critical_unknown_reference",
-            "critical_missing_bib_entry",
-            "critical_unsupported_citation",
-            "critical_citation_support_missing",
-            "critical_weak_reference_identity",
-        }:
-            bibtex_rebuild = _try_rebuild_bib_for_citation_quality(cwd) if code == "critical_weak_reference_identity" else None
-            review_path = write_citation_support_review(cwd, provider=citation_provider, evidence_mode=citation_evidence_mode)
-            refreshed = _refresh_citation_integrity_for_current_manuscript(cwd, quality_mode=quality_mode)
-            attempted = {
-                "code": code,
-                "handler": "refresh_citation_quality",
-                "citation_support_review": str(review_path),
-                "citation_integrity": refreshed,
-            }
-            if bibtex_rebuild is not None:
-                attempted["bibtex_rebuild"] = bibtex_rebuild
-            execution["actions_attempted"].append(attempted)
-        elif code in {
-            "rendered_reference_audit_missing",
-            "rendered_reference_audit_stale",
-            "citation_intent_plan_missing",
-            "citation_intent_plan_stale",
-            "citation_source_match_missing",
-            "citation_source_match_stale",
-            "citation_integrity_missing",
-            "citation_integrity_stale",
-            "citation_critic_missing",
-            "citation_critic_stale",
-        }:
-            refreshed = _refresh_citation_integrity_for_current_manuscript(cwd, quality_mode=quality_mode)
-            execution["actions_attempted"].append(
-                {"code": code, "handler": "refresh_citation_integrity", "artifacts": refreshed}
-            )
-        elif code in REVIEW_REFRESH_CODES:
-            path = review_current_paper(cwd, provider, runtime_mode=runtime_mode)
-            execution["actions_attempted"].append({"code": code, "handler": "review", "path": str(path)})
-        elif code in {
-            "compile_report_missing",
-            "compile_report_stale",
-            "compile_report_legacy_untrusted",
-            "compile_pdf_missing",
-            "compile_pdf_stale",
-            "compile_not_clean",
-        }:
-            try:
-                pdf_path = compile_current_paper(cwd)
-                execution["actions_attempted"].append({"code": code, "handler": "compile", "pdf": str(pdf_path), "ok": True})
-            except Exception as exc:
-                execution["actions_attempted"].append({"code": code, "handler": "compile", "ok": False, "error": str(exc)})
-                break
-        elif code in {"section_review_missing", "section_review_stale", "section_review_legacy_untrusted"}:
-            path = write_section_review(cwd)
-            execution["actions_attempted"].append({"code": code, "handler": "critique_sections", "path": str(path)})
-        elif code in {"source_obligations_missing", "source_obligations_stale"}:
-            path = write_source_obligations(cwd)
-            execution["actions_attempted"].append({"code": code, "handler": "build_source_obligations", "path": str(path)})
-        elif code in {"review_score_below_threshold", "section_quality_below_threshold", "source_material_coverage_insufficient"}:
-            state = load_session(cwd)
-            if not state.artifacts.latest_review_json:
-                review_path = review_current_paper(cwd, provider, runtime_mode=runtime_mode)
-                execution["actions_attempted"].append(
-                    {"code": code, "handler": "review", "path": str(review_path), "reason": "required_before_refine"}
-                )
-            refine_result = refine_current_paper(
-                cwd,
-                provider,
-                iterations=1,
-                require_compile_for_accept=require_compile,
-                runtime_mode=runtime_mode,
-                claim_safe=quality_mode == "claim_safe",
-            )
-            section_path = write_section_review(cwd)
-            execution["actions_attempted"].append(
-                {"code": code, "handler": "refine", "result": refine_result, "section_review": str(section_path)}
-            )
-            if any(not item.get("accepted", False) for item in refine_result):
-                break
-        elif code in {
-            "citation_support_critic_failed",
-            "citation_density_policy_failed",
-            "citation_coverage_insufficient",
-            "high_risk_uncited_claim",
-        }:
-            repair = repair_citation_claims(cwd, provider, runtime_mode=runtime_mode, require_compile=require_compile, commit=False)
-            if not repair.get("accepted"):
-                failure = _citation_repair_failure_payload(code, repair)
-                execution.setdefault("repair_failures", []).append(failure)
-                execution["actionable_failure"] = {
-                    "category": "citation_repair_failed",
-                    "code": code,
-                    "reason": failure["reason"],
-                    "validation_failing_codes": failure["validation"]["failing_codes"],
-                    "semantic_recheck_blockers": failure.get("semantic_recheck_blockers") or [],
-                    "next_steps": failure["next_steps"],
-                }
-                execution["actions_attempted"].append({"code": code, "handler": "repair_citation_claims", "result": repair})
-                break
-            if paper_path and repair.get("candidate_path"):
-                preserved_candidate_path = _preserve_citation_candidate_for_approval(cwd, repair.get("candidate_path"))
-                if preserved_candidate_path:
-                    repair = dict(repair)
-                    repair.setdefault("raw_candidate_path", str(repair.get("candidate_path")))
-                    repair["candidate_path"] = preserved_candidate_path
-                    repair["candidate_sha256"] = _artifact_sha(preserved_candidate_path)
-                citation_candidate_path = str(repair["candidate_path"])
-                guarded_replace_manuscript_text(
-                    cwd,
-                    paper_path,
-                    Path(citation_candidate_path).read_text(encoding="utf-8"),
-                    reason="qa_loop_citation_candidate_for_validation",
-                    original_text=original_paper,
-                )
-                citation_candidate_applied = True
-            execution["actions_attempted"].append({"code": code, "handler": "repair_citation_claims", "result": repair})
-        else:
-            execution["actions_skipped"].append({"code": code, "reason": "no_handler"})
+    dispatch_result = dispatch_qa_loop_actions(
+        actions,
+        execution,
+        QaLoopActionDispatchContext(
+            cwd=cwd,
+            provider=provider,
+            runtime_mode=runtime_mode,
+            require_compile=require_compile,
+            quality_mode=quality_mode,
+            citation_evidence_mode=citation_evidence_mode,
+            citation_provider=citation_provider,
+            paper_path=paper_path,
+            original_paper=original_paper,
+        ),
+    )
+    citation_candidate_applied = dispatch_result.citation_candidate_applied
+    citation_candidate_path = dispatch_result.citation_candidate_path
 
     try:
         validation_path, validation_payload = record_current_validation_report(cwd, name="validation.qa-loop-step.json")
@@ -480,7 +304,11 @@ def run_qa_loop_step(
                 compile_payload = {"ok": False, "error": str(exc)}
         section_review_path = write_section_review(cwd)
         figure_review_path, figure_review_payload = write_figure_placement_review(cwd)
-        citation_review_path = write_citation_support_review(cwd, provider=citation_provider, evidence_mode=citation_evidence_mode)
+        citation_review_path = write_citation_support_review(
+            cwd,
+            provider=citation_provider,
+            evidence_mode=citation_evidence_mode,
+        )
         refreshed_citation_integrity = _refresh_citation_integrity_for_current_manuscript(
             cwd,
             quality_mode=quality_mode,
@@ -734,6 +562,10 @@ def run_qa_loop_step(
             execution_path=path,
             event_type="qa_loop_step",
             consumes_budget=True,
-            extra={"actionable_failure": execution.get("actionable_failure")} if execution.get("actionable_failure") else None,
+            extra=(
+                {"actionable_failure": execution.get("actionable_failure")}
+                if execution.get("actionable_failure")
+                else None
+            ),
         )
     return StepResult(path=path, payload=execution, exit_code=qa_loop_exit_code(verdict))
