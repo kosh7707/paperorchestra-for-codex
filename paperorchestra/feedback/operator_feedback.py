@@ -8,13 +8,7 @@ from paperorchestra.runtime.providers import BaseProvider
 from paperorchestra.loop_engine.quality.loop import append_quality_loop_history
 from paperorchestra.core.session import artifact_path, load_session
 from paperorchestra.feedback.operator_candidates import (
-    _candidate_approval_source_role,
-    _failed_operator_candidate_result,
-    _generate_operator_candidate,
-    _preserve_operator_candidate_for_attempt,
     _promote_candidate_text,
-    _ready_candidate_from_packet,
-    _stage_candidate_text_for_verification,
 )
 from paperorchestra.feedback.operator_verification import _verification_block, _verification_snapshot
 from paperorchestra.feedback.operator_gates import (
@@ -42,6 +36,7 @@ from paperorchestra.feedback.operator_completion import (
 )
 from paperorchestra.feedback.operator_snapshots import _restore_session_snapshot, _session_snapshot
 from paperorchestra.feedback.operator_contexts.citations import _protected_supported_citation_regressions
+from paperorchestra.feedback.operator_feedback_attempts import prepare_operator_candidate_attempt
 from paperorchestra.feedback.operator_feedback_context import load_operator_feedback_context, operator_feedback_attempt_count
 from paperorchestra.feedback.packets import (
     _file_sha256,
@@ -95,42 +90,23 @@ def apply_operator_feedback(
         attempts = operator_feedback_attempt_count(intent=intent, max_supervised_iterations=max_supervised_iterations)
         for attempt_index in range(1, attempts + 1):
             _restore_session_snapshot(cwd, snapshot)
-            if intent == "approve_existing_candidate":
-                candidate_result = _ready_candidate_from_packet(
-                    packet,
-                    current_sha,
-                    source_artifact_role=_candidate_approval_source_role(imported),
-                )
-                candidate_text = _stage_candidate_text_for_verification(cwd, candidate_result["candidate_path"])
-                require_issue_progress = False
-            elif intent == "generate_new_operator_candidate":
-                prior_attempts_for_candidate = [*packet_prior_attempts, *(execution.get("attempts") or [])]
-                try:
-                    candidate_result = _generate_operator_candidate(
-                        cwd,
-                        provider,
-                        imported,
-                        require_compile=require_compile,
-                        runtime_mode=runtime_mode,
-                        quality_mode=quality_mode,
-                        prior_attempts=prior_attempts_for_candidate,
-                    )
-                except Exception as exc:
-                    _restore_session_snapshot(cwd, snapshot)
-                    candidate_result = _failed_operator_candidate_result(cwd, exc)
-                candidate_text = candidate_result.get("candidate_text") or ""
-                if candidate_result.get("candidate_path"):
-                    candidate_result = _preserve_operator_candidate_for_attempt(
-                        cwd,
-                        candidate_result,
-                        attempt_index=attempt_index,
-                    )
-                    candidate_text = _stage_candidate_text_for_verification(cwd, candidate_result["candidate_path"])
-                require_issue_progress = True
-            elif intent == "reject_candidate_with_reason":  # pragma: no cover - attempts is zero for explicit rejection
-                break
-            else:  # pragma: no cover - import validation should prevent this
-                raise ContractError(f"unsupported imported operator intent: {intent}")
+            prepared_attempt = prepare_operator_candidate_attempt(
+                cwd=cwd,
+                provider=provider,
+                imported=imported,
+                packet=packet,
+                current_sha=current_sha,
+                packet_prior_attempts=packet_prior_attempts,
+                execution=execution,
+                snapshot=snapshot,
+                attempt_index=attempt_index,
+                require_compile=require_compile,
+                runtime_mode=runtime_mode,
+                quality_mode=quality_mode,
+            )
+            candidate_result = prepared_attempt.candidate_result
+            candidate_text = prepared_attempt.candidate_text
+            require_issue_progress = prepared_attempt.require_issue_progress
 
             verification = _verification_snapshot(
                 cwd,
