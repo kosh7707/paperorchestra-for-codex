@@ -4,6 +4,7 @@ __pycache__/
 .omx/
 .omc/
 .env
+.paperorchestra.env
 .venv/
 .pytest_cache/
 .mypy_cache/

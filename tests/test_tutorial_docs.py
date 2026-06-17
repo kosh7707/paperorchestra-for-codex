@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 import re
-import shlex
 import unittest
 from pathlib import Path
 
@@ -77,18 +75,17 @@ class TutorialDocsTests(unittest.TestCase):
         self.assertIn("docs/tutorials/claim-safe-quality-loop.md", text)
         self.assertIn("Keep these status meanings separate", text)
         self.assertIn("complete`: a compiled PDF exists", text)
-        self.assertIn("does **not** mean the paper is claim-safe", text)
+        self.assertIn("do **not** mean the paper is claim-safe", text)
 
-    def test_readme_copyable_model_command_is_valid_json(self) -> None:
+    def test_readme_primary_install_path_stays_model_agnostic(self) -> None:
         text = self._read("README.md")
-        matches = re.findall(r"^export PAPERO_MODEL_CMD=(.+)$", text, re.MULTILINE)
-        self.assertTrue(matches, "README must contain a copyable PAPERO_MODEL_CMD export")
-        for assignment in matches:
-            with self.subTest(assignment=assignment):
-                value = shlex.split(assignment)[0]
-                parsed = json.loads(value)
-                self.assertIsInstance(parsed, list)
-                self.assertIn("codex", parsed[0])
+        install_section = text.split("## Skill-first workflow", 1)[0]
+        self.assertIn("## Installation", install_section)
+        self.assertIn("git clone", install_section)
+        self.assertIn("cd paperorchestra-for-codex && ./install.sh", install_section)
+        self.assertNotIn("export PAPERO_MODEL_CMD", text)
+        self.assertNotIn("gpt-5.5", text)
+        self.assertNotIn("model_reasoning_effort", text)
 
     def test_tutorials_are_generic_and_do_not_overclaim_readiness(self) -> None:
         offenders: list[str] = []

@@ -4,37 +4,18 @@ PaperOrchestra is a Codex/OMX-oriented research-writing workflow for turning rea
 
 Current posture: **v1-alpha**. A successful run is **not submission-ready** approval. known limitations remain around citation/claim quality, figure finalization, and operator repair convergence. Never turn `BLOCK`, `not_ready`, `human_needed`, warnings, or false readiness into a publishable-paper claim.
 
-## TL;DR
+## Installation
 
-Clone, install, then ask PaperOrchestra what is ready:
+Two commands are the intended path:
 
 ```bash
 git clone https://github.com/kosh7707/paperorchestra-for-codex.git
-cd paperorchestra-for-codex
-./install.sh
-.venv/bin/paperorchestra status --json
+cd paperorchestra-for-codex && ./install.sh
 ```
 
-Optional safe demo, still no live search/model calls and no reference PDF required. This wraps `./scripts/demo-mock.sh --in-repo`:
+The installer creates the local environment, installs PaperOrchestra, installs the bundled Codex skills, registers the PaperOrchestra MCP server by default, prepares a generic shell-provider command, and runs `omx setup` when `omx` is available. It does not pin a model version or reasoning level; choose those in your own Codex/OMX configuration.
 
-```bash
-./install.sh --demo
-```
-
-Optional Codex MCP registration:
-
-```bash
-./install.sh --mcp
-# then restart Codex and check for mcp__paperorchestra__ tools
-```
-
-For a real model-backed review, configure a shell provider when you are ready:
-
-```bash
-export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"high\""]'
-```
-
-Semantic Scholar/S2 is optional. Use web/source citation evidence or manual source artifacts when no S2 key is available.
+After installation, restart Codex/OMX so MCP tools reload. Then use the skills below rather than treating this README as a runbook. Semantic Scholar/S2 is optional; use web/source citation evidence or manual source artifacts when no S2 key is available.
 
 ## Skill-first workflow
 
@@ -64,114 +45,17 @@ Keep these status meanings separate:
 - `complete`: a compiled PDF exists or a bounded run finished.
 - `pass_loop_verified`: a loop passed its configured checks.
 - `ready_for_human_finalization`: automation has no more safe action.
-- None of these does **not** mean the paper is claim-safe, submission-ready, camera-ready, or publication-ready.
+- These do **not** mean the paper is claim-safe, submission-ready, camera-ready, or publication-ready.
 
 Evidence bundles are a diagnostic artifact, not a readiness pass. They record state, commands, blockers, and outputs for review.
 
-## Codex-first setup path
-
-```bash
-# Compact guide from the implementation.
-paperorchestra first-use --intent setup
-
-# Install skills and register the MCP server.
-./install.sh --mcp
-scripts/smoke-paperorchestra-mcp.py --transport newline --json
-
-# Restart Codex completely, then verify visible mcp__paperorchestra__ tools in a new Codex session.
-# codex mcp list proves registration; it does not prove active attachment.
-```
-
-If native MCP attachment is absent, use CLI fallback and say so explicitly. Do not run the full repository test suite just to answer first-use questions; use the first-use, status, doctor, and smoke surfaces first.
-
-## No-live local-step check
-
-This is the safe bounded orchestrator check:
-
-```bash
-paperorchestra orchestrate --material ./my-material --execute-local --write-evidence --json
-```
-
-`execute_local` performs **one deterministic local step**. It is **not a full paper run** and **not a full paper pipeline**. No live model/search, OMX, compile/export, or drafting is implied. Typical next actions include `material_input_required`, `start_autoresearch`, or a deterministic local action. If the next action is `start_autoresearch`, let the engine/research surface handle machine-solvable citation/search work instead of asking the user to do it manually.
-
-Equivalent MCP shape:
-
-```json
-{"name":"orchestrate","arguments":{"material":"./my-material","execute_local":true,"write_evidence":true}}
-```
-
-## Minimal first run
-
-Use the bundled fixture when you only need to prove the package works:
-
-```bash
-paperorchestra init \
-  --idea examples/minimal/idea.md \
-  --experimental-log examples/minimal/experimental_log.md \
-  --template examples/minimal/template.tex \
-  --guidelines examples/minimal/conference_guidelines.md \
-  --figures-dir examples/minimal/figures
-
-paperorchestra run --provider mock --refine-iterations 0
-paperorchestra audit-fidelity
-paperorchestra audit-reproducibility
-paperorchestra status --json
-```
-
-`paperorchestra run` alone is draft generation, not a full quality gate. A full quality workflow must validate structure, compile when allowed, run critic/citation evidence, run `quality-eval --quality-mode`, write `qa-loop-plan`, and execute only bounded `qa-loop-step` attempts.
-
-## Real-review quick path
-
-Prefer `$paperorchestra-live-review`; CLI fallback:
-
-```bash
-paperorchestra critic-preflight \
-  --provider shell \
-  --provider-command "$PAPERO_MODEL_CMD" \
-  --citation-evidence-mode web \
-  --live
-
-paperorchestra critique \
-  --live \
-  --provider shell \
-  --provider-command "$PAPERO_MODEL_CMD" \
-  --citation-evidence-mode web \
-  --source-paper ./paper.full.tex \
-  --output-dir .paper-orchestra/live-review
-
-paperorchestra review-citations \
-  --provider shell \
-  --provider-command "$PAPERO_MODEL_CMD" \
-  --evidence-mode web \
-  --output .paper-orchestra/live-review/citation_support_review.json
-```
-
-`review-citations --evidence-mode web` emits progress to stderr and writes a JSONL progress checkpoint so long reviews are observable and resumable.
-
-## Quality gate quick path
-
-Prefer `$paperorchestra-quality-gate`; CLI fallback:
-
-```bash
-paperorchestra validate-current
-paperorchestra build-source-obligations
-paperorchestra compile
-paperorchestra review-sections
-paperorchestra review-citations --provider shell --provider-command "$PAPERO_MODEL_CMD" --evidence-mode web
-paperorchestra quality-eval --quality-mode claim_safe --require-live-verification
-paperorchestra qa-loop-plan --quality-mode claim_safe
-paperorchestra qa-loop-step --quality-mode claim_safe --max-iterations 1
-```
-
-Stop on `human_needed`, `failed`, or `ready_for_human_finalization`. Those are correct states, not reasons to hide blockers.
-
 ## Environment and domains
 
-Use `ENVIRONMENT.md` for the operator setup sheet and `paperorchestra environment` for the canonical inventory.
+Use `ENVIRONMENT.md` for the full operator setup sheet and `paperorchestra environment` for the canonical inventory.
 
 Common knobs:
 
-- `PAPERO_MODEL_CMD`: shell provider command for live model-backed stages.
+- `PAPERO_MODEL_CMD`: shell provider command for live model-backed stages. `./install.sh` writes a generic Codex search command locally and into the MCP server environment; override it when you want a specific model, provider, or runtime policy.
 - `PAPERO_ALLOW_TEX_COMPILE=1`: enable intentional PDF compilation.
 - `PAPERO_TESTSET_SMOKE_WORKDIR`: testset smoke work directory.
 - `PAPERO_TESTSET_SMOKE_PROVIDER_TIMEOUT_SECONDS`: testset smoke provider timeout.
@@ -181,13 +65,13 @@ External domain profiles can be added in code with `register_domain`; keep domai
 
 ## Tutorials
 
-Detailed runbooks live outside this README:
+Detailed references live outside this README. Use them only when the matching situation exists; the normal install path is still `git clone` followed by `./install.sh`.
 
 | Tutorial | Scope |
 | --- | --- |
 | [`docs/tutorials/index.md`](docs/tutorials/index.md) | Tutorial map and safety posture. |
 | [`docs/tutorials/start.md`](docs/tutorials/start.md) | First-use and stale install checks. |
-| [`docs/tutorials/mock-demo.md`](docs/tutorials/mock-demo.md) | Safe mock demo. |
+| [`docs/tutorials/mock-demo.md`](docs/tutorials/mock-demo.md) | Optional fixture/mock check. |
 | [`docs/tutorials/docker-container-qa.md`](docs/tutorials/docker-container-qa.md) | Fresh container QA. |
 | [`docs/tutorials/rendered-pdf-human-qa.md`](docs/tutorials/rendered-pdf-human-qa.md) | Human rendered-PDF QA. |
 | [`docs/tutorials/claim-safe-quality-loop.md`](docs/tutorials/claim-safe-quality-loop.md) | Claim-safe gate, `qa-loop-step`, and Ralph handoff semantics. |

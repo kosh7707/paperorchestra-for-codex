@@ -101,12 +101,20 @@ def _resolve_exec_timeout(env_var: str, default: float, *, minimum: float = 1.0,
     return min(value, maximum)
 
 
-def _resolve_omx_model(model: str | None = None) -> str:
-    return model or os.environ.get("PAPERO_OMX_MODEL") or "gpt-5.5"
+def _resolve_omx_model(model: str | None = None) -> str | None:
+    return model or os.environ.get("PAPERO_OMX_MODEL") or None
 
 
-def _resolve_omx_reasoning_effort(default: str = "low") -> str:
+def _resolve_omx_reasoning_effort(default: str | None = None) -> str | None:
     return os.environ.get("PAPERO_OMX_REASONING_EFFORT") or default
+
+
+def _append_omx_model_flags(args: list[str], *, model: str | None, reasoning_effort: str | None) -> list[str]:
+    if model:
+        args.extend(["-m", model])
+    if reasoning_effort:
+        args.extend(["-c", f'model_reasoning_effort="{reasoning_effort}"'])
+    return args
 
 
 def _format_omx_failure(args: list[str], return_code: int, stdout: str, stderr: str) -> str:
@@ -350,22 +358,27 @@ def omx_exec_completion(
     reasoning_effort = _resolve_omx_reasoning_effort()
     with tempfile.NamedTemporaryFile(prefix="omx-exec-", suffix=".txt", dir=tmp_dir, delete=False) as handle:
         output_path = Path(handle.name)
-    proc = _run_omx_exec_command(
+    args = _append_omx_model_flags(
         [
             "omx",
             "exec",
             "--dangerously-bypass-approvals-and-sandbox",
             "--skip-git-repo-check",
-            "-m",
-            model,
-            "-c",
-            f'model_reasoning_effort="{reasoning_effort}"',
+        ],
+        model=model,
+        reasoning_effort=reasoning_effort,
+    )
+    args.extend(
+        [
             "-C",
             str(root),
             "-o",
             str(output_path),
             "-",
-        ],
+        ]
+    )
+    proc = _run_omx_exec_command(
+        args,
         root=root,
         prompt=prompt,
         output_path=output_path,
@@ -399,16 +412,18 @@ def omx_exec_json_completion(
         schema_path = Path(schema_file.name)
     with tempfile.NamedTemporaryFile(prefix="omx-exec-", suffix=".json", dir=tmp_dir, delete=False) as out_file:
         output_path = Path(out_file.name)
-    proc = _run_omx_exec_command(
+    args = _append_omx_model_flags(
         [
             "omx",
             "exec",
             "--dangerously-bypass-approvals-and-sandbox",
             "--skip-git-repo-check",
-            "-m",
-            model,
-            "-c",
-            f'model_reasoning_effort="{reasoning_effort}"',
+        ],
+        model=model,
+        reasoning_effort=reasoning_effort,
+    )
+    args.extend(
+        [
             "-C",
             str(root),
             "--output-schema",
@@ -416,7 +431,10 @@ def omx_exec_json_completion(
             "-o",
             str(output_path),
             "-",
-        ],
+        ]
+    )
+    proc = _run_omx_exec_command(
+        args,
         root=root,
         prompt=prompt,
         output_path=output_path,

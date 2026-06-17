@@ -606,21 +606,12 @@ def get_provider(name: str, command: str | None = None) -> BaseProvider:
 
 
 def default_codex_web_provider_command() -> str:
-    model = os.environ.get("PAPERO_OMX_MODEL") or "gpt-5.5"
-    effort = os.environ.get("PAPERO_OMX_REASONING_EFFORT") or "low"
-    return json.dumps(
-        [
-            "codex",
-            "--search",
-            "exec",
-            "--skip-git-repo-check",
-            "-m",
-            model,
-            "-c",
-            f'model_reasoning_effort="{effort}"',
-        ]
-    )
-
+    command = ["codex", "--search", "exec", "--skip-git-repo-check"]
+    if model := os.environ.get("PAPERO_OMX_MODEL"):
+        command.extend(["-m", model])
+    if effort := os.environ.get("PAPERO_OMX_REASONING_EFFORT"):
+        command.extend(["-c", f'model_reasoning_effort="{effort}"'])
+    return json.dumps(command)
 
 
 def provider_command_digest(provider: BaseProvider | None) -> str | None:

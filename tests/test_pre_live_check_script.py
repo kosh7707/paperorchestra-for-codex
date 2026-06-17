@@ -795,6 +795,8 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             )
 
             for _ in range(2):
+                env = os.environ.copy()
+                env["PAPERO_MODEL_CMD"] = '["codex","--search","exec","--skip-git-repo-check"]'
                 result = subprocess.run(
                     [
                         "bash",
@@ -812,6 +814,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
                     text=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
+                    env=env,
                     check=False,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -825,6 +828,7 @@ class PreLiveCheckScriptTests(unittest.TestCase):
             self.assertIn("enabled = true", text)
             self.assertIn("startup_timeout_sec = 12", text)
             self.assertIn('PAPERO_ALLOWED_PROVIDER_BINARIES = "codex,omx"', text)
+            self.assertIn('PAPERO_MODEL_CMD = "[\\"codex\\",\\"--search\\",\\"exec\\",\\"--skip-git-repo-check\\"]"', text)
             self.assertNotIn("stale-paperorchestra-mcp", text)
 
     def test_register_codex_mcp_dry_run_does_not_write_config(self) -> None:
@@ -2002,13 +2006,15 @@ class PreLiveCheckScriptTests(unittest.TestCase):
 
             subprocess.run(["bash", str(harness), str(repo)], check=True)
 
-    def test_docs_safe_first_run_initializes_before_run(self) -> None:
+    def test_docs_primary_install_path_is_simple_and_stale_safe(self) -> None:
         readme = Path("README.md").read_text(encoding="utf-8")
         environment = Path("ENVIRONMENT.md").read_text(encoding="utf-8")
+        start = Path("docs/tutorials/start.md").read_text(encoding="utf-8")
 
-        self.assertIn("./scripts/demo-mock.sh", readme)
-        self.assertIn("no reference PDF required", readme)
-        for text in (readme, environment):
+        self.assertIn("cd paperorchestra-for-codex && ./install.sh", readme)
+        self.assertIn("registers the PaperOrchestra MCP server by default", readme)
+        self.assertIn("package_context", start)
+        for text in (environment,):
             init_index = text.index("paperorchestra init")
             run_index = text.index("paperorchestra run", init_index)
             self.assertLess(init_index, run_index)

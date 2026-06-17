@@ -332,18 +332,17 @@ auto-launch long-running workers.
 
 ---
 
-## 4. Copyable env template
+## 4. Local env file
 
-A compact operator template lives in `README.md` under **`Copyable environment template`**. The broader walkthroughs live in `docs/tutorials/start.md` and `docs/tutorials/docker-container-qa.md`.
+`./install.sh` writes `.paperorchestra.env` with a generic shell-provider command. The broader walkthroughs live in `docs/tutorials/start.md` and `docs/tutorials/docker-container-qa.md`.
 
-Typical usage:
+Typical usage after running `./install.sh`:
 
 ```bash
-# copy only the variables you need from README.md into a local .env
-set -a
-source .env
-set +a
+source .paperorchestra.env
 ```
+
+If you prefer a different provider command, edit a private `.env` file or set `PAPERO_MODEL_CMD` in your shell before running live stages.
 
 If you use `direnv`, `mise`, or another env manager, translate the same variables there.
 
@@ -357,8 +356,8 @@ Below is the operator-facing inventory. Variables not listed here are either aut
 
 | Variable | Required? | Default | Why it exists |
 | --- | --- | --- | --- |
-| `PAPERO_OMX_MODEL` | Optional | `gpt-5.5` | Override the OMX-native model |
-| `PAPERO_OMX_REASONING_EFFORT` | Optional | `low` | Trade latency/cost vs reasoning depth |
+| `PAPERO_OMX_MODEL` | Optional | Codex/OMX config | Optionally pass an explicit OMX-native model |
+| `PAPERO_OMX_REASONING_EFFORT` | Optional | Codex/OMX config | Optionally pass an explicit OMX-native reasoning effort |
 | `PAPERO_OMX_EXEC_TIMEOUT_SECONDS` | Optional | code-bounded | Give slow live runs more time |
 | `PAPERO_OMX_CONTROL_TIMEOUT_SECONDS` | Optional | `60` | Bound OMX control-plane calls like `omx status` / `omx state` |
 | `PAPERO_OMX_TIMEOUT_GRACE_SECONDS` | Optional | `0` | Extra wait for OMX/Codex reconnects before treating timeout as failed |
@@ -427,7 +426,7 @@ Requires BOTH PAPERO_PROVIDER_RETRY_SAFE=1 AND PAPERO_PROVIDER_RETRY_ATTEMPTS>0 
 For cited-sentence claim-support review, `paperorchestra review-citations --evidence-mode model` uses this same provider surface. `--evidence-mode web` is intended for a web-search-capable provider; when no provider command is configured, the CLI falls back to a Codex command shaped like:
 
 ```bash
-codex --search exec --skip-git-repo-check -m "${PAPERO_OMX_MODEL:-gpt-5.5}"
+codex --search exec --skip-git-repo-check
 ```
 
 This path is independent of Semantic Scholar. It checks whether cited manuscript sentences are supported by evidence; it is not the same as `verify-papers --mode live`, which only builds bibliographic metadata. If `review-citations --evidence-mode web` is requested and the active shell writing provider is a non-search `codex exec` command, PaperOrchestra uses the Codex `--search exec` default for the citation-support critic unless an explicit `--provider-command` is supplied.
@@ -534,7 +533,7 @@ scripts/demo-mock.sh
 ### Shell-provider live run
 
 ```bash
-export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"high\""]'
+source .paperorchestra.env
 # export PAPERO_PROVIDER_SEED=7
 # export PAPERO_PROVIDER_TEMPERATURE=0.2
 # export PAPERO_PROVIDER_MAX_OUTPUT_TOKENS=4096
@@ -544,14 +543,14 @@ paperorchestra run --provider shell --verify-mode mock --runtime-mode compatibil
 ### OMX-native live run
 
 ```bash
-export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"high\""]'
+source .paperorchestra.env
 paperorchestra run --provider shell --verify-mode mock --runtime-mode omx_native
 ```
 
 ### Live verification + compile
 
 ```bash
-export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"high\""]'
+source .paperorchestra.env
 export SEMANTIC_SCHOLAR_API_KEY='<your-key>'
 export PAPERO_ALLOW_TEX_COMPILE=1
 paperorchestra run \
@@ -584,7 +583,7 @@ paperorchestra ralph-start --quality-mode claim_safe --max-iterations 5 --dry-ru
 ## 8. What to do when something is missing
 
 ### `paperorchestra doctor` says `shell_provider_ready` is missing
-Set `PAPERO_MODEL_CMD`.
+Run `./install.sh` and `source .paperorchestra.env`, or set `PAPERO_MODEL_CMD` manually.
 
 ### `paperorchestra doctor` says `omx_native_ready` is missing
 Install `omx` and `codex`, then re-run `paperorchestra doctor`. If both binaries

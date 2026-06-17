@@ -10,6 +10,7 @@ DRY_RUN=0
 BACKUP=1
 STARTUP_TIMEOUT_SEC=10
 ALLOWED_PROVIDER_BINARIES="codex,openai,ollama,llm,claude,gemini"
+PROVIDER_COMMAND="${PAPERO_MODEL_CMD:-}"
 
 usage() {
   cat <<'USAGE'
@@ -35,6 +36,10 @@ Options:
   --allowed-provider-binaries LIST
       Value for PAPERO_ALLOWED_PROVIDER_BINARIES.
       Default: codex,openai,ollama,llm,claude,gemini.
+
+  --provider-command COMMAND
+      Value for PAPERO_MODEL_CMD to persist in the MCP server environment.
+      Defaults to the current PAPERO_MODEL_CMD environment value when set.
 
   --startup-timeout-sec N
       startup_timeout_sec value. Default: 10.
@@ -78,6 +83,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --allowed-provider-binaries)
       ALLOWED_PROVIDER_BINARIES="${2:?--allowed-provider-binaries requires a value}"
+      shift
+      ;;
+    --provider-command)
+      PROVIDER_COMMAND="${2:?--provider-command requires a value}"
       shift
       ;;
     --startup-timeout-sec)
@@ -133,7 +142,7 @@ if [[ "$SERVER_NAME" =~ [^A-Za-z0-9_-] ]]; then
   exit 64
 fi
 
-export CONFIG_PATH SERVER_NAME COMMAND ALLOWED_PROVIDER_BINARIES STARTUP_TIMEOUT_SEC DRY_RUN BACKUP
+export CONFIG_PATH SERVER_NAME COMMAND ALLOWED_PROVIDER_BINARIES PROVIDER_COMMAND STARTUP_TIMEOUT_SEC DRY_RUN BACKUP
 python3 - <<'PY'
 from __future__ import annotations
 
@@ -149,6 +158,7 @@ config_path = Path(os.environ["CONFIG_PATH"]).expanduser()
 server = os.environ["SERVER_NAME"]
 command = os.environ["COMMAND"]
 allowed_provider_binaries = os.environ["ALLOWED_PROVIDER_BINARIES"]
+provider_command = os.environ.get("PROVIDER_COMMAND", "")
 startup_timeout_sec = int(os.environ["STARTUP_TIMEOUT_SEC"])
 dry_run = os.environ["DRY_RUN"] == "1"
 backup = os.environ["BACKUP"] == "1"
@@ -204,8 +214,10 @@ block = [
     "\n",
     f"[mcp_servers.{server}.env]\n",
     f"PAPERO_ALLOWED_PROVIDER_BINARIES = {toml_string(allowed_provider_binaries)}\n",
-    f"{end_marker}\n",
 ]
+if provider_command:
+    block.append(f"PAPERO_MODEL_CMD = {toml_string(provider_command)}\n")
+block.append(f"{end_marker}\n")
 new_text = "".join(preserved + block)
 
 if dry_run:

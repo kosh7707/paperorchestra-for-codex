@@ -31,19 +31,19 @@ ENVIRONMENT_VARIABLES: tuple[EnvironmentVariableSpec, ...] = (
         name="PAPERO_OMX_MODEL",
         category="core_runtime",
         operator_settable=True,
-        default="gpt-5.5",
-        example="gpt-5.5",
-        description="Override the default OMX-native model used by PaperOrchestra stages.",
-        notes=("Optional quality/cost knob.",),
+        default="Codex/OMX config",
+        example="your-preferred-model",
+        description="Optionally pass an explicit OMX-native model for PaperOrchestra stages.",
+        notes=("Unset by default so Codex/OMX can use the operator's configured model.",),
     ),
     EnvironmentVariableSpec(
         name="PAPERO_OMX_REASONING_EFFORT",
         category="core_runtime",
         operator_settable=True,
-        default="low",
+        default="Codex/OMX config",
         example="xhigh",
-        description="Override OMX-native reasoning effort for slower/higher-quality live runs.",
-        notes=("Optional quality/cost knob.",),
+        description="Optionally pass an explicit OMX-native reasoning effort for live runs.",
+        notes=("Unset by default so Codex/OMX can use the operator's configured effort.",),
     ),
     EnvironmentVariableSpec(
         name="PAPERO_OMX_EXEC_TIMEOUT_SECONDS",
@@ -121,7 +121,7 @@ ENVIRONMENT_VARIABLES: tuple[EnvironmentVariableSpec, ...] = (
         category="shell_provider",
         operator_settable=True,
         default=None,
-        example='["codex","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\\"low\\""]',
+        example='["codex","--search","exec","--skip-git-repo-check"]',
         description="Shell-provider command: reads prompt from stdin and writes response to stdout.",
         required_for=("shell_provider_ready", "full_live_run_ready", "claim_safe_full_run_ready"),
     ),
@@ -729,7 +729,7 @@ def build_readiness_profiles(
     shell_steps: list[str] = []
     if not provider_command_configured:
         shell_missing.append("Set PAPERO_MODEL_CMD for shell-provider runs.")
-        shell_steps.append("Use the README copyable environment template and set PAPERO_MODEL_CMD to your Codex/OpenAI/Ollama command.")
+        shell_steps.append("Run ./install.sh for the generic Codex provider command or set PAPERO_MODEL_CMD to your Codex/OpenAI/Ollama command.")
     profiles.append(
         _profile(
             "shell_provider_ready",

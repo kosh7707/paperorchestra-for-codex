@@ -293,11 +293,32 @@ class OmxBridgeTests(unittest.TestCase):
         old_model = os.environ.get("PAPERO_OMX_MODEL")
         old_effort = os.environ.get("PAPERO_OMX_REASONING_EFFORT")
         try:
+            os.environ.pop("PAPERO_OMX_MODEL", None)
+            os.environ.pop("PAPERO_OMX_REASONING_EFFORT", None)
+            self.assertIsNone(_resolve_omx_model())
+            self.assertIsNone(_resolve_omx_reasoning_effort())
+            self.assertEqual(
+                json.loads(default_codex_web_provider_command()),
+                ["codex", "--search", "exec", "--skip-git-repo-check"],
+            )
             os.environ["PAPERO_OMX_MODEL"] = "gpt-5.4"
             os.environ["PAPERO_OMX_REASONING_EFFORT"] = "xhigh"
             self.assertEqual(_resolve_omx_model(), "gpt-5.4")
             self.assertEqual(_resolve_omx_model("custom-model"), "custom-model")
             self.assertEqual(_resolve_omx_reasoning_effort(), "xhigh")
+            self.assertEqual(
+                json.loads(default_codex_web_provider_command()),
+                [
+                    "codex",
+                    "--search",
+                    "exec",
+                    "--skip-git-repo-check",
+                    "-m",
+                    "gpt-5.4",
+                    "-c",
+                    'model_reasoning_effort="xhigh"',
+                ],
+            )
         finally:
             if old_model is None:
                 os.environ.pop("PAPERO_OMX_MODEL", None)

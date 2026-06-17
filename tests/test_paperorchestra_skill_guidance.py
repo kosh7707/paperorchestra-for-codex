@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import subprocess
 import tempfile
 import unittest
@@ -184,7 +183,7 @@ class PaperOrchestraSkillGuidanceTests(unittest.TestCase):
         self.assertTrue(installer.exists(), "missing root install.sh")
         self.assertTrue(installer.stat().st_mode & 0o111, "install.sh must be executable")
         result = subprocess.run(
-            ["bash", "install.sh", "--dry-run", "--demo", "--mcp"],
+            ["bash", "install.sh", "--dry-run"],
             cwd=Path.cwd(),
             text=True,
             stdout=subprocess.PIPE,
@@ -198,30 +197,43 @@ class PaperOrchestraSkillGuidanceTests(unittest.TestCase):
             "pip install",
             "scripts/install-skill.sh",
             "scripts/register-codex-mcp.sh --use-local-venv",
-            "scripts/demo-mock.sh --in-repo",
+            "PAPERO_MODEL_CMD",
+            '["codex","--search","exec","--skip-git-repo-check"]',
             "Next:",
             ".venv/bin/paperorchestra status --json",
         ]:
             self.assertIn(phrase, output)
+        self.assertNotIn("scripts/demo-mock.sh --in-repo", output)
+        self.assertNotIn("gpt-5.5", output)
+        self.assertNotIn("model_reasoning_effort", output)
 
-    def test_readme_tldr_is_clone_install_not_manual_pip_recipe(self) -> None:
+    def test_readme_installation_is_clone_install_not_manual_pip_recipe(self) -> None:
         text = self._readme()
-        tldr = text.split("## Skill-first workflow", 1)[0]
-        self.assertIn("git clone", tldr)
-        self.assertIn("./install.sh", tldr)
-        self.assertIn("./install.sh --demo", tldr)
-        self.assertIn(".venv/bin/paperorchestra status --json", tldr)
-        self.assertNotIn("pip install -e", tldr)
-        self.assertNotIn("python -m venv", tldr)
-        self.assertNotIn(". .venv/bin/activate", tldr)
+        install_section = text.split("## Skill-first workflow", 1)[0]
+        self.assertIn("## Installation", install_section)
+        self.assertNotIn("TL;DR", install_section)
+        self.assertIn("git clone", install_section)
+        self.assertIn("cd paperorchestra-for-codex && ./install.sh", install_section)
+        self.assertNotIn("./install.sh --demo", install_section)
+        self.assertNotIn("./install.sh --mcp", install_section)
+        self.assertNotIn("pip install -e", install_section)
+        self.assertNotIn("python -m venv", install_section)
+        self.assertNotIn(". .venv/bin/activate", install_section)
+        self.assertNotIn("export PAPERO_MODEL_CMD", install_section)
 
-    def test_readme_copyable_model_command_remains_valid_json(self) -> None:
+    def test_readme_removes_noisy_quick_paths(self) -> None:
         text = self._readme()
-        line = next(line for line in text.splitlines() if line.startswith("export PAPERO_MODEL_CMD="))
-        value = line.split("=", 1)[1].strip().strip("'")
-        parsed = json.loads(value)
-        self.assertIsInstance(parsed, list)
-        self.assertIn("codex", parsed[0])
+        for phrase in [
+            "Codex-first setup path",
+            "No-live local-step check",
+            "Minimal first run",
+            "Real-review quick path",
+            "Quality gate quick path",
+            "export PAPERO_MODEL_CMD",
+            "gpt-5.5",
+            "model_reasoning_effort",
+        ]:
+            self.assertNotIn(phrase, text)
 
     def test_environment_mentions_no_live_local_step_check(self) -> None:
         text = self._environment()
