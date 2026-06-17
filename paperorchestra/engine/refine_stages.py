@@ -47,6 +47,7 @@ from paperorchestra.engine.reports import (
     _record_validation_report,
     collect_paper_contract_issues,
 )
+from paperorchestra.engine.refine_drafts import normalize_refinement_latex, parse_refinement_response
 from paperorchestra.engine.refine_results import (
     accepted_refinement_result,
     candidate_only_result,
@@ -155,28 +156,14 @@ def refine_current_paper(
             omx_lane_type="refiner",
             trace_stage="refinement",
         )
-        try:
-            worklog = extract_json(response)
-        except ExtractionError:
-            worklog = {
-                "actions_taken": ["Refinement response did not include a machine-readable worklog block; accepted LaTeX-only fallback."],
-                "addressed_weaknesses": [],
-                "integrated_answers": [],
-            }
-            lane_notes = lane_notes + ["Refinement output omitted JSON worklog; synthesized fallback worklog from LaTeX-only response."]
-        try:
-            latex = extract_latex(response)
-        except ExtractionError as exc:
-            raise ContractError(f"Refinement output did not include extractable LaTeX: {exc}") from exc
-        latex = _ensure_bibliography_hook(latex, citation_map)
-        latex = _normalize_generated_plot_paths(latex, plot_assets_index)
-        latex = _normalize_source_figure_paths(latex, state.inputs.figures_dir)
-        latex = _ensure_generated_plot_usage(latex, plot_assets_index)
-        latex = _stabilize_figure_float_placement(latex)
-        latex = _remove_material_packet_sections(latex)
-        latex = _ensure_discussion_section_for_claim_boundaries(latex, claim_map)
-        latex = _ensure_required_claim_scope_notes(latex, claim_map)
-        latex, citation_replacements = canonicalize_citation_keys(latex, citation_map)
+        worklog, latex, lane_notes = parse_refinement_response(response, lane_notes=lane_notes)
+        latex, citation_replacements = normalize_refinement_latex(
+            latex,
+            citation_map=citation_map,
+            plot_assets_index=plot_assets_index,
+            figures_dir=state.inputs.figures_dir,
+            claim_map=claim_map,
+        )
         if strict_claim_safe_prompt:
             dropped_citations = _unknown_citation_key_counts(latex, citation_map)
         else:
