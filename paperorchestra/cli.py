@@ -12,6 +12,7 @@ from . import __version__
 from .candidate_commands import candidate_apply, candidate_diff, candidate_list, candidate_reject
 from .compile_env import inspect_compile_environment
 from .cost import estimate_run_cost
+from .critic_trust import build_critic_trust_card, require_live_critic_trust
 from .citation_integrity import (
     write_citation_integrity_audit,
     write_citation_integrity_critic,
@@ -580,6 +581,16 @@ def build_parser() -> argparse.ArgumentParser:
     suggest_parser.add_argument("--citation-review")
     suggest_parser.add_argument("--output", required=True)
 
+    critic_preflight_parser = sub.add_parser("critic-preflight", help="Report the critic trust tier before running critic-like workflows")
+    critic_preflight_parser.add_argument(
+        "--citation-evidence-mode",
+        default="heuristic",
+        choices=["heuristic", "model", "web", "source"],
+    )
+    critic_preflight_parser.add_argument("--claim-safe", action="store_true")
+    critic_preflight_parser.add_argument("--live", action="store_true", help="Fail unless the preflight supports live/web critic claims.")
+    _common_provider_args(critic_preflight_parser)
+
     critique_parser = sub.add_parser("critique", help="Run paper, section, citation critics and produce revision suggestions")
     critique_parser.add_argument("--source-paper")
     critique_parser.add_argument("--output-dir")
@@ -589,6 +600,8 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["heuristic", "model", "web", "source"],
         help="Evidence mode for the citation-support critic used by critique.",
     )
+    critique_parser.add_argument("--live", action="store_true", help="Refuse mock/local/heuristic-only paths before running critique.")
+    critique_parser.add_argument("--claim-safe", action="store_true", help="Classify a live web critique as claim_safe_live in the trust card.")
     _runtime_mode_args(critique_parser, strict_flag=True)
     _common_provider_args(critique_parser)
 
@@ -1811,7 +1824,27 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
 
+        if args.command == "critic-preflight":
+            card = build_critic_trust_card(
+                provider_name=args.provider,
+                provider_command=args.provider_command,
+                citation_evidence_mode=args.citation_evidence_mode,
+                claim_safe=args.claim_safe,
+            )
+            if args.live:
+                require_live_critic_trust(card)
+            print(json.dumps({"critic_trust": card}, indent=2, ensure_ascii=False))
+            return 0
+
         if args.command == "critique":
+            trust_card = build_critic_trust_card(
+                provider_name=args.provider,
+                provider_command=args.provider_command,
+                citation_evidence_mode=args.citation_evidence_mode,
+                claim_safe=args.claim_safe,
+            )
+            if args.live:
+                require_live_critic_trust(trust_card)
             provider = _provider_from_args(args)
             state = load_session(cwd)
             output_dir = Path(args.output_dir).resolve() if args.output_dir else Path(state.artifacts.paper_full_tex or state.inputs.idea_path).resolve().parent
@@ -1839,6 +1872,7 @@ def main(argv: list[str] | None = None) -> int:
                 citation_review_json=citation_path,
             )
             print(json.dumps({
+                "critic_trust": trust_card,
                 "review": str(review_path),
                 "section_review": str(section_path),
                 "citation_support_review": str(citation_path),
