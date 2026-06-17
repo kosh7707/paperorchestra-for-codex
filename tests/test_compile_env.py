@@ -63,3 +63,25 @@ def test_ensure_sandbox_wrapper_accepts_pre_detected_tool_without_reprobing(monk
     wrapper_path = Path(wrapper)
     assert wrapper_path.exists()
     assert "/usr/bin/firejail --quiet" in wrapper_path.read_text(encoding="utf-8")
+
+
+def test_compile_env_reexports_sandbox_helpers_from_focused_module() -> None:
+    from paperorchestra.runtime import compile_sandbox
+
+    assert compile_env.SANDBOX_TOOLS is compile_sandbox.SANDBOX_TOOLS
+    assert compile_env.detect_sandbox_tool is compile_sandbox.detect_sandbox_tool
+    assert compile_env._detect_sandbox_tool_with_notes is compile_sandbox._detect_sandbox_tool_with_notes
+    assert compile_env._sandbox_probe_command is compile_sandbox._sandbox_probe_command
+    assert compile_env._sandbox_tool_usable is compile_sandbox._sandbox_tool_usable
+    assert compile_env._wrapper_script_contents is compile_sandbox._wrapper_script_contents
+    assert compile_env._write_sandbox_wrapper is compile_sandbox._write_sandbox_wrapper
+    assert compile_env.ensure_sandbox_wrapper is not compile_sandbox.ensure_sandbox_wrapper
+
+
+def test_compile_env_sandbox_wrapper_preserves_facade_monkeypatch_semantics(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(compile_env, "detect_sandbox_tool", lambda: "/usr/bin/firejail")
+
+    wrapper = compile_env.ensure_sandbox_wrapper(tmp_path)
+
+    assert wrapper is not None
+    assert "/usr/bin/firejail --quiet" in Path(wrapper).read_text(encoding="utf-8")
