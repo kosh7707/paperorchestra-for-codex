@@ -55,7 +55,12 @@ from paperorchestra.engine.refine_results import (
     contract_validation_failed_result,
     rejected_refinement_result,
 )
-from paperorchestra.engine.refine_review import _accept_review_delta, _redact_review_scores_for_writer
+from paperorchestra.engine.refine_review import (
+    _accept_review_delta,
+    _redact_review_scores_for_writer,
+    should_accept_refinement_candidate,
+    should_retry_refinement_review,
+)
 from paperorchestra.engine.review_stages import _extract_axis_scores, review_current_paper
 from paperorchestra.engine.section_scope import _expected_section_titles_from_outline
 from paperorchestra.manuscript.latex import compile_latex
@@ -368,12 +373,20 @@ def refine_current_paper(
                 )
             )
             break
-        accept = compile_error is None and (no_op_refinement or _accept_review_delta(candidate_score, previous_score, candidate_axes, previous_axes))
-        if (
-            not accept
-            and not no_op_refinement
-            and compile_error is None
-            and previous_score - candidate_score <= 1.0
+        accept = should_accept_refinement_candidate(
+            compile_error=compile_error,
+            no_op_refinement=no_op_refinement,
+            candidate_score=candidate_score,
+            previous_score=previous_score,
+            candidate_axes=candidate_axes,
+            previous_axes=previous_axes,
+        )
+        if should_retry_refinement_review(
+            accept=accept,
+            no_op_refinement=no_op_refinement,
+            compile_error=compile_error,
+            previous_score=previous_score,
+            candidate_score=candidate_score,
         ):
             retry_review_path = review_current_paper(
                 cwd,
@@ -386,7 +399,14 @@ def refine_current_paper(
             retry_axes = _extract_axis_scores(retry_review)
             review_retry_paths.append(str(retry_review_path))
             review_retry_scores.append(retry_score)
-            if _accept_review_delta(retry_score, previous_score, retry_axes, previous_axes):
+            if should_accept_refinement_candidate(
+                compile_error=None,
+                no_op_refinement=False,
+                candidate_score=retry_score,
+                previous_score=previous_score,
+                candidate_axes=retry_axes,
+                previous_axes=previous_axes,
+            ):
                 candidate_review_path = retry_review_path
                 candidate_review = retry_review
                 candidate_score = retry_score

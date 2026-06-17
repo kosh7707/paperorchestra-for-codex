@@ -36,3 +36,34 @@ def _accept_review_delta(
         tolerance = 0.0
     keys = set(candidate_axes) & set(previous_axes)
     return not keys or all(candidate_axes.get(key, 0.0) >= previous_axes.get(key, 0.0) - tolerance for key in keys)
+
+
+def should_accept_refinement_candidate(
+    *,
+    compile_error: str | None,
+    no_op_refinement: bool,
+    candidate_score: float,
+    previous_score: float,
+    candidate_axes: dict[str, Any],
+    previous_axes: dict[str, Any],
+) -> bool:
+    return compile_error is None and (
+        no_op_refinement
+        or _accept_review_delta(candidate_score, previous_score, candidate_axes, previous_axes)
+    )
+
+
+def should_retry_refinement_review(
+    *,
+    accept: bool,
+    no_op_refinement: bool,
+    compile_error: str | None,
+    previous_score: float,
+    candidate_score: float,
+) -> bool:
+    return (
+        not accept
+        and not no_op_refinement
+        and compile_error is None
+        and previous_score - candidate_score <= 1.0
+    )
