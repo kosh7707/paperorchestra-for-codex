@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from paperorchestra.loop_engine.quality.action_plan.citation_integrity import _append_citation_integrity_actions
 from paperorchestra.loop_engine.quality.action_plan.citation_quality import _append_citation_quality_actions
+from paperorchestra.loop_engine.quality.action_plan.figure_grounding import _append_figure_grounding_actions
 
 
 def test_citation_integrity_actions_emit_refresh_for_missing_or_stale_artifacts() -> None:
@@ -51,3 +52,32 @@ def test_citation_quality_actions_emit_refresh_and_critical_repair() -> None:
     assert actions[0]["automation"] == "automatic"
     assert actions[1]["automation"] == "semi_auto"
     assert actions[1]["approval_required_from"] == "citation_quality_gate"
+
+
+def test_figure_grounding_actions_emit_human_needed_with_context() -> None:
+    actions: list[dict] = []
+
+    _append_figure_grounding_actions(
+        actions,
+        {
+            "path": "figure-review.json",
+            "figures": [
+                {
+                    "label": "Figure 2",
+                    "section_title": "Evaluation",
+                    "included_assets": ["precision.pdf"],
+                    "nearby_reference_context": "Figure 2 summarizes the full OWASP trend.",
+                    "plot_manifest_match": {"purpose": "show precision trend"},
+                    "failing_codes": ["figure_caption_unsupported"],
+                }
+            ],
+        },
+    )
+
+    assert [action["code"] for action in actions] == ["figure_caption_unsupported"]
+    assert actions[0]["id"] == "quality-eval:figure-grounding:figure_caption_unsupported:1"
+    assert actions[0]["source"] == "figure-review.json"
+    assert actions[0]["target"] == "Figure 2 in Evaluation"
+    assert actions[0]["automation"] == "human_needed"
+    assert "Assets: precision.pdf." in actions[0]["reason"]
+    assert actions[0]["approval_required_from"] == "figure_placement_review_critic"
