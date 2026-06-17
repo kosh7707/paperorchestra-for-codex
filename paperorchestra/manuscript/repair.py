@@ -6,49 +6,28 @@ from typing import Any
 from paperorchestra.core.boundary import is_material_packet_section_title, normalized_claim_projection
 from paperorchestra.manuscript.validator import canonical_citation_key, canonical_citation_map, extract_citation_keys
 
-SECTION_COMMAND_RE = re.compile(r"\\section\{([^}]+)\}")
-SUBSECTION_COMMAND_RE = re.compile(r"\\subsection\{([^}]+)\}")
-LABEL_RE = re.compile(r"\\label\{([^}]+)\}")
+from paperorchestra.manuscript.labels import (
+    COMMON_GENERATED_SECTION_LABELS,
+    _restore_common_generated_section_labels,
+    _restore_missing_referenced_labels,
+    _restore_missing_subsection_reference_labels,
+)
+from paperorchestra.manuscript.structure import (
+    LABEL_RE,
+    SECTION_COMMAND_RE,
+    SUBSECTION_COMMAND_RE,
+    _canonical_generated_section_title,
+    _insert_block_into_section,
+    _normalized_section_range_map,
+    _paragraph_insertion_index,
+    _preferred_section_name,
+    _section_range_map,
+)
+
 LATEX_CITATION_COMMAND_RE = re.compile(
     r"\\(?P<name>(?!nocite\b)[A-Za-z]*cite[A-Za-z]*)(?P<star>\*)?(?P<opts>(?:\s*\[[^\]]*\]){0,2})\s*\{(?P<keys>[^}]+)\}",
     re.IGNORECASE,
 )
-
-
-def _section_range_map(latex: str) -> dict[str, tuple[int, int]]:
-    matches = list(SECTION_COMMAND_RE.finditer(latex))
-    ranges: dict[str, tuple[int, int]] = {}
-    for idx, match in enumerate(matches):
-        start = match.start()
-        next_start = matches[idx + 1].start() if idx + 1 < len(matches) else latex.find("\\end{document}", match.end())
-        end = next_start if next_start != -1 else len(latex)
-        ranges[match.group(1).strip().lower()] = (start, end)
-    return ranges
-
-
-def _canonical_generated_section_title(title: str) -> str:
-    raw = title.strip()
-    if re.fullmatch(r"\\begin\{abstract\}.*?\\end\{abstract\}", raw, flags=re.DOTALL | re.IGNORECASE):
-        raw = "abstract"
-    elif re.fullmatch(r"\\+appendix\b.*", raw, flags=re.DOTALL | re.IGNORECASE):
-        raw = "appendix"
-    section_match = re.fullmatch(r"\\(?:sub)*section\*?\{(.+)\}", raw, flags=re.DOTALL)
-    if section_match:
-        raw = section_match.group(1).strip()
-    normalized = re.sub(r"\s+", " ", raw.lower())
-    aliases = {
-        "proposed method": "method",
-        "methodology": "method",
-        "implementation and results": "experiments",
-        "implementation results": "experiments",
-        "experiments": "experiments",
-        "discussion and limitations": "discussion",
-    }
-    return aliases.get(normalized, normalized)
-
-
-def _normalized_section_range_map(latex: str) -> dict[str, tuple[int, int]]:
-    return {_canonical_generated_section_title(title): span for title, span in _section_range_map(latex).items()}
 
 
 def _move_macro_definitions_to_preamble(latex: str, macro_block: str) -> str:
@@ -378,213 +357,6 @@ def _ensure_required_claim_scope_notes(latex: str, claim_map: dict[str, Any] | N
         insert_at = _paragraph_insertion_index(rendered, section_title_end + 1 if section_title_end != -1 else start, end)
         rendered = rendered[:insert_at] + "\n" + note + rendered[insert_at:]
     return _repair_inline_math_surplus_closing_brace(rendered)
-
-
-def _paragraph_insertion_index(latex: str, start: int, section_end: int) -> int:
-    paragraph_end = latex.find("\n\n", start, section_end)
-    if paragraph_end != -1:
-        return paragraph_end + 2
-    line_end = latex.find("\n", start, section_end)
-    if line_end != -1:
-        return line_end + 1
-    return section_end
-
-def _preferred_section_name(
-    latex: str,
-    *,
-    label: str | None = None,
-    anchor_tokens: list[str] | None = None,
-) -> str | None:
-    ranges = _section_range_map(latex)
-    if not ranges:
-        return None
-    if label:
-        ref_match = re.search(rf"\\(?:eqref|ref)\{{{re.escape(label)}\}}", latex)
-        if ref_match:
-            for section_name, (start, end) in ranges.items():
-                if start <= ref_match.start() < end:
-                    return section_name
-    lowered = latex.lower()
-    for token in anchor_tokens or []:
-        if not token:
-            continue
-        token_index = lowered.find(token.lower())
-        if token_index == -1:
-            continue
-        for section_name, (start, end) in ranges.items():
-            if start <= token_index < end:
-                return section_name
-    for preferred in ["method", "proposed method", "experiments", "implementation and results", "introduction", "related work", "background"]:
-        if preferred in ranges:
-            return preferred
-    return next(iter(ranges))
-
-
-def _insert_block_into_section(
-    latex: str,
-    *,
-    section_name: str | None,
-    block: str,
-    label: str | None = None,
-    anchor_tokens: list[str] | None = None,
-) -> str:
-    if not section_name:
-        return latex + "\n" + block.strip() + "\n"
-    ranges = _section_range_map(latex)
-    target_range = ranges.get(section_name.strip().lower())
-    if target_range is None:
-        return latex + "\n" + block.strip() + "\n"
-    start, end = target_range
-    section_text = latex[start:end]
-    if label:
-        ref_match = re.search(rf"\\(?:eqref|ref)\{{{re.escape(label)}\}}", section_text)
-        if ref_match:
-            insert_at = _paragraph_insertion_index(latex, start + ref_match.end(), end)
-            return latex[:insert_at] + "\n" + block.strip() + "\n" + latex[insert_at:]
-    lowered_section = section_text.lower()
-    for token in anchor_tokens or []:
-        if not token:
-            continue
-        token_index = lowered_section.find(token.lower())
-        if token_index == -1:
-            continue
-        insert_at = _paragraph_insertion_index(latex, start + token_index + len(token), end)
-        return latex[:insert_at] + "\n" + block.strip() + "\n" + latex[insert_at:]
-    return latex[:end] + "\n" + block.strip() + "\n" + latex[end:]
-
-
-def _restore_missing_referenced_labels(generated_latex: str, template_latex: str) -> str:
-    referenced_labels = set(re.findall(r"\\(?:eqref|ref)\{([^}]+)\}", generated_latex))
-    if not referenced_labels:
-        return generated_latex
-    existing_labels = set(LABEL_RE.findall(generated_latex))
-    missing = referenced_labels - existing_labels
-    if not missing:
-        return generated_latex
-    source_ranges = _section_range_map(template_latex)
-    merged = generated_latex
-    for section_name, source_range in source_ranges.items():
-        source_block = template_latex[source_range[0] : source_range[1]]
-        source_labels = set(LABEL_RE.findall(source_block)) & missing
-        if not source_labels:
-            continue
-        if section_name not in _section_range_map(merged):
-            continue
-        for label in sorted(source_labels):
-            for block in re.findall(r"(\\(?:subsection|subsubsection|paragraph)\*?\{[^}]+\}(?:\n\\label\{[^}]+\})?|\\begin\{[^}]+\}.*?\\end\{[^}]+\}|\\label\{[^}]+\})", source_block, re.DOTALL):
-                if f"\\label{{{label}}}" in block and f"\\label{{{label}}}" not in merged:
-                    insertion_section = _preferred_section_name(merged, label=label) or section_name
-                    merged = _insert_block_into_section(
-                        merged,
-                        section_name=insertion_section,
-                        block=block,
-                        label=label,
-                    )
-                    break
-        missing -= source_labels
-        if not missing:
-            break
-    merged = _restore_common_generated_section_labels(merged, missing)
-    return merged
-
-
-COMMON_GENERATED_SECTION_LABELS: dict[str, tuple[str, ...]] = {
-    "sec:intro": ("introduction",),
-    "sec:related": ("background and related work", "related work", "background"),
-    "sec:background": ("background and related work", "background", "related work"),
-    "sec:method": (
-        "method",
-        "methodology",
-        "proposed method",
-        "construction",
-    ),
-    "sec:construction": (
-        "method",
-        "methodology",
-        "proposed method",
-        "construction",
-    ),
-    "sec:security": ("security analysis", "security proof", "analysis"),
-    "sec:impl": (
-        "implementation and results",
-        "implementation results",
-        "implementation",
-        "experiments",
-        "evaluation",
-    ),
-    "sec:results": (
-        "implementation and results",
-        "implementation results",
-        "results",
-        "experiments",
-        "evaluation",
-    ),
-    "sec:discussion": ("discussion and limitations", "discussion", "limitations"),
-    "sec:conclusion": ("conclusion",),
-}
-
-
-def _restore_common_generated_section_labels(generated_latex: str, missing_labels: set[str]) -> str:
-    """Add safe labels for common generated sections when the source had none.
-
-    Some human source packets reference labels such as ``sec:impl`` from tables
-    or figure captions, while some generated templates only supply plain
-    section headings.  If a generated manuscript preserves the reference but no
-    source block contains the label, insert the label immediately after the
-    matching generated section title.  This does not create new content; it only
-    restores LaTeX referential integrity for conventional section labels.
-    """
-
-    merged = generated_latex
-    for label in sorted(missing_labels):
-        target_titles = COMMON_GENERATED_SECTION_LABELS.get(label)
-        if not target_titles or f"\\label{{{label}}}" in merged:
-            continue
-        ranges = _section_range_map(merged)
-        target_name = next((title for title in target_titles if title in ranges), None)
-        if target_name is None:
-            continue
-        start, end = ranges[target_name]
-        section_title_end = merged.find("}", start, end)
-        if section_title_end == -1:
-            continue
-        insert_at = section_title_end + 1
-        insertion = f"\n\\label{{{label}}}"
-        merged = merged[:insert_at] + insertion + merged[insert_at:]
-    merged = _restore_missing_subsection_reference_labels(merged, missing_labels)
-    return merged
-
-
-def _restore_missing_subsection_reference_labels(generated_latex: str, missing_labels: set[str]) -> str:
-    """Restore missing subsection labels at the nearest generated subsection.
-
-    Source packets can legitimately mention subsection labels from the author's
-    technical material even when generated templates only contain section
-    headings.  If the generated text preserves a ``\ref{subsec:...}`` but no
-    source block can be reinserted, attach that label to the nearest preceding
-    generated subsection in the same manuscript.  This is compile hygiene only:
-    it creates an anchor for an already-visible reference without adding prose.
-    """
-
-    merged = generated_latex
-    for label in sorted(missing_labels):
-        if not label.startswith("subsec:") or f"\\label{{{label}}}" in merged:
-            continue
-        ref_match = re.search(rf"\\(?:eqref|ref)\{{{re.escape(label)}\}}", merged)
-        if not ref_match:
-            continue
-        prefix = merged[: ref_match.start()]
-        subsection_matches = list(SUBSECTION_COMMAND_RE.finditer(prefix))
-        if subsection_matches:
-            target_match = subsection_matches[-1]
-        else:
-            section_matches = list(SECTION_COMMAND_RE.finditer(prefix))
-            if not section_matches:
-                continue
-            target_match = section_matches[-1]
-        insert_at = target_match.end()
-        merged = merged[:insert_at] + f"\n\\label{{{label}}}" + merged[insert_at:]
-    return merged
 
 
 def _citation_map_for_selected_sections(source_latex: str, citation_map: dict[str, Any], selected_sections: list[str]) -> dict[str, Any]:
