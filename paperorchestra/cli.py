@@ -1439,6 +1439,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.output,
                     provider=citation_provider,
                     evidence_mode=args.evidence_mode,
+                    progress_stream=sys.stderr if args.evidence_mode in {"model", "web"} else None,
                 )
             )
             return 0
@@ -1862,6 +1863,7 @@ def main(argv: list[str] | None = None) -> int:
                 output_dir / "citation_support_review.json",
                 provider=citation_provider,
                 evidence_mode=args.citation_evidence_mode,
+                progress_stream=sys.stderr if args.citation_evidence_mode in {"model", "web"} else None,
             )
             source_paper = args.source_paper or state.artifacts.paper_full_tex
             suggestions_path = write_revision_suggestions(

@@ -1317,6 +1317,103 @@ def _summary_from_items(items: list[dict[str, Any]]) -> dict[str, int]:
     return summary
 
 
+def _citation_progress_path(output_path: Path) -> Path:
+    return output_path.with_name(f"{output_path.stem}.progress.jsonl")
+
+
+def _emit_citation_progress(progress_stream: Any, message: str) -> None:
+    if progress_stream is None:
+        return
+    progress_stream.write(f"[paperorchestra] citation-support {message}\n")
+    progress_stream.flush()
+
+
+def _citation_progress_cite_label(item: dict[str, Any]) -> str:
+    keys = [str(key) for key in (item.get("citation_keys") or []) if str(key).strip()]
+    return ",".join(keys) if keys else str(item.get("id") or "unknown")
+
+
+def _stable_json_sha256(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def _citation_progress_claim_input_sha256(item: dict[str, Any]) -> str:
+    return _stable_json_sha256(
+        {
+            "id": item.get("id"),
+            "sentence": item.get("sentence"),
+            "citation_keys": item.get("citation_keys") or [],
+            "citation_entries": item.get("citation_entries") or [],
+            "claim_type": item.get("claim_type"),
+            "heuristic_support_status": item.get("heuristic_support_status"),
+            "heuristic_risk": item.get("heuristic_risk"),
+        }
+    )
+
+
+def _citation_progress_provider_identity_sha256(provider_identity: dict[str, Any]) -> str:
+    return _stable_json_sha256(provider_identity)
+
+
+def _load_citation_progress_checkpoint(
+    checkpoint_path: Path | None,
+    *,
+    manuscript_sha256: str,
+    citation_map_sha256: str | None,
+    evidence_mode: str,
+    provider_identity: dict[str, Any],
+    retrieved_web_evidence_sha256: str | None,
+    items: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    if checkpoint_path is None or not checkpoint_path.exists():
+        return {}
+    provider_identity_sha256 = _citation_progress_provider_identity_sha256(provider_identity)
+    claim_hashes = {str(item.get("id")): _citation_progress_claim_input_sha256(item) for item in items}
+    reusable: dict[str, dict[str, Any]] = {}
+    for line in checkpoint_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(row, dict):
+            continue
+        claim_id = str(row.get("claim_id") or "")
+        if (
+            row.get("schema_version") != "citation-support-progress-checkpoint/1"
+            or row.get("event") != "checked"
+            or row.get("manuscript_sha256") != manuscript_sha256
+            or row.get("citation_map_sha256") != citation_map_sha256
+            or row.get("evidence_mode") != evidence_mode
+            or row.get("provider_identity_sha256") != provider_identity_sha256
+            or row.get("retrieved_web_evidence_sha256") != retrieved_web_evidence_sha256
+            or row.get("claim_input_sha256") != claim_hashes.get(claim_id)
+            or not isinstance(row.get("item"), dict)
+        ):
+            continue
+        reusable[claim_id] = row["item"]
+    return reusable
+
+
+def _append_citation_progress_checkpoint(checkpoint_path: Path | None, record: dict[str, Any]) -> None:
+    if checkpoint_path is None:
+        return
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    with checkpoint_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, sort_keys=True, ensure_ascii=False) + "\n")
+
+
+def _retrieved_web_evidence_for_item_ids(payload: dict[str, Any] | None, item_ids: set[str]) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return payload
+    filtered = dict(payload)
+    items = payload.get("items")
+    if isinstance(items, list):
+        filtered["items"] = [item for item in items if isinstance(item, dict) and str(item.get("id")) in item_ids]
+    return filtered
+
+
 def _citation_support_provider_identity(provider: BaseProvider | None) -> dict[str, Any]:
     if provider is None:
         return {"provider_name": None, "provider_command_digest": None, "provider_class": None}
@@ -1386,7 +1483,12 @@ def _retrieved_evidence_file_sha256(path: Path) -> str | None:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _build_web_evidence_retrieval(*, provider: BaseProvider, items: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_web_evidence_retrieval(
+    *,
+    provider: BaseProvider,
+    items: list[dict[str, Any]],
+    progress_stream: Any = None,
+) -> dict[str, Any]:
     chunk_size = 8
     if len(items) > chunk_size:
         merged_items: list[dict[str, Any]] = []
@@ -1394,7 +1496,13 @@ def _build_web_evidence_retrieval(*, provider: BaseProvider, items: list[dict[st
         chunk_traces: list[dict[str, Any]] = []
         for start in range(0, len(items), chunk_size):
             chunk = items[start : start + chunk_size]
+            end = start + len(chunk)
+            _emit_citation_progress(
+                progress_stream,
+                f"retrieving {start + 1}-{end}/{len(items)} cite={_citation_progress_cite_label(chunk[0])}",
+            )
             chunk_payload = _build_web_evidence_retrieval(provider=provider, items=chunk)
+            _emit_citation_progress(progress_stream, f"retrieved {start + 1}-{end}/{len(items)}")
             merged_items.extend(chunk_payload.get("items") if isinstance(chunk_payload.get("items"), list) else [])
             if isinstance(chunk_payload.get("research_notes"), list):
                 research_notes.extend(str(note) for note in chunk_payload.get("research_notes", []))
@@ -1417,6 +1525,11 @@ def _build_web_evidence_retrieval(*, provider: BaseProvider, items: list[dict[st
             },
         }
 
+    if items:
+        _emit_citation_progress(
+            progress_stream,
+            f"retrieving 1-{len(items)}/{len(items)} cite={_citation_progress_cite_label(items[0])}",
+        )
     review_items = [
         {
             "id": item["id"],
@@ -1453,6 +1566,8 @@ Input:
 {json.dumps({"items": review_items}, indent=2, ensure_ascii=False)}
 """.strip()
     response = provider.complete(CompletionRequest(system_prompt=system_prompt, user_prompt=user_prompt))
+    if items:
+        _emit_citation_progress(progress_stream, f"retrieved 1-{len(items)}/{len(items)}")
     trace_base = {
         "schema_version": "citation-support-retrieval-trace/1",
         "system_prompt_sha256": hashlib.sha256(system_prompt.encode("utf-8")).hexdigest(),
@@ -1847,6 +1962,100 @@ def _merge_model_citation_review(
     return merged
 
 
+def _build_model_citation_review_with_progress(
+    *,
+    provider: BaseProvider,
+    items: list[dict[str, Any]],
+    web_search_required: bool,
+    evidence_mode: str,
+    manuscript_sha256: str,
+    citation_map_sha256: str | None,
+    provider_identity: dict[str, Any],
+    retrieved_web_evidence: dict[str, Any] | None = None,
+    retrieved_web_evidence_sha256: str | None = None,
+    progress_stream: Any = None,
+    progress_checkpoint_path: Path | None = None,
+) -> dict[str, Any]:
+    completed = _load_citation_progress_checkpoint(
+        progress_checkpoint_path,
+        manuscript_sha256=manuscript_sha256,
+        citation_map_sha256=citation_map_sha256,
+        evidence_mode=evidence_mode,
+        provider_identity=provider_identity,
+        retrieved_web_evidence_sha256=retrieved_web_evidence_sha256,
+        items=items,
+    )
+    provider_identity_sha256 = _citation_progress_provider_identity_sha256(provider_identity)
+    merged_items: list[dict[str, Any]] = []
+    research_notes: list[str] = []
+    claim_traces: list[dict[str, Any]] = []
+    reused_claims = 0
+    claim_count = len(items)
+    for index, item in enumerate(items, start=1):
+        claim_id = str(item.get("id"))
+        cite_label = _citation_progress_cite_label(item)
+        cached_item = completed.get(claim_id)
+        if cached_item is not None:
+            reused_claims += 1
+            _emit_citation_progress(progress_stream, f"reusing {index}/{claim_count} cite={cite_label} id={claim_id}")
+            merged_items.append(cached_item)
+            continue
+
+        _emit_citation_progress(progress_stream, f"checking {index}/{claim_count} cite={cite_label} id={claim_id}")
+        item_retrieved_web_evidence = _retrieved_web_evidence_for_item_ids(retrieved_web_evidence, {claim_id})
+        model_payload = _build_model_citation_review(
+            provider=provider,
+            items=[item],
+            web_search_required=web_search_required,
+            retrieved_web_evidence=item_retrieved_web_evidence if web_search_required else None,
+        )
+        trace = model_payload.pop("_trace", None)
+        if isinstance(trace, dict):
+            trace = dict(trace)
+            trace["claim_id"] = claim_id
+            trace["claim_index"] = index
+            claim_traces.append(trace)
+        if isinstance(model_payload.get("research_notes"), list):
+            research_notes.extend(str(note) for note in model_payload.get("research_notes", []))
+        merged = _merge_model_citation_review([item], model_payload)
+        merged_item = merged[0] if merged else dict(item)
+        merged_items.append(merged_item)
+        _append_citation_progress_checkpoint(
+            progress_checkpoint_path,
+            {
+                "schema_version": "citation-support-progress-checkpoint/1",
+                "event": "checked",
+                "manuscript_sha256": manuscript_sha256,
+                "citation_map_sha256": citation_map_sha256,
+                "evidence_mode": evidence_mode,
+                "provider_identity_sha256": provider_identity_sha256,
+                "retrieved_web_evidence_sha256": retrieved_web_evidence_sha256,
+                "claim_id": claim_id,
+                "claim_index": index,
+                "claim_count": claim_count,
+                "citation_keys": item.get("citation_keys") or [],
+                "claim_input_sha256": _citation_progress_claim_input_sha256(item),
+                "item": merged_item,
+            },
+        )
+        _emit_citation_progress(progress_stream, f"checked {index}/{claim_count} cite={cite_label} id={claim_id}")
+
+    return {
+        "items": merged_items,
+        "research_notes": research_notes,
+        "_trace": {
+            "schema_version": "citation-support-trace/1",
+            "chunked": True,
+            "claim_count": claim_count,
+            "reused_claims": reused_claims,
+            "checked_claims": claim_count - reused_claims,
+            "web_search_required": web_search_required,
+            "claim_traces": claim_traces,
+            "progress_checkpoint_path": str(progress_checkpoint_path) if progress_checkpoint_path is not None else None,
+        },
+    }
+
+
 def build_citation_support_review(
     cwd: str | Path | None,
     *,
@@ -1855,6 +2064,8 @@ def build_citation_support_review(
     retrieved_web_evidence: dict[str, Any] | None = None,
     retrieved_web_evidence_sha256: str | None = None,
     retrieved_web_evidence_path: str | None = None,
+    progress_stream: Any = None,
+    progress_checkpoint_path: str | Path | None = None,
 ) -> dict[str, Any]:
     if evidence_mode not in {"heuristic", "model", "web", "source"}:
         raise ValueError(f"Unsupported citation evidence mode: {evidence_mode}")
@@ -1864,6 +2075,7 @@ def build_citation_support_review(
     if not state.artifacts.paper_full_tex:
         raise ValueError("Need paper.full.tex before citation support review.")
     latex = Path(state.artifacts.paper_full_tex).read_text(encoding="utf-8")
+    manuscript_sha256 = hashlib.sha256(Path(state.artifacts.paper_full_tex).read_bytes()).hexdigest()
     citation_map = read_json(state.artifacts.citation_map_json) if state.artifacts.citation_map_json else {}
     citation_map_sha256 = None
     if state.artifacts.citation_map_json and Path(state.artifacts.citation_map_json).exists():
@@ -1871,19 +2083,36 @@ def build_citation_support_review(
     items = _heuristic_citation_items(latex, citation_map)
     model_payload: dict[str, Any] | None = None
     model_trace: dict[str, Any] | None = None
+    provider_identity = _citation_support_provider_identity(provider)
     if evidence_mode in {"model", "web"}:
         if provider is None:
             raise ValueError(f"evidence_mode={evidence_mode!r} requires a provider.")
-        model_payload = _build_model_citation_review(
-            provider=provider,
-            items=items,
-            web_search_required=evidence_mode == "web",
-            retrieved_web_evidence=retrieved_web_evidence if evidence_mode == "web" else None,
-        )
-        model_trace = model_payload.pop("_trace", None)
-        items = _merge_model_citation_review(items, model_payload)
+        if progress_stream is not None or progress_checkpoint_path is not None:
+            model_payload = _build_model_citation_review_with_progress(
+                provider=provider,
+                items=items,
+                web_search_required=evidence_mode == "web",
+                evidence_mode=evidence_mode,
+                manuscript_sha256=manuscript_sha256,
+                citation_map_sha256=citation_map_sha256,
+                provider_identity=provider_identity,
+                retrieved_web_evidence=retrieved_web_evidence if evidence_mode == "web" else None,
+                retrieved_web_evidence_sha256=retrieved_web_evidence_sha256 if evidence_mode == "web" else None,
+                progress_stream=progress_stream,
+                progress_checkpoint_path=Path(progress_checkpoint_path).resolve() if progress_checkpoint_path is not None else None,
+            )
+            model_trace = model_payload.pop("_trace", None)
+            items = model_payload.get("items") if isinstance(model_payload.get("items"), list) else items
+        else:
+            model_payload = _build_model_citation_review(
+                provider=provider,
+                items=items,
+                web_search_required=evidence_mode == "web",
+                retrieved_web_evidence=retrieved_web_evidence if evidence_mode == "web" else None,
+            )
+            model_trace = model_payload.pop("_trace", None)
+            items = _merge_model_citation_review(items, model_payload)
     summary = _summary_from_items(items)
-    provider_identity = _citation_support_provider_identity(provider)
     provider_command_digest = provider_identity.get("provider_command_digest")
     web_search_capable = bool(provider_identity.get("web_search_capable"))
     research_notes = model_payload.get("research_notes", []) if isinstance(model_payload, dict) else []
@@ -1892,7 +2121,7 @@ def build_citation_support_review(
     return {
         "schema_version": "citation-support-review/2",
         "session_id": state.session_id,
-        "manuscript_sha256": hashlib.sha256(Path(state.artifacts.paper_full_tex).read_bytes()).hexdigest(),
+        "manuscript_sha256": manuscript_sha256,
         "citation_map_sha256": citation_map_sha256,
         "review_mode": evidence_mode,
         "evidence_provenance": {
@@ -1958,9 +2187,16 @@ def write_citation_support_review(
     *,
     provider: BaseProvider | None = None,
     evidence_mode: str = "heuristic",
+    progress_stream: Any = None,
+    progress_checkpoint_path: str | Path | None = None,
 ) -> Path:
     state = load_session(cwd)
     path = Path(output_path).resolve() if output_path else artifact_path(cwd, "citation_support_review.json")
+    checkpoint_path = (
+        Path(progress_checkpoint_path).resolve()
+        if progress_checkpoint_path is not None
+        else (_citation_progress_path(path) if (progress_stream is not None and evidence_mode in {"model", "web"}) else None)
+    )
     cache_key = None
     cache_payload_path: Path | None = None
     cache_trace_path: Path | None = None
@@ -2020,7 +2256,11 @@ def write_citation_support_review(
                 latex = Path(state.artifacts.paper_full_tex).read_text(encoding="utf-8")
                 citation_map = read_json(state.artifacts.citation_map_json) if state.artifacts.citation_map_json else {}
                 retrieval_items = _heuristic_citation_items(latex, citation_map)
-                retrieved_web_evidence = _build_web_evidence_retrieval(provider=provider, items=retrieval_items)
+                retrieved_web_evidence = _build_web_evidence_retrieval(
+                    provider=provider,
+                    items=retrieval_items,
+                    progress_stream=progress_stream,
+                )
                 retrieved_web_evidence_path.write_text(
                     json.dumps(retrieved_web_evidence, indent=2, ensure_ascii=False) + "\n",
                     encoding="utf-8",
@@ -2054,7 +2294,14 @@ def write_citation_support_review(
         retrieved_web_evidence=retrieved_web_evidence,
         retrieved_web_evidence_sha256=retrieved_web_evidence_sha256,
         retrieved_web_evidence_path=str(retrieved_web_evidence_path) if retrieved_web_evidence_path is not None else None,
+        progress_stream=progress_stream,
+        progress_checkpoint_path=checkpoint_path,
     )
+    if checkpoint_path is not None:
+        provenance = payload.setdefault("evidence_provenance", {})
+        provenance["progress_checkpoint_path"] = str(checkpoint_path)
+        if checkpoint_path.exists():
+            provenance["progress_checkpoint_sha256"] = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
     if cache_key and citation_review_cacheable:
         provenance = payload.setdefault("evidence_provenance", {})
         evidence_sha = provenance.get("retrieved_web_evidence_sha256") if evidence_mode == "web" else None
