@@ -36,6 +36,12 @@ from paperorchestra.feedback.operator_gates import (
     _tier_failing_codes,
 )
 from paperorchestra.feedback.operator_incorporation import _issue_incorporation_detailed
+from paperorchestra.feedback.operator_records import (
+    _build_operator_attempt_record,
+    _build_operator_execution_record,
+    _build_operator_incorporation_report,
+    _operator_feedback_verdict,
+)
 from paperorchestra.feedback.operator_snapshots import _restore_session_snapshot, _session_snapshot
 from paperorchestra.feedback.operator_contract import (
     ACTIONABLE_FAILURE_OWNER_CATEGORIES,
@@ -95,28 +101,13 @@ def apply_operator_feedback(
     base_tier2_failures = set(_tier_failing_codes(base_quality_eval, "tier_2_claim_safety"))
     base_active_failures = set(_quality_failing_codes(base_quality_eval or {}))
 
-    execution: dict[str, Any] = {
-        "schema_version": OPERATOR_FEEDBACK_EXECUTION_SCHEMA_VERSION,
-        "started_at": utc_now_iso(),
-        "event_type": "operator_feedback_cycle",
-        "source": OPERATOR_SOURCE,
-        "not_independent_human_review": True,
-        "imported_feedback_path": str(imported_path),
-        "imported_feedback_sha256": _file_sha256(imported_path),
-        "packet_sha256": imported.get("packet_sha256"),
-        "manuscript_sha256_before": current_sha,
-        "supervised_max_iterations": max_supervised_iterations,
-        "translated_actions": imported.get("translated_actions") or [],
-        "candidate_branch": intent,
-        "promotion_status": "candidate_ready",
-        "post_promotion_qa_verdict": None,
-        "attempts": [],
-        "verification": {},
-    }
-    if isinstance(imported.get("human_needed_answer"), dict):
-        execution["human_needed_answer"] = dict(imported["human_needed_answer"])
-    if isinstance(imported.get("operator_review_notes"), dict):
-        execution["operator_review_notes"] = dict(imported["operator_review_notes"])
+    execution = _build_operator_execution_record(
+        imported_path,
+        imported,
+        current_sha=current_sha,
+        max_supervised_iterations=max_supervised_iterations,
+        intent=intent,
+    )
     snapshot = _session_snapshot(cwd)
     before_text = snapshot.get("paper_text") or ""
     owner_categories = [str(issue.get("owner_category") or "author") for issue in imported.get("issues") or []]
@@ -211,43 +202,28 @@ def apply_operator_feedback(
             if not ok and _repeats_non_promotable_candidate([*packet_prior_attempts, *(execution.get("attempts") or [])], candidate_sha_for_attempt):
                 gate_reasons = list(dict.fromkeys([*gate_reasons, "repeated_non_promotable_candidate"]))
                 ok = False
-            attempt_record = {
-                "attempt_index": attempt_index,
-                "candidate_branch": intent,
-                "candidate_path": candidate_result.get("candidate_path"),
-                "candidate_sha256": candidate_sha_for_attempt,
-                "gate_passed": ok,
-                "gate_reasons": gate_reasons,
-                "base_tier2_failures": sorted(base_tier2_failures),
-                "candidate_tier2_failures": sorted(candidate_tier2_failures),
-                "new_tier2_failures": new_tier2_failures,
-                "base_active_failures": sorted(base_active_failures),
-                "candidate_active_failures": sorted(candidate_active_failures),
-                "resolved_active_failures": resolved_active_failures,
-                "active_tier2_metric_delta": _active_tier2_metric_delta(
+            attempt_record = _build_operator_attempt_record(
+                attempt_index=attempt_index,
+                intent=intent,
+                candidate_result=candidate_result,
+                candidate_sha_for_attempt=candidate_sha_for_attempt,
+                gate_passed=ok,
+                gate_reasons=gate_reasons,
+                base_tier2_failures=base_tier2_failures,
+                candidate_tier2_failures=candidate_tier2_failures,
+                new_tier2_failures=new_tier2_failures,
+                base_active_failures=base_active_failures,
+                candidate_active_failures=candidate_active_failures,
+                resolved_active_failures=resolved_active_failures,
+                active_tier2_metric_delta=_active_tier2_metric_delta(
                     base_quality_eval,
                     verification["quality_eval"],
                     base_active_failures=sorted(base_active_failures),
                 ),
-                "protected_supported_citation_regressions": protected_regressions,
-                "protected_supported_citation_regression_count": len(protected_regressions),
-                "verification": _verification_block(verification),
-                "incorporation": incorporation,
-                "executor_environment": candidate_result.get("executor_environment") or ("preexisting_candidate" if intent == "approve_existing_candidate" else "in_process"),
-                "executor_path": candidate_result.get("executor_path") or ("operator_feedback._ready_candidate_from_packet" if intent == "approve_existing_candidate" else "operator_feedback._generate_operator_candidate->pipeline.refine_current_paper"),
-                "executor_trace_artifact": candidate_result.get("executor_trace_artifact"),
-                "executor_failure_category": candidate_result.get("executor_failure_category") or "none",
-            }
-            if candidate_result.get("preserved_prior_after_contract_regression") is True:
-                attempt_record["preserved_prior_after_contract_regression"] = True
-                for key in (
-                    "rejected_candidate_path",
-                    "rejected_candidate_sha256",
-                    "contract_regression_issue_count",
-                    "contract_regression_validation_report_path",
-                ):
-                    if candidate_result.get(key) is not None:
-                        attempt_record[key] = candidate_result[key]
+                protected_regressions=protected_regressions,
+                verification_block=_verification_block(verification),
+                incorporation=incorporation,
+            )
             execution["attempts"].append(attempt_record)
             final_incorporation = incorporation
             final_verification = verification
@@ -341,26 +317,18 @@ def apply_operator_feedback(
             code=failure_code,
             attempts=execution.get("attempts") or [],
         )
-        incorporation_report = {
-            "schema_version": OPERATOR_FEEDBACK_INCORPORATION_SCHEMA_VERSION,
-            "generated_at": utc_now_iso(),
-            "source": OPERATOR_SOURCE,
-            "not_independent_human_review": True,
-            "packet_sha256": imported.get("packet_sha256"),
-            "manuscript_sha256_before": current_sha,
-            "manuscript_sha256_after": after_sha,
-            "promotion_status": execution["promotion_status"],
-            "actionable_failure": non_promoted_actionable_failure,
-            "issues": final_incorporation,
-        }
-        if isinstance(imported.get("human_needed_answer"), dict):
-            incorporation_report["human_needed_answer"] = dict(imported["human_needed_answer"])
-        if isinstance(imported.get("operator_review_notes"), dict):
-            incorporation_report["operator_review_notes"] = dict(imported["operator_review_notes"])
+        incorporation_report = _build_operator_incorporation_report(
+            imported=imported,
+            current_sha=current_sha,
+            after_sha=after_sha,
+            promotion_status=execution["promotion_status"],
+            actionable_failure=non_promoted_actionable_failure,
+            issues=final_incorporation,
+        )
         incorporation_path = artifact_path(cwd, "operator_feedback.incorporation.json")
         write_json(incorporation_path, incorporation_report)
         plan = final_verification["plan"] if final_verification else {}
-        verdict = "execution_error" if executor_crashed else str(plan.get("verdict") or "human_needed") if promoted else "human_needed"
+        verdict = _operator_feedback_verdict(executor_crashed=executor_crashed, promoted=promoted, plan=plan)
         execution.update(
             {
                 "completed_at": utc_now_iso(),
