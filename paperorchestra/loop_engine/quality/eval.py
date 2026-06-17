@@ -28,6 +28,13 @@ from paperorchestra.loop_engine.quality.provenance import (
     _mixed_provenance_acceptance_path,
     _provenance_trust,
 )
+from paperorchestra.loop_engine.quality.eval_preconditions import PreconditionContext, build_precondition_tier
+from paperorchestra.loop_engine.quality.eval_tiers import (
+    _skipped_tier,
+    _status_from_failures,
+    _strict_issue_codes,
+    _tier,
+)
 from paperorchestra.loop_engine.quality.reviews import (
     _review_score_check,
     _reviewer_independence_check,
@@ -61,49 +68,6 @@ def _normalize_quality_mode(mode: str | None) -> str:
     return normalized
 
 
-def _strict_issue_codes(reproducibility: dict[str, Any], *, kinds: set[str] | None = None) -> list[str]:
-    codes: list[str] = []
-    for issue in reproducibility.get("strict_content_gate_issues") or []:
-        if not isinstance(issue, dict):
-            continue
-        if kinds is not None and str(issue.get("kind") or "") not in kinds:
-            continue
-        code = str(issue.get("code") or "")
-        if code:
-            codes.append(code)
-    return codes
-
-
-def _tier(
-    *,
-    status: str,
-    checks: dict[str, Any] | None = None,
-    failing_codes: list[str] | None = None,
-    skip_reason: str | None = None,
-    **extra: Any,
-) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "status": status,
-        "checks": checks or {},
-    }
-    if failing_codes is not None:
-        payload["failing_codes"] = sorted(dict.fromkeys(str(code) for code in failing_codes if code))
-    if skip_reason:
-        payload["skip_reason"] = skip_reason
-    payload.update(extra)
-    return payload
-
-
-def _skipped_tier(reason: str) -> dict[str, Any]:
-    return _tier(status="skipped_due_to_upstream_fail", checks={}, failing_codes=[], skip_reason=reason)
-
-
-def _status_from_failures(failing_codes: list[str], *, warn_only: bool = False) -> str:
-    if not failing_codes:
-        return "pass"
-    return "warn" if warn_only else "fail"
-
-
 def build_quality_eval(
     cwd: str | Path | None,
     *,
@@ -124,46 +88,18 @@ def build_quality_eval(
     ralph_evidence = _ralph_evidence_check(cwd, quality_mode=mode)
     provenance = _provenance_trust(reproducibility)
 
-    # Tier 0 — Preconditions/freshness.  This is intentionally about whether
-    # downstream evaluators are looking at the current manuscript, not about the
-    # paper's scholarly content.
-    tier0_failing: list[str] = []
-    artifact_checks: dict[str, Any] = {}
     paper_exists = bool(state.artifacts.paper_full_tex and Path(state.artifacts.paper_full_tex).exists())
-    artifact_checks["paper_full_tex"] = {"status": "pass" if paper_exists else "fail", "path": state.artifacts.paper_full_tex}
-    if not paper_exists:
-        tier0_failing.append("paper_full_tex_missing")
-    artifact_checks["manuscript_hash"] = {"status": "pass" if manuscript_hash else "fail", "sha256": manuscript_hash}
-    if not manuscript_hash:
-        tier0_failing.append("manuscript_hash_missing")
-    stale_or_missing = _strict_issue_codes(
-        reproducibility,
-        kinds={"validation_report_missing", "validation_report_stale", "figure_placement_review_missing", "figure_placement_review_stale"},
-    )
     planning_status = planning_artifact_status(cwd)
-    planning_freshness_codes = list(planning_status.get("failing_codes") or [])
-    artifact_checks["freshness"] = {
-        "status": "pass" if not (stale_or_missing or planning_freshness_codes) else "fail",
-        "stale_against_manuscript_hash": stale_or_missing,
-        "planning_artifact_issues": planning_freshness_codes,
-    }
-    tier0_failing.extend(stale_or_missing)
-    if paper_exists:
-        tier0_failing.extend(planning_freshness_codes)
-    tier0 = _tier(
-        status=_status_from_failures(tier0_failing),
-        checks={
-            "artifacts_present": artifact_checks["paper_full_tex"],
-            "manuscript_hash": artifact_checks["manuscript_hash"],
-            "freshness": artifact_checks["freshness"],
-            "planning_artifacts": {
-                "status": planning_status.get("status"),
-                "failing_codes": planning_freshness_codes,
-                "artifacts": planning_status.get("artifacts"),
-            },
-        },
-        failing_codes=tier0_failing,
+    tier0_result = build_precondition_tier(
+        PreconditionContext(
+            paper_full_tex=state.artifacts.paper_full_tex,
+            paper_exists=paper_exists,
+            manuscript_hash=manuscript_hash,
+            reproducibility=reproducibility,
+            planning_status=planning_status,
+        )
     )
+    tier0 = tier0_result.tier
 
     tiers: dict[str, Any] = {"tier_0_preconditions": tier0}
     if getattr(_manuscript_prompt_leakage, "__module__", "") == "paperorchestra.loop_engine.quality.leakage":
