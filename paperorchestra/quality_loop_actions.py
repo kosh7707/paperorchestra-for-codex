@@ -8,6 +8,7 @@ from .quality_loop_policy import (
     AUTO_REPAIR_CODES,
     FIGURE_REPAIR_CODES,
     MANUAL_REVIEW_CODES,
+    QA_LOOP_SUPPORTED_HANDLER_CODES,
     SEMI_AUTO_REPAIR_CODES,
 )
 from .quality_loop_utils import _file_sha256, _read_json_if_exists
@@ -404,11 +405,17 @@ def _fidelity_actions(fidelity: dict[str, Any]) -> list[dict[str, Any]]:
         status = str(check.get("status") or "")
         if status == "implemented" or code not in critical_commands:
             continue
-        automation = "automatic" if code in {"verified_citation_lane", "section_writing_pipeline", "submission_ready_output"} else "human_needed"
+        action_code = f"fidelity_{code}_{status}"
+        automation = (
+            "automatic"
+            if code in {"verified_citation_lane", "section_writing_pipeline", "submission_ready_output"}
+            and action_code in QA_LOOP_SUPPORTED_HANDLER_CODES
+            else "human_needed"
+        )
         actions.append(
             _action(
                 action_id=f"fidelity:{len(actions)+1}",
-                code=f"fidelity_{code}_{status}",
+                code=action_code,
                 source=None,
                 target=code,
                 automation=automation,

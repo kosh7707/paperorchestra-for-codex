@@ -2300,6 +2300,27 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
             self.assertNotIn("fidelity_runtime_parity_missing", executable_section)
             self.assertIn("do not stop only because separate human-needed actions are also listed", brief)
 
+    def test_fidelity_actions_do_not_mark_unsupported_handlers_executable(self) -> None:
+        from paperorchestra.quality_loop_actions import _fidelity_actions
+        from paperorchestra.quality_loop_policy import QA_LOOP_SUPPORTED_HANDLER_CODES
+
+        actions = _fidelity_actions(
+            {
+                "checks": [
+                    {
+                        "code": "section_writing_pipeline",
+                        "status": "partial",
+                        "rationale": "writer lane did not complete",
+                    }
+                ]
+            }
+        )
+
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(actions[0]["code"], "fidelity_section_writing_pipeline_partial")
+        self.assertNotIn(actions[0]["code"], QA_LOOP_SUPPORTED_HANDLER_CODES)
+        self.assertEqual(actions[0]["automation"], "human_needed")
+
     def test_fidelity_actions_distinguish_missing_from_recorded_partial_runtime_parity(self) -> None:
         from paperorchestra.quality_loop_actions import _fidelity_actions
 
