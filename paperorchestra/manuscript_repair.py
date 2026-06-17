@@ -528,7 +528,7 @@ def _restore_common_generated_section_labels(generated_latex: str, missing_label
     """Add safe labels for common generated sections when the source had none.
 
     Some human source packets reference labels such as ``sec:impl`` from tables
-    or figure captions, while the fresh-smoke template only supplies plain
+    or figure captions, while some generated templates only supply plain
     section headings.  If a generated manuscript preserves the reference but no
     source block contains the label, insert the label immediately after the
     matching generated section title.  This does not create new content; it only
@@ -559,7 +559,7 @@ def _restore_missing_subsection_reference_labels(generated_latex: str, missing_l
     """Restore missing subsection labels at the nearest generated subsection.
 
     Source packets can legitimately mention subsection labels from the author's
-    technical material even when the fresh smoke template only contains section
+    technical material even when generated templates only contain section
     headings.  If the generated text preserves a ``\ref{subsec:...}`` but no
     source block can be reinserted, attach that label to the nearest preceding
     generated subsection in the same manuscript.  This is compile hygiene only:

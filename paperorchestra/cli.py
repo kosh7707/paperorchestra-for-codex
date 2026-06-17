@@ -9,98 +9,31 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .candidate_commands import candidate_apply, candidate_diff, candidate_list, candidate_reject
-from .compile_env import inspect_compile_environment
-from .cost import estimate_run_cost
 from .critic_trust import build_critic_trust_card, require_live_critic_trust
-from .citation_integrity import (
-    write_citation_integrity_audit,
-    write_citation_integrity_critic,
-    write_rendered_reference_audit,
-)
-from .orchestra_citation_quality import write_citation_quality_gate
-from .critics import write_citation_source_retrieval_debug, write_citation_support_review, write_section_review
+from .critics import write_citation_support_review, write_section_review
 from .doctor import build_doctor_report, build_session_recovery_hint
 from .environment import build_environment_inventory
-from .fidelity import write_reproducibility_audit
-from .first_user_guide import build_first_user_guide, render_first_user_guide_summary
-from .fresh_smoke_acceptance import write_fresh_smoke_acceptance_summary
 from .human_needed import record_human_needed_answer
-from .io_utils import write_json
-from .eval import (
-    write_review_gate_comparison,
-    write_reference_case_partition_scaffold,
-    write_reference_case_partitioned_citation_coverage,
-    write_generated_citation_titles,
-    write_citation_partition_request,
-    write_partitioned_citation_coverage,
-    write_reference_benchmark_case,
-    write_reference_comparison,
-    write_session_eval_summary,
-)
-from .intake import (
-    answer_intake_question,
-    approve_intake_direction,
-    finalize_intake,
-    get_intake_review,
-    get_intake_status,
-    research_prior_work,
-    start_intake,
-)
-from .jobs import cancel_job, get_job_status, list_jobs, start_run_job, tail_job_log
 from .models import InputBundle
-from .validator import canonical_citation_map
-from .omx_bridge import cleanup_omx_tmp
-from .omx_diagnostics import export_omx_evidence, write_omx_review_handoff
-from .operator_feedback import apply_operator_feedback, build_operator_review_packet, import_operator_feedback
-from .orchestra_acceptance import (
-    build_acceptance_ledger,
-    build_final_audit_bug_ledger,
-    render_acceptance_ledger_summary,
-    render_final_audit_bug_ledger_summary,
-)
 from .orchestra_evidence import write_orchestrator_evidence_bundle
 from .orchestra_executor import LocalActionExecutor
-from .orchestra_figures import write_figure_gate_report
 from .orchestra_omx_executor import OmxActionExecutor
 from .orchestra_scorecard import render_scorecard_summary
-from .orchestra_verifier import build_verifier_evidence_checklist, write_verifier_evidence_checklist
-from .orchestrator import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state, run_until_blocked as orchestrator_run_until_blocked
-from .quality_loop import write_quality_eval, write_quality_loop_plan
-from .quality_gate import write_quality_gate
-from .ralph_bridge import (
-    build_ralph_start_payload,
-    launch_omx_ralph,
-    repair_citation_claims,
-    run_qa_loop_step,
-    write_qa_loop_brief,
-)
+from .orchestrator import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state
 from .pipeline import (
-    build_bib,
     compile_current_paper,
-    discover_papers,
-    generate_outline,
-    generate_plots,
     import_prior_work,
-    plan_narrative_and_claims,
-    record_compile_environment_report,
-    record_current_validation_report,
-    refine_current_paper,
     research_prior_work as generate_prior_work_seed,
     review_current_paper,
-    record_fidelity_report,
     run_pipeline,
-    verify_papers,
-    write_figure_placement_review,
-    write_intro_related,
     write_sections,
 )
 from .providers import get_citation_support_provider, get_provider
+from .quality_gate import write_quality_gate
+from .quality_loop import write_quality_loop_plan
+from .ralph_bridge import build_ralph_start_payload, launch_omx_ralph, run_qa_loop_step
 from .revisions import write_revision_suggestions
-from .runtime_parity import record_runtime_parity_report
-from .session import artifact_path, create_session, get_current_session_id, load_session, run_dir
-from .source_obligations import write_source_obligations
-from .teach import prepare_teach_bundle
+from .session import artifact_path, create_session, load_session, run_dir
 
 
 def _common_provider_args(parser: argparse.ArgumentParser) -> None:
@@ -120,7 +53,10 @@ def _runtime_mode_args(parser: argparse.ArgumentParser, *, strict_flag: bool = F
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="paperorchestra", description="PaperOrchestra operator/debug CLI for the PaperOrchestra-on-OMX core")
+    parser = argparse.ArgumentParser(
+        prog="paperorchestra",
+        description="PaperOrchestra CLI: status, research, critic review, authoring, QA loop, and OMX handoff.",
+    )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -133,496 +69,152 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--cutoff-date")
     init_parser.add_argument("--venue")
     init_parser.add_argument("--page-limit", type=int)
-    init_parser.add_argument("--allow-outside-workspace", action="store_true", help="Allow init to snapshot inputs from outside the current workspace.")
+    init_parser.add_argument("--allow-outside-workspace", action="store_true")
 
     status_parser = sub.add_parser("status", help="Show current session state")
     status_parser.add_argument("--json", action="store_true")
-    status_parser.add_argument("--summary", action="store_true", help="Print a compact first-user session summary")
+    status_parser.add_argument("--summary", action="store_true")
 
-    inspect_state_parser = sub.add_parser("inspect-state", help="Inspect the v1 OrchestraState without running live work")
-    inspect_state_parser.add_argument("--material", help="Optional material directory/file to inspect")
+    inspect_state_parser = sub.add_parser("inspect-state", help="Inspect material readiness and the next orchestration action")
+    inspect_state_parser.add_argument("--material")
     inspect_state_parser.add_argument("--json", action="store_true")
 
-    orchestrate_parser = sub.add_parser("orchestrate", help="Run the v1 orchestrator until the next bounded action/block")
-    orchestrate_parser.add_argument("--material", help="Optional material directory/file to inspect")
+    orchestrate_parser = sub.add_parser("orchestrate", help="Run the orchestrator until the next bounded action or stop")
+    orchestrate_parser.add_argument("--material")
     orchestrate_mode = orchestrate_parser.add_mutually_exclusive_group()
-    orchestrate_mode.add_argument("--execute-local", action="store_true", help="Execute exactly one deterministic local orchestrator step")
-    orchestrate_mode.add_argument("--plan-full-loop", action="store_true", help="Plan the next full-loop action without executing it")
-    orchestrate_mode.add_argument("--execute-omx", action="store_true", help="Execute exactly one bounded supported OMX action")
-    orchestrate_parser.add_argument("--write-evidence", action="store_true", help="Persist a public-safe orchestrator evidence bundle")
-    orchestrate_parser.add_argument("--evidence-output", help="Workspace-contained evidence bundle directory")
+    orchestrate_mode.add_argument("--execute-local", action="store_true")
+    orchestrate_mode.add_argument("--plan-full-loop", action="store_true")
+    orchestrate_mode.add_argument("--execute-omx", action="store_true")
+    orchestrate_parser.add_argument("--write-evidence", action="store_true")
+    orchestrate_parser.add_argument("--evidence-output")
     orchestrate_parser.add_argument("--json", action="store_true")
 
-    acceptance_parser = sub.add_parser("acceptance-ledger", help="Render the v1 acceptance/completion-audit ledger")
-    acceptance_parser.add_argument("--evidence", help="JSON evidence object keyed by acceptance gate id")
-    acceptance_parser.add_argument("--json", action="store_true")
 
-    final_audit_parser = sub.add_parser("final-audit-ledger", help="Render a public-safe final-audit bug traceability ledger")
-    final_audit_parser.add_argument("--bugs", help="JSON object with a bugs list")
-    final_audit_parser.add_argument("--json", action="store_true")
+    answer_parser = sub.add_parser("answer-human-needed", help="Record an answer for a human_needed stop and optionally apply it")
+    answer_parser.add_argument("--answer", required=True)
+    answer_parser.add_argument("--packet")
+    answer_parser.add_argument("--review-scope", choices=["pdf_and_tex", "tex_only"])
+    answer_parser.add_argument("--intent", choices=["approve_existing_candidate", "generate_new_operator_candidate", "reject_candidate_with_reason"])
+    answer_parser.add_argument("--action-id")
+    answer_parser.add_argument("--output-answer")
+    answer_parser.add_argument("--output-feedback")
+    answer_parser.add_argument("--redacted-answer-only", action="store_true")
+    answer_parser.add_argument("--apply", action="store_true")
+    answer_parser.add_argument("--imported-feedback-output")
+    answer_parser.add_argument("--max-supervised-iterations", type=int, default=1)
+    answer_parser.add_argument("--quality-mode", default="claim_safe", choices=["draft", "ralph", "claim_safe"])
+    answer_parser.add_argument("--max-iterations", type=int, default=10)
+    answer_parser.add_argument("--require-live-verification", action="store_true")
+    answer_parser.add_argument("--accept-mixed-provenance", action="store_true")
+    answer_parser.add_argument("--require-compile", action="store_true")
+    answer_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web", "source"])
+    _runtime_mode_args(answer_parser, strict_flag=True)
+    _common_provider_args(answer_parser)
+    _citation_provider_args(answer_parser)
+    answer_parser.add_argument("--json", action="store_true")
 
-    verifier_parser = sub.add_parser("verify-evidence-checklist", help="Build the v1 verifier evidence checklist without running live critic/model work")
-    verifier_parser.add_argument("--output")
-    verifier_parser.add_argument("--json", action="store_true")
+    export_parser = sub.add_parser("export-current", help="Copy current manuscript outputs to a destination directory")
+    export_parser.add_argument("--output", required=True)
+    export_parser.add_argument("--include-all-artifacts", action="store_true")
+    export_parser.add_argument("--json", action="store_true")
 
-    fresh_smoke_parser = sub.add_parser("summarize-fresh-smoke", help="Summarize an existing fresh-smoke evidence root without running live work")
-    fresh_smoke_parser.add_argument("--evidence-root", required=True)
-    fresh_smoke_parser.add_argument("--smoke-mode", default="synthetic_container", choices=["synthetic_container", "private_final"])
-    fresh_smoke_parser.add_argument("--material-manifest")
-    fresh_smoke_parser.add_argument("--output")
-    fresh_smoke_parser.add_argument("--json", action="store_true")
+    research_parser = sub.add_parser("research-prior-work", help="Generate/import a prior-work seed using the configured provider")
+    research_parser.add_argument("--output")
+    research_parser.add_argument("--paper")
+    research_parser.add_argument("--artifact-repo")
+    research_parser.add_argument("--source", default="codex_web_seed")
+    research_parser.add_argument("--import", dest="import_seed", action="store_true")
+    research_parser.add_argument("--require-complete-metadata", action="store_true")
+    _runtime_mode_args(research_parser, strict_flag=True)
+    _common_provider_args(research_parser)
 
-    continue_project_parser = sub.add_parser("continue-project", help="Continue the v1 orchestrator from current state without live work")
-    continue_project_parser.add_argument("--write-evidence", action="store_true", help="Persist a public-safe orchestrator evidence bundle")
-    continue_project_parser.add_argument("--evidence-output", help="Workspace-contained evidence bundle directory")
-    continue_project_parser.add_argument("--json", action="store_true")
+    import_parser = sub.add_parser("import-prior-work", help="Import a curated prior-work seed file")
+    import_parser.add_argument("--seed-file", required=True)
+    import_parser.add_argument("--source", default="manual_seed")
+    import_parser.add_argument("--require-complete-metadata", action="store_true")
 
-    first_use_parser = sub.add_parser("first-use", help="Print a compact first-user Skill/MCP/CLI guide for natural-language PaperOrchestra use")
-    first_use_parser.add_argument("--intent", default="auto", choices=["auto", "setup", "how_to_use", "start", "write_now"])
-    first_use_parser.add_argument("--material", help="Optional material folder/file to inspect without exposing raw content")
-    first_use_parser.add_argument("--mcp-attached", default="unknown", choices=["yes", "no", "unknown"], help="Whether the current Codex session exposes native PaperOrchestra MCP tools")
-    first_use_parser.add_argument("--json", action="store_true")
-
-    answer_human_needed_parser = sub.add_parser("answer-human-needed", help="Record a bounded, hash-bound answer for a human_needed stop")
-    answer_human_needed_parser.add_argument("--answer", required=True)
-    answer_human_needed_parser.add_argument("--packet")
-    answer_human_needed_parser.add_argument("--review-scope", choices=["pdf_and_tex", "tex_only"])
-    answer_human_needed_parser.add_argument("--intent", choices=["approve_existing_candidate", "generate_new_operator_candidate", "reject_candidate_with_reason"])
-    answer_human_needed_parser.add_argument("--action-id")
-    answer_human_needed_parser.add_argument("--output-answer")
-    answer_human_needed_parser.add_argument("--output-feedback")
-    answer_human_needed_parser.add_argument("--redacted-answer-only", action="store_true")
-    answer_human_needed_parser.add_argument("--apply", action="store_true")
-    answer_human_needed_parser.add_argument("--imported-feedback-output")
-    answer_human_needed_parser.add_argument("--max-supervised-iterations", type=int, default=1)
-    answer_human_needed_parser.add_argument("--quality-mode", default="claim_safe", choices=["draft", "ralph", "claim_safe"])
-    answer_human_needed_parser.add_argument("--max-iterations", type=int, default=10)
-    answer_human_needed_parser.add_argument("--require-live-verification", action="store_true")
-    answer_human_needed_parser.add_argument("--accept-mixed-provenance", action="store_true")
-    answer_human_needed_parser.add_argument("--require-compile", action="store_true")
-    answer_human_needed_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web", "source"])
-    _runtime_mode_args(answer_human_needed_parser, strict_flag=True)
-    _common_provider_args(answer_human_needed_parser)
-    _citation_provider_args(answer_human_needed_parser)
-    answer_human_needed_parser.add_argument("--json", action="store_true")
-
-    export_parser = sub.add_parser("export-artifacts", help="Copy the current session's main outputs to an easy-to-share directory")
-    export_parser.add_argument("--output", required=True, help="Destination directory for exported outputs")
-    export_parser.add_argument("--include-all-artifacts", action="store_true", help="Also copy the complete session artifacts/ directory")
-    export_parser.add_argument("--json", action="store_true", help="Print machine-readable export details")
-
-    export_current_parser = sub.add_parser("export-current", help="Alias for export-artifacts")
-    export_current_parser.add_argument("--output", required=True, help="Destination directory for exported outputs")
-    export_current_parser.add_argument("--include-all-artifacts", action="store_true", help="Also copy the complete session artifacts/ directory")
-    export_current_parser.add_argument("--json", action="store_true", help="Print machine-readable export details")
-
-    quickstart_parser = sub.add_parser("quickstart", help="Print a short operator guide for common PaperOrchestra workflows")
-    quickstart_parser.add_argument("--scenario", default="new-paper", choices=["new-paper", "testset", "curated-prior-work", "environment"])
-
-    teach_parser = sub.add_parser("teach", help="Prepare PaperOrchestra inputs from an existing manuscript/artifact repo")
-    teach_parser.add_argument("--paper", required=True)
-    teach_parser.add_argument("--pdf")
-    teach_parser.add_argument("--artifact-repo")
-    teach_parser.add_argument("--figures-dir")
-    teach_parser.add_argument("--output-dir")
-    teach_parser.add_argument("--no-init-session", action="store_true")
-    teach_parser.add_argument("--allow-outside-workspace", action="store_true", help="Allow teach-mode inputs and outputs outside the current workspace.")
-
-    intake_start_parser = sub.add_parser("intake-start", help="Start a guided intake session")
-    intake_start_parser.add_argument("--seed-answers")
-
-    intake_status_parser = sub.add_parser("intake-status", help="Show guided intake status")
-    intake_status_parser.add_argument("--intake-id")
-
-    intake_review_parser = sub.add_parser("intake-review", help="Show the review packet for a guided intake")
-    intake_review_parser.add_argument("--intake-id")
-
-    intake_answer_parser = sub.add_parser("intake-answer", help="Answer one or more guided intake questions")
-    intake_answer_parser.add_argument("--intake-id")
-    intake_answer_parser.add_argument("--key")
-    intake_answer_parser.add_argument("--answer")
-    intake_answer_parser.add_argument("--answers-json")
-
-    intake_research_parser = sub.add_parser("intake-research", help="Enrich the current intake with prior-work search")
-    intake_research_parser.add_argument("--intake-id")
-    intake_research_parser.add_argument("--mode", default="live", choices=["live", "mock"])
-    intake_research_parser.add_argument("--max-per-seed", type=int, default=2)
-    intake_research_parser.add_argument("--allow-outside-workspace", action="store_true")
-
-    intake_finalize_parser = sub.add_parser("intake-finalize", help="Generate input artifacts from the current guided intake")
-    intake_finalize_parser.add_argument("--intake-id")
-    intake_finalize_parser.add_argument("--output-dir")
-    intake_finalize_parser.add_argument("--template-path")
-    intake_finalize_parser.add_argument("--figures-dir")
-    intake_finalize_parser.add_argument("--no-init-session", action="store_true")
-    intake_finalize_parser.add_argument("--allow-overwrite", action="store_true")
-    intake_finalize_parser.add_argument("--allow-outside-workspace", action="store_true", help="Allow finalize output/template/figure paths outside the current workspace.")
-    intake_finalize_parser.add_argument("--story-candidate-id")
-    intake_finalize_parser.add_argument("--claim-candidate-ids")
-
-    intake_approve_parser = sub.add_parser("intake-approve", help="Approve a story/claim direction and finalize the intake")
-    intake_approve_parser.add_argument("--intake-id")
-    intake_approve_parser.add_argument("--story-candidate-id", required=True)
-    intake_approve_parser.add_argument("--claim-candidate-ids", required=True)
-    intake_approve_parser.add_argument("--output-dir")
-    intake_approve_parser.add_argument("--template-path")
-    intake_approve_parser.add_argument("--figures-dir")
-    intake_approve_parser.add_argument("--no-init-session", action="store_true")
-    intake_approve_parser.add_argument("--allow-overwrite", action="store_true")
-    intake_approve_parser.add_argument("--allow-outside-workspace", action="store_true", help="Allow approve/finalize output/template/figure paths outside the current workspace.")
-
-    jobs_start_parser = sub.add_parser("job-start-run", help="Start a background pipeline run")
-    jobs_start_parser.add_argument("--discovery-mode", default="model", choices=["model", "scholar-only", "search-grounded"])
-    jobs_start_parser.add_argument("--verify-mode", default="live", choices=["live", "mock"])
-    jobs_start_parser.add_argument("--verify-error-policy", default="skip", choices=["skip", "fail"])
-    jobs_start_parser.add_argument("--verify-fallback-mode", default="none", choices=["none", "mock"], help="If live verification fails, optionally fall back to mock verification instead of aborting.")
-    jobs_start_parser.add_argument("--require-live-verification", action="store_true", help="Treat skipped live citation verification as a blocking reproducibility failure.")
-    jobs_start_parser.add_argument("--refine-iterations", type=int, default=1)
-    jobs_start_parser.add_argument("--compile", action="store_true")
-    _runtime_mode_args(jobs_start_parser, strict_flag=True)
-    _common_provider_args(jobs_start_parser)
-
-    jobs_list_parser = sub.add_parser("jobs-list", help="List recent background jobs")
-    jobs_list_parser.add_argument("--limit", type=int, default=20)
-
-    job_status_parser = sub.add_parser("job-status", help="Show background job status")
-    job_status_parser.add_argument("--job-id", required=True)
-    run_status_parser = sub.add_parser("run-status", help="Alias for job-status")
-    run_status_parser.add_argument("--job-id", required=True)
-
-    job_tail_parser = sub.add_parser("job-tail-log", help="Tail the log of a background job")
-    job_tail_parser.add_argument("--job-id", required=True)
-    job_tail_parser.add_argument("--lines", type=int, default=40)
-    run_tail_parser = sub.add_parser("run-tail-log", help="Alias for job-tail-log")
-    run_tail_parser.add_argument("--job-id", required=True)
-    run_tail_parser.add_argument("--lines", type=int, default=40)
-
-    job_cancel_parser = sub.add_parser("job-cancel", help="Cancel a running background job")
-    job_cancel_parser.add_argument("--job-id", required=True)
-
-    outline_parser = sub.add_parser("outline", help="Generate outline.json")
-    _runtime_mode_args(outline_parser, strict_flag=True)
-    _common_provider_args(outline_parser)
-
-    plots_parser = sub.add_parser("generate-plots", help="Generate plot manifest artifacts")
-    _runtime_mode_args(plots_parser, strict_flag=True)
-    _common_provider_args(plots_parser)
-
-    discover_parser = sub.add_parser("discover-papers", help="Generate candidate_papers.json")
-    discover_parser.add_argument("--mode", default="model", choices=["model", "scholar-only", "search-grounded"])
-    _runtime_mode_args(discover_parser, strict_flag=True)
-    _common_provider_args(discover_parser)
-
-    import_prior_parser = sub.add_parser("import-prior-work", help="Import curated prior-work seeds into citation artifacts")
-    import_prior_parser.add_argument("--seed-file", required=True)
-    import_prior_parser.add_argument("--source", default="manual_seed")
-    import_prior_parser.add_argument(
-        "--require-complete-metadata",
-        action="store_true",
-        help="Reject seed entries without title, author/organization, and concrete year before building claim-safe references.",
-    )
-
-    narrative_parser = sub.add_parser("plan-narrative", help="Write narrative, claim-map, and citation-placement planning artifacts")
-    _runtime_mode_args(narrative_parser, strict_flag=True)
-    _common_provider_args(narrative_parser)
-
-    research_prior_parser = sub.add_parser("research-prior-work", help="Generate a curated prior-work seed JSON from current materials")
-    research_prior_parser.add_argument("--output")
-    research_prior_parser.add_argument("--paper")
-    research_prior_parser.add_argument("--artifact-repo")
-    _runtime_mode_args(research_prior_parser, strict_flag=True)
-    research_prior_parser.add_argument("--source", default="codex_web_seed")
-    research_prior_parser.add_argument("--import", dest="import_seed", action="store_true")
-    research_prior_parser.add_argument(
-        "--require-complete-metadata",
-        action="store_true",
-        help="When used with --import, reject seed entries without title, author/organization, and concrete year.",
-    )
-    _common_provider_args(research_prior_parser)
-
-    verify_parser = sub.add_parser("verify-papers", help="Verify candidate papers with Semantic Scholar")
-    verify_parser.add_argument("--min-ratio", type=float, default=70.0)
-    verify_parser.add_argument("--mode", default="live", choices=["live", "mock"])
-    verify_parser.add_argument("--on-error", default="skip", choices=["skip", "fail"])
-
-    sub.add_parser("build-bib", help="Generate references.bib from verified citation registry")
-
-    intro_parser = sub.add_parser("write-intro-related", help="Draft Introduction and Related Work")
-    _runtime_mode_args(intro_parser, strict_flag=True)
-    intro_parser.add_argument("--claim-safe", action="store_true", help="Fail closed on claim-safe citation/source prompt contract violations.")
-    intro_parser.add_argument(
-        "--allow-recoverable-contract-issues",
-        action="store_true",
-        help=(
-            "Persist a draft when only recoverable citation-coverage blockers remain, "
-            "so supervised QA/operator loops can repair it instead of aborting early."
-        ),
-    )
-    _common_provider_args(intro_parser)
-
-    sections_parser = sub.add_parser("write-sections", help="Draft the full paper")
+    sections_parser = sub.add_parser("write-sections", help="Draft or rewrite manuscript sections")
+    sections_parser.add_argument("--only-sections")
+    sections_parser.add_argument("--output-tex")
+    sections_parser.add_argument("--claim-safe", action="store_true")
     _runtime_mode_args(sections_parser, strict_flag=True)
-    sections_parser.add_argument("--only-sections", help="Comma-separated section titles to rewrite while preserving all other existing sections.")
-    sections_parser.add_argument("--output-tex", help="Write the resulting manuscript to this explicit path instead of the default paper.full.tex artifact.")
-    sections_parser.add_argument("--claim-safe", action="store_true", help="Fail closed on claim-safe citation/source prompt contract violations.")
     _common_provider_args(sections_parser)
 
-    sub.add_parser("compile", help="Compile the current paper.full.tex")
-    sub.add_parser("check-compile-env", help="Inspect and record the compile environment readiness")
-    runtime_parity_parser = sub.add_parser("record-runtime-parity", help="Record the current lane-manifest runtime parity report")
-    runtime_parity_parser.add_argument("--output", help="Optional explicit report path (default: current session artifact runtime-parity.json)")
-    sub.add_parser("bootstrap-compile-env", help="Print compile environment remediation commands and generated bootstrap script path")
-    environment_parser = sub.add_parser("environment", help="Show the canonical environment-variable inventory, docs, and readiness profiles")
-    environment_parser.add_argument("--json", action="store_true", help="Print the full machine-readable inventory (default for compatibility)")
-    environment_parser.add_argument("--summary", action="store_true", help="Print a compact human-readable readiness summary")
-    doctor_parser = sub.add_parser("doctor", help="Run a pre-flight environment check for live PaperOrchestra runs")
-    doctor_parser.add_argument("--omx-deep", action="store_true", help="Include bounded OMX state/trace/Ralph/sparkshell/team probes")
-    doctor_parser.add_argument("--omx-timeout", type=float, default=10.0, help="Timeout seconds for each bounded --omx-deep probe")
-    omx_evidence_parser = sub.add_parser("export-omx-evidence", help="Export OMX trace/state/status summaries to an evidence directory")
-    omx_evidence_parser.add_argument("--output", required=True)
-    omx_evidence_parser.add_argument("--timeout", type=float, default=10.0)
-    omx_review_handoff_parser = sub.add_parser("omx-review-handoff", help="Write a safe manual handoff for OMX Critic/team/ultrawork review")
-    omx_review_handoff_parser.add_argument("--output")
-    cleanup_tmp_parser = sub.add_parser("cleanup-tmp", help="Remove temporary OMX execution artifacts")
-    cleanup_tmp_parser.add_argument("--max-age-seconds", type=float, default=0.0)
+    sub.add_parser("compile", help="Compile the current manuscript")
 
-    review_parser = sub.add_parser("review", help="Review the current paper")
-    review_parser.add_argument("--output", help="Review artifact name/path (default: review.latest.json)")
-    _runtime_mode_args(review_parser, strict_flag=True)
-    _common_provider_args(review_parser)
-    section_review_parser = sub.add_parser("review-sections", help="Run a section-level critic over the current manuscript")
-    section_review_parser.add_argument("--output")
-    citation_review_parser = sub.add_parser("review-citations", help="Run a citation-support critic over cited claims")
-    citation_review_parser.add_argument("--output")
-    citation_review_parser.add_argument(
-        "--evidence-mode",
-        default="heuristic",
-        choices=["heuristic", "model", "web", "source"],
-        help="Use heuristic metadata checks, a model critic, or a web-search-capable model critic for cited-sentence support.",
-    )
-    _common_provider_args(citation_review_parser)
-    citation_retrieval_parser = sub.add_parser("debug-citation-sources", help="Resolve citation source artifacts without running the citation-support critic")
-    citation_retrieval_parser.add_argument("--output")
-    rendered_reference_parser = sub.add_parser("audit-rendered-references", help="Audit the rendered bibliography denominator and visible BibTeX metadata")
-    rendered_reference_parser.add_argument("--output")
-    rendered_reference_parser.add_argument("--quality-mode", default="ralph", choices=["draft", "ralph", "claim_safe"])
-    citation_integrity_parser = sub.add_parser("audit-citation-integrity", help="Write citation intent/source-match/integrity artifacts for claim-safe quality gates")
-    citation_integrity_parser.add_argument("--output")
-    citation_integrity_parser.add_argument("--quality-mode", default="ralph", choices=["draft", "ralph", "claim_safe"])
-    citation_quality_parser = sub.add_parser("audit-citation-quality", help="Write the aggregate citation quality hard-gate artifact")
-    citation_quality_parser.add_argument("--output")
-    citation_quality_parser.add_argument("--quality-mode", default="ralph", choices=["draft", "ralph", "claim_safe"])
-    citation_critic_parser = sub.add_parser(
-        "audit-citation-integrity-critic",
-        help="Write the deterministic citation integrity critic artifact for claim-safe quality gates",
-    )
-    citation_critic_parser.add_argument("--output")
-    citation_critic_parser.add_argument("--quality-mode", default="ralph", choices=["draft", "ralph", "claim_safe"])
-    figure_review_parser = sub.add_parser("review-figure-placement", help="Build a figure-placement review packet for the current manuscript")
-    figure_review_parser.add_argument("--output")
-    figure_gate_parser = sub.add_parser("audit-figure-gate", help="Inventory supplied figures and block unresolved generated-placeholder figure slots")
-    figure_gate_parser.add_argument("--figures-dir")
-    figure_gate_parser.add_argument("--plot-assets")
-    figure_gate_parser.add_argument("--plot-manifest")
-    figure_gate_parser.add_argument("--plot-captions")
-    figure_gate_parser.add_argument("--output")
-    validate_current_parser = sub.add_parser("validate-current", help="Record validation issues for the current manuscript without rewriting it")
-    validate_current_parser.add_argument("--output")
-    validate_claim_safe_parser = sub.add_parser(
-        "validate-claim-safe-current",
-        help="Record structural validation plus claim-safe quality-loop blockers for the current manuscript",
-    )
-    validate_claim_safe_parser.add_argument("--output")
-    validate_claim_safe_parser.add_argument("--max-iterations", type=int, default=10)
-    validate_claim_safe_parser.add_argument("--require-live-verification", action="store_true")
-    source_obligations_parser = sub.add_parser("build-source-obligations", help="Build source_obligations.json from the current session input packet")
-    source_obligations_parser.add_argument("--output")
+    environment_parser = sub.add_parser("environment", help="Show environment-variable and readiness inventory")
+    environment_parser.add_argument("--json", action="store_true")
+    environment_parser.add_argument("--summary", action="store_true")
 
-    sub.add_parser("audit-fidelity", help="Audit the current implementation/session against paper-derived fidelity checks")
-    reproducibility_parser = sub.add_parser("audit-reproducibility", help="Classify whether the current run supports reproducibility/fidelity claims")
-    reproducibility_parser.add_argument("--output")
-    reproducibility_parser.add_argument("--require-live-verification", action="store_true", help="Treat skipped live citation verification as a blocking reproducibility failure.")
-    quality_eval_parser = sub.add_parser("quality-eval", help="Write the tiered quality-eval diagnostic snapshot for the current session")
-    quality_eval_parser.add_argument("--output")
-    quality_eval_parser.add_argument("--quality-mode", default="ralph", choices=["draft", "ralph", "claim_safe"], help="Evaluation mode controlling claim-safety and score thresholds.")
-    quality_eval_parser.add_argument("--max-iterations", type=int, default=10, help="Iteration budget recorded in cross-iteration metadata.")
-    quality_eval_parser.add_argument("--require-live-verification", action="store_true", help="Pass through to reproducibility audit for claim-safe runs.")
-    quality_eval_parser.add_argument("--record-history", action="store_true", help="Append this diagnostic-only quality evaluation to qa-loop-history.jsonl.")
-    quality_gate_parser = sub.add_parser("quality-gate", help="Run the strict draft-quality gate and write quality-gate.report.json")
-    quality_gate_parser.add_argument("--output")
-    quality_gate_parser.add_argument("--plan-output")
-    quality_gate_parser.add_argument("--profile", default="auto", choices=["auto", "mock", "ralph", "claim_safe"], help="Gate strictness profile; auto uses mock for mock provenance, claim_safe for claim-safe evals, otherwise ralph.")
-    quality_gate_parser.add_argument("--quality-mode", default="draft", choices=["draft", "ralph", "claim_safe"], help="Evaluation mode used to build the underlying quality-eval and repair plan.")
-    quality_gate_parser.add_argument("--max-iterations", type=int, default=10)
-    quality_gate_parser.add_argument("--require-live-verification", action="store_true")
-    quality_gate_parser.add_argument("--accept-mixed-provenance", action="store_true")
-    quality_gate_parser.add_argument("--auto-refine", action="store_true", help="Attempt one bounded refinement pass when the gate blocks or is repairable.")
-    quality_gate_parser.add_argument("--refine-iterations", type=int, default=1)
-    quality_gate_parser.add_argument("--require-compile-for-accept", action="store_true")
-    quality_gate_parser.add_argument("--no-fail-on-block", action="store_true", help="Always exit 0 after writing the report, even when the gate blocks.")
-    _runtime_mode_args(quality_gate_parser, strict_flag=True)
-    _common_provider_args(quality_gate_parser)
-    qa_loop_parser = sub.add_parser("qa-loop-plan", help="Build a Ralph-friendly repair plan from tiered quality-eval and audit artifacts")
-    qa_loop_parser.add_argument("--output")
-    qa_loop_parser.add_argument("--quality-eval", help="Consume an existing quality-eval.json diagnostic snapshot instead of regenerating one.")
-    qa_loop_parser.add_argument("--quality-mode", default="ralph", choices=["draft", "ralph", "claim_safe"], help="Evaluation mode controlling claim-safety and score thresholds.")
-    qa_loop_parser.add_argument("--max-iterations", type=int, default=10, help="Iteration budget recorded in cross-iteration metadata.")
-    qa_loop_parser.add_argument("--accept-mixed-provenance", action="store_true", help="Allow ready_for_human_finalization when provenance is mixed but explicitly accepted by the operator.")
-    qa_loop_parser.add_argument("--require-live-verification", action="store_true", help="Pass through to reproducibility audit when planning claim-safe repairs.")
-    qa_loop_alias_parser = sub.add_parser("qa-loop", help="Alias for qa-loop-plan; currently builds the repair plan without executing edits")
-    qa_loop_alias_parser.add_argument("--output")
-    qa_loop_alias_parser.add_argument("--quality-eval", help="Consume an existing quality-eval.json diagnostic snapshot instead of regenerating one.")
-    qa_loop_alias_parser.add_argument("--quality-mode", default="ralph", choices=["draft", "ralph", "claim_safe"], help="Evaluation mode controlling claim-safety and score thresholds.")
-    qa_loop_alias_parser.add_argument("--max-iterations", type=int, default=10, help="Iteration budget recorded in cross-iteration metadata.")
-    qa_loop_alias_parser.add_argument("--accept-mixed-provenance", action="store_true", help="Allow ready_for_human_finalization when provenance is mixed but explicitly accepted by the operator.")
-    qa_loop_alias_parser.add_argument("--require-live-verification", action="store_true", help="Pass through to reproducibility audit when planning claim-safe repairs.")
-    qa_loop_brief_parser = sub.add_parser("qa-loop-brief", help="Write a Ralph-readable brief from the current quality loop state")
-    qa_loop_brief_parser.add_argument("--output")
-    qa_loop_brief_parser.add_argument("--quality-eval")
-    qa_loop_brief_parser.add_argument("--qa-loop-plan")
-    qa_loop_brief_parser.add_argument("--quality-mode", default="claim_safe", choices=["draft", "ralph", "claim_safe"])
-    qa_loop_brief_parser.add_argument("--max-iterations", type=int, default=10)
-    qa_loop_brief_parser.add_argument("--accept-mixed-provenance", action="store_true")
-    qa_loop_brief_parser.add_argument("--require-live-verification", action="store_true")
-    repair_citations_parser = sub.add_parser("repair-citation-claims", help="Run a bounded citation-claim repair pass from citation-support critic issues")
-    repair_citations_parser.add_argument("--citation-review")
-    repair_citations_parser.add_argument("--require-compile", action="store_true")
-    _runtime_mode_args(repair_citations_parser, strict_flag=True)
-    _common_provider_args(repair_citations_parser)
-    qa_loop_step_parser = sub.add_parser("qa-loop-step", help="Execute exactly one bounded QA-loop repair iteration")
-    qa_loop_step_parser.add_argument("--quality-mode", default="claim_safe", choices=["draft", "ralph", "claim_safe"])
-    qa_loop_step_parser.add_argument("--max-iterations", type=int, default=10)
-    qa_loop_step_parser.add_argument("--accept-mixed-provenance", action="store_true")
-    qa_loop_step_parser.add_argument("--require-live-verification", action="store_true")
-    qa_loop_step_parser.add_argument("--require-compile", action="store_true")
-    qa_loop_step_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web", "source"])
-    qa_loop_step_parser.add_argument("--quality-eval", help="Consume an explicit quality-eval artifact instead of regenerating the input snapshot.")
-    qa_loop_step_parser.add_argument("--qa-loop-plan", help="Consume an explicit QA-loop plan artifact instead of regenerating the input plan.")
-    qa_loop_step_parser.add_argument("--citation-support-review", help="Use and stage an explicit citation-support review artifact for this step.")
-    _runtime_mode_args(qa_loop_step_parser, strict_flag=True)
-    _common_provider_args(qa_loop_step_parser)
-    _citation_provider_args(qa_loop_step_parser)
-    sub.add_parser("candidate-list", help="List candidate manuscripts available for explicit operator approval")
-    candidate_diff_parser = sub.add_parser("candidate-diff", help="Show a diff for a candidate manuscript")
-    candidate_diff_parser.add_argument("candidate_id")
-    candidate_apply_parser = sub.add_parser("candidate-apply", help="Apply a candidate manuscript after author approval")
-    candidate_apply_parser.add_argument("candidate_id")
-    candidate_apply_parser.add_argument("--as-author-approved", action="store_true")
-    candidate_reject_parser = sub.add_parser("candidate-reject", help="Reject a candidate manuscript with a reason")
-    candidate_reject_parser.add_argument("candidate_id")
-    candidate_reject_parser.add_argument("--reason", required=True)
-    ralph_start_parser = sub.add_parser("ralph-start", help="Create or explicitly launch an OMX Ralph handoff for the current quality loop")
-    ralph_start_parser.add_argument("--output")
-    ralph_start_parser.add_argument("--quality-mode", default="claim_safe", choices=["draft", "ralph", "claim_safe"])
-    ralph_start_parser.add_argument("--max-iterations", type=int, default=10)
-    ralph_start_parser.add_argument("--require-live-verification", action="store_true")
-    ralph_start_parser.add_argument("--accept-mixed-provenance", action="store_true")
-    ralph_start_parser.add_argument("--evidence-root")
-    ralph_start_parser.add_argument("--dry-run", action="store_true")
-    ralph_start_parser.add_argument("--launch", action="store_true")
-    operator_packet_parser = sub.add_parser("build-operator-review-packet", help="Build a hash-bound packet for external OMX/Codex operator review after human_needed")
-    operator_packet_parser.add_argument("--output")
-    operator_packet_parser.add_argument("--require-pdf", action="store_true")
-    operator_packet_parser.add_argument("--review-scope", choices=["pdf_and_tex", "tex_only"])
-    operator_import_parser = sub.add_parser("import-operator-feedback", help="Validate/import external Codex-operator feedback against a review packet")
-    operator_import_parser.add_argument("--packet", required=True)
-    operator_import_parser.add_argument("--feedback", required=True)
-    operator_import_parser.add_argument("--output")
-    operator_apply_parser = sub.add_parser("apply-operator-feedback", help="Run one bounded candidate-first supervised feedback cycle")
-    operator_apply_parser.add_argument("--imported-feedback", required=True)
-    operator_apply_parser.add_argument("--max-supervised-iterations", type=int, default=1)
-    operator_apply_parser.add_argument("--quality-mode", default="claim_safe", choices=["draft", "ralph", "claim_safe"])
-    operator_apply_parser.add_argument("--max-iterations", type=int, default=10)
-    operator_apply_parser.add_argument("--require-live-verification", action="store_true")
-    operator_apply_parser.add_argument("--accept-mixed-provenance", action="store_true")
-    operator_apply_parser.add_argument("--require-compile", action="store_true")
-    operator_apply_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web", "source"])
-    _runtime_mode_args(operator_apply_parser, strict_flag=True)
-    _common_provider_args(operator_apply_parser)
-    _citation_provider_args(operator_apply_parser)
-    estimate_parser = sub.add_parser("estimate-cost", help="Estimate model/search/compile calls for a prospective pipeline run")
-    estimate_parser.add_argument("--discovery-mode", default="model", choices=["model", "scholar-only", "search-grounded"])
-    estimate_parser.add_argument("--refine-iterations", type=int, default=1)
-    estimate_parser.add_argument("--compile", action="store_true")
-    _runtime_mode_args(estimate_parser)
-    benchmark_parser = sub.add_parser("build-reference-benchmark-case", help="Build a paper-derived benchmark/eval scaffold artifact from extracted reference materials")
-    benchmark_parser.add_argument("--reference-dir", required=True)
-    benchmark_parser.add_argument("--output")
-    benchmark_parser.add_argument("--source-pdf")
-    session_eval_parser = sub.add_parser("build-session-eval-summary", help="Summarize the current session into a benchmark/eval-friendly artifact")
-    session_eval_parser.add_argument("--output")
-    review_compare_parser = sub.add_parser("build-review-gate-comparison", help="Compare the current review artifact against the expected AgentReview-style surface")
-    review_compare_parser.add_argument("--output")
-    generated_titles_parser = sub.add_parser("build-generated-citation-titles", help="Extract the generated citation title set from the current paper and citation map")
-    generated_titles_parser.add_argument("--output")
-    compare_parser = sub.add_parser("compare-reference-case", help="Compare the current session against a reference benchmark case artifact")
-    compare_parser.add_argument("--reference-case", required=True)
-    compare_parser.add_argument("--output")
-    partition_scaffold_parser = sub.add_parser("build-reference-case-partition-scaffold", help="Build a partition scaffold from a reference benchmark case")
-    partition_scaffold_parser.add_argument("--reference-case", required=True)
-    partition_scaffold_parser.add_argument("--output")
-    partition_compare_case_parser = sub.add_parser("compare-reference-case-citation-coverage", help="Compare current generated citations against a reference-case partition scaffold")
-    partition_compare_case_parser.add_argument("--reference-case", required=True)
-    partition_compare_case_parser.add_argument("--output")
-    partition_request_parser = sub.add_parser("build-citation-partition-request", help="Build a Citation F1 P0/P1 partition request artifact from paper text and references")
-    partition_request_parser.add_argument("--paper-text-file", required=True)
-    partition_request_parser.add_argument("--references-json", required=True)
-    partition_request_parser.add_argument("--output")
-    partition_compare_parser = sub.add_parser("compare-partitioned-citation-coverage", help="Compare generated citation titles against a partitioned reference list")
-    partition_compare_parser.add_argument("--references-json", required=True)
-    partition_compare_parser.add_argument("--partition-json", required=True)
-    partition_compare_parser.add_argument("--generated-titles-json", required=True)
-    partition_compare_parser.add_argument("--output")
+    doctor_parser = sub.add_parser("doctor", help="Run a pre-flight environment check")
+    doctor_parser.add_argument("--omx-deep", action="store_true")
+    doctor_parser.add_argument("--omx-timeout", type=float, default=10.0)
 
-    suggest_parser = sub.add_parser("suggest-revisions", help="Convert review/critic JSON into section-targeted revision suggestions")
-    suggest_parser.add_argument("--source-paper", required=True)
-    suggest_parser.add_argument("--review", required=True)
-    suggest_parser.add_argument("--section-review")
-    suggest_parser.add_argument("--citation-review")
-    suggest_parser.add_argument("--output", required=True)
-
-    critic_preflight_parser = sub.add_parser("critic-preflight", help="Report the critic trust tier before running critic-like workflows")
-    critic_preflight_parser.add_argument(
-        "--citation-evidence-mode",
-        default="heuristic",
-        choices=["heuristic", "model", "web", "source"],
-    )
-    critic_preflight_parser.add_argument("--claim-safe", action="store_true")
-    critic_preflight_parser.add_argument("--live", action="store_true", help="Fail unless the preflight supports live/web critic claims.")
-    _common_provider_args(critic_preflight_parser)
-
-    critique_parser = sub.add_parser("critique", help="Run paper, section, citation critics and produce revision suggestions")
+    critique_parser = sub.add_parser("critique", help="Run paper, section, and citation critics")
     critique_parser.add_argument("--source-paper")
     critique_parser.add_argument("--output-dir")
-    critique_parser.add_argument(
-        "--citation-evidence-mode",
-        default="heuristic",
-        choices=["heuristic", "model", "web", "source"],
-        help="Evidence mode for the citation-support critic used by critique.",
-    )
-    critique_parser.add_argument("--live", action="store_true", help="Refuse mock/local/heuristic-only paths before running critique.")
-    critique_parser.add_argument("--claim-safe", action="store_true", help="Classify a live web critique as claim_safe_live in the trust card.")
+    critique_parser.add_argument("--citation-evidence-mode", default="heuristic", choices=["heuristic", "model", "web", "source"])
+    critique_parser.add_argument("--live", action="store_true")
+    critique_parser.add_argument("--claim-safe", action="store_true")
     _runtime_mode_args(critique_parser, strict_flag=True)
     _common_provider_args(critique_parser)
 
-    refine_parser = sub.add_parser("refine", help="Run the refinement loop")
-    refine_parser.add_argument("--iterations", type=int, default=1)
-    refine_parser.add_argument("--require-compile-for-accept", action="store_true")
-    refine_parser.add_argument("--claim-safe", action="store_true", help="Fail closed on claim-safe citation/source prompt contract violations.")
-    _runtime_mode_args(refine_parser, strict_flag=True)
-    _common_provider_args(refine_parser)
+    quality_gate_parser = sub.add_parser("quality-gate", help="Run the draft-quality gate")
+    quality_gate_parser.add_argument("--output")
+    quality_gate_parser.add_argument("--plan-output")
+    quality_gate_parser.add_argument("--profile", default="auto", choices=["auto", "mock", "ralph", "claim_safe"])
+    quality_gate_parser.add_argument("--quality-mode", default="draft", choices=["draft", "ralph", "claim_safe"])
+    quality_gate_parser.add_argument("--max-iterations", type=int, default=10)
+    quality_gate_parser.add_argument("--require-live-verification", action="store_true")
+    quality_gate_parser.add_argument("--accept-mixed-provenance", action="store_true")
+    quality_gate_parser.add_argument("--auto-refine", action="store_true")
+    quality_gate_parser.add_argument("--refine-iterations", type=int, default=1)
+    quality_gate_parser.add_argument("--require-compile-for-accept", action="store_true")
+    quality_gate_parser.add_argument("--no-fail-on-block", action="store_true")
+    _runtime_mode_args(quality_gate_parser, strict_flag=True)
+    _common_provider_args(quality_gate_parser)
+
+    qa_loop_parser = sub.add_parser("qa-loop", help="Build the next QA-loop repair plan")
+    qa_loop_parser.add_argument("--output")
+    qa_loop_parser.add_argument("--quality-eval")
+    qa_loop_parser.add_argument("--quality-mode", default="ralph", choices=["draft", "ralph", "claim_safe"])
+    qa_loop_parser.add_argument("--max-iterations", type=int, default=10)
+    qa_loop_parser.add_argument("--accept-mixed-provenance", action="store_true")
+    qa_loop_parser.add_argument("--require-live-verification", action="store_true")
+
+    qa_step_parser = sub.add_parser("qa-loop-step", help="Execute one bounded QA-loop repair step")
+    qa_step_parser.add_argument("--quality-mode", default="claim_safe", choices=["draft", "ralph", "claim_safe"])
+    qa_step_parser.add_argument("--max-iterations", type=int, default=10)
+    qa_step_parser.add_argument("--accept-mixed-provenance", action="store_true")
+    qa_step_parser.add_argument("--require-live-verification", action="store_true")
+    qa_step_parser.add_argument("--require-compile", action="store_true")
+    qa_step_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web", "source"])
+    qa_step_parser.add_argument("--quality-eval")
+    qa_step_parser.add_argument("--plan")
+    qa_step_parser.add_argument("--citation-support-review")
+    _runtime_mode_args(qa_step_parser, strict_flag=True)
+    _common_provider_args(qa_step_parser)
+    _citation_provider_args(qa_step_parser)
+
+    ralph_parser = sub.add_parser("ralph-start", help="Create or launch an OMX Ralph handoff for the current QA loop")
+    ralph_parser.add_argument("--output")
+    ralph_parser.add_argument("--quality-mode", default="claim_safe", choices=["draft", "ralph", "claim_safe"])
+    ralph_parser.add_argument("--max-iterations", type=int, default=10)
+    ralph_parser.add_argument("--require-live-verification", action="store_true")
+    ralph_parser.add_argument("--accept-mixed-provenance", action="store_true")
+    ralph_parser.add_argument("--evidence-root")
+    ralph_parser.add_argument("--dry-run", action="store_true")
+    ralph_parser.add_argument("--launch", action="store_true")
 
     run_parser = sub.add_parser("run", help="Run the full PaperOrchestra pipeline")
     run_parser.add_argument("--discovery-mode", default="model", choices=["model", "scholar-only", "search-grounded"])
     run_parser.add_argument("--verify-mode", default="live", choices=["live", "mock"])
     run_parser.add_argument("--verify-error-policy", default="skip", choices=["skip", "fail"])
-    run_parser.add_argument("--verify-fallback-mode", default="none", choices=["none", "mock"], help="If live verification fails, optionally fall back to mock verification instead of aborting.")
-    run_parser.add_argument("--require-live-verification", action="store_true", help="Treat skipped live citation verification as a blocking reproducibility failure.")
+    run_parser.add_argument("--verify-fallback-mode", default="none", choices=["none", "mock"])
+    run_parser.add_argument("--require-live-verification", action="store_true")
     run_parser.add_argument("--refine-iterations", type=int, default=1)
     run_parser.add_argument("--compile", action="store_true")
     _runtime_mode_args(run_parser, strict_flag=True)
-    run_parser.add_argument("--full-fidelity", action="store_true", help="Write eval/comparison/fidelity artifacts after the run")
-    run_parser.add_argument("--reference-case", help="Reference benchmark case JSON for --full-fidelity comparison artifacts")
     _common_provider_args(run_parser)
 
     return parser
@@ -646,51 +238,6 @@ def _strict_omx_env(enabled: bool):
             os.environ.pop("PAPERO_STRICT_OMX_NATIVE", None)
         else:
             os.environ["PAPERO_STRICT_OMX_NATIVE"] = previous
-
-
-def _write_full_fidelity_artifacts(cwd: Path, reference_case: str | None) -> dict[str, str]:
-    current_session_id = get_current_session_id(cwd)
-    state = load_session(cwd)
-    artifact_dir = cwd / ".paper-orchestra" / "runs" / current_session_id / "artifacts"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-    paths = {
-        "session_eval_summary": str(write_session_eval_summary(cwd, artifact_dir / "session_eval_summary.json")),
-        "review_gate_comparison": str(write_review_gate_comparison(cwd, artifact_dir / "review_gate_comparison.json")),
-        "generated_citation_titles": str(write_generated_citation_titles(cwd, artifact_dir / "generated_citation_titles.json")),
-    }
-    if state.artifacts.paper_full_tex and state.artifacts.citation_map_json:
-        citation_map = json.loads(Path(state.artifacts.citation_map_json).read_text(encoding="utf-8"))
-        references = [
-            {"title": entry.get("title"), "citation_key": key}
-            for key, entry in canonical_citation_map(citation_map).items()
-            if isinstance(entry, dict) and isinstance(entry.get("title"), str) and entry.get("title", "").strip()
-        ]
-        paths["citation_partition_request"] = str(
-            write_citation_partition_request(
-                Path(state.artifacts.paper_full_tex).read_text(encoding="utf-8"),
-                references,
-                artifact_dir / "citation_partition_request.json",
-            )
-        )
-    if reference_case:
-        reference_case_path = Path(reference_case).resolve()
-        paths["reference_case_partition_scaffold"] = str(
-            write_reference_case_partition_scaffold(reference_case_path, artifact_dir / "reference_case_partition_scaffold.json")
-        )
-        paths["reference_case_partitioned_citation_coverage"] = str(
-            write_reference_case_partitioned_citation_coverage(
-                reference_case_path,
-                cwd,
-                artifact_dir / "reference_case_partitioned_citation_coverage.json",
-            )
-        )
-        paths["reference_comparison"] = str(write_reference_comparison(reference_case_path, cwd, artifact_dir / "reference_comparison.json"))
-    fidelity_path, _ = record_fidelity_report(cwd)
-    paths["fidelity_audit"] = str(fidelity_path)
-    paths["session_eval_summary"] = str(write_session_eval_summary(cwd, artifact_dir / "session_eval_summary.json"))
-    if reference_case:
-        paths["reference_comparison"] = str(write_reference_comparison(Path(reference_case).resolve(), cwd, artifact_dir / "reference_comparison.json"))
-    return paths
 
 
 def _path_or_missing(value: str | None) -> str:
@@ -719,7 +266,6 @@ def _status_summary_lines(cwd: Path, payload: dict[str, object]) -> list[str]:
         f"  TeX: {_path_or_missing(artifacts.get('paper_full_tex'))}",
         f"  PDF: {_path_or_missing(artifacts.get('compiled_pdf'))}",
         f"  Review: {_path_or_missing(artifacts.get('latest_review_json'))}",
-        f"  Reproducibility: {_path_or_missing(artifacts.get('latest_reproducibility_json'))}",
         f"  Artifact directory: {artifact_dir}",
         "",
         "Next:",
@@ -728,14 +274,9 @@ def _status_summary_lines(cwd: Path, payload: dict[str, object]) -> list[str]:
     if isinstance(next_commands, list) and next_commands:
         lines.extend(f"  {command}" for command in next_commands)
     elif not artifacts.get("compiled_pdf"):
-        lines.extend(
-            [
-                "  paperorchestra check-compile-env",
-                "  PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile",
-            ]
-        )
+        lines.extend(["  paperorchestra environment --summary", "  PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile"])
     else:
-        lines.append("  paperorchestra export-artifacts --output ./paperorchestra-output")
+        lines.append("  paperorchestra export-current --output ./paperorchestra-output")
     return lines
 
 
@@ -764,10 +305,6 @@ def _export_current_artifacts(cwd: Path, output: str | Path, *, include_all_arti
         ("compiled_pdf", artifacts.compiled_pdf, output_dir / "paper.full.pdf"),
         ("references_bib", artifacts.references_bib, output_dir / "references.bib"),
         ("latest_review_json", artifacts.latest_review_json, output_dir / "review.latest.json"),
-        ("latest_reproducibility_json", artifacts.latest_reproducibility_json, output_dir / "reproducibility.audit.json"),
-        ("latest_fidelity_json", artifacts.latest_fidelity_json, output_dir / "fidelity.audit.json"),
-        ("latest_runtime_parity_json", artifacts.latest_runtime_parity_json, output_dir / "runtime-parity.json"),
-        ("latest_compile_report_json", artifacts.latest_compile_report_json, output_dir / "compile-report.json"),
         ("quality_gate_report", str(artifact_path(cwd, "quality-gate.report.json")), output_dir / "quality-gate.report.json"),
         ("session_json", str(run_dir(cwd, state.session_id) / "session.json"), output_dir / "session.json"),
     ]
@@ -782,13 +319,7 @@ def _export_current_artifacts(cwd: Path, output: str | Path, *, include_all_arti
         else:
             skipped.append({"label": "artifacts_dir", "source": str(artifact_dir), "reason": "missing on disk"})
 
-    return {
-        "status": "ok",
-        "session_id": state.session_id,
-        "output_dir": str(output_dir),
-        "copied": copied,
-        "skipped": skipped,
-    }
+    return {"status": "ok", "session_id": state.session_id, "output_dir": str(output_dir), "copied": copied, "skipped": skipped}
 
 
 def _ok_warn(value: bool) -> str:
@@ -796,15 +327,9 @@ def _ok_warn(value: bool) -> str:
 
 
 def _environment_summary_lines(payload: dict[str, object]) -> list[str]:
-    package_context = payload.get("package_context")
-    if not isinstance(package_context, dict):
-        package_context = {}
-    profiles = payload.get("readiness_profiles")
-    if not isinstance(profiles, list):
-        profiles = []
-    mcp_health = payload.get("paperorchestra_mcp_health")
-    if not isinstance(mcp_health, dict):
-        mcp_health = {}
+    package_context = payload.get("package_context") if isinstance(payload.get("package_context"), dict) else {}
+    profiles = payload.get("readiness_profiles") if isinstance(payload.get("readiness_profiles"), list) else []
+    mcp_health = payload.get("paperorchestra_mcp_health") if isinstance(payload.get("paperorchestra_mcp_health"), dict) else {}
     mcp_config = mcp_health.get("config") if isinstance(mcp_health.get("config"), dict) else {}
     mcp_server = mcp_health.get("server") if isinstance(mcp_health.get("server"), dict) else {}
     mcp_attachment = mcp_health.get("active_session_attachment") if isinstance(mcp_health.get("active_session_attachment"), dict) else {}
@@ -826,7 +351,6 @@ def _environment_summary_lines(payload: dict[str, object]) -> list[str]:
         missing = profile.get("missing")
         if isinstance(missing, list) and missing:
             lines.append(f"    missing: {'; '.join(str(item) for item in missing[:2])}")
-
     lines.extend(
         [
             "",
@@ -836,51 +360,47 @@ def _environment_summary_lines(payload: dict[str, object]) -> list[str]:
             f"  active Codex session attachment: not checked ({mcp_attachment.get('detail', 'cannot be verified from CLI')})",
             "",
             "Next:",
-            "  paperorchestra status --json",
+            "  paperorchestra status --summary",
             "  paperorchestra doctor",
         ]
     )
     return lines
 
 
-
 def _orchestrator_summary_lines(payload: dict[str, object]) -> list[str]:
-    actions = payload.get("next_actions")
-    if not isinstance(actions, list):
-        actions = []
+    actions = payload.get("next_actions") if isinstance(payload.get("next_actions"), list) else []
     readiness = payload.get("readiness") if isinstance(payload.get("readiness"), dict) else {}
     scorecard = payload.get("scorecard_summary") if isinstance(payload.get("scorecard_summary"), dict) else {}
     first_action = actions[0].get("action_type") if actions and isinstance(actions[0], dict) else "none"
-    lines = [
+    return [
         "PaperOrchestra orchestrator state",
         render_scorecard_summary(scorecard) if scorecard else "Score: unscored",
         f"Readiness: {readiness.get('label', 'unknown')}",
         f"Next action: {first_action}",
     ]
-    return lines
 
 
 def _print_orchestrator_payload(payload: dict[str, object], *, json_output: bool) -> None:
     if json_output:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
-    else:
-        state_payload = payload.get("state") if isinstance(payload.get("state"), dict) else payload
-        lines: list[str] = []
-        if isinstance(payload.get("execution_record"), dict):
-            execution_record = payload["execution_record"]
-            lines.extend(
-                [
-                    f"Execution: {payload.get('execution', 'unknown')}",
-                    f"Action taken: {payload.get('action_taken', 'none')}",
-                    f"Execution status: {execution_record.get('status', 'unknown')}",
-                    f"Adapter: {execution_record.get('adapter', 'unknown')}",
-                    f"Reason: {execution_record.get('reason', 'unknown')}",
-                    f"State rebuild required: {execution_record.get('state_rebuild_required', 'unknown')}",
-                    "",
-                ]
-            )
-        lines.extend(_orchestrator_summary_lines(state_payload))
-        print("\n".join(lines))
+        return
+    state_payload = payload.get("state") if isinstance(payload.get("state"), dict) else payload
+    lines: list[str] = []
+    if isinstance(payload.get("execution_record"), dict):
+        execution_record = payload["execution_record"]
+        lines.extend(
+            [
+                f"Execution: {payload.get('execution', 'unknown')}",
+                f"Action taken: {payload.get('action_taken', 'none')}",
+                f"Execution status: {execution_record.get('status', 'unknown')}",
+                f"Adapter: {execution_record.get('adapter', 'unknown')}",
+                f"Reason: {execution_record.get('reason', 'unknown')}",
+                f"State rebuild required: {execution_record.get('state_rebuild_required', 'unknown')}",
+                "",
+            ]
+        )
+    lines.extend(_orchestrator_summary_lines(state_payload))
+    print("\n".join(lines))
 
 
 def _make_omx_executor(cwd: Path, *, timeout_seconds: float = 30.0) -> OmxActionExecutor:
@@ -911,6 +431,21 @@ def main(argv: list[str] | None = None) -> int:
             print(state.session_id)
             return 0
 
+        if args.command == "status":
+            state = load_session(cwd)
+            payload = state.to_dict()
+            payload["session_recovery"] = build_session_recovery_hint(cwd)
+            if args.json:
+                print(json.dumps(payload, indent=2, ensure_ascii=False))
+            elif args.summary:
+                print("\n".join(_status_summary_lines(cwd, payload)))
+            else:
+                print(f"session_id: {payload['session_id']}")
+                print(f"current_phase: {payload['current_phase']}")
+                print(f"active_artifact: {payload['active_artifact']}")
+                print(f"artifacts: {json.dumps(payload['artifacts'], indent=2, ensure_ascii=False)}")
+            return 0
+
         if args.command == "inspect-state":
             state = orchestrator_inspect_state(cwd, material_path=args.material)
             _print_orchestrator_payload(state.to_public_dict(), json_output=args.json)
@@ -919,101 +454,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "orchestrate":
             orchestrator = OrchestraOrchestrator(cwd)
             if args.execute_local:
-                result = orchestrator.step(
-                    material_path=args.material,
-                    execute=True,
-                    executor=LocalActionExecutor(material_path=args.material),
-                )
+                result = orchestrator.step(material_path=args.material, execute=True, executor=LocalActionExecutor(material_path=args.material))
             elif args.plan_full_loop:
                 result = orchestrator.plan_full_loop(material_path=args.material)
             elif args.execute_omx:
-                result = orchestrator.execute_omx_once(
-                    material_path=args.material,
-                    executor=_make_omx_executor(cwd),
-                )
+                result = orchestrator.execute_omx_once(material_path=args.material, executor=_make_omx_executor(cwd))
             else:
                 result = orchestrator.run_until_blocked(material_path=args.material)
-            state = result.state
-            payload = result.to_public_dict()
-            if args.write_evidence:
-                payload["evidence_bundle"] = write_orchestrator_evidence_bundle(cwd, state, output_dir=args.evidence_output)
-            _print_orchestrator_payload(payload, json_output=args.json)
-            return 0
-
-        if args.command == "acceptance-ledger":
-            evidence = None
-            if args.evidence:
-                evidence = json.loads(Path(args.evidence).read_text(encoding="utf-8"))
-            ledger = build_acceptance_ledger(evidence)
-            if args.json:
-                print(json.dumps(ledger.to_dict(), indent=2, ensure_ascii=False))
-            else:
-                print(render_acceptance_ledger_summary(ledger))
-            return 0
-
-        if args.command == "final-audit-ledger":
-            bugs = None
-            if args.bugs:
-                bugs = json.loads(Path(args.bugs).read_text(encoding="utf-8"))
-            ledger = build_final_audit_bug_ledger(bugs)
-            if args.json:
-                print(json.dumps(ledger, indent=2, ensure_ascii=False))
-            else:
-                print(render_final_audit_bug_ledger_summary(ledger))
-            return 0
-
-        if args.command == "verify-evidence-checklist":
-            if args.output:
-                _path, payload = write_verifier_evidence_checklist(cwd, output_path=args.output)
-            else:
-                state = orchestrator_inspect_state(cwd)
-                checklist = build_verifier_evidence_checklist(state, None, None, None)
-                payload = checklist.to_public_dict()
-            if args.json:
-                print(json.dumps(payload, indent=2, ensure_ascii=False))
-            else:
-                print(f"Verifier evidence checklist: {payload['overall_status']}")
-                for item in payload["items"]:
-                    print(f"  - {item['id']}: {item['status']} ({item['reason']})")
-            return 0
-
-        if args.command == "summarize-fresh-smoke":
-            _path, payload = write_fresh_smoke_acceptance_summary(
-                args.evidence_root,
-                output_path=args.output,
-                smoke_mode=args.smoke_mode,
-                material_manifest=args.material_manifest,
-            )
-            if args.json:
-                print(json.dumps(payload, indent=2, ensure_ascii=False))
-            else:
-                print(f"Fresh-smoke acceptance summary: {payload['overall_status']}")
-                print(f"Mode: {payload['smoke_mode']}")
-                print(f"Evidence: {payload['evidence_root_label']}")
-                for check in payload["checks"]:
-                    print(f"  - {check['id']}: {check['status']} ({check['reason']})")
-            return 0
-
-        if args.command == "continue-project":
-            result = OrchestraOrchestrator(cwd).run_until_blocked()
             payload = result.to_public_dict()
             if args.write_evidence:
                 payload["evidence_bundle"] = write_orchestrator_evidence_bundle(cwd, result.state, output_dir=args.evidence_output)
             _print_orchestrator_payload(payload, json_output=args.json)
             return 0
 
-        if args.command == "first-use":
-            payload = build_first_user_guide(
-                cwd,
-                intent=args.intent,
-                material=args.material,
-                mcp_attached=args.mcp_attached,
-            )
-            if args.json:
-                print(json.dumps(payload, indent=2, ensure_ascii=False))
-            else:
-                print(render_first_user_guide_summary(payload))
-            return 0
 
         if args.command == "answer-human-needed":
             provider = _provider_from_args(args) if args.apply else None
@@ -1045,269 +498,21 @@ def main(argv: list[str] | None = None) -> int:
             _print_orchestrator_payload(payload, json_output=args.json)
             return 0
 
-        if args.command == "status":
-            state = load_session(cwd)
-            payload = state.to_dict()
-            payload["session_recovery"] = build_session_recovery_hint(cwd)
-            if args.json:
-                print(json.dumps(payload, indent=2, ensure_ascii=False))
-            elif args.summary:
-                print("\n".join(_status_summary_lines(cwd, payload)))
-            else:
-                print(f"session_id: {payload['session_id']}")
-                print(f"current_phase: {payload['current_phase']}")
-                print(f"active_artifact: {payload['active_artifact']}")
-                print(f"refinement_iteration: {payload['refinement_iteration']}")
-                print(f"latest_validation_json: {payload['artifacts'].get('latest_validation_json')}")
-                print(f"latest_fidelity_json: {payload['artifacts'].get('latest_fidelity_json')}")
-                print(f"latest_compile_env_json: {payload['artifacts'].get('latest_compile_env_json')}")
-                print(f"latest_compile_report_json: {payload['artifacts'].get('latest_compile_report_json')}")
-                print(f"latest_runtime_parity_json: {payload['artifacts'].get('latest_runtime_parity_json')}")
-                print(f"latest_lane_summary_json: {payload['artifacts'].get('latest_lane_summary_json')}")
-                print(f"latest_reproducibility_json: {payload['artifacts'].get('latest_reproducibility_json')}")
-                print(f"latest_provider_identity_json: {payload['artifacts'].get('latest_provider_identity_json')}")
-                print(f"latest_figure_placement_review_json: {payload['artifacts'].get('latest_figure_placement_review_json')}")
-                print(f"latest_section_review_json: {payload['artifacts'].get('latest_section_review_json')}")
-                print(f"latest_prompt_trace_dir: {payload['artifacts'].get('latest_prompt_trace_dir')}")
-                print(f"latest_verification_errors_json: {payload['artifacts'].get('latest_verification_errors_json')}")
-                recovery = payload["session_recovery"]
-                print(f"recovery_status: {recovery.get('status')}")
-                if recovery.get("next_commands"):
-                    print("next_commands:")
-                    for command in recovery["next_commands"]:
-                        print(f"  - {command}")
-                print(f"artifacts: {json.dumps(payload['artifacts'], indent=2, ensure_ascii=False)}")
-            return 0
-
-        if args.command in {"export-artifacts", "export-current"}:
+        if args.command == "export-current":
             payload = _export_current_artifacts(cwd, args.output, include_all_artifacts=args.include_all_artifacts)
             if args.json:
                 print(json.dumps(payload, indent=2, ensure_ascii=False))
             else:
                 print(f"Exported PaperOrchestra outputs for session {payload['session_id']}")
                 print(f"Output: {payload['output_dir']}")
-                print("Copied:")
                 for item in payload["copied"]:
                     print(f"  - {item['label']}: {item['destination']}")
-                if payload["skipped"]:
-                    print("Skipped:")
-                    for item in payload["skipped"]:
-                        reason = item.get("reason", "unknown")
-                        print(f"  - {item['label']}: {reason}")
-            return 0
-
-        if args.command == "quickstart":
-            guides = {
-                "new-paper": [
-                    "1. Prepare idea.md, experimental_log.md, template.tex, and conference_guidelines.md.",
-                    "2. Run: paperorchestra init --idea ... --experimental-log ... --template ... --guidelines ...",
-                    "3. Optional: paperorchestra research-prior-work / import-prior-work for curated citations.",
-                    "4. Run: paperorchestra run --provider mock --verify-mode mock --compile --full-fidelity",
-                    "5. Run: paperorchestra critique --provider mock --source-paper <your-main.tex>",
-                    "6. Run: paperorchestra audit-reproducibility  # classify whether the current run is claim-safe",
-                ],
-                "testset": [
-                    "1. Prepare your own idea.md, experimental_log.md, template.tex, and conference_guidelines.md.",
-                    "2. Run: paperorchestra init --idea ... --experimental-log ... --template ... --guidelines ...",
-                    "3. Run the PaperOrchestra skills from Codex for status, setup, review, quality gate, and authoring rounds.",
-                ],
-                "curated-prior-work": [
-                    "1. Use Codex/web/manual review to create prior_work.json, references.bib, or prior_work.md.",
-                    "2. Run: paperorchestra import-prior-work --seed-file prior_work.json --source codex_web_seed",
-                    "3. Continue with write-intro-related, write-sections, compile, review, and refine.",
-                ],
-                "environment": [
-                    "1. Run: ./scripts/install.sh",
-                    "2. Restart Codex/OMX so MCP tools reload.",
-                    "3. Run: paperorchestra environment  # canonical inventory + readiness profiles",
-                    "4. Run: paperorchestra doctor       # what is missing on this machine right now?",
-                ],
-            }
-            print(json.dumps({"scenario": args.scenario, "steps": guides[args.scenario]}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "teach":
-            print(json.dumps(prepare_teach_bundle(
-                cwd,
-                paper=args.paper,
-                output_dir=args.output_dir,
-                artifact_repo=args.artifact_repo,
-                figures_dir=args.figures_dir,
-                pdf=args.pdf,
-                initialize_session=not args.no_init_session,
-                allow_outside_workspace=args.allow_outside_workspace,
-            ), indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "intake-start":
-            seed_answers = json.loads(args.seed_answers) if args.seed_answers else None
-            print(json.dumps(start_intake(cwd, seed_answers=seed_answers), indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "intake-status":
-            print(json.dumps(get_intake_status(cwd, intake_id=args.intake_id), indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "intake-review":
-            print(json.dumps(get_intake_review(cwd, intake_id=args.intake_id), indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "intake-answer":
-            answers = json.loads(args.answers_json) if args.answers_json else None
-            print(
-                json.dumps(
-                    answer_intake_question(
-                        cwd,
-                        intake_id=args.intake_id,
-                        key=args.key,
-                        answer=args.answer,
-                        answers=answers,
-                    ),
-                    indent=2,
-                    ensure_ascii=False,
-                )
-            )
-            return 0
-
-        if args.command == "intake-research":
-            print(
-                json.dumps(
-                    research_prior_work(
-                        cwd,
-                        intake_id=args.intake_id,
-                        mode=args.mode,
-                        max_per_seed=args.max_per_seed,
-                        allow_outside_workspace=args.allow_outside_workspace,
-                    ),
-                    indent=2,
-                    ensure_ascii=False,
-                )
-            )
-            return 0
-
-        if args.command == "intake-finalize":
-            print(
-                json.dumps(
-                    finalize_intake(
-                        cwd,
-                        intake_id=args.intake_id,
-                        output_dir=args.output_dir,
-                        template_path=args.template_path,
-                        figures_dir=args.figures_dir,
-                        initialize_session=not args.no_init_session,
-                        allow_overwrite=args.allow_overwrite,
-                        allow_outside_workspace=args.allow_outside_workspace,
-                        selected_story_candidate_id=args.story_candidate_id,
-                        selected_claim_candidate_ids=args.claim_candidate_ids,
-                    ),
-                    indent=2,
-                    ensure_ascii=False,
-                )
-            )
-            return 0
-
-        if args.command == "intake-approve":
-            print(
-                json.dumps(
-                    approve_intake_direction(
-                        cwd,
-                        intake_id=args.intake_id,
-                        story_candidate_id=args.story_candidate_id,
-                        claim_candidate_ids=args.claim_candidate_ids,
-                        output_dir=args.output_dir,
-                        template_path=args.template_path,
-                        figures_dir=args.figures_dir,
-                        initialize_session=not args.no_init_session,
-                        allow_overwrite=args.allow_overwrite,
-                        allow_outside_workspace=args.allow_outside_workspace,
-                    ),
-                    indent=2,
-                    ensure_ascii=False,
-                )
-            )
-            return 0
-
-        if args.command == "job-start-run":
-            with _strict_omx_env(args.strict_omx_native):
-                print(
-                    json.dumps(
-                        start_run_job(
-                            cwd,
-                            provider=args.provider,
-                            provider_command=args.provider_command,
-                            discovery_mode=args.discovery_mode,
-                            verify_mode=args.verify_mode,
-                            verify_error_policy=args.verify_error_policy,
-                            verify_fallback_mode=args.verify_fallback_mode,
-                            require_live_verification=args.require_live_verification,
-                            refine_iterations=args.refine_iterations,
-                            compile_paper=args.compile,
-                            runtime_mode=args.runtime_mode,
-                        ),
-                        indent=2,
-                        ensure_ascii=False,
-                    )
-                )
-            return 0
-
-        if args.command == "jobs-list":
-            print(json.dumps(list_jobs(cwd, limit=args.limit), indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command in {"job-status", "run-status"}:
-            print(json.dumps(get_job_status(cwd, args.job_id), indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command in {"job-tail-log", "run-tail-log"}:
-            print(json.dumps(tail_job_log(cwd, args.job_id, lines=args.lines), indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "job-cancel":
-            print(json.dumps(cancel_job(cwd, args.job_id), indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "outline":
-            provider = _provider_from_args(args)
-            with _strict_omx_env(args.strict_omx_native):
-                print(generate_outline(cwd, provider, runtime_mode=args.runtime_mode))
-            return 0
-
-        if args.command == "generate-plots":
-            provider = _provider_from_args(args)
-            with _strict_omx_env(args.strict_omx_native):
-                print(generate_plots(cwd, provider, runtime_mode=args.runtime_mode))
-            return 0
-
-        if args.command == "discover-papers":
-            provider = _provider_from_args(args) if args.mode == "model" else None
-            with _strict_omx_env(args.strict_omx_native):
-                print(discover_papers(cwd, provider=provider, mode=args.mode, runtime_mode=args.runtime_mode))
-            return 0
-
-        if args.command == "import-prior-work":
-            print(json.dumps(
-                import_prior_work(
-                    cwd,
-                    seed_file=args.seed_file,
-                    source=args.source,
-                    require_complete_metadata=args.require_complete_metadata,
-                ),
-                indent=2,
-                ensure_ascii=False,
-            ))
-            return 0
-
-        if args.command == "plan-narrative":
-            provider = _provider_from_args(args)
-            with _strict_omx_env(args.strict_omx_native):
-                paths = plan_narrative_and_claims(cwd, provider, runtime_mode=args.runtime_mode)
-            print(json.dumps({key: str(path) for key, path in paths.items()}, indent=2, ensure_ascii=False))
             return 0
 
         if args.command == "research-prior-work":
             provider = _provider_from_args(args)
             with _strict_omx_env(args.strict_omx_native):
-                print(json.dumps(generate_prior_work_seed(
+                payload = generate_prior_work_seed(
                     cwd,
                     provider,
                     output=args.output,
@@ -1317,63 +522,31 @@ def main(argv: list[str] | None = None) -> int:
                     source=args.source,
                     import_seed=args.import_seed,
                     require_complete_metadata=args.require_complete_metadata,
-                ), indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "verify-papers":
-            print(verify_papers(cwd, min_ratio=args.min_ratio, mode=args.mode, on_error=args.on_error))
-            return 0
-
-        if args.command == "build-bib":
-            print(build_bib(cwd))
-            return 0
-
-        if args.command == "write-intro-related":
-            provider = _provider_from_args(args)
-            with _strict_omx_env(args.strict_omx_native):
-                print(
-                    write_intro_related(
-                        cwd,
-                        provider,
-                        runtime_mode=args.runtime_mode,
-                        claim_safe=args.claim_safe,
-                        allow_recoverable_contract_issues=args.allow_recoverable_contract_issues,
-                    )
                 )
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            return 0
+
+        if args.command == "import-prior-work":
+            payload = import_prior_work(cwd, seed_file=args.seed_file, source=args.source, require_complete_metadata=args.require_complete_metadata)
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
             return 0
 
         if args.command == "write-sections":
             provider = _provider_from_args(args)
             with _strict_omx_env(args.strict_omx_native):
-                print(
-                    write_sections(
-                        cwd,
-                        provider,
-                        runtime_mode=args.runtime_mode,
-                        only_sections=args.only_sections,
-                        output_path=args.output_tex,
-                        claim_safe=args.claim_safe,
-                    )
+                path = write_sections(
+                    cwd,
+                    provider,
+                    runtime_mode=args.runtime_mode,
+                    only_sections=args.only_sections,
+                    output_path=args.output_tex,
+                    claim_safe=args.claim_safe,
                 )
+            print(path)
             return 0
 
         if args.command == "compile":
             print(compile_current_paper(cwd))
-            return 0
-
-        if args.command == "check-compile-env":
-            path, payload = record_compile_environment_report(cwd)
-            print(json.dumps({"path": str(path), "report": payload, **payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "record-runtime-parity":
-            path, payload = record_runtime_parity_report(cwd, output_path=args.output)
-            print(json.dumps({"path": str(path), "runtime_parity": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "bootstrap-compile-env":
-            report = inspect_compile_environment(cwd)
-            print(json.dumps(report.to_dict(), indent=2, ensure_ascii=False))
             return 0
 
         if args.command == "environment":
@@ -1383,11 +556,7 @@ def main(argv: list[str] | None = None) -> int:
                 **inventory,
                 "readiness_profiles": doctor["readiness_profiles"],
                 "paperorchestra_mcp_health": doctor.get("paperorchestra_mcp_health"),
-                "next_steps": [
-                    "paperorchestra doctor",
-                    "paperorchestra quickstart --scenario new-paper",
-                    "paperorchestra quickstart --scenario testset",
-                ],
+                "next_steps": ["paperorchestra doctor"],
             }
             if args.summary:
                 print("\n".join(_environment_summary_lines(payload)))
@@ -1398,439 +567,6 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "doctor":
             payload = build_doctor_report(cwd, omx_deep=args.omx_deep, omx_timeout=args.omx_timeout)
             print(json.dumps(payload, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "export-omx-evidence":
-            print(json.dumps(export_omx_evidence(cwd, args.output, timeout=args.timeout), indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "omx-review-handoff":
-            path, payload = write_omx_review_handoff(cwd, output_path=args.output)
-            print(json.dumps({"path": str(path), **payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "cleanup-tmp":
-            print(json.dumps(cleanup_omx_tmp(cwd, max_age_seconds=args.max_age_seconds), indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "review":
-            provider = _provider_from_args(args)
-            with _strict_omx_env(args.strict_omx_native):
-                print(review_current_paper(cwd, provider, review_name=args.output or "review.latest.json", runtime_mode=args.runtime_mode))
-            return 0
-
-        if args.command == "review-sections":
-            print(write_section_review(cwd, args.output))
-            return 0
-
-        if args.command == "review-citations":
-            citation_provider = get_citation_support_provider(
-                args.provider,
-                command=args.provider_command,
-                evidence_mode=args.evidence_mode,
-            )
-            print(
-                write_citation_support_review(
-                    cwd,
-                    args.output,
-                    provider=citation_provider,
-                    evidence_mode=args.evidence_mode,
-                    progress_stream=sys.stderr if args.evidence_mode in {"model", "web"} else None,
-                )
-            )
-            return 0
-
-        if args.command == "debug-citation-sources":
-            print(write_citation_source_retrieval_debug(cwd, args.output))
-            return 0
-
-        if args.command == "audit-rendered-references":
-            path, payload = write_rendered_reference_audit(cwd, quality_mode=args.quality_mode)
-            if args.output:
-                extra_path = Path(args.output).resolve()
-                if extra_path != path:
-                    write_json(extra_path, payload)
-                    path = extra_path
-            print(json.dumps({"path": str(path), "report": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "audit-citation-integrity":
-            path, payload = write_citation_integrity_audit(cwd, quality_mode=args.quality_mode, output_path=args.output)
-            print(json.dumps({"path": str(path), "report": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "audit-citation-quality":
-            path, payload = write_citation_quality_gate(cwd, quality_mode=args.quality_mode, output_path=args.output)
-            print(json.dumps({"path": str(path), "report": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "audit-citation-integrity-critic":
-            path, payload = write_citation_integrity_critic(cwd, quality_mode=args.quality_mode, output_path=args.output)
-            print(json.dumps({"path": str(path), "report": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "review-figure-placement":
-            path, payload = write_figure_placement_review(cwd, output_path=args.output)
-            print(json.dumps({"path": str(path), "report": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "audit-figure-gate":
-            path, payload = write_figure_gate_report(
-                cwd,
-                output_path=args.output,
-                figures_dir=args.figures_dir,
-                plot_assets_path=args.plot_assets,
-                plot_manifest_path=args.plot_manifest,
-                plot_captions_path=args.plot_captions,
-            )
-            print(json.dumps({"path": str(path), "report": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "validate-current":
-            name = Path(args.output).name if args.output else "validation.current.json"
-            path, payload = record_current_validation_report(cwd, name=name)
-            if args.output and Path(args.output).resolve() != path:
-                Path(args.output).resolve().write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-                path = Path(args.output).resolve()
-            print(json.dumps({"path": str(path), "report": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "validate-claim-safe-current":
-            structural_name = "validation.claim-safe.structural.json"
-            structural_path, structural_payload = record_current_validation_report(cwd, name=structural_name)
-            quality_path, quality_payload = write_quality_eval(
-                cwd,
-                quality_mode="claim_safe",
-                max_iterations=args.max_iterations,
-                require_live_verification=args.require_live_verification,
-            )
-            plan_path, plan_payload = write_quality_loop_plan(
-                cwd,
-                quality_mode="claim_safe",
-                max_iterations=args.max_iterations,
-                require_live_verification=args.require_live_verification,
-                quality_eval_input_path=quality_path,
-            )
-            payload = {
-                "schema_version": "claim-safe-validation/1",
-                "structural_validation": {
-                    "path": str(structural_path),
-                    "ok": structural_payload.get("ok"),
-                    "blocking_issue_count": structural_payload.get("blocking_issue_count"),
-                },
-                "quality_eval": {
-                    "path": str(quality_path),
-                    "verdict_inputs": quality_payload.get("tiers"),
-                },
-                "qa_loop_plan": {
-                    "path": str(plan_path),
-                    "verdict": plan_payload.get("verdict"),
-                    "verdict_rationale": plan_payload.get("verdict_rationale"),
-                    "repair_actions": plan_payload.get("repair_actions"),
-                    "human_handoff": plan_payload.get("human_handoff"),
-                },
-                "ok": bool(structural_payload.get("ok")) and plan_payload.get("verdict") == "ready_for_human_finalization",
-            }
-            output_path = Path(args.output).resolve() if args.output else Path(structural_path).with_name("validation.claim-safe-current.json")
-            output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-            print(json.dumps({"path": str(output_path), "report": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "build-source-obligations":
-            print(write_source_obligations(cwd, args.output))
-            return 0
-
-        if args.command == "audit-fidelity":
-            path, payload = record_fidelity_report(cwd)
-            print(json.dumps({"path": str(path), "report": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "audit-reproducibility":
-            output_path = Path(args.output).resolve() if args.output else None
-            path, payload = write_reproducibility_audit(
-                cwd,
-                output_path,
-                require_live_verification=args.require_live_verification,
-            )
-            print(json.dumps({"path": str(path), "report": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "quality-eval":
-            output_path = Path(args.output).resolve() if args.output else None
-            path, payload = write_quality_eval(
-                cwd,
-                output_path,
-                require_live_verification=args.require_live_verification,
-                quality_mode=args.quality_mode,
-                max_iterations=args.max_iterations,
-                append_history=args.record_history,
-            )
-            print(json.dumps({"path": str(path), "quality_eval": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "quality-gate":
-            output_path = Path(args.output).resolve() if args.output else None
-            plan_output_path = Path(args.plan_output).resolve() if args.plan_output else None
-            provider = _provider_from_args(args) if args.auto_refine else None
-            with _strict_omx_env(args.strict_omx_native):
-                path, payload = write_quality_gate(
-                    cwd,
-                    output_path,
-                    plan_output_path=plan_output_path,
-                    profile=args.profile,
-                    quality_mode=args.quality_mode,
-                    require_live_verification=args.require_live_verification,
-                    accept_mixed_provenance=args.accept_mixed_provenance,
-                    max_iterations=args.max_iterations,
-                    auto_refine=args.auto_refine,
-                    provider=provider,
-                    refine_iterations=args.refine_iterations,
-                    runtime_mode=args.runtime_mode,
-                    require_compile_for_accept=args.require_compile_for_accept,
-                )
-            print(json.dumps({"path": str(path), "quality_gate": payload}, indent=2, ensure_ascii=False))
-            if payload.get("decision", {}).get("blocked") and not args.no_fail_on_block:
-                return 10
-            return 0
-
-        if args.command in {"qa-loop-plan", "qa-loop"}:
-            output_path = Path(args.output).resolve() if args.output else None
-            path, payload = write_quality_loop_plan(
-                cwd,
-                output_path,
-                require_live_verification=args.require_live_verification,
-                quality_mode=args.quality_mode,
-                max_iterations=args.max_iterations,
-                accept_mixed_provenance=args.accept_mixed_provenance,
-                quality_eval_input_path=args.quality_eval,
-            )
-            print(json.dumps({"path": str(path), "plan": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "qa-loop-brief":
-            output_path = Path(args.output).resolve() if args.output else None
-            path, brief = write_qa_loop_brief(
-                cwd,
-                output_path,
-                require_live_verification=args.require_live_verification,
-                quality_mode=args.quality_mode,
-                max_iterations=args.max_iterations,
-                accept_mixed_provenance=args.accept_mixed_provenance,
-                quality_eval_path=args.quality_eval,
-                plan_path=args.qa_loop_plan,
-            )
-            print(json.dumps({"path": str(path), "brief": brief}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "repair-citation-claims":
-            provider = _provider_from_args(args)
-            with _strict_omx_env(args.strict_omx_native):
-                payload = repair_citation_claims(
-                    cwd,
-                    provider,
-                    citation_review_path=args.citation_review,
-                    runtime_mode=args.runtime_mode,
-                    require_compile=args.require_compile,
-                )
-            print(json.dumps(payload, indent=2, ensure_ascii=False))
-            return 0 if payload.get("accepted") else 1
-
-        if args.command == "candidate-list":
-            print(json.dumps(candidate_list(cwd), indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "candidate-diff":
-            print(candidate_diff(cwd, args.candidate_id), end="")
-            return 0
-
-        if args.command == "candidate-apply":
-            payload = candidate_apply(cwd, args.candidate_id, as_author_approved=args.as_author_approved)
-            print(json.dumps(payload, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "candidate-reject":
-            payload = candidate_reject(cwd, args.candidate_id, reason=args.reason)
-            print(json.dumps(payload, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "qa-loop-step":
-            provider = _provider_from_args(args)
-            with _strict_omx_env(args.strict_omx_native):
-                result = run_qa_loop_step(
-                    cwd,
-                    provider,
-                    quality_mode=args.quality_mode,
-                    max_iterations=args.max_iterations,
-                    require_live_verification=args.require_live_verification,
-                    accept_mixed_provenance=args.accept_mixed_provenance,
-                    runtime_mode=args.runtime_mode,
-                    require_compile=args.require_compile,
-                    citation_evidence_mode=args.citation_evidence_mode,
-                    citation_provider_name=args.citation_provider or args.provider,
-                    citation_provider_command=args.citation_provider_command if args.citation_provider_command is not None else args.provider_command,
-                    quality_eval_input_path=args.quality_eval,
-                    qa_loop_plan_input_path=args.qa_loop_plan,
-                    citation_support_review_path=args.citation_support_review,
-                )
-            print(json.dumps({"path": str(result.path), "execution": result.payload}, indent=2, ensure_ascii=False))
-            return result.exit_code
-
-        if args.command == "ralph-start":
-            if args.dry_run and args.launch:
-                parser.error("ralph-start accepts either --dry-run or --launch, not both")
-            output_path = Path(args.output).resolve() if args.output else None
-            payload = build_ralph_start_payload(
-                cwd,
-                quality_mode=args.quality_mode,
-                max_iterations=args.max_iterations,
-                output_path=output_path,
-                require_live_verification=args.require_live_verification,
-                accept_mixed_provenance=args.accept_mixed_provenance,
-                evidence_root=args.evidence_root,
-            )
-            if args.launch:
-                proc = launch_omx_ralph(payload["argv"], cwd=cwd)
-                payload["launch"] = {"pid": proc.pid, "status": "started"}
-            else:
-                payload["launch"] = {"status": "dry_run"}
-            print(json.dumps(payload, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "build-operator-review-packet":
-            path, payload = build_operator_review_packet(
-                cwd,
-                output_path=args.output,
-                require_pdf=args.require_pdf,
-                review_scope=args.review_scope,
-            )
-            print(json.dumps({"path": str(path), "packet": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "import-operator-feedback":
-            path, payload = import_operator_feedback(
-                cwd,
-                packet_path=args.packet,
-                feedback_path=args.feedback,
-                output_path=args.output,
-            )
-            print(json.dumps({"path": str(path), "imported_feedback": payload}, indent=2, ensure_ascii=False))
-            return 0
-
-        if args.command == "apply-operator-feedback":
-            provider = _provider_from_args(args)
-            with _strict_omx_env(args.strict_omx_native):
-                path, payload = apply_operator_feedback(
-                    cwd,
-                    provider,
-                    imported_feedback_path=args.imported_feedback,
-                    max_supervised_iterations=args.max_supervised_iterations,
-                    require_compile=args.require_compile,
-                    quality_mode=args.quality_mode,
-                    max_iterations=args.max_iterations,
-                    require_live_verification=args.require_live_verification,
-                    accept_mixed_provenance=args.accept_mixed_provenance,
-                    runtime_mode=args.runtime_mode,
-                    citation_evidence_mode=args.citation_evidence_mode,
-                    citation_provider_name=args.citation_provider,
-                    citation_provider_command=args.citation_provider_command,
-                )
-            print(json.dumps({"path": str(path), "execution": payload}, indent=2, ensure_ascii=False))
-            return 0 if payload.get("verdict") != "execution_error" else 1
-
-        if args.command == "estimate-cost":
-            print(
-                json.dumps(
-                    estimate_run_cost(
-                        cwd,
-                        discovery_mode=args.discovery_mode,
-                        refine_iterations=args.refine_iterations,
-                        compile_paper=args.compile,
-                        runtime_mode=args.runtime_mode,
-                    ),
-                    indent=2,
-                    ensure_ascii=False,
-                )
-            )
-            return 0
-
-        if args.command == "build-reference-benchmark-case":
-            reference_dir = Path(args.reference_dir).resolve()
-            output_path = Path(args.output).resolve() if args.output else reference_dir / "benchmark_case.json"
-            print(write_reference_benchmark_case(reference_dir, output_path, source_pdf=args.source_pdf))
-            return 0
-
-        if args.command == "build-session-eval-summary":
-            current_session_id = get_current_session_id(cwd)
-            output_path = Path(args.output).resolve() if args.output else cwd / ".paper-orchestra" / "runs" / current_session_id / "artifacts" / "session_eval_summary.json"
-            print(write_session_eval_summary(cwd, output_path))
-            return 0
-
-        if args.command == "build-review-gate-comparison":
-            current_session_id = get_current_session_id(cwd)
-            output_path = Path(args.output).resolve() if args.output else cwd / ".paper-orchestra" / "runs" / current_session_id / "artifacts" / "review_gate_comparison.json"
-            print(write_review_gate_comparison(cwd, output_path))
-            return 0
-
-        if args.command == "build-generated-citation-titles":
-            current_session_id = get_current_session_id(cwd)
-            output_path = Path(args.output).resolve() if args.output else cwd / ".paper-orchestra" / "runs" / current_session_id / "artifacts" / "generated_citation_titles.json"
-            print(write_generated_citation_titles(cwd, output_path))
-            return 0
-
-        if args.command == "compare-reference-case":
-            current_session_id = get_current_session_id(cwd)
-            output_path = Path(args.output).resolve() if args.output else cwd / ".paper-orchestra" / "runs" / current_session_id / "artifacts" / "reference_comparison.json"
-            print(write_reference_comparison(Path(args.reference_case).resolve(), cwd, output_path))
-            return 0
-
-        if args.command == "build-reference-case-partition-scaffold":
-            output_path = Path(args.output).resolve() if args.output else Path(args.reference_case).resolve().with_name("reference_case_partition_scaffold.json")
-            print(write_reference_case_partition_scaffold(Path(args.reference_case).resolve(), output_path))
-            return 0
-
-        if args.command == "compare-reference-case-citation-coverage":
-            current_session_id = get_current_session_id(cwd)
-            output_path = Path(args.output).resolve() if args.output else cwd / ".paper-orchestra" / "runs" / current_session_id / "artifacts" / "reference_case_partitioned_citation_coverage.json"
-            print(write_reference_case_partitioned_citation_coverage(Path(args.reference_case).resolve(), cwd, output_path))
-            return 0
-
-        if args.command == "build-citation-partition-request":
-            paper_text = Path(args.paper_text_file).resolve().read_text(encoding="utf-8")
-            references = json.loads(Path(args.references_json).resolve().read_text(encoding="utf-8"))
-            output_path = Path(args.output).resolve() if args.output else Path(args.references_json).resolve().with_name("citation_partition_request.json")
-            print(write_citation_partition_request(paper_text, references, output_path))
-            return 0
-
-        if args.command == "compare-partitioned-citation-coverage":
-            references = json.loads(Path(args.references_json).resolve().read_text(encoding="utf-8"))
-            partition_map = json.loads(Path(args.partition_json).resolve().read_text(encoding="utf-8"))
-            generated_titles = json.loads(Path(args.generated_titles_json).resolve().read_text(encoding="utf-8"))
-            output_path = Path(args.output).resolve() if args.output else Path(args.partition_json).resolve().with_name("partitioned_citation_coverage.json")
-            print(write_partitioned_citation_coverage(references, partition_map, generated_titles, output_path))
-            return 0
-
-        if args.command == "suggest-revisions":
-            print(
-                write_revision_suggestions(
-                    args.source_paper,
-                    args.review,
-                    args.output,
-                    section_review_json=args.section_review,
-                    citation_review_json=args.citation_review,
-                )
-            )
-            return 0
-
-        if args.command == "critic-preflight":
-            card = build_critic_trust_card(
-                provider_name=args.provider,
-                provider_command=args.provider_command,
-                citation_evidence_mode=args.citation_evidence_mode,
-                claim_safe=args.claim_safe,
-            )
-            if args.live:
-                require_live_critic_trust(card)
-            print(json.dumps({"critic_trust": card}, indent=2, ensure_ascii=False))
             return 0
 
         if args.command == "critique":
@@ -1849,11 +585,7 @@ def main(argv: list[str] | None = None) -> int:
             with _strict_omx_env(args.strict_omx_native):
                 review_path = review_current_paper(cwd, provider, runtime_mode=args.runtime_mode)
             section_path = write_section_review(cwd, output_dir / "section_review.json")
-            citation_provider = get_citation_support_provider(
-                args.provider,
-                command=args.provider_command,
-                evidence_mode=args.citation_evidence_mode,
-            )
+            citation_provider = get_citation_support_provider(args.provider, command=args.provider_command, evidence_mode=args.citation_evidence_mode)
             citation_path = write_citation_support_review(
                 cwd,
                 output_dir / "citation_support_review.json",
@@ -1878,19 +610,81 @@ def main(argv: list[str] | None = None) -> int:
             }, indent=2, ensure_ascii=False))
             return 0
 
-        if args.command == "refine":
+        if args.command == "quality-gate":
+            provider = _provider_from_args(args) if args.auto_refine else None
+            with _strict_omx_env(args.strict_omx_native):
+                path, payload = write_quality_gate(
+                    cwd,
+                    Path(args.output).resolve() if args.output else None,
+                    plan_output_path=Path(args.plan_output).resolve() if args.plan_output else None,
+                    profile=args.profile,
+                    quality_mode=args.quality_mode,
+                    require_live_verification=args.require_live_verification,
+                    accept_mixed_provenance=args.accept_mixed_provenance,
+                    max_iterations=args.max_iterations,
+                    auto_refine=args.auto_refine,
+                    provider=provider,
+                    refine_iterations=args.refine_iterations,
+                    runtime_mode=args.runtime_mode,
+                    require_compile_for_accept=args.require_compile_for_accept,
+                )
+            print(json.dumps({"path": str(path), "quality_gate": payload}, indent=2, ensure_ascii=False))
+            return 10 if payload.get("decision", {}).get("blocked") and not args.no_fail_on_block else 0
+
+        if args.command == "qa-loop":
+            path, payload = write_quality_loop_plan(
+                cwd,
+                Path(args.output).resolve() if args.output else None,
+                require_live_verification=args.require_live_verification,
+                quality_mode=args.quality_mode,
+                max_iterations=args.max_iterations,
+                accept_mixed_provenance=args.accept_mixed_provenance,
+                quality_eval_input_path=args.quality_eval,
+            )
+            print(json.dumps({"path": str(path), "plan": payload}, indent=2, ensure_ascii=False))
+            return 0
+
+        if args.command == "qa-loop-step":
             provider = _provider_from_args(args)
             with _strict_omx_env(args.strict_omx_native):
-                result = refine_current_paper(
+                result = run_qa_loop_step(
                     cwd,
                     provider,
-                    iterations=args.iterations,
-                    require_compile_for_accept=args.require_compile_for_accept,
+                    quality_mode=args.quality_mode,
+                    max_iterations=args.max_iterations,
+                    require_live_verification=args.require_live_verification,
+                    accept_mixed_provenance=args.accept_mixed_provenance,
                     runtime_mode=args.runtime_mode,
-                    claim_safe=args.claim_safe,
+                    require_compile=args.require_compile,
+                    citation_evidence_mode=args.citation_evidence_mode,
+                    citation_provider_name=args.citation_provider,
+                    citation_provider_command=args.citation_provider_command,
+                    quality_eval_input_path=args.quality_eval,
+                    qa_loop_plan_input_path=args.plan,
+                    citation_support_review_path=args.citation_support_review,
                 )
-            print(json.dumps(result, indent=2, ensure_ascii=False))
-            return 1 if any(not item.get("accepted", False) for item in result) else 0
+            print(json.dumps({"path": str(result.path), "execution": result.payload}, indent=2, ensure_ascii=False))
+            return result.exit_code
+
+        if args.command == "ralph-start":
+            if args.dry_run and args.launch:
+                parser.error("ralph-start accepts either --dry-run or --launch, not both")
+            payload = build_ralph_start_payload(
+                cwd,
+                quality_mode=args.quality_mode,
+                max_iterations=args.max_iterations,
+                output_path=Path(args.output).resolve() if args.output else None,
+                require_live_verification=args.require_live_verification,
+                accept_mixed_provenance=args.accept_mixed_provenance,
+                evidence_root=args.evidence_root,
+            )
+            if args.launch:
+                proc = launch_omx_ralph(payload["argv"], cwd=cwd)
+                payload["launch"] = {"pid": proc.pid, "status": "started"}
+            else:
+                payload["launch"] = {"status": "dry_run"}
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            return 0
 
         if args.command == "run":
             provider = _provider_from_args(args)
@@ -1907,21 +701,8 @@ def main(argv: list[str] | None = None) -> int:
                     compile_paper=args.compile,
                     runtime_mode=args.runtime_mode,
                 )
-            if args.full_fidelity:
-                result["full_fidelity_artifacts"] = _write_full_fidelity_artifacts(cwd, args.reference_case)
-            exit_code = 1 if result.get("status") == "blocked" else 0
-            if (
-                args.strict_omx_native
-                and args.runtime_mode == "omx_native"
-                and result.get("runtime_parity", {}).get("overall_status") != "implemented"
-            ):
-                result["strict_omx_native_violation"] = {
-                    "runtime_parity_overall_status": result.get("runtime_parity", {}).get("overall_status"),
-                    "runtime_parity_report": result.get("runtime_parity_report"),
-                }
-                exit_code = 2
             print(json.dumps(result, indent=2, ensure_ascii=False))
-            return exit_code
+            return 1 if result.get("status") == "blocked" else 0
 
         parser.error(f"Unhandled command: {args.command}")
         return 2

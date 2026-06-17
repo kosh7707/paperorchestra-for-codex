@@ -17,9 +17,9 @@ from typing import Any
 EXPECTED_TOOLS = [
     "status",
     "run_pipeline",
-    "check_compile_environment",
     "compile_current_paper",
-    "audit_reproducibility",
+    "critique",
+    "quality_gate",
 ]
 
 TRANSPORT_CONTENT_LENGTH = "content-length"

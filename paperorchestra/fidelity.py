@@ -422,9 +422,7 @@ def run_fidelity_audit(cwd: str | Path | None) -> dict[str, Any]:
             status=partition_scaffold_status,
             rationale="Benchmark/eval proof should include a partition-based citation coverage scaffold tying generated citations back to a reference-case P0/P1-style split.",
             next_step=(
-                "Run `paperorchestra build-generated-citation-titles` plus either "
-                "`paperorchestra compare-partitioned-citation-coverage` or "
-                "`paperorchestra compare-reference-case-citation-coverage` to complete partitioned coverage evidence."
+                "Run `paperorchestra quality-gate --no-fail-on-block` after adding partitioned coverage evidence to the session artifacts."
                 if partition_scaffold_status != "implemented"
                 else None
             ),

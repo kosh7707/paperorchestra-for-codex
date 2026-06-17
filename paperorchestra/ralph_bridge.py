@@ -236,13 +236,13 @@ def _citation_repair_failure_payload(code: str, repair: dict[str, Any]) -> dict[
     next_steps = [
         "Inspect validation failing codes before retrying citation repair.",
         "Refresh citation support evidence or weaken/delete unsupported claims.",
-        "Rerun paperorchestra qa-loop-plan --quality-mode claim_safe after targeted changes.",
+        "Rerun paperorchestra qa-loop --quality-mode claim_safe after targeted changes.",
     ]
     if str(repair.get("reason") or "") == "semantic_recheck_failed":
         next_steps = [
             "Inspect semantic_recheck blockers before retrying citation repair.",
             "Use the semantic recheck artifacts to identify whether citation integrity or high-risk claim sweep failed to improve.",
-            "Weaken, split, or delete unsupported claims before rerunning paperorchestra qa-loop-plan --quality-mode claim_safe.",
+            "Weaken, split, or delete unsupported claims before rerunning paperorchestra qa-loop --quality-mode claim_safe.",
         ]
     payload = {
         "code": code,
@@ -738,7 +738,7 @@ def run_qa_loop_step(
             )
         elif code in CITATION_SUPPORT_REVIEW_REFRESH_CODES | {"citation_support_evidence_research_needed"}:
             review_path = write_citation_support_review(cwd, provider=citation_provider, evidence_mode=citation_evidence_mode)
-            execution["actions_attempted"].append({"code": code, "handler": "review_citations", "path": str(review_path)})
+            execution["actions_attempted"].append({"code": code, "handler": "critique_citations", "path": str(review_path)})
         elif code in {
             "critical_unknown_reference",
             "critical_missing_bib_entry",
@@ -793,7 +793,7 @@ def run_qa_loop_step(
                 break
         elif code in {"section_review_missing", "section_review_stale", "section_review_legacy_untrusted"}:
             path = write_section_review(cwd)
-            execution["actions_attempted"].append({"code": code, "handler": "review_sections", "path": str(path)})
+            execution["actions_attempted"].append({"code": code, "handler": "critique_sections", "path": str(path)})
         elif code in {"source_obligations_missing", "source_obligations_stale"}:
             path = write_source_obligations(cwd)
             execution["actions_attempted"].append({"code": code, "handler": "build_source_obligations", "path": str(path)})

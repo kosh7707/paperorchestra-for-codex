@@ -2429,8 +2429,8 @@ def _record_verification_errors(
             "errors": errors,
             "recovery_hints": [
                 "Set SEMANTIC_SCHOLAR_API_KEY for more reliable live verification.",
-                "Retry `paperorchestra verify-papers --mode live --on-error skip` to keep any candidates that verify successfully.",
-                "Use `paperorchestra verify-papers --mode mock` only for demos or offline dry runs.",
+                "Retry `paperorchestra run --provider shell --discovery-mode search-grounded` to keep any candidates that verify successfully.",
+                "Use `paperorchestra run --provider mock` only for demos or offline dry runs.",
             ],
         },
     )

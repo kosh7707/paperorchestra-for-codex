@@ -5,18 +5,15 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any, Mapping
 
-SCHEMA_VERSION = "orchestrator-acceptance-ledger/1"
+SCHEMA_VERSION = "orchestrator-acceptance-ledger/2"
 FINAL_AUDIT_BUG_LEDGER_SCHEMA_VERSION = "orchestrator-final-audit-bug-ledger/1"
 ACCEPTANCE_GATE_IDS: tuple[str, ...] = (
     "state_contract_tests",
     "action_planner_scenario_tests",
     "fake_omx_unit_contract_tests",
     "real_bounded_omx_command_probes",
-    "mcp_raw_and_attach_smoke",
-    "mock_demo",
+    "mcp_registration_health",
     "compile_export",
-    "fresh_container_functional_smoke",
-    "private_final_live_smoke_redacted",
     "private_leakage_scan",
     "no_unsupported_critical_claims",
     "no_unknown_refs_for_critical_claims",
@@ -34,11 +31,8 @@ _GATE_TITLES: dict[str, str] = {
     "action_planner_scenario_tests": "Action planner scenario tests pass",
     "fake_omx_unit_contract_tests": "Fake OMX unit/contract tests pass",
     "real_bounded_omx_command_probes": "Real bounded OMX command probes pass or document blockers",
-    "mcp_raw_and_attach_smoke": "MCP raw and Codex attach smoke passes",
-    "mock_demo": "Mock demo still passes",
+    "mcp_registration_health": "MCP registration and stdio server health pass",
     "compile_export": "Compile/export still passes",
-    "fresh_container_functional_smoke": "Fresh container functional smoke passes",
-    "private_final_live_smoke_redacted": "Private final live smoke produced redacted evidence",
     "private_leakage_scan": "Private leakage scan passes",
     "no_unsupported_critical_claims": "No unsupported critical claims remain",
     "no_unknown_refs_for_critical_claims": "No Unknown references support critical claims",
@@ -48,7 +42,7 @@ _GATE_TITLES: dict[str, str] = {
     "critic_consensus_near_ready_or_better": "Critic consensus says near_ready or better",
     "verifier_evidence_completeness_no_leakage": "Verifier confirms evidence completeness and no leakage",
     "exported_pdf_tex_evidence_bundle": "Exported PDF, TeX, and evidence bundle exist",
-    "readme_environment_skill_docs_updated": "README, ENVIRONMENT, and Skill docs explain runtime",
+    "readme_environment_skill_docs_updated": "README and Skill docs explain runtime",
 }
 
 _ALLOWED_STATUSES = {"unknown", "blocked", "fail", "pass"}
@@ -175,7 +169,7 @@ class AcceptanceLedger:
         gates = [AcceptanceGate.from_dict(item) for item in gates_payload]
         gate_ids = tuple(gate.id for gate in gates)
         if gate_ids != ACCEPTANCE_GATE_IDS:
-            raise ValueError("Acceptance ledger gate IDs do not match the v1 contract.")
+            raise ValueError("Acceptance ledger gate IDs do not match the v2 contract.")
         return cls(gates=gates, private_safe_summary=bool(payload.get("private_safe_summary", True)))
 
 

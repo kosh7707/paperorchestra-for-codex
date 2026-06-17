@@ -230,7 +230,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     target="narrative planning artifacts",
                     automation="automatic",
                     reason="Fresh narrative/claim/citation placement planning artifacts are required before claim-safe writing or evaluation.",
-                    suggested_commands=["paperorchestra plan-narrative", "paperorchestra quality-eval --quality-mode claim_safe"],
+                    suggested_commands=["paperorchestra plan-narrative", "paperorchestra qa-loop --quality-mode claim_safe"],
                     ralph_instruction="Regenerate planning artifacts with `paperorchestra plan-narrative`; do not continue automated writing against missing or stale plans.",
                 )
             )
@@ -256,7 +256,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     target="compile",
                     automation="automatic",
                     reason="Claim-safe readiness requires a clean compile report for the current manuscript hash.",
-                    suggested_commands=["paperorchestra compile", "paperorchestra quality-eval --quality-mode claim_safe"],
+                    suggested_commands=["paperorchestra compile", "paperorchestra qa-loop --quality-mode claim_safe"],
                     ralph_instruction="Compile the current manuscript and require the compile report manuscript hash to match paper.full.tex before continuing.",
                 )
             )
@@ -274,7 +274,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     suggested_commands=[
                         "apt-get install -y poppler-utils  # or: sudo apt-get install -y poppler-utils",
                         "PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile",
-                        "paperorchestra quality-eval --quality-mode claim_safe",
+                        "paperorchestra qa-loop --quality-mode claim_safe",
                     ],
                     ralph_instruction="Do not rewrite the manuscript for this blocker. Install or expose pdftotext/poppler-utils, recompile, and rebuild quality-eval so the rendered PDF text can be scanned.",
                     why_not_automatic="This is an execution-environment dependency, not a manuscript repair; automated rewriting cannot prove rendered-PDF leakage without pdftotext.",
@@ -312,9 +312,9 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                         automation="human_needed",
                         reason=f"Figure-placement review failed for {target} with {code}; claim-safe readiness requires critic/operator judgment before changing visual evidence or captions.{detail}",
                         suggested_commands=[
-                            "paperorchestra review-figure-placement",
-                            "paperorchestra build-operator-review-packet",
-                            "paperorchestra qa-loop-plan --quality-mode claim_safe",
+                            "paperorchestra critique",
+                            "paperorchestra answer-human-needed --answer <answer>",
+                            "paperorchestra qa-loop --quality-mode claim_safe",
                         ],
                         ralph_instruction=(
                             "Do not route unsafe figure/caption grounding to automatic repair. Ask a figure-placement critic/operator to remove, "
@@ -336,7 +336,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     target="claim safety",
                     automation="automatic",
                     reason="Claim-safe mode requires a current orthogonal citation-support critic before reviewer scores can be trusted.",
-                    suggested_commands=["paperorchestra review-citations --evidence-mode web", "paperorchestra qa-loop-plan --quality-mode claim_safe"],
+                    suggested_commands=["paperorchestra critique --citation-evidence-mode web", "paperorchestra qa-loop --quality-mode claim_safe"],
                     ralph_instruction="Run the citation-support critic for the current manuscript with the writer blind to reviewer scores, then rebuild the QA loop plan.",
                 )
             )
@@ -377,8 +377,8 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     automation="automatic",
                     reason=f"{machine_research_count} citation-support manual-check item(s) have concrete but unbound evidence surfaces and must be re-verified by search before author judgment.",
                     suggested_commands=[
-                        "paperorchestra review-citations --evidence-mode web",
-                        "paperorchestra qa-loop-plan --quality-mode claim_safe",
+                        "paperorchestra critique --citation-evidence-mode web",
+                        "paperorchestra qa-loop --quality-mode claim_safe",
                     ],
                     ralph_instruction="Refresh citation-support evidence with web/S2-backed verification for the machine-solvable unbound evidence surfaces before attempting rewrite or asking the author.",
                 )
@@ -401,7 +401,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     target="claim safety",
                     automation="semi_auto",
                     reason="Citation-support critic found cited-claim support failures that can be attempted by bounded repair." + manual_phrase,
-                    suggested_commands=["paperorchestra review-citations --evidence-mode web", "paperorchestra write-sections", "paperorchestra validate-current"],
+                    suggested_commands=["paperorchestra critique --citation-evidence-mode web", "paperorchestra write-sections", "paperorchestra quality-gate --no-fail-on-block"],
                     ralph_instruction="Produce a candidate claim-safe rewrite only from existing verified citations and machine-solvable manual-check issue counts, then require citation-support critic approval.",
                     why_not_automatic="Resolving unsupported citations can alter factual claims; writer cannot decide source support alone.",
                     approval_required_from="citation_support_critic",
@@ -430,9 +430,9 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     automation="human_needed",
                     reason=reason,
                     suggested_commands=[
-                        "paperorchestra build-operator-review-packet",
-                        "paperorchestra review-citations --evidence-mode web",
-                        "paperorchestra qa-loop-plan --quality-mode claim_safe",
+                        "paperorchestra answer-human-needed --answer <answer>",
+                        "paperorchestra critique --citation-evidence-mode web",
+                        "paperorchestra qa-loop --quality-mode claim_safe",
                     ],
                     ralph_instruction=(
                         "Stop automatic promotion for the author-owned citation-support manual-check item count. "
@@ -464,11 +464,11 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     automation="automatic",
                     reason="Claim-safe citation quality needs fresh artifacts bound to the current manuscript before source support can be trusted.",
                     suggested_commands=[
-                        "paperorchestra audit-rendered-references --quality-mode claim_safe",
-                        "paperorchestra review-citations --evidence-mode web",
-                        "paperorchestra audit-citation-integrity --quality-mode claim_safe",
-                        "paperorchestra audit-citation-quality --quality-mode claim_safe",
-                        "paperorchestra qa-loop-plan --quality-mode claim_safe",
+                        "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
+                        "paperorchestra critique --citation-evidence-mode web",
+                        "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
+                        "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
+                        "paperorchestra qa-loop --quality-mode claim_safe",
                     ],
                     ralph_instruction="Refresh citation-quality artifacts for the current manuscript before evaluating claim-safe readiness.",
                 )
@@ -483,10 +483,10 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     automation="semi_auto",
                     reason="Critical citation quality failed; resolve with machine citation support/search evidence before asking the author for final source-use judgment.",
                     suggested_commands=[
-                        "paperorchestra review-citations --evidence-mode web",
-                        "paperorchestra audit-rendered-references --quality-mode claim_safe",
-                        "paperorchestra audit-citation-quality --quality-mode claim_safe",
-                        "paperorchestra qa-loop-plan --quality-mode claim_safe",
+                        "paperorchestra critique --citation-evidence-mode web",
+                        "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
+                        "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
+                        "paperorchestra qa-loop --quality-mode claim_safe",
                     ],
                     ralph_instruction="Do not route machine-solvable citation/source gaps to human_needed. Gather citation support or weaken/delete unsupported claims, then rerun citation quality.",
                     why_not_automatic="Changing cited support can alter factual claims, so the rewrite is semi-automatic but the evidence search remains machine-solvable first.",
@@ -520,10 +520,10 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     automation="automatic",
                     reason="Claim-safe mode requires citation-integrity artifacts bound to the current manuscript and citation-support review.",
                     suggested_commands=[
-                        "paperorchestra audit-rendered-references --quality-mode claim_safe",
-                        "paperorchestra audit-citation-integrity --quality-mode claim_safe",
-                        "paperorchestra audit-citation-integrity-critic --quality-mode claim_safe",
-                        "paperorchestra qa-loop-plan --quality-mode claim_safe",
+                        "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
+                        "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
+                        "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
+                        "paperorchestra qa-loop --quality-mode claim_safe",
                     ],
                     ralph_instruction="Refresh rendered-reference and citation-integrity artifacts for the current manuscript before evaluating claim-safe readiness.",
                 )
@@ -547,10 +547,10 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     automation="semi_auto",
                     reason="Citation-integrity critic found citation-density, duplicate-support, source-match, or context-policy failures that should be repaired before asking the author for final judgment.",
                     suggested_commands=[
-                        "paperorchestra repair-citation-claims",
-                        "paperorchestra audit-citation-integrity --quality-mode claim_safe",
-                        "paperorchestra review-citations --evidence-mode web",
-                        "paperorchestra quality-eval --quality-mode claim_safe",
+                        "paperorchestra qa-loop-step",
+                        "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
+                        "paperorchestra critique --citation-evidence-mode web",
+                        "paperorchestra qa-loop --quality-mode claim_safe",
                     ],
                     ralph_instruction="Produce a bounded citation-integrity repair candidate: split dense citation bundles, remove redundant repeated support, or scope claims while preserving citation-support critic approval.",
                     why_not_automatic="Changing citation placement can alter claim support boundaries; the candidate must remain uncommitted until citation-integrity critic approval.",
@@ -569,9 +569,9 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                 reason="The manuscript omits required proof/results material that appears in the source packet or experiment log.",
                 suggested_commands=[
                     "paperorchestra write-sections",
-                    "paperorchestra review-sections",
-                    "paperorchestra review-citations --evidence-mode web",
-                    "paperorchestra qa-loop-plan --quality-mode claim_safe",
+                    "paperorchestra critique",
+                    "paperorchestra critique --citation-evidence-mode web",
+                    "paperorchestra qa-loop --quality-mode claim_safe",
                 ],
                 ralph_instruction="Run one bounded evidence-backed rewrite/refinement pass that restores omitted proof or benchmark material without inventing new facts.",
                 why_not_automatic="Restoring omitted technical content changes manuscript substance; the candidate must pass source-material, section, citation, validation, and compile critics.",
@@ -591,7 +591,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     target="source obligations",
                     automation="automatic",
                     reason="Claim-safe source-material fidelity requires a current source-obligations matrix for the session input packet.",
-                    suggested_commands=["paperorchestra build-source-obligations", "paperorchestra quality-eval --quality-mode claim_safe"],
+                    suggested_commands=["paperorchestra quality-gate --no-fail-on-block", "paperorchestra qa-loop --quality-mode claim_safe"],
                     ralph_instruction="Regenerate source_obligations.json from the current snapshotted input packet before continuing claim-safe evaluation.",
                 )
             )
@@ -604,7 +604,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     target="source-material fidelity",
                     automation="semi_auto",
                     reason="The manuscript does not satisfy one or more source-material obligations.",
-                    suggested_commands=["paperorchestra write-sections", "paperorchestra review-sections", "paperorchestra quality-eval --quality-mode claim_safe"],
+                    suggested_commands=["paperorchestra write-sections", "paperorchestra critique", "paperorchestra qa-loop --quality-mode claim_safe"],
                     ralph_instruction="Run one bounded evidence-backed rewrite/refinement pass that satisfies the missing source obligations without inventing new facts.",
                     why_not_automatic="Filling missing source obligations changes manuscript substance and must be checked by source/material critics.",
                     approval_required_from="source_material_critic",
@@ -621,10 +621,10 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                 automation="semi_auto",
                 reason="High-risk uncited factual, novelty, security, benchmark, or numeric claims remain without citation, source-obligation support, or limitation scoping.",
                 suggested_commands=[
-                    "paperorchestra repair-citation-claims",
-                    "paperorchestra review-citations --evidence-mode web",
-                    "paperorchestra audit-citation-integrity --quality-mode claim_safe",
-                    "paperorchestra quality-eval --quality-mode claim_safe",
+                    "paperorchestra qa-loop-step",
+                    "paperorchestra critique --citation-evidence-mode web",
+                    "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
+                    "paperorchestra qa-loop --quality-mode claim_safe",
                 ],
                 ralph_instruction="Ground each high-risk uncited claim with existing verified evidence, scope it as a limitation/author-material claim, or delete it; do not add new claims or bibliography keys.",
                 why_not_automatic="Repairing high-risk claims can alter factual substance; the candidate must be checked by claim-safety/citation critics before promotion.",
@@ -641,7 +641,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                 target="narrative/claim/citation plan satisfaction",
                 automation="human_needed",
                 reason="The manuscript does not satisfy current narrative, claim-map, or citation-placement obligations.",
-                suggested_commands=["paperorchestra write-sections", "paperorchestra validate-current", "paperorchestra quality-eval --quality-mode claim_safe"],
+                suggested_commands=["paperorchestra write-sections", "paperorchestra quality-gate --no-fail-on-block", "paperorchestra qa-loop --quality-mode claim_safe"],
                 ralph_instruction="Plan satisfaction failures are substantive writing issues; implement a supported targeted rewrite handler before continuing automatically.",
                 why_not_automatic="Naive automated rewriting can satisfy keyword gates dishonestly; requires a dedicated handler and critic approval.",
                 approval_required_from="plan_satisfaction_critic",
@@ -657,7 +657,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                 target="scholarly scorecard",
                 automation="automatic",
                 reason="Tier 3 scholarly quality cannot be evaluated until a reviewer artifact exists.",
-                suggested_commands=["paperorchestra review", "paperorchestra qa-loop-plan"],
+                suggested_commands=["paperorchestra critique", "paperorchestra qa-loop"],
                 ralph_instruction="Run the reviewer only after Tier 0-2 are pass/warn; do not expose numeric scores to the writer.",
             )
         )
@@ -675,7 +675,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     target="scholarly scorecard",
                     automation="automatic",
                     reason="Reviewer scorecard is missing current-manuscript provenance and cannot be trusted.",
-                    suggested_commands=["paperorchestra review", "paperorchestra qa-loop-plan --quality-mode claim_safe"],
+                    suggested_commands=["paperorchestra critique", "paperorchestra qa-loop --quality-mode claim_safe"],
                     ralph_instruction="Regenerate the skeptical reviewer artifact for the current manuscript before using Tier 3.",
                 )
             )
@@ -690,7 +690,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     target="scholarly quality",
                     automation="semi_auto",
                     reason="The reviewer scorecard says the manuscript is not strong enough for human-finalization readiness.",
-                    suggested_commands=["paperorchestra refine --iterations 1", "paperorchestra review", "paperorchestra qa-loop-plan --quality-mode claim_safe"],
+                    suggested_commands=["paperorchestra qa-loop-step", "paperorchestra critique", "paperorchestra qa-loop --quality-mode claim_safe"],
                     ralph_instruction="Run one bounded refinement pass using redacted reviewer issues, then regenerate reviewer and section critics.",
                     why_not_automatic="Refinement changes manuscript substance; accept only when validation, compile, citation support, and critic scores do not regress.",
                     approval_required_from="reviewer_and_section_critic",
@@ -708,7 +708,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                         target="section quality critic",
                         automation="automatic",
                         reason="Section-level critic is missing or stale for the current manuscript.",
-                        suggested_commands=["paperorchestra review-sections", "paperorchestra qa-loop-plan --quality-mode claim_safe"],
+                        suggested_commands=["paperorchestra critique", "paperorchestra qa-loop --quality-mode claim_safe"],
                         ralph_instruction="Run the deterministic section critic for the current manuscript before deciding HITL readiness.",
                     )
                 )
@@ -721,7 +721,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                         target="section quality",
                         automation="human_needed",
                         reason="Section-level critic found reviewer-visible process residue; this is a non-reviewable structural artifact.",
-                        suggested_commands=["paperorchestra write-sections", "paperorchestra review-sections", "paperorchestra qa-loop-plan --quality-mode claim_safe"],
+                        suggested_commands=["paperorchestra write-sections", "paperorchestra critique", "paperorchestra qa-loop --quality-mode claim_safe"],
                         ralph_instruction="Stop and regenerate the affected manuscript prose; do not route process residue as ordinary human-needed feedback.",
                     )
                 )
@@ -735,10 +735,10 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                         automation="semi_auto",
                         reason="Section-level critic found shallow, low-score, or required-fix sections; this is not reviewable paper content yet.",
                         suggested_commands=[
-                            "paperorchestra review",
-                            "paperorchestra refine --iterations 1",
-                            "paperorchestra review-sections",
-                            "paperorchestra qa-loop-plan --quality-mode claim_safe",
+                            "paperorchestra critique",
+                            "paperorchestra qa-loop-step",
+                            "paperorchestra critique",
+                            "paperorchestra qa-loop --quality-mode claim_safe",
                         ],
                         ralph_instruction="Run one bounded content refinement pass from critic issues, then regenerate section and reviewer critics before continuing.",
                         why_not_automatic="Improving weak sections changes manuscript substance; acceptance requires non-regression across validation, compile, citation support, and critic checks.",
@@ -756,8 +756,8 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     automation="human_needed",
                     reason="Claim-safe readiness requires an independent reviewer artifact pair or an explicit reviewer-independence acceptance record.",
                     suggested_commands=[
-                        "paperorchestra review --output review.independent.json",
-                        "paperorchestra quality-eval --quality-mode claim_safe",
+                        "paperorchestra critique --output review.independent.json",
+                        "paperorchestra qa-loop --quality-mode claim_safe",
                     ],
                     ralph_instruction="Stop before ready_for_human_finalization: obtain a second independent review or record a hash-bound human acceptance artifact.",
                     approval_required_from="human_operator",

@@ -70,39 +70,39 @@ def _commands_for_validation_issue(code: str, target: str | None) -> list[str]:
     section_arg = _section_arg(target)
     if code == "unsupported_comparative_claim":
         return [
-            "paperorchestra validate-current",
-            "paperorchestra review-citations",
+            "paperorchestra quality-gate --no-fail-on-block",
+            "paperorchestra critique",
             f"paperorchestra write-sections{section_arg}",
-            "paperorchestra audit-reproducibility",
-            "paperorchestra qa-loop-plan --quality-mode claim_safe",
+            "paperorchestra quality-gate --no-fail-on-block",
+            "paperorchestra qa-loop --quality-mode claim_safe",
         ]
     if code in {"unknown_citation_keys", "citation_coverage_insufficient"}:
         return [
-            "paperorchestra build-bib",
-            "paperorchestra review-citations",
+            "paperorchestra run --provider shell --discovery-mode search-grounded",
+            "paperorchestra critique",
             f"paperorchestra write-sections{section_arg}",
-            "paperorchestra audit-reproducibility",
+            "paperorchestra quality-gate --no-fail-on-block",
         ]
     if code == "numeric_grounding_mismatch":
         return [
-            "paperorchestra validate-current",
+            "paperorchestra quality-gate --no-fail-on-block",
             f"paperorchestra write-sections{section_arg}",
-            "paperorchestra audit-reproducibility",
+            "paperorchestra quality-gate --no-fail-on-block",
         ]
     if code in {"expected_section_missing", "expected_section_too_shallow"}:
         return [
             f"paperorchestra write-sections{section_arg}",
-            "paperorchestra review",
-            "paperorchestra audit-reproducibility",
+            "paperorchestra critique",
+            "paperorchestra quality-gate --no-fail-on-block",
         ]
     if code == "plot_plan_not_reflected":
         return [
-            "paperorchestra generate-plots",
+            "paperorchestra run --provider shell",
             f"paperorchestra write-sections{section_arg}",
-            "paperorchestra review-figure-placement",
-            "paperorchestra audit-reproducibility",
+            "paperorchestra critique",
+            "paperorchestra quality-gate --no-fail-on-block",
         ]
-    return ["paperorchestra audit-reproducibility"]
+    return ["paperorchestra quality-gate --no-fail-on-block"]
 
 def _claim_safety_approval(code: str) -> tuple[str | None, str | None]:
     if code == "unsupported_comparative_claim":
@@ -185,9 +185,9 @@ def _strict_content_actions(reproducibility: dict[str, Any]) -> list[dict[str, A
         if code in {"validation_report_missing", "validation_report_stale"}:
             automation = "automatic"
             commands = [
-                "paperorchestra validate-current",
-                "paperorchestra audit-reproducibility",
-                "paperorchestra qa-loop-plan --quality-mode claim_safe",
+                "paperorchestra quality-gate --no-fail-on-block",
+                "paperorchestra quality-gate --no-fail-on-block",
+                "paperorchestra qa-loop --quality-mode claim_safe",
             ]
             instruction = (
                 "Regenerate a validation report for the current manuscript before attempting content repair; do not act on stale validation warnings."
@@ -195,9 +195,9 @@ def _strict_content_actions(reproducibility: dict[str, Any]) -> list[dict[str, A
         elif code in {"figure_placement_review_missing", "figure_placement_review_stale"}:
             automation = "automatic"
             commands = [
-                "paperorchestra review-figure-placement",
-                "paperorchestra audit-reproducibility",
-                "paperorchestra qa-loop-plan --quality-mode claim_safe",
+                "paperorchestra critique",
+                "paperorchestra quality-gate --no-fail-on-block",
+                "paperorchestra qa-loop --quality-mode claim_safe",
             ]
             instruction = (
                 "Regenerate figure-placement review for the current manuscript before moving figures or rewriting figure references."
@@ -205,9 +205,9 @@ def _strict_content_actions(reproducibility: dict[str, Any]) -> list[dict[str, A
         elif kind in {"figure_placement_warning", "figure_placement_failure"}:
             automation = "human_needed"
             commands = [
-                "paperorchestra review-figure-placement",
+                "paperorchestra critique",
                 "paperorchestra write-sections --only-sections \"Implementation Results\"",
-                "paperorchestra audit-reproducibility",
+                "paperorchestra quality-gate --no-fail-on-block",
             ]
             instruction = (
                 "Prepare a targeted figure-grounding decision for a human reviewer; do not auto-edit figure placement, captions, or visual evidence from the quality loop."
@@ -254,9 +254,9 @@ def _citation_actions(reproducibility: dict[str, Any]) -> list[dict[str, Any]]:
             automation="automatic",
             reason="Final citation artifacts are empty, malformed, or inconsistent: " + "; ".join(str(item) for item in issues),
             suggested_commands=[
-                "paperorchestra verify-papers --mode live --on-error skip",
-                "paperorchestra build-bib",
-                "paperorchestra audit-reproducibility",
+                "paperorchestra run --provider shell --discovery-mode search-grounded",
+                "paperorchestra run --provider shell --discovery-mode search-grounded",
+                "paperorchestra quality-gate --no-fail-on-block",
             ],
             ralph_instruction="Rebuild or re-import the citation lane before attempting more prose refinement; do not accept a manuscript with empty or malformed citation artifacts.",
         )
@@ -287,7 +287,7 @@ def _mode_actions(reproducibility: dict[str, Any]) -> list[dict[str, Any]]:
                 target="verification lane",
                 automation="human_needed",
                 reason="Citation verification used mock mode.",
-                suggested_commands=["paperorchestra verify-papers --mode live --on-error skip", "paperorchestra audit-reproducibility --require-live-verification"],
+                suggested_commands=["paperorchestra run --provider shell --discovery-mode search-grounded", "paperorchestra quality-gate --no-fail-on-block --require-live-verification"],
                 ralph_instruction="Use live verification for claim-safe runs, or stop and record that only an offline demo is available.",
             )
         )
@@ -301,8 +301,8 @@ def _mode_actions(reproducibility: dict[str, Any]) -> list[dict[str, Any]]:
                 automation="human_needed",
                 reason="The citation registry still contains seed-only or curated metadata entries after a required live verification pass.",
                 suggested_commands=[
-                    "paperorchestra verify-papers --mode live --on-error fail",
-                    "paperorchestra audit-reproducibility --require-live-verification",
+                    "paperorchestra run --provider shell --discovery-mode search-grounded --require-live-verification",
+                    "paperorchestra quality-gate --no-fail-on-block --require-live-verification",
                 ],
                 ralph_instruction="Do not present citation provenance as fully live until every registry entry is live-verified or explicitly removed/scoped.",
             )
@@ -317,8 +317,8 @@ def _mode_actions(reproducibility: dict[str, Any]) -> list[dict[str, Any]]:
                 automation="human_needed",
                 reason="One or more cited references have mixed cited provenance rather than live verification.",
                 suggested_commands=[
-                    "paperorchestra qa-loop-plan --accept-mixed-provenance",
-                    "paperorchestra audit-reproducibility --require-live-verification",
+                    "paperorchestra qa-loop --accept-mixed-provenance",
+                    "paperorchestra quality-gate --no-fail-on-block --require-live-verification",
                 ],
                 ralph_instruction=(
                     "Do not treat mixed cited provenance as fully live. Either replace the affected cited references "
@@ -357,7 +357,7 @@ def _warning_actions(reproducibility: dict[str, Any]) -> list[dict[str, Any]]:
                     target="compile",
                     automation="automatic",
                     reason=reason_text,
-                    suggested_commands=["paperorchestra compile", "paperorchestra audit-reproducibility"],
+                    suggested_commands=["paperorchestra compile", "paperorchestra quality-gate --no-fail-on-block"],
                     ralph_instruction="Re-run compilation and inspect the compile report before accepting the current manuscript.",
                 )
             )
@@ -383,7 +383,7 @@ def _warning_actions(reproducibility: dict[str, Any]) -> list[dict[str, Any]]:
                     target="audit",
                     automation="human_needed",
                     reason=reason_text,
-                    suggested_commands=["paperorchestra audit-reproducibility"],
+                    suggested_commands=["paperorchestra quality-gate --no-fail-on-block"],
                     ralph_instruction="Classify this reproducibility warning before stopping the Ralph loop.",
                 )
             )
@@ -391,10 +391,10 @@ def _warning_actions(reproducibility: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _fidelity_actions(fidelity: dict[str, Any]) -> list[dict[str, Any]]:
     critical_commands = {
-        "verified_citation_lane": ["paperorchestra verify-papers --mode live --on-error skip", "paperorchestra build-bib", "paperorchestra audit-reproducibility"],
-        "section_writing_pipeline": ["paperorchestra write-sections", "paperorchestra review", "paperorchestra audit-reproducibility"],
-        "submission_ready_output": ["paperorchestra compile", "paperorchestra audit-reproducibility"],
-        "compile_environment_ready": ["paperorchestra check-compile-env"],
+        "verified_citation_lane": ["paperorchestra run --provider shell --discovery-mode search-grounded", "paperorchestra run --provider shell --discovery-mode search-grounded", "paperorchestra quality-gate --no-fail-on-block"],
+        "section_writing_pipeline": ["paperorchestra write-sections", "paperorchestra critique", "paperorchestra quality-gate --no-fail-on-block"],
+        "submission_ready_output": ["paperorchestra compile", "paperorchestra quality-gate --no-fail-on-block"],
+        "compile_environment_ready": ["paperorchestra environment --summary"],
         "runtime_parity": ["paperorchestra run --provider shell --runtime-mode omx_native"],
     }
     actions: list[dict[str, Any]] = []
@@ -466,9 +466,9 @@ def _figure_review_actions(state) -> list[dict[str, Any]]:
                         + (f" Manifest purpose/title: {manifest.get('purpose') or manifest.get('title')}." if manifest else "")
                     ),
                     suggested_commands=[
-                        "paperorchestra review-figure-placement",
+                        "paperorchestra critique",
                         f"paperorchestra write-sections --only-sections {shlex.quote(section or 'Implementation Results')}",
-                        "paperorchestra audit-reproducibility",
+                        "paperorchestra quality-gate --no-fail-on-block",
                     ],
                     ralph_instruction=(
                         "Stop automatic figure editing. Prepare a bounded figure-grounding decision: remove/quarantine nontechnical figures, "
@@ -512,8 +512,8 @@ def _generated_placeholder_figure_actions(state) -> list[dict[str, Any]]:
             reason="Generated placeholder figure assets are still used in the manuscript, so the artifact is not reviewable until human final artwork replaces or removes them.",
             suggested_commands=[
                 "Replace generated placeholder assets with human-authored final figures, or remove/defer those figures.",
-                "paperorchestra review-figure-placement",
-                "paperorchestra qa-loop-plan --quality-mode claim_safe",
+                "paperorchestra critique",
+                "paperorchestra qa-loop --quality-mode claim_safe",
             ],
             ralph_instruction="Stop automatic paper packaging: placeholder figures are acceptable draft scaffolds but not review-ready evidence.",
             preconditions=["tier_1_structural must remain pass"],

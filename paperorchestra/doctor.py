@@ -147,37 +147,16 @@ def build_session_recovery_hint(cwd: str | Path | None = None) -> dict[str, Any]
     elif state.current_phase in {'complete', 'draft_complete'}:
         status = 'ok'
         notes.append('Session has reached a terminal usable draft state.')
-    elif not artifacts.outline_json:
-        status = 'actionable'
-        next_commands.append('paperorchestra outline --provider shell')
-    elif not artifacts.plot_manifest_json:
-        status = 'actionable'
-        next_commands.append('paperorchestra generate-plots --provider shell')
-    elif not artifacts.candidate_papers_json:
-        status = 'actionable'
-        next_commands.append('paperorchestra discover-papers --mode search-grounded')
-    elif not artifacts.citation_registry_json:
-        status = 'actionable'
-        next_commands.extend([
-            'paperorchestra verify-papers --mode live --on-error skip',
-            'paperorchestra verify-papers --mode mock  # offline/demo fallback only',
-        ])
-        notes.append('If live verification was rate-limited, set SEMANTIC_SCHOLAR_API_KEY and retry.')
-    elif not artifacts.references_bib:
-        status = 'actionable'
-        next_commands.append('paperorchestra build-bib')
-    elif not artifacts.intro_related_tex:
-        status = 'actionable'
-        next_commands.append('paperorchestra write-intro-related --provider shell')
     elif not artifacts.paper_full_tex:
         status = 'actionable'
-        next_commands.append('paperorchestra write-sections --provider shell')
+        next_commands.append('paperorchestra run --provider shell --discovery-mode search-grounded')
+        notes.append('The phase-level commands are intentionally not public; use the full pipeline or write-sections once planning/citations exist.')
     elif state.current_phase == 'blocked':
         status = 'blocked'
         next_commands.extend([
             'paperorchestra status --json',
-            'paperorchestra review --provider shell',
-            'paperorchestra refine --provider shell --iterations 1',
+            'paperorchestra critique --provider shell',
+            'paperorchestra qa-loop-step --provider shell',
         ])
         notes.append('Inspect latest validation/review artifacts before retrying refinement.')
     else:
@@ -277,7 +256,7 @@ def build_doctor_report(cwd: str | Path | None = None, *, omx_deep: bool = False
         {
             'code': 'current_session',
             'status': 'ok' if current_session_id else 'warning',
-            'detail': current_session_id or 'no current session; run paperorchestra init or guided intake first',
+            'detail': current_session_id or 'no current session; run paperorchestra init first',
         },
         {
             'code': 'session_recovery',
@@ -325,7 +304,7 @@ def build_doctor_report(cwd: str | Path | None = None, *, omx_deep: bool = False
             'Use `paperorchestra environment` for the canonical environment-variable and prerequisite inventory.',
             'Set PAPERO_ALLOW_TEX_COMPILE=1 before compiling TeX sources.',
             'Set SEMANTIC_SCHOLAR_API_KEY for more reliable live citation verification.',
-            'Use `paperorchestra audit-reproducibility` to classify whether the current run is suitable for reproducibility/fidelity claims.',
+            'Use `paperorchestra quality-gate --no-fail-on-block` to classify whether the current run is suitable for reproducibility/fidelity claims.',
             '`codex mcp list` confirms registration, not that the active Codex conversation received mcp__paperorchestra__ tools; `paperorchestra doctor` checks stdio server health, while active-session attachment still requires a fresh Codex session with visible mcp__paperorchestra__ tools.',
         ],
     }

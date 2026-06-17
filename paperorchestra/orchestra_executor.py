@@ -43,7 +43,7 @@ ADAPTER_REQUIRED_ACTIONS = {
     "re_adjudicate",
     "auto_weaken_or_delete_claim",
     "compile_current",
-    "export_results",
+    "export_current",
     "match_supplied_figures",
 }
 TERMINAL_BLOCK_ACTIONS = {"block"}

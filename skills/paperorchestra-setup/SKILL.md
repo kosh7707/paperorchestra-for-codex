@@ -1,6 +1,6 @@
 ---
 name: paperorchestra-setup
-description: Verify PaperOrchestra environment, session, provider, compile, and live-review readiness. Use for setup, preflight, S2-key questions, PAPERO_MODEL_CMD checks, MCP attachment checks, and deciding whether a run is mock, heuristic, shell-live, or claim-safe-live.
+description: Verify the Codex/OMX paper-writing engine environment, session, provider, compile, and MCP readiness. Use for setup, preflight, S2-key questions, PAPERO_MODEL_CMD checks, MCP attachment checks, and deciding whether a run is mock, heuristic, shell-live, or claim-safe-live.
 ---
 
 # PaperOrchestra Setup
@@ -13,11 +13,9 @@ Use the narrowest available surface:
 
 ```bash
 paperorchestra doctor
-paperorchestra environment
+paperorchestra environment --summary
 paperorchestra status --json
-paperorchestra check-compile-env
-paperorchestra critic-preflight --citation-evidence-mode heuristic
-paperorchestra critic-preflight --provider shell --provider-command "$PAPERO_MODEL_CMD" --citation-evidence-mode web --live
+paperorchestra doctor
 ```
 
 If MCP is expected, distinguish registration from active attachment:
@@ -33,8 +31,8 @@ Report one of:
 
 - `mock`: mock provider or local checks only.
 - `heuristic`: offline citation/metadata checks only.
-- `shell-live`: shell provider can call a live model, but web citation trust may be absent.
-- `claim-safe-live`: live provider plus web/source citation evidence and strict gate prerequisites are ready.
+- `shell-live`: shell provider can call a live model, but web citation trust may be absent; verify with `$paperorchestra-live-review`.
+- `claim-safe-live`: live provider plus web/source citation evidence and strict gate prerequisites are ready; verify with `$paperorchestra-live-review` and `$paperorchestra-quality-gate`.
 
 S2 API key is optional. Its absence is not fatal when web/source citation evidence or manual source artifacts are used. Do not block setup solely because S2 is unset.
 

@@ -21,7 +21,7 @@ KNOWN_ACTIONS = [
     "run_third_critic_adjudication",
     "re_adjudicate",
     "compile_current",
-    "export_results",
+    "export_current",
     "match_supplied_figures",
     "block",
     "auto_weaken_or_delete_claim",
@@ -145,5 +145,5 @@ class ActionPlanner:
         ):
             return [NextAction("show_prewriting_notice", "prewriting_notice_required", state_after=current)]
         if facets.session == "compiled":
-            return [NextAction("export_results", "compiled_artifact_available", state_after=current)]
+            return [NextAction("export_current", "compiled_artifact_available", state_after=current)]
         return [NextAction("block", current.readiness.label, risk="low", state_after=current)]

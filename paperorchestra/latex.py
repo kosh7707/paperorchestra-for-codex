@@ -85,10 +85,10 @@ def _compile_opt_in_error_message() -> str:
     return """LaTeX compilation is disabled by default.
 
 To inspect whether this machine can compile:
-  paperorchestra check-compile-env
+  paperorchestra environment --summary
 
 To install missing tools:
-  paperorchestra bootstrap-compile-env
+  paperorchestra environment --summary
 
 To intentionally compile:
   PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile"""
@@ -102,8 +102,8 @@ def _missing_compile_environment_message(project_root: Path) -> str:
             "compile environment is not ready.\n\n"
             f"Could not inspect compile environment automatically: {type(exc).__name__}: {exc}\n\n"
             "Run:\n"
-            "  paperorchestra check-compile-env\n"
-            "  paperorchestra bootstrap-compile-env\n"
+            "  paperorchestra environment --summary\n"
+            "  paperorchestra environment --summary\n"
             "  PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile"
         )
 
@@ -126,8 +126,8 @@ def _missing_compile_environment_message(project_root: Path) -> str:
         f"  Usable sandbox: {sandbox_state}\n"
         f"  Sandbox wrapper: {wrapper_state}\n\n"
         "Run:\n"
-        "  paperorchestra check-compile-env\n"
-        "  paperorchestra bootstrap-compile-env\n"
+        "  paperorchestra environment --summary\n"
+        "  paperorchestra environment --summary\n"
         "  PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile"
     )
 

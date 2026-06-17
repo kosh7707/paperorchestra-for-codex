@@ -92,7 +92,7 @@ class FullLoopPlanner:
             if state.facets.session == "draft_available" and not facts.compiled:
                 return LoopDecision(state, [NextAction("compile_current", "ready_to_compile", state_after=state)], [])
             if state.facets.session == "compiled" and not facts.exported:
-                return LoopDecision(state, [NextAction("export_results", "ready_to_export", state_after=state)], [])
+                return LoopDecision(state, [NextAction("export_current", "ready_to_export", state_after=state)], [])
 
         action = NextAction("block", state.readiness.label, state_after=state)
         return LoopDecision(state, [action], [state.readiness.label])

@@ -756,8 +756,8 @@ def get_citation_support_provider(
         provider = get_provider(name, command=default_codex_web_provider_command())
     if evidence_mode == "web" and not provider_supports_web_search(provider):
         raise ProviderError(
-            "review-citations --evidence-mode web requires a Codex shell provider command containing --search. "
+            "critique --citation-evidence-mode web requires a Codex shell provider command containing --search. "
             "Set PAPERO_MODEL_CMD to a codex --search exec command, pass --provider-command with --search, "
-            "or use --evidence-mode model for non-web model review."
+            "or use --citation-evidence-mode model for non-web model review."
         )
     return provider

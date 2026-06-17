@@ -1,6 +1,6 @@
 ---
 name: paperorchestra-quality-gate
-description: Run the bounded PaperOrchestra validation, quality-eval, and QA-loop state transition. Use for quality gate, claim-safe checks, qa-loop-plan/qa-loop-step, human_needed handling, or deciding whether the current paper is blocked, failed, or ready for human finalization.
+description: Run the bounded PaperOrchestra quality gate and QA-loop state transition. Use for quality gate, claim-safe checks, qa-loop/qa-loop-step, human_needed handling, or deciding whether the current paper is blocked, failed, or ready for human finalization.
 ---
 
 # PaperOrchestra Quality Gate
@@ -9,22 +9,16 @@ Use this for state-machine verification. It may call critics, but its job is to 
 
 ## Bounded order
 
-Run only the needed suffix if fresh artifacts already exist; otherwise follow this order. The citation-support stage is `review-citations --evidence-mode web`:
+Run only the needed suffix if fresh artifacts already exist; otherwise follow this order. The citation-support stage is `critique --citation-evidence-mode web`:
 
 ```bash
-paperorchestra validate-current
-paperorchestra build-source-obligations
-paperorchestra compile
-paperorchestra review --provider shell --provider-command "$PAPERO_MODEL_CMD"
-paperorchestra review-sections
-paperorchestra review-citations --provider shell --provider-command "$PAPERO_MODEL_CMD" --evidence-mode web
-paperorchestra quality-eval --quality-mode draft
-paperorchestra quality-eval --quality-mode claim_safe --require-live-verification
-paperorchestra qa-loop-plan --quality-mode claim_safe
+paperorchestra quality-gate --no-fail-on-block
+paperorchestra critique --provider shell --provider-command "$PAPERO_MODEL_CMD" --citation-evidence-mode web
+paperorchestra qa-loop --quality-mode claim_safe --require-live-verification
 paperorchestra qa-loop-step --quality-mode claim_safe --max-iterations 1
 ```
 
-`run` alone is draft generation, not full quality approval. A full quality gate must include validation, compile where allowed, critic/citation evidence, `quality-eval --quality-mode`, `qa-loop-plan`, and at most a bounded `qa-loop-step`.
+`run` alone is draft generation, not full quality approval. A full quality gate must include validation, compile where allowed, critic/citation evidence, `quality-gate`, `qa-loop`, and at most a bounded `qa-loop-step`.
 
 ## Stop states
 

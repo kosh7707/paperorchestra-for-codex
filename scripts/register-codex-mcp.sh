@@ -231,7 +231,7 @@ sys.stderr.write(f"Registered PaperOrchestra MCP server '{server}' in: {config_p
 sys.stderr.write(f"Command: {command}\n")
 sys.stderr.write("Next:\n")
 sys.stderr.write("  1. Restart Codex completely so it reloads MCP servers.\n")
-sys.stderr.write("  2. In the new session, verify that mcp__paperorchestra__status or mcp__paperorchestra__check_compile_environment is visible.\n")
+sys.stderr.write("  2. In the new session, verify that mcp__paperorchestra__status or mcp__paperorchestra__quality_gate is visible.\n")
 sys.stderr.write("  3. If tools are absent, run `paperorchestra doctor` to separate server health from session attachment.\n")
 sys.stderr.write("Note: `codex mcp list` shows config registration, not active session attachment/tool injection.\n")
 PY

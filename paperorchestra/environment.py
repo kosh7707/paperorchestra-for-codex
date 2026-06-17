@@ -287,7 +287,7 @@ ENVIRONMENT_VARIABLES: tuple[EnvironmentVariableSpec, ...] = (
         default="auto-configured when a supported sandbox exists",
         example='["/path/to/tex-sandbox.sh"]',
         description="Override the sandbox wrapper used for LaTeX compilation.",
-        notes=("Advanced compile knob; usually auto-configured by `paperorchestra check-compile-env`.",),
+        notes=("Advanced compile knob; usually auto-configured by `paperorchestra environment --summary`.",),
     ),
     EnvironmentVariableSpec(
         name="TEXINPUTS",
@@ -372,8 +372,8 @@ def build_environment_inventory() -> dict[str, Any]:
                 "latex_engines": ["latexmk", "pdflatex", "tectonic"],
                 "sandbox_tools": ["bwrap", "firejail", "nsjail"],
                 "inspection_commands": [
-                    "paperorchestra check-compile-env",
-                    "paperorchestra bootstrap-compile-env",
+                    "paperorchestra environment --summary",
+                    "paperorchestra environment --summary",
                 ],
             },
         },
@@ -481,7 +481,7 @@ def build_readiness_profiles(
             "Live literature verification and search-grounded discovery with less rate-limit risk.",
             semantic_scholar_api_key_set,
             verify_missing,
-            verify_steps or ["paperorchestra verify-papers --mode live"],
+            verify_steps or ["paperorchestra run --provider shell --discovery-mode search-grounded"],
         )
     )
 
@@ -489,7 +489,7 @@ def build_readiness_profiles(
     compile_steps: list[str] = []
     if not compile_environment_ready:
         compile_missing.append("Install a supported LaTeX engine and sandbox tool, or run the compile bootstrap guidance.")
-        compile_steps.extend(["paperorchestra check-compile-env", "paperorchestra bootstrap-compile-env"])
+        compile_steps.extend(["paperorchestra environment --summary", "paperorchestra environment --summary"])
     if not tex_compile_opt_in:
         compile_missing.append("Set PAPERO_ALLOW_TEX_COMPILE=1 before running compile commands.")
         compile_steps.append("export PAPERO_ALLOW_TEX_COMPILE=1")
@@ -520,7 +520,7 @@ def build_readiness_profiles(
         full_steps.extend([
             "paperorchestra environment",
             "paperorchestra doctor",
-            "paperorchestra audit-reproducibility",
+            "paperorchestra quality-gate --no-fail-on-block",
         ])
     profiles.append(
         _profile(
@@ -552,7 +552,7 @@ def build_readiness_profiles(
             and strict_omx_native
             and strict_content_gates,
             claim_missing,
-            claim_steps or ["paperorchestra audit-reproducibility"],
+            claim_steps or ["paperorchestra quality-gate --no-fail-on-block"],
         )
     )
 

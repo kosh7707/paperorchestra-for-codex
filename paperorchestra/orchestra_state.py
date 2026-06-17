@@ -248,7 +248,7 @@ def derive_readiness(state: OrchestraState) -> ReadinessSummary:
     if facets.session == "no_session" and facets.material == "missing":
         return ReadinessSummary("needs_material", "blocked", "No session or material has been provided.")
     if facets.material == "inventory_needed":
-        return ReadinessSummary("intake_needed", "blocked", "Material must be inventoried before drafting.")
+        return ReadinessSummary("material_inventory_needed", "blocked", "Material must be inventoried before drafting.")
     if facets.evidence in {"research_needed", "durable_research_needed"}:
         return ReadinessSummary("research_needed", "blocked", "Machine-solvable evidence work remains.")
     if facets.claims == "conflict" or facets.interaction == "human_needed":

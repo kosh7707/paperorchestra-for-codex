@@ -21,7 +21,6 @@ from .io_utils import read_json, write_json
 from .models import utc_now_iso
 from .narrative import planning_artifact_status
 from .orchestra_citation_quality import build_citation_quality_gate_internal, citation_quality_gate_path
-from .omx_diagnostics import OMX_EVIDENCE_SUMMARY_FILENAME, OMX_REVIEW_HANDOFF_FILENAME
 from .providers import ShellProvider, get_citation_support_provider
 from .session import artifact_path, load_session, runtime_root, save_session
 from .source_obligations import evaluate_source_obligations, source_obligations_path
@@ -604,7 +603,7 @@ def build_quality_eval(
                     "next_steps": [
                         "Install poppler-utils or otherwise provide a working pdftotext binary.",
                         "Rerun: PAPERO_ALLOW_TEX_COMPILE=1 paperorchestra compile",
-                        "Rerun: paperorchestra quality-eval --quality-mode claim_safe",
+                        "Rerun: paperorchestra qa-loop --quality-mode claim_safe",
                     ]
                     if pdf_text_scan_unavailable
                     else [],
@@ -762,10 +761,6 @@ def build_quality_eval(
             "ralph_handoff_sha256": ralph_evidence["ralph_handoff_sha256"],
             "qa_loop_history": ralph_evidence["qa_loop_history"],
             "qa_loop_history_sha256": ralph_evidence["qa_loop_history_sha256"],
-            "omx_evidence_summary": str(artifact_path(cwd, OMX_EVIDENCE_SUMMARY_FILENAME)),
-            "omx_evidence_summary_sha256": _file_sha256(artifact_path(cwd, OMX_EVIDENCE_SUMMARY_FILENAME)),
-            "omx_review_handoff": str(artifact_path(cwd, OMX_REVIEW_HANDOFF_FILENAME)),
-            "omx_review_handoff_sha256": _file_sha256(artifact_path(cwd, OMX_REVIEW_HANDOFF_FILENAME)),
         },
         "audit_snapshot_hashes": {
             "reproducibility": f"sha256:{_sha256_jsonable(reproducibility)}",
@@ -863,7 +858,7 @@ def build_quality_loop_plan(
                 target="claim safety",
                 automation="automatic",
                 reason="Citation-support review identity is missing, stale, or divergent from the quality-eval snapshot.",
-                suggested_commands=["paperorchestra review-citations --evidence-mode web", "paperorchestra qa-loop-plan --quality-mode claim_safe"],
+                suggested_commands=["paperorchestra critique --citation-evidence-mode web", "paperorchestra qa-loop --quality-mode claim_safe"],
                 ralph_instruction="Regenerate citation-support review and quality-eval before treating the QA loop plan as ready.",
             )
         )

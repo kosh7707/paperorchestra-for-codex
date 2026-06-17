@@ -1105,7 +1105,7 @@ def render_citation_support_human_needed_markdown(review: dict[str, Any]) -> str
     lines = [
         "# Citation source follow-up",
         "",
-        "Add the missing source artifact, then rerun `paperorchestra review-citations --evidence-mode source`.",
+        "Add the missing source artifact, then rerun `paperorchestra critique --citation-evidence-mode source`.",
         "",
     ]
     for case in cases:
