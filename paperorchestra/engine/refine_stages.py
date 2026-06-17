@@ -8,7 +8,7 @@ from typing import Any
 from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import ExtractionError, extract_json, extract_latex, read_json, read_text, write_json, write_text
 from paperorchestra.core.session import artifact_path, build_path, load_session, review_path, save_session
-from paperorchestra.engine.authoring_common import _append_unique_note, _apply_mock_watermark
+from paperorchestra.engine.authoring_common import _apply_mock_watermark
 from paperorchestra.engine.completion import (
     _build_completion_request,
     _complete_with_runtime_mode,
@@ -61,6 +61,10 @@ from paperorchestra.engine.refine_results import (
 from paperorchestra.engine.refine_manifests import (
     record_accepted_refinement_lane_manifest,
     record_rejected_refinement_lane_manifest,
+)
+from paperorchestra.engine.refine_persistence import (
+    apply_accepted_refinement_state,
+    apply_rejected_refinement_state,
 )
 from paperorchestra.engine.refine_review import (
     _accept_review_delta,
@@ -387,29 +391,18 @@ def refine_current_paper(
                 notes=lane_notes,
             )
             state = load_session(cwd)
-            state.artifacts.paper_full_tex = str(final_path)
-            state.artifacts.latest_review_json = str(candidate_review_path)
-            if candidate_pdf_path is not None:
-                state.artifacts.compiled_pdf = str(candidate_pdf_path)
-                state.current_phase = "complete"
-                state.active_artifact = Path(candidate_pdf_path).name
-            else:
-                state.active_artifact = final_path.name
-            state.refinement_iteration = iteration.candidate_iter
-            state.notes.append(
-                f"Accepted refinement iteration {iteration.candidate_iter} (score {previous_score} -> {candidate_score})."
+            apply_accepted_refinement_state(
+                state,
+                final_path=final_path,
+                candidate_review_path=candidate_review_path,
+                candidate_pdf_path=candidate_pdf_path,
+                iteration=iteration.candidate_iter,
+                previous_score=previous_score,
+                candidate_score=candidate_score,
+                compile_preservation=compile_preservation,
+                review_retry_scores=review_retry_scores,
+                lane_manifest_path=lane_path,
             )
-            if compile_preservation:
-                _append_unique_note(
-                    state,
-                    f"Compile-failed refinement iteration {iteration.candidate_iter} preserved the prior compiled manuscript.",
-                )
-            if review_retry_scores:
-                state.notes.append(
-                    "Refinement acceptance used reviewer retry confirmation: "
-                    + ", ".join(str(score) for score in review_retry_scores)
-                )
-            state.notes.append(f"Lane manifest recorded: {lane_path.name}")
             save_session(cwd, state)
             accepted_results.append(
                 accepted_refinement_result(
@@ -439,25 +432,23 @@ def refine_current_paper(
                 notes=lane_notes,
             )
             state = load_session(cwd)
-            state.artifacts.paper_full_tex = temp_state_paper
-            state.artifacts.latest_review_json = temp_latest_review
-            state.artifacts.latest_validation_json = str(validation_path)
-            state.review_history = state.review_history[:temp_review_history_len]
-            _append_unique_note(
-                state,
-                f"Rejected refinement iteration {iteration.candidate_iter} (score {previous_score} -> {candidate_score}).",
-            )
             reason = compile_error or "score_regressed_or_tie_break_failed"
             print(
                 f"Refinement iter {iteration.candidate_iter} rejected: score {previous_score} -> {candidate_score}; reason={reason}",
                 file=sys.stderr,
             )
-            if review_retry_scores:
-                state.notes.append(
-                    "Refinement rejection persisted after reviewer retry: "
-                    + ", ".join(str(score) for score in review_retry_scores)
-                )
-            state.notes.append(f"Lane manifest recorded: {lane_path.name}")
+            apply_rejected_refinement_state(
+                state,
+                temp_state_paper=temp_state_paper,
+                temp_latest_review=temp_latest_review,
+                validation_path=validation_path,
+                temp_review_history_len=temp_review_history_len,
+                iteration=iteration.candidate_iter,
+                previous_score=previous_score,
+                candidate_score=candidate_score,
+                review_retry_scores=review_retry_scores,
+                lane_manifest_path=lane_path,
+            )
             save_session(cwd, state)
             accepted_results.append(
                 rejected_refinement_result(
