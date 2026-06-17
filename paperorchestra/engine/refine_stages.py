@@ -7,7 +7,7 @@ from typing import Any
 
 from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import ExtractionError, extract_json, extract_latex, read_json, read_text, write_json, write_text
-from paperorchestra.core.session import artifact_path, build_path, load_session, review_path, save_session
+from paperorchestra.core.session import artifact_path, load_session, review_path, save_session
 from paperorchestra.engine.authoring_common import _apply_mock_watermark
 from paperorchestra.engine.completion import (
     _build_completion_request,
@@ -51,6 +51,11 @@ from paperorchestra.engine.refine_context import (
     RefinementIterationContext,
     build_refinement_iteration_context,
 )
+from paperorchestra.engine.refine_compile import (
+    RefinementCompileGateResult,
+    apply_compile_acceptance_gate,
+    compile_latex,
+)
 from paperorchestra.engine.refine_drafts import normalize_refinement_latex, parse_refinement_response
 from paperorchestra.engine.refine_results import (
     accepted_refinement_result,
@@ -75,7 +80,6 @@ from paperorchestra.engine.refine_review import (
 )
 from paperorchestra.engine.review_stages import _extract_axis_scores, review_current_paper
 from paperorchestra.engine.section_scope import _expected_section_titles_from_outline
-from paperorchestra.manuscript.latex import compile_latex
 from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.manuscript.repair import (
     _ensure_discussion_section_for_claim_boundaries,
@@ -268,47 +272,39 @@ def refine_current_paper(
             candidate_review = read_json(candidate_review_path)
             candidate_score = float(candidate_review.get("overall_score", 0.0))
             candidate_axes = _extract_axis_scores(candidate_review)
-        candidate_pdf_path = None
-        compile_error = None
-        compile_preservation = False
-        preserved_compile_error = None
-        if require_compile_for_accept:
-            try:
-                candidate_pdf_path = compile_latex(
-                    candidate_tex_path,
-                    workdir=build_path(cwd, f"compiled-iter-{iteration.candidate_iter:02d}"),
-                    output_log=build_path(cwd, f"latex-build.iter-{iteration.candidate_iter:02d}.log"),
-                )
-            except Exception as exc:  # pragma: no cover - compile availability is environment-dependent
-                compile_error = str(exc)
-                preserved_compile_error = compile_error
-                previous_compile_report = (
-                    read_json(state.artifacts.latest_compile_report_json)
-                    if state.artifacts.latest_compile_report_json and Path(state.artifacts.latest_compile_report_json).exists()
-                    else None
-                )
-                if (
-                    isinstance(previous_compile_report, dict)
-                    and previous_compile_report.get("clean")
-                    and previous_compile_report.get("pdf_exists")
-                ):
-                    latex = iteration.current_paper
-                    candidate_pdf_path = state.artifacts.compiled_pdf
-                    compile_error = None
-                    compile_preservation = True
-                    no_op_refinement = True
-                    candidate_review_path = Path(temp_latest_review or state.artifacts.latest_review_json or "")
-                    candidate_review = iteration.review_payload
-                    candidate_score = previous_score
-                    candidate_axes = previous_axes
-                    worklog.setdefault("actions_taken", []).append(
-                        "Preserved the pre-refinement compiled manuscript because the generated revision failed compile acceptance."
-                    )
-                    lane_notes = lane_notes + ["Refinement revision failed compile acceptance; preserved prior compiled manuscript."]
-                    print(
-                        f"Refinement iter {iteration.candidate_iter} preserved prior compiled manuscript after compile failure.",
-                        file=sys.stderr,
-                    )
+        compile_gate = apply_compile_acceptance_gate(
+            enabled=require_compile_for_accept,
+            cwd=cwd,
+            candidate_iter=iteration.candidate_iter,
+            candidate_tex_path=candidate_tex_path,
+            latex=latex,
+            current_paper=iteration.current_paper,
+            previous_review_path=temp_latest_review or state.artifacts.latest_review_json or "",
+            previous_review_payload=iteration.review_payload,
+            previous_score=previous_score,
+            previous_axes=previous_axes,
+            candidate_review_path=candidate_review_path,
+            candidate_review=candidate_review,
+            candidate_score=candidate_score,
+            candidate_axes=candidate_axes,
+            no_op_refinement=no_op_refinement,
+            latest_compile_report_json=state.artifacts.latest_compile_report_json,
+            compiled_pdf=state.artifacts.compiled_pdf,
+            worklog=worklog,
+            lane_notes=lane_notes,
+        )
+        latex = compile_gate.latex
+        candidate_pdf_path = compile_gate.candidate_pdf_path
+        compile_error = compile_gate.compile_error
+        compile_preservation = compile_gate.compile_preservation
+        preserved_compile_error = compile_gate.preserved_compile_error
+        candidate_review_path = compile_gate.candidate_review_path
+        candidate_review = compile_gate.candidate_review
+        candidate_score = compile_gate.candidate_score
+        candidate_axes = compile_gate.candidate_axes
+        no_op_refinement = compile_gate.no_op_refinement
+        worklog = compile_gate.worklog
+        lane_notes = compile_gate.lane_notes
 
         review_retry_paths: list[str] = []
         review_retry_scores: list[float] = []
