@@ -5,6 +5,7 @@ from pathlib import Path
 from paperorchestra.loop_engine.ralph.bridge_records import (
     build_candidate_state,
     build_initial_execution_record,
+    build_restored_bridge_update,
     build_restored_current_state,
     build_verification_record,
 )
@@ -99,3 +100,37 @@ def test_candidate_and_restored_state_records_share_verification_shape() -> None
     }
     assert restored["quality_eval_path"] == "/tmp/quality.restored.json"
     assert restored["qa_loop_plan_verdict"] == "human_needed"
+
+
+def test_build_restored_bridge_update_projects_final_state_and_execution_fields() -> None:
+    restored = {
+        "verification": {"quality_eval": {"path": "/tmp/restored-quality.json"}},
+        "quality_eval_path": Path("/tmp/restored-quality.json"),
+        "quality_eval": {"tiers": {"tier_1": {"status": "fail", "failing_codes": ["remaining"]}}},
+        "qa_loop_plan_path": Path("/tmp/restored-plan.json"),
+        "qa_loop_plan": {"verdict": "continue"},
+        "citation_summary": {"unsupported": 1},
+        "progress": {"forward_progress": False},
+    }
+
+    update = build_restored_bridge_update(restored)
+
+    assert update["final_eval_path"] == Path("/tmp/restored-quality.json")
+    assert update["final_eval"] is restored["quality_eval"]
+    assert update["final_plan_path"] == Path("/tmp/restored-plan.json")
+    assert update["final_plan"] is restored["qa_loop_plan"]
+    assert update["final_summary"] == {"unsupported": 1}
+    assert update["final_progress"] == {"forward_progress": False}
+    assert update["final_verification"] is restored["verification"]
+    assert update["execution_updates"]["restored_current_verification"] is restored["verification"]
+    assert update["execution_updates"]["restored_current_state"] == {
+        "verification": restored["verification"],
+        "after": {
+            "failing_codes": ["remaining"],
+            "citation_support_summary": {"unsupported": 1},
+        },
+        "quality_eval_path": "/tmp/restored-quality.json",
+        "qa_loop_plan_path": "/tmp/restored-plan.json",
+        "qa_loop_plan_verdict": "continue",
+        "progress": {"forward_progress": False},
+    }

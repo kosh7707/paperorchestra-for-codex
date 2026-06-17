@@ -48,7 +48,7 @@ from .inputs import (
 from .bridge_records import (
     build_candidate_state,
     build_initial_execution_record,
-    build_restored_current_state,
+    build_restored_bridge_update,
     build_verification_record,
 )
 from .action_dispatch import QaLoopActionDispatchContext, dispatch_qa_loop_actions
@@ -322,23 +322,15 @@ def run_qa_loop_step(
                 validation_name="validation.qa-loop-step.rollback.json",
             )
             if restored:
-                final_eval_path = restored["quality_eval_path"]
-                final_eval = restored["quality_eval"]
-                final_plan_path = restored["qa_loop_plan_path"]
-                final_plan = restored["qa_loop_plan"]
-                final_summary = restored["citation_summary"]
-                final_progress = restored["progress"]
-                final_verification = restored["verification"]
-                execution["restored_current_verification"] = restored["verification"]
-                execution["restored_current_state"] = build_restored_current_state(
-                    verification=restored["verification"],
-                    final_eval=final_eval,
-                    final_summary=final_summary,
-                    quality_eval_path=final_eval_path,
-                    qa_loop_plan_path=final_plan_path,
-                    qa_loop_plan_verdict=str(final_plan.get("verdict")),
-                    progress=final_progress,
-                )
+                restored_update = build_restored_bridge_update(restored)
+                final_eval_path = restored_update["final_eval_path"]
+                final_eval = restored_update["final_eval"]
+                final_plan_path = restored_update["final_plan_path"]
+                final_plan = restored_update["final_plan"]
+                final_summary = restored_update["final_summary"]
+                final_progress = restored_update["final_progress"]
+                final_verification = restored_update["final_verification"]
+                execution.update(restored_update["execution_updates"])
             verdict = "human_needed"
             rejection = build_citation_support_rejection_records(
                 candidate_path=citation_candidate_path,
@@ -368,23 +360,15 @@ def run_qa_loop_step(
                 validation_name="validation.qa-loop-step.candidate-approved-original-restored.json",
             )
             if restored:
-                final_eval_path = restored["quality_eval_path"]
-                final_eval = restored["quality_eval"]
-                final_plan_path = restored["qa_loop_plan_path"]
-                final_plan = restored["qa_loop_plan"]
-                final_summary = restored["citation_summary"]
-                final_progress = restored["progress"]
-                final_verification = restored["verification"]
-                execution["restored_current_verification"] = restored["verification"]
-                execution["restored_current_state"] = build_restored_current_state(
-                    verification=restored["verification"],
-                    final_eval=final_eval,
-                    final_summary=final_summary,
-                    quality_eval_path=final_eval_path,
-                    qa_loop_plan_path=final_plan_path,
-                    qa_loop_plan_verdict=str(final_plan.get("verdict")),
-                    progress=final_progress,
-                )
+                restored_update = build_restored_bridge_update(restored)
+                final_eval_path = restored_update["final_eval_path"]
+                final_eval = restored_update["final_eval"]
+                final_plan_path = restored_update["final_plan_path"]
+                final_plan = restored_update["final_plan"]
+                final_summary = restored_update["final_summary"]
+                final_progress = restored_update["final_progress"]
+                final_verification = restored_update["final_verification"]
+                execution.update(restored_update["execution_updates"])
             verdict = "human_needed"
             rejection = build_auto_commit_rejection_records(
                 candidate_path=citation_candidate_path,

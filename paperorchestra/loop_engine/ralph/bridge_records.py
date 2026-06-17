@@ -105,3 +105,34 @@ def build_restored_current_state(
         "qa_loop_plan_verdict": qa_loop_plan_verdict,
         "progress": progress,
     }
+
+
+def build_restored_bridge_update(restored: dict[str, Any]) -> dict[str, Any]:
+    final_eval_path = restored["quality_eval_path"]
+    final_eval = restored["quality_eval"]
+    final_plan_path = restored["qa_loop_plan_path"]
+    final_plan = restored["qa_loop_plan"]
+    final_summary = restored["citation_summary"]
+    final_progress = restored["progress"]
+    final_verification = restored["verification"]
+    return {
+        "final_eval_path": final_eval_path,
+        "final_eval": final_eval,
+        "final_plan_path": final_plan_path,
+        "final_plan": final_plan,
+        "final_summary": final_summary,
+        "final_progress": final_progress,
+        "final_verification": final_verification,
+        "execution_updates": {
+            "restored_current_verification": final_verification,
+            "restored_current_state": build_restored_current_state(
+                verification=final_verification,
+                final_eval=final_eval,
+                final_summary=final_summary,
+                quality_eval_path=final_eval_path,
+                qa_loop_plan_path=final_plan_path,
+                qa_loop_plan_verdict=str(final_plan.get("verdict")),
+                progress=final_progress,
+            ),
+        },
+    }
