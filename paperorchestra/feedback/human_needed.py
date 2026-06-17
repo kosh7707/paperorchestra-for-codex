@@ -25,7 +25,10 @@ from paperorchestra.feedback.operator_answer_metadata import (
 from paperorchestra.feedback.human_needed_records import (
     _action_id,
     _artifact_source,
+    _draft_issue_for_action,
     _metadata_without_targets,
+    feedback_draft,
+    private_answer_payload,
     public_answer_payload,
     public_result_payload,
 )
@@ -213,47 +216,6 @@ def _private_answer_path(
     raise ContractError("private answer output must be under .paper-orchestra/private/human-needed, outside the project root, or omitted")
 
 
-def _draft_issue_for_action(
-    *,
-    action: dict[str, Any] | None,
-    handoff_type: str,
-    decision_kind: str,
-    candidate_role: str | None,
-) -> dict[str, Any]:
-    if candidate_role and decision_kind == "approve_existing_candidate":
-        return {
-            "source_artifact_role": candidate_role,
-            "source_item_key": "candidate_approval",
-            "target_section": "Whole manuscript",
-            "severity": "major",
-            "rationale": "The operator explicitly approved a hash-bound forward-progress candidate exposed by the human_needed packet.",
-            "suggested_action": (
-                "Import this as approve_existing_candidate author feedback. "
-                "apply_operator_feedback must re-read the packet-bound candidate_approval, verify candidate/base/source hashes "
-                "and forward-progress evidence, then promote only after the operator-feedback hard gate passes."
-            ),
-            "authority_class": "author_feedback",
-            "owner_category": "author",
-        }
-    source_key = str((action or {}).get("code") or _action_id(action) or f"human_needed:{handoff_type}")
-    target = str((action or {}).get("target") or "Whole manuscript")
-    reason = str((action or {}).get("reason") or "The QA loop reached human_needed and requires bounded operator judgment.")
-    if decision_kind == "reject_candidate_with_reason":
-        suggested = "Reject the currently exposed candidate or unsafe direction; keep the canonical manuscript unchanged and request a safer repair plan."
-    else:
-        suggested = "Generate a bounded operator-feedback candidate that addresses this human_needed handoff using only packet-grounded manuscript evidence."
-    return {
-        "source_artifact_role": "qa_loop_plan",
-        "source_item_key": source_key,
-        "target_section": target,
-        "severity": "major",
-        "rationale": reason,
-        "suggested_action": suggested,
-        "authority_class": "author_feedback",
-        "owner_category": "author",
-    }
-
-
 def _public_result_path(cwd: str | Path | None, path: str | Path) -> str | None:
     candidate = Path(path).resolve()
     try:
@@ -335,19 +297,17 @@ def record_human_needed_answer(
     )
     private_answer_artifact_sha256: str | None = None
     if raw_path is not None:
-        raw_payload = {
-            "schema_version": HUMAN_NEEDED_ANSWER_SCHEMA_VERSION,
-            "recorded_at": utc_now_iso(),
-            "session_id": packet.get("session_id"),
-            "packet_sha256": packet.get("packet_sha256"),
-            "packet_file_sha256": packet_file_sha256,
-            "manuscript_sha256": packet.get("manuscript_sha256"),
-            "answer_sha256": answer_sha256,
-            "answer": answer,
-            "decision_kind": decision_kind,
-            "handoff_type": handoff_type,
-            "target_action_id": _action_id(action) or None,
-        }
+        raw_payload = private_answer_payload(
+            schema_version=HUMAN_NEEDED_ANSWER_SCHEMA_VERSION,
+            recorded_at=utc_now_iso(),
+            packet=packet,
+            packet_file_sha256=packet_file_sha256,
+            answer_sha256=answer_sha256,
+            answer=answer,
+            decision_kind=decision_kind,
+            handoff_type=handoff_type,
+            action=action,
+        )
         write_json(raw_path, raw_payload)
         private_answer_artifact_sha256 = _sha256_file(raw_path)
 
@@ -361,18 +321,13 @@ def record_human_needed_answer(
         action=action,
         candidate_role=candidate_role if decision_kind == "approve_existing_candidate" else None,
     )
-    draft = {
-        "intent": decision_kind,
-        "issues": [
-            _draft_issue_for_action(
-                action=action,
-                handoff_type=handoff_type,
-                decision_kind=decision_kind,
-                candidate_role=candidate_role if decision_kind == "approve_existing_candidate" else None,
-            )
-        ],
-        "human_needed_answer": metadata,
-    }
+    draft = feedback_draft(
+        action=action,
+        handoff_type=handoff_type,
+        decision_kind=decision_kind,
+        candidate_role=candidate_role if decision_kind == "approve_existing_candidate" else None,
+        metadata=metadata,
+    )
     feedback = normalize_operator_feedback_draft(packet, draft)
     target_issue_ids = [str(issue.get("id") or "") for issue in feedback.get("issues") or [] if str(issue.get("id") or "")]
     metadata["target_issue_ids"] = target_issue_ids
