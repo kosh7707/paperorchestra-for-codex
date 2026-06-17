@@ -18,14 +18,16 @@ from paperorchestra.feedback.normalization import (
     actionable_candidate_approval_role,
     normalize_operator_feedback_draft,
 )
+from paperorchestra.feedback.operator_answer_metadata import (
+    HUMAN_NEEDED_METADATA_SCHEMA_VERSION,
+    HUMAN_NEEDED_PUBLIC_SCHEMA_VERSION,
+)
 from paperorchestra.feedback.packets import _artifact_by_role, _file_sha256, _validate_operator_packet_artifact_bindings
 from paperorchestra.core.errors import ContractError
 from paperorchestra.runtime.providers import BaseProvider, MockProvider
 from paperorchestra.core.session import artifact_path, load_session, project_root, run_dir, runtime_root
 
 HUMAN_NEEDED_ANSWER_SCHEMA_VERSION = "human-needed-answer/1"
-HUMAN_NEEDED_PUBLIC_SCHEMA_VERSION = "human-needed-answer-public/1"
-HUMAN_NEEDED_METADATA_SCHEMA_VERSION = "human-needed-answer-metadata/1"
 
 HUMAN_NEEDED_DECISION_KINDS = {
     "approve_existing_candidate",
