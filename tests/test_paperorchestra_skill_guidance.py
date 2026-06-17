@@ -178,6 +178,43 @@ class PaperOrchestraSkillGuidanceTests(unittest.TestCase):
                 with self.subTest(skill=skill):
                     self.assertTrue((target / skill / "SKILL.md").exists())
 
+
+    def test_root_installer_supports_clone_and_go_dry_run(self) -> None:
+        installer = Path("install.sh")
+        self.assertTrue(installer.exists(), "missing root install.sh")
+        self.assertTrue(installer.stat().st_mode & 0o111, "install.sh must be executable")
+        result = subprocess.run(
+            ["bash", "install.sh", "--dry-run", "--demo", "--mcp"],
+            cwd=Path.cwd(),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=True,
+        )
+        output = result.stdout
+        for phrase in [
+            "PaperOrchestra installer",
+            "python -m venv .venv",
+            "pip install",
+            "scripts/install-skill.sh",
+            "scripts/register-codex-mcp.sh --use-local-venv",
+            "scripts/demo-mock.sh --in-repo",
+            "Next:",
+            ".venv/bin/paperorchestra status --json",
+        ]:
+            self.assertIn(phrase, output)
+
+    def test_readme_tldr_is_clone_install_not_manual_pip_recipe(self) -> None:
+        text = self._readme()
+        tldr = text.split("## Skill-first workflow", 1)[0]
+        self.assertIn("git clone", tldr)
+        self.assertIn("./install.sh", tldr)
+        self.assertIn("./install.sh --demo", tldr)
+        self.assertIn(".venv/bin/paperorchestra status --json", tldr)
+        self.assertNotIn("pip install -e", tldr)
+        self.assertNotIn("python -m venv", tldr)
+        self.assertNotIn(". .venv/bin/activate", tldr)
+
     def test_readme_copyable_model_command_remains_valid_json(self) -> None:
         text = self._readme()
         line = next(line for line in text.splitlines() if line.startswith("export PAPERO_MODEL_CMD="))

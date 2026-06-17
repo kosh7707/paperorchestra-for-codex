@@ -6,23 +6,29 @@ Current posture: **v1-alpha**. A successful run is **not submission-ready** appr
 
 ## TL;DR
 
+Clone, install, then ask PaperOrchestra what is ready:
+
 ```bash
-# Install the package in this checkout.
-python -m venv .venv
-. .venv/bin/activate
-pip install -e '.[dev]'
-
-# Install all PaperOrchestra skills into Codex.
-./scripts/install-skill.sh
-
-# Safe demo: no live search/model calls, no reference PDF required.
-./scripts/demo-mock.sh --in-repo
-
-# Inspect current state.
-paperorchestra status --json
+git clone https://github.com/kosh7707/paperorchestra-for-codex.git
+cd paperorchestra-for-codex
+./install.sh
+.venv/bin/paperorchestra status --json
 ```
 
-For a real model-backed review, configure a shell provider:
+Optional safe demo, still no live search/model calls and no reference PDF required. This wraps `./scripts/demo-mock.sh --in-repo`:
+
+```bash
+./install.sh --demo
+```
+
+Optional Codex MCP registration:
+
+```bash
+./install.sh --mcp
+# then restart Codex and check for mcp__paperorchestra__ tools
+```
+
+For a real model-backed review, configure a shell provider when you are ready:
 
 ```bash
 export PAPERO_MODEL_CMD='["codex","--search","exec","--skip-git-repo-check","-m","gpt-5.5","-c","model_reasoning_effort=\"high\""]'
@@ -69,8 +75,7 @@ Evidence bundles are a diagnostic artifact, not a readiness pass. They record st
 paperorchestra first-use --intent setup
 
 # Install skills and register the MCP server.
-./scripts/install-skill.sh
-./scripts/register-codex-mcp.sh --use-local-venv
+./install.sh --mcp
 scripts/smoke-paperorchestra-mcp.py --transport newline --json
 
 # Restart Codex completely, then verify visible mcp__paperorchestra__ tools in a new Codex session.
