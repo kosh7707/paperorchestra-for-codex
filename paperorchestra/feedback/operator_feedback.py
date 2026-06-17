@@ -39,6 +39,7 @@ from paperorchestra.feedback.operator_records import (
     _operator_feedback_verdict,
 )
 from paperorchestra.feedback.operator_snapshots import _restore_session_snapshot, _session_snapshot
+from paperorchestra.feedback.operator_contexts.citations import _protected_supported_citation_regressions
 from paperorchestra.feedback.operator_contract import (
     ACTIONABLE_FAILURE_OWNER_CATEGORIES,
     AXIS_CATASTROPHIC_DROP,
