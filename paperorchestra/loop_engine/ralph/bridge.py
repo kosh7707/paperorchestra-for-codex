@@ -25,6 +25,13 @@ from paperorchestra.loop_engine.ralph.bridge_actions import (
     _unsupported_executable_actions,
 )
 from paperorchestra.loop_engine.ralph.bridge_restore import _restore_current_after_uncommitted_candidate
+from paperorchestra.loop_engine.ralph.candidate_outcomes import (
+    build_auto_commit_record,
+    build_auto_commit_rejection_records,
+    build_citation_support_rejection_records,
+    classify_candidate_outcome,
+    should_override_no_progress,
+)
 from .handoff import (
     build_qa_loop_brief,
     build_ralph_start_payload,
@@ -60,7 +67,6 @@ from .state import (
     SUPPORTED_HANDLER_CODES,
     TERMINAL_VERDICTS,
     StepResult,
-    _artifact_sha,
     atomic_write_text,
     _citation_issue_count,
     _citation_summary,
@@ -278,7 +284,12 @@ def run_qa_loop_step(
             if citation_candidate_applied
             else (False, "no_citation_candidate")
         )
-        if citation_candidate_applied and auto_commit_allowed:
+        candidate_outcome = classify_candidate_outcome(
+            citation_candidate_applied=citation_candidate_applied,
+            auto_commit_allowed=auto_commit_allowed,
+            after_codes=after_codes,
+        )
+        if candidate_outcome == "auto_commit":
             clear_pending_manuscript_write(
                 cwd,
                 status="resolved",
@@ -286,15 +297,13 @@ def run_qa_loop_step(
             )
             execution["candidate_state"] = candidate_state
             execution["candidate_progress"] = progress
-            execution["candidate_auto_commit"] = {
-                "status": "committed_for_continued_qa",
-                "reason": auto_commit_reason,
-                "candidate_path": citation_candidate_path,
-                "candidate_sha256": _artifact_sha(citation_candidate_path),
-                "residual_citation_failures": residual_citation_failures,
-                "after_failing_codes": sorted(after_codes),
-            }
-        elif citation_candidate_applied and any(code.startswith("citation_support_") for code in after_codes):
+            execution["candidate_auto_commit"] = build_auto_commit_record(
+                candidate_path=citation_candidate_path,
+                auto_commit_reason=auto_commit_reason,
+                residual_citation_failures=residual_citation_failures,
+                after_codes=after_codes,
+            )
+        elif candidate_outcome == "citation_support_rejected":
             restored = _restore_current_after_uncommitted_candidate(
                 cwd,
                 paper_path=paper_path,
@@ -331,21 +340,16 @@ def run_qa_loop_step(
                     progress=final_progress,
                 )
             verdict = "human_needed"
-            execution["candidate_rollback"] = {
-                "reason": "citation_support_approval_failed",
-                "failing_codes": residual_citation_failures,
-                "auto_commit_blocked_reason": auto_commit_reason,
-            }
+            rejection = build_citation_support_rejection_records(
+                candidate_path=citation_candidate_path,
+                residual_citation_failures=residual_citation_failures,
+                auto_commit_reason=auto_commit_reason,
+            )
+            execution["candidate_rollback"] = rejection["rollback"]
             execution["candidate_state"] = candidate_state
             execution["candidate_progress"] = progress
-            execution["candidate_handoff"] = {
-                "status": "human_needed_candidate_rejected_by_citation_support",
-                "reason": "semi_auto citation repair did not satisfy the auto-commit safety gate",
-                "candidate_path": citation_candidate_path,
-                "residual_citation_failures": residual_citation_failures,
-                "auto_commit_blocked_reason": auto_commit_reason,
-            }
-        elif citation_candidate_applied:
+            execution["candidate_handoff"] = rejection["handoff"]
+        elif candidate_outcome == "auto_commit_gate_rejected":
             restored = _restore_current_after_uncommitted_candidate(
                 cwd,
                 paper_path=paper_path,
@@ -382,24 +386,21 @@ def run_qa_loop_step(
                     progress=final_progress,
                 )
             verdict = "human_needed"
-            execution["candidate_rollback"] = {
-                "reason": "citation_candidate_auto_commit_blocked",
-                "auto_commit_blocked_reason": auto_commit_reason,
-                "failing_codes": sorted(after_codes),
-            }
-            execution["candidate_handoff"] = {
-                "status": "human_needed_candidate_rejected_by_auto_commit_gate",
-                "reason": "semi_auto citation repair did not satisfy the auto-commit safety gate",
-                "candidate_path": citation_candidate_path,
-                "auto_commit_blocked_reason": auto_commit_reason,
-            }
+            rejection = build_auto_commit_rejection_records(
+                candidate_path=citation_candidate_path,
+                auto_commit_reason=auto_commit_reason,
+                after_codes=after_codes,
+            )
+            execution["candidate_rollback"] = rejection["rollback"]
+            execution["candidate_handoff"] = rejection["handoff"]
             execution["candidate_state"] = candidate_state
             execution["candidate_progress"] = progress
-        if (
-            verdict == "continue"
-            and execution["actions_attempted"]
-            and not final_progress["forward_progress"]
-            and not (citation_candidate_applied and progress.get("forward_progress"))
+        if should_override_no_progress(
+            verdict=verdict,
+            actions_attempted=execution["actions_attempted"],
+            final_progress=final_progress,
+            citation_candidate_applied=citation_candidate_applied,
+            candidate_progress=progress,
         ):
             verdict = "human_needed"
             execution["no_progress_override"] = True
