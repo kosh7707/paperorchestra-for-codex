@@ -16,3 +16,5 @@ CRITIC_REPORT*.md
 audit-artifacts/
 review/
 review.tar.gz
+
+paperorchestra-output*/
