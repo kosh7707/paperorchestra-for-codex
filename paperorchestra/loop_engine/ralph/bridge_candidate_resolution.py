@@ -33,8 +33,8 @@ class CandidateResolutionRequest:
     paper_path: Path | None
     original_paper: str | None
     mutation_snapshot: dict[str, Any]
-    citation_review_snapshot: dict[str, Any] | None
-    citation_trace_snapshot: dict[str, Any] | None
+    citation_review_snapshot: dict[str, Any]
+    citation_trace_snapshot: dict[str, Any]
     require_compile: bool
     require_live_verification: bool
     quality_mode: str

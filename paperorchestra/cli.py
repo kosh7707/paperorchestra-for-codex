@@ -35,7 +35,8 @@ from paperorchestra.engine.pipeline import (
 from paperorchestra.runtime.providers import get_citation_support_provider, get_provider
 from paperorchestra.loop_engine.quality.gate import write_quality_gate
 from paperorchestra.loop_engine.quality.loop import write_quality_loop_plan
-from paperorchestra.loop_engine.ralph.bridge import build_ralph_start_payload, launch_omx_ralph, run_qa_loop_step
+from paperorchestra.loop_engine.ralph.bridge import run_qa_loop_step
+from paperorchestra.loop_engine.ralph.handoff import build_ralph_start_payload, launch_omx_ralph
 from paperorchestra.manuscript.revisions import write_revision_suggestions
 from paperorchestra.core.session import create_session, load_session
 
