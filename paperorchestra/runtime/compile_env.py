@@ -294,16 +294,20 @@ exec {tool_path} -Mo --chroot "$PWD" --cwd / --disable_clone_newnet -- "$@"
     raise ValueError(f"Unsupported sandbox tool: {tool_name}")
 
 
-def ensure_sandbox_wrapper(cwd: str | Path | None) -> str | None:
-    tool = detect_sandbox_tool()
-    if not tool:
-        return None
+def _write_sandbox_wrapper(cwd: str | Path | None, tool_path: str) -> str:
     tools_dir = Path(cwd or ".").resolve() / ".paper-orchestra" / "tools"
     tools_dir.mkdir(parents=True, exist_ok=True)
     wrapper = tools_dir / "tex-sandbox.sh"
-    wrapper.write_text(_wrapper_script_contents(tool), encoding="utf-8")
+    wrapper.write_text(_wrapper_script_contents(tool_path), encoding="utf-8")
     wrapper.chmod(0o755)
     return str(wrapper)
+
+
+def ensure_sandbox_wrapper(cwd: str | Path | None, *, tool_path: str | None = None) -> str | None:
+    tool = tool_path or detect_sandbox_tool()
+    if not tool:
+        return None
+    return _write_sandbox_wrapper(cwd, tool)
 
 
 def inspect_compile_environment(cwd: str | Path | None, *, auto_configure_wrapper: bool = True) -> CompileEnvironmentReport:
@@ -374,7 +378,7 @@ def inspect_compile_environment(cwd: str | Path | None, *, auto_configure_wrappe
         notes.append("pkg-config is not available; cargo-based tectonic installation will fail until it is installed.")
 
     if not wrapper_path and auto_configure_wrapper and sandbox_tool:
-        wrapper = ensure_sandbox_wrapper(cwd)
+        wrapper = ensure_sandbox_wrapper(cwd, tool_path=sandbox_tool)
         if wrapper:
             wrapper_path = f'["{wrapper}"]'
             auto_configured = True
