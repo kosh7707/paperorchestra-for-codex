@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from ...io_utils import write_json
+from paperorchestra.core.io import write_json
 from ..quality.loop import DEFAULT_MAX_ITERATIONS, write_quality_eval, write_quality_loop_plan
 from .state import (
     OMX_TMUX_INJECT_MARKER,
@@ -17,7 +17,7 @@ from .state import (
     _qa_loop_step_command,
     _read_json,
 )
-from ...session import artifact_path, load_session
+from paperorchestra.core.session import artifact_path, load_session
 
 
 def build_qa_loop_brief(

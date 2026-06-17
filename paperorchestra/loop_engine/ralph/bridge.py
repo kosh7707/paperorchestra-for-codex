@@ -8,15 +8,15 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from ...critics import write_citation_support_review, write_section_review
-from ...citation_integrity import (
+from paperorchestra.reviews.critics import write_citation_support_review, write_section_review
+from paperorchestra.reviews.citation_integrity import (
     write_citation_integrity_audit,
     write_citation_integrity_critic,
     write_rendered_reference_audit,
 )
-from ...io_utils import extract_latex, write_json
-from ...models import utc_now_iso
-from ...pipeline import (
+from paperorchestra.core.io import extract_latex, write_json
+from paperorchestra.core.models import utc_now_iso
+from paperorchestra.engine.pipeline import (
     ContractError,
     _build_completion_request,
     _complete_with_runtime_mode,
@@ -28,8 +28,8 @@ from ...pipeline import (
     review_current_paper,
     write_figure_placement_review,
 )
-from ...providers import BaseProvider, get_citation_support_provider
-from ...source_obligations import write_source_obligations
+from paperorchestra.runtime.providers import BaseProvider, get_citation_support_provider
+from paperorchestra.manuscript.source_obligations import write_source_obligations
 from ..quality.loop import (
     CITATION_SUPPORT_REVIEW_REFRESH_CODES,
     DEFAULT_MAX_ITERATIONS,
@@ -40,8 +40,8 @@ from ..quality.loop import (
     write_quality_eval,
     write_quality_loop_plan,
 )
-from ...session import artifact_path, load_session, save_session
-from ...validator import extract_citation_keys
+from paperorchestra.core.session import artifact_path, load_session, save_session
+from paperorchestra.manuscript.validator import extract_citation_keys
 from .handoff import (
     build_qa_loop_brief,
     build_ralph_start_payload,

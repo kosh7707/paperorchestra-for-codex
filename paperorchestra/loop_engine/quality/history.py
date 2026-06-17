@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .policy import BUDGET_CONSUMING_HISTORY_EVENTS, HISTORY_FILENAME
-from ...session import runtime_root
+from paperorchestra.core.session import runtime_root
 
 def quality_loop_history_path(cwd: str | Path | None) -> Path:
     return runtime_root(cwd) / HISTORY_FILENAME

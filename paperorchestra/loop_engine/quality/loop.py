@@ -7,8 +7,8 @@ import shlex
 from pathlib import Path
 from typing import Any
 
-from ...critics import citation_item_has_valid_supporting_evidence, extract_cited_sentences
-from ...citation_integrity import (
+from paperorchestra.reviews.critics import citation_item_has_valid_supporting_evidence, extract_cited_sentences
+from paperorchestra.reviews.citation_integrity import (
     citation_integrity_audit_path,
     citation_integrity_check,
     citation_integrity_critic_path,
@@ -16,15 +16,15 @@ from ...citation_integrity import (
     citation_source_match_path,
     rendered_reference_audit_path,
 )
-from ...fidelity import build_reproducibility_audit, run_fidelity_audit, write_reproducibility_audit
-from ...io_utils import read_json, write_json
-from ...models import utc_now_iso
-from ...narrative import planning_artifact_status
-from ...orchestra_citation_quality import build_citation_quality_gate_internal, citation_quality_gate_path
-from ...providers import ShellProvider, get_citation_support_provider
-from ...session import artifact_path, load_session, runtime_root, save_session
-from ...source_obligations import evaluate_source_obligations, source_obligations_path
-from ...validator import check_citation_placement, check_claim_map_coverage, check_narrative_section_roles, extract_decimal_like_tokens
+from paperorchestra.reviews.fidelity import build_reproducibility_audit, run_fidelity_audit, write_reproducibility_audit
+from paperorchestra.core.io import read_json, write_json
+from paperorchestra.core.models import utc_now_iso
+from paperorchestra.manuscript.narrative import planning_artifact_status
+from paperorchestra.reviews.citation_quality import build_citation_quality_gate_internal, citation_quality_gate_path
+from paperorchestra.runtime.providers import ShellProvider, get_citation_support_provider
+from paperorchestra.core.session import artifact_path, load_session, runtime_root, save_session
+from paperorchestra.manuscript.source_obligations import evaluate_source_obligations, source_obligations_path
+from paperorchestra.manuscript.validator import check_citation_placement, check_claim_map_coverage, check_narrative_section_roles, extract_decimal_like_tokens
 
 from .policy import (
     AUTO_REPAIR_CODES,

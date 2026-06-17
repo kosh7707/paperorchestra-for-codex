@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..orchestra_consensus import CriticConsensus
-from ..orchestra_policies import ReadinessPolicy
-from ..orchestra_scoring import ScholarlyScore, ScoringInputBundle
-from ..orchestra_state import NextAction, OrchestraState
+from paperorchestra.orchestra.consensus import CriticConsensus
+from paperorchestra.orchestra.policies import ReadinessPolicy
+from paperorchestra.orchestra.scoring import ScholarlyScore, ScoringInputBundle
+from paperorchestra.orchestra.state import NextAction, OrchestraState
 
 
 @dataclass

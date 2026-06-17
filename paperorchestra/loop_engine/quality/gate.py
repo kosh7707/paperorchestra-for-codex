@@ -3,12 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ...io_utils import write_json
-from ...models import utc_now_iso
-from ...pipeline import refine_current_paper
+from paperorchestra.core.io import write_json
+from paperorchestra.core.models import utc_now_iso
+from paperorchestra.engine.pipeline import refine_current_paper
 from .loop import write_quality_eval, write_quality_loop_plan
 from .history import _failing_codes_from_quality_eval
-from ...session import artifact_path, load_session, save_session
+from paperorchestra.core.session import artifact_path, load_session, save_session
 
 QUALITY_GATE_SCHEMA_VERSION = "quality-gate/1"
 QUALITY_GATE_PROFILES = {"auto", "mock", "ralph", "claim_safe"}

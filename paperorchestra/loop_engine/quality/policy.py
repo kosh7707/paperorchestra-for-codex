@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from ...boundary import CONTROL_PROSE_PATTERNS
+from paperorchestra.core.boundary import CONTROL_PROSE_PATTERNS
 
 QUALITY_EVAL_SCHEMA_VERSION = "quality-eval/1"
 QA_LOOP_PLAN_SCHEMA_VERSION = "qa-loop-plan/2"

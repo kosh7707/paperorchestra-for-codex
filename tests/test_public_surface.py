@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import importlib
+import pkgutil
+from pathlib import Path
 import unittest
 
+import paperorchestra
 from paperorchestra.cli import build_parser
 from paperorchestra.mcp_server import TOOLS, TOOL_HANDLERS
+from paperorchestra.runtime.environment import package_context
 
 
 class PublicSurfaceTest(unittest.TestCase):
@@ -66,13 +70,46 @@ class PublicSurfaceTest(unittest.TestCase):
 
     def test_loop_engine_modules_import_from_new_packages(self) -> None:
         for module in (
+            "paperorchestra.core.session",
+            "paperorchestra.engine.pipeline",
+            "paperorchestra.feedback.human_needed",
+            "paperorchestra.interfaces.mcp.handlers",
             "paperorchestra.loop_engine.orchestra",
             "paperorchestra.loop_engine.quality.gate",
             "paperorchestra.loop_engine.quality.loop",
             "paperorchestra.loop_engine.ralph.bridge",
+            "paperorchestra.manuscript.validator",
+            "paperorchestra.orchestra.controller",
+            "paperorchestra.research.literature",
+            "paperorchestra.reviews.critics",
+            "paperorchestra.runtime.doctor",
         ):
             with self.subTest(module=module):
                 importlib.import_module(module)
+
+    def test_root_package_stays_thin(self) -> None:
+        root_py = {path.name for path in Path(paperorchestra.__file__).resolve().parent.glob("*.py")}
+        self.assertLessEqual(root_py, {"__init__.py", "cli.py", "mcp_server.py"})
+
+    def test_runtime_reports_repo_and_package_roots_after_module_split(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        package_root = Path(paperorchestra.__file__).resolve().parent
+        context = package_context(repo_root)
+
+        self.assertEqual(context["project_root"], str(repo_root))
+        self.assertEqual(context["package_root"], str(package_root))
+        self.assertIsNone(context["stale_install_warning"])
+
+    def test_all_package_modules_import(self) -> None:
+        failures = []
+        for module in pkgutil.walk_packages(paperorchestra.__path__, prefix="paperorchestra."):
+            if ".prompt_assets" in module.name:
+                continue
+            try:
+                importlib.import_module(module.name)
+            except Exception as exc:  # pragma: no cover - subTest reports concrete import failure
+                failures.append(f"{module.name}: {type(exc).__name__}: {exc}")
+        self.assertEqual(failures, [])
 
 
 if __name__ == "__main__":

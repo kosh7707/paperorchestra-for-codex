@@ -6,7 +6,7 @@ from typing import Any
 
 from ...domains import detect_domain_for_text, get_domain
 from .utils import _read_json_if_exists
-from ...validator import check_citation_placement, check_claim_map_coverage, check_narrative_section_roles, extract_decimal_like_tokens
+from paperorchestra.manuscript.validator import check_citation_placement, check_claim_map_coverage, check_narrative_section_roles, extract_decimal_like_tokens
 
 
 HIGH_RISK_CLAIM_RE = get_domain().high_risk_claim_re

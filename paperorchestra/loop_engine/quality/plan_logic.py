@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ...critics import citation_item_has_valid_supporting_evidence
+from paperorchestra.reviews.critics import citation_item_has_valid_supporting_evidence
 from .actions import _action
 from .history import _failing_codes_from_quality_eval, _tier_statuses
 from .policy import (

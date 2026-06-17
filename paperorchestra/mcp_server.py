@@ -4,8 +4,8 @@ import json
 import sys
 from typing import Any
 
-from .mcp_handlers import TOOL_HANDLERS
-from .mcp_tools import TOOLS
+from paperorchestra.interfaces.mcp.handlers import TOOL_HANDLERS
+from paperorchestra.interfaces.mcp.tools import TOOLS
 
 JSON = dict[str, Any]
 

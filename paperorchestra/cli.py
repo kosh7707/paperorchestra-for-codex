@@ -7,20 +7,20 @@ import os
 import sys
 from pathlib import Path
 
-from .critic_trust import build_critic_trust_card, require_live_critic_trust
-from .critics import write_citation_support_review, write_section_review
-from .doctor import build_doctor_report, build_session_recovery_hint
-from .environment import build_environment_inventory
-from .exporting import export_current_artifacts
-from .human_needed import record_human_needed_answer
-from .cli_parser import build_parser
-from .models import InputBundle
-from .orchestra_evidence import write_orchestrator_evidence_bundle
-from .orchestra_executor import LocalActionExecutor
-from .orchestra_omx_executor import OmxActionExecutor
-from .orchestra_scorecard import render_scorecard_summary
-from .orchestrator import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state
-from .pipeline import (
+from paperorchestra.reviews.critic_trust import build_critic_trust_card, require_live_critic_trust
+from paperorchestra.reviews.critics import write_citation_support_review, write_section_review
+from paperorchestra.runtime.doctor import build_doctor_report, build_session_recovery_hint
+from paperorchestra.runtime.environment import build_environment_inventory
+from paperorchestra.interfaces.exporting import export_current_artifacts
+from paperorchestra.feedback.human_needed import record_human_needed_answer
+from paperorchestra.interfaces.cli_parser import build_parser
+from paperorchestra.core.models import InputBundle
+from paperorchestra.orchestra.evidence import write_orchestrator_evidence_bundle
+from paperorchestra.orchestra.executor import LocalActionExecutor
+from paperorchestra.orchestra.omx_executor import OmxActionExecutor
+from paperorchestra.orchestra.scorecard import render_scorecard_summary
+from paperorchestra.orchestra.controller import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state
+from paperorchestra.engine.pipeline import (
     compile_current_paper,
     import_prior_work,
     research_prior_work as generate_prior_work_seed,
@@ -28,12 +28,12 @@ from .pipeline import (
     run_pipeline,
     write_sections,
 )
-from .providers import get_citation_support_provider, get_provider
-from .loop_engine.quality.gate import write_quality_gate
-from .loop_engine.quality.loop import write_quality_loop_plan
-from .loop_engine.ralph.bridge import build_ralph_start_payload, launch_omx_ralph, run_qa_loop_step
-from .revisions import write_revision_suggestions
-from .session import create_session, load_session, run_dir
+from paperorchestra.runtime.providers import get_citation_support_provider, get_provider
+from paperorchestra.loop_engine.quality.gate import write_quality_gate
+from paperorchestra.loop_engine.quality.loop import write_quality_loop_plan
+from paperorchestra.loop_engine.ralph.bridge import build_ralph_start_payload, launch_omx_ralph, run_qa_loop_step
+from paperorchestra.manuscript.revisions import write_revision_suggestions
+from paperorchestra.core.session import create_session, load_session, run_dir
 
 
 def _provider_from_args(args: argparse.Namespace):
