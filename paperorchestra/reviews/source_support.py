@@ -1,40 +1,26 @@
 from __future__ import annotations
 
 import json
-import re
 import urllib.parse
 from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.io import read_json
-from paperorchestra.core.session import artifact_path, load_session, save_session
-from paperorchestra.manuscript.validator import CITE_COMMAND_RE
-from paperorchestra.reviews.citation_sentences import _sentence_end, _sentence_start, extract_cited_sentences
+from paperorchestra.core.session import artifact_path, load_session
+from paperorchestra.reviews.citation_sentences import extract_cited_sentences
 from paperorchestra.reviews.citation_source_payload import _clean_optional_string, _lean_source_payload
+from paperorchestra.reviews.source_support_cases import (
+    _collapse_ws,
+    _looks_like_section_heading,
+    _sentence_for_cite_in_paragraph,
+    _strip_cites,
+    build_source_backed_citation_cases_from_latex,
+)
 from paperorchestra.reviews.source_support_classifier import _classify_source_support
 from paperorchestra.reviews.source_support_retrieval import (
     _download_source_evidence,
     _source_locators,
 )
-
-
-def _strip_cites(text: str) -> str:
-    return re.sub(CITE_COMMAND_RE, "", text).replace("~", " ")
-
-
-def _collapse_ws(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def _sentence_for_cite_in_paragraph(paragraph: str, cite_start: int, cite_end: int) -> str:
-    start = _sentence_start(paragraph, cite_start)
-    end = _sentence_end(paragraph, cite_end)
-    return _collapse_ws(paragraph[start:end])
-
-
-def _looks_like_section_heading(paragraph: str) -> bool:
-    stripped = paragraph.strip()
-    return bool(stripped and len(stripped) < 80 and stripped.endswith(".") and "\\cite" not in stripped)
 
 
 def _run_relative_artifact_path(cwd: str | Path | None, path: Path) -> str:
@@ -63,43 +49,17 @@ def build_source_backed_citation_cases(
         raise ValueError("Need paper.full.tex before citation support review.")
     latex = Path(state.artifacts.paper_full_tex).read_text(encoding="utf-8")
     citation_map = read_json(state.artifacts.citation_map_json) if state.artifacts.citation_map_json else {}
-    body = _citation_review_body(latex)
-    raw_paragraphs = [_collapse_ws(part) for part in re.split(r"\n\s*\n+", body) if _collapse_ws(part)]
-    current_section = "Manuscript"
-    paragraph_index = 0
-    cases: list[dict[str, Any]] = []
-    for paragraph in raw_paragraphs:
-        if "\\cite" not in paragraph and _looks_like_section_heading(paragraph):
-            current_section = paragraph.rstrip(".")
-            continue
-        if "\\cite" not in paragraph:
-            continue
-        paragraph_index += 1
-        for cite_command_index, match in enumerate(CITE_COMMAND_RE.finditer(paragraph), start=1):
-            raw_keys = [item.strip() for item in match.group(2).split(",") if item.strip()]
-            anchor = _sentence_for_cite_in_paragraph(paragraph, match.start(), match.end())
-            target = _collapse_ws(_strip_cites(anchor)).rstrip(".")
-            for key in raw_keys:
-                case_id = f"C{len(cases) + 1}"
-                case: dict[str, Any] = {
-                    "id": case_id,
-                    "key": key,
-                    "loc": f"{current_section} ¶{paragraph_index}",
-                    "paragraph": paragraph,
-                    "anchor": anchor,
-                    "target": target,
-                    "source": _lean_source_payload(key, citation_map),
-                }
-                if resolve_evidence:
-                    case["_cwd"] = cwd
-                    ignore_existing_source = _apply_human_resolution(cwd, case, citation_map)
-                    if not case.get("_skip_source_resolution"):
-                        evidence = _resolve_source_evidence(cwd, case, ignore_existing_source=ignore_existing_source)
-                        case["evidence"] = evidence
-                        verdict, message_field, message = _inspect_source_case(case, evidence)
-                        case["verdict"] = verdict
-                        case[message_field] = message
-                cases.append(case)
+    cases = build_source_backed_citation_cases_from_latex(latex, citation_map)
+    if resolve_evidence:
+        for case in cases:
+            case["_cwd"] = cwd
+            ignore_existing_source = _apply_human_resolution(cwd, case, citation_map)
+            if not case.get("_skip_source_resolution"):
+                evidence = _resolve_source_evidence(cwd, case, ignore_existing_source=ignore_existing_source)
+                case["evidence"] = evidence
+                verdict, message_field, message = _inspect_source_case(case, evidence)
+                case["verdict"] = verdict
+                case[message_field] = message
     return cases
 
 
