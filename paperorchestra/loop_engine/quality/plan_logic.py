@@ -3,10 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .critics import citation_item_has_valid_supporting_evidence
-from .quality_loop_actions import _action
-from .quality_loop_history import _failing_codes_from_quality_eval, _tier_statuses
-from .quality_loop_policy import (
+from ...critics import citation_item_has_valid_supporting_evidence
+from .actions import _action
+from .history import _failing_codes_from_quality_eval, _tier_statuses
+from .policy import (
     CITATION_SUPPORT_REVIEW_REFRESH_CODES,
     HARD_HUMAN_ACTION_CODES,
     NON_REVIEWABLE_ACTION_CODES,
@@ -14,7 +14,7 @@ from .quality_loop_policy import (
     QA_LOOP_SUPPORTED_HANDLER_CODES,
     REVIEW_REFRESH_CODES,
 )
-from .quality_loop_utils import _path_ref, _read_json_if_exists
+from .utils import _path_ref, _read_json_if_exists
 
 
 AUTHOR_JUDGMENT_AUTHORITY_CLASSES = {"author_judgment", "operator_judgment", "domain_judgment", "author_feedback"}
@@ -230,8 +230,8 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     target="narrative planning artifacts",
                     automation="automatic",
                     reason="Fresh narrative/claim/citation placement planning artifacts are required before claim-safe writing or evaluation.",
-                    suggested_commands=["paperorchestra plan-narrative", "paperorchestra qa-loop --quality-mode claim_safe"],
-                    ralph_instruction="Regenerate planning artifacts with `paperorchestra plan-narrative`; do not continue automated writing against missing or stale plans.",
+                    suggested_commands=["paperorchestra run --provider shell", "paperorchestra qa-loop --quality-mode claim_safe"],
+                    ralph_instruction="Regenerate planning artifacts through the high-level run/orchestrator path; do not continue automated writing against missing or stale plans.",
                 )
             )
     tier1 = tiers.get("tier_1_structural") if isinstance(tiers.get("tier_1_structural"), dict) else {}
@@ -756,7 +756,7 @@ def _quality_eval_actions(quality_eval: dict[str, Any]) -> list[dict[str, Any]]:
                     automation="human_needed",
                     reason="Claim-safe readiness requires an independent reviewer artifact pair or an explicit reviewer-independence acceptance record.",
                     suggested_commands=[
-                        "paperorchestra critique --output review.independent.json",
+                        "paperorchestra critique --output-dir <critic-run-dir>",
                         "paperorchestra qa-loop --quality-mode claim_safe",
                     ],
                     ralph_instruction="Stop before ready_for_human_finalization: obtain a second independent review or record a hash-bound human acceptance artifact.",

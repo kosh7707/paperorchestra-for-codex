@@ -19,6 +19,7 @@ EXPECTED_TOOLS = [
     "run_pipeline",
     "compile_current_paper",
     "critique",
+    "export_current",
     "quality_gate",
 ]
 

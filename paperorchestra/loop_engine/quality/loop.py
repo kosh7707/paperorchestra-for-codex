@@ -7,8 +7,8 @@ import shlex
 from pathlib import Path
 from typing import Any
 
-from .critics import citation_item_has_valid_supporting_evidence, extract_cited_sentences
-from .citation_integrity import (
+from ...critics import citation_item_has_valid_supporting_evidence, extract_cited_sentences
+from ...citation_integrity import (
     citation_integrity_audit_path,
     citation_integrity_check,
     citation_integrity_critic_path,
@@ -16,17 +16,17 @@ from .citation_integrity import (
     citation_source_match_path,
     rendered_reference_audit_path,
 )
-from .fidelity import build_reproducibility_audit, run_fidelity_audit, write_reproducibility_audit
-from .io_utils import read_json, write_json
-from .models import utc_now_iso
-from .narrative import planning_artifact_status
-from .orchestra_citation_quality import build_citation_quality_gate_internal, citation_quality_gate_path
-from .providers import ShellProvider, get_citation_support_provider
-from .session import artifact_path, load_session, runtime_root, save_session
-from .source_obligations import evaluate_source_obligations, source_obligations_path
-from .validator import check_citation_placement, check_claim_map_coverage, check_narrative_section_roles, extract_decimal_like_tokens
+from ...fidelity import build_reproducibility_audit, run_fidelity_audit, write_reproducibility_audit
+from ...io_utils import read_json, write_json
+from ...models import utc_now_iso
+from ...narrative import planning_artifact_status
+from ...orchestra_citation_quality import build_citation_quality_gate_internal, citation_quality_gate_path
+from ...providers import ShellProvider, get_citation_support_provider
+from ...session import artifact_path, load_session, runtime_root, save_session
+from ...source_obligations import evaluate_source_obligations, source_obligations_path
+from ...validator import check_citation_placement, check_claim_map_coverage, check_narrative_section_roles, extract_decimal_like_tokens
 
-from .quality_loop_policy import (
+from .policy import (
     AUTO_REPAIR_CODES,
     BUDGET_CONSUMING_HISTORY_EVENTS,
     CITATION_SUPPORT_REVIEW_REFRESH_CODES,
@@ -52,7 +52,7 @@ from .quality_loop_policy import (
     TIER2_CLAIM_CODES,
 )
 
-from .quality_loop_history import (
+from .history import (
     _build_cross_iteration,
     _failing_codes_from_quality_eval,
     _history_entry_consumes_budget,
@@ -62,7 +62,7 @@ from .quality_loop_history import (
     quality_loop_history_path,
 )
 
-from .quality_loop_leakage import (
+from .leakage import (
     PDF_TEXT_SCAN_UNAVAILABLE_CODE,
     _leakage_markers_in_text,
     _manuscript_prompt_leakage,
@@ -72,11 +72,11 @@ from .quality_loop_leakage import (
     _scan_text_file_for_prompt_leakage,
 )
 
-from .quality_loop_utils import _file_sha256, _path_ref, _read_json_if_exists, _sha256_jsonable
-from .ralph_bridge_state import QA_LOOP_HANDOFF_FILENAME
+from .utils import _file_sha256, _path_ref, _read_json_if_exists, _sha256_jsonable
+from ..ralph.state import QA_LOOP_HANDOFF_FILENAME
 
-from .quality_loop_citation_support import _citation_support_check, _citation_support_path
-from .quality_loop_reviews import (
+from .citation_support import _citation_support_check, _citation_support_path
+from .reviews import (
     _anti_inflation_violations,
     _current_review_records,
     _latest_review_payload,
@@ -93,7 +93,7 @@ from .quality_loop_reviews import (
     _section_review_path,
     _validation_issue_counts,
 )
-from .quality_loop_source_checks import (
+from .source_checks import (
     BENCHMARK_CLAIM_RE,
     HIGH_RISK_CLAIM_RE,
     LIMITATION_SCOPE_RE,
@@ -106,7 +106,7 @@ from .quality_loop_source_checks import (
     _source_material_fidelity_check,
 )
 
-from .quality_loop_actions import (
+from .actions import (
     _action,
     _automation_for_issue,
     _citation_actions,
@@ -123,7 +123,7 @@ from .quality_loop_actions import (
     _validation_actions,
     _warning_actions,
 )
-from .quality_loop_plan_logic import (
+from .plan_logic import (
     _human_handoff,
     _next_ralph_instruction,
     _plan_reads,
@@ -506,7 +506,7 @@ def build_quality_eval(
     )
 
     tiers: dict[str, Any] = {"tier_0_preconditions": tier0}
-    if getattr(_manuscript_prompt_leakage, "__module__", "") == "paperorchestra.quality_loop_leakage":
+    if getattr(_manuscript_prompt_leakage, "__module__", "") == "paperorchestra.loop_engine.quality.leakage":
         leakage_report = _manuscript_prompt_leakage_report(state)
         leakage = leakage_report["markers"]
         pdf_text_scan_unavailable = leakage_report["pdf_text_scan_unavailable"]

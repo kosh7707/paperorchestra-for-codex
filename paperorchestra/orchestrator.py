@@ -7,7 +7,7 @@ from typing import Any
 from .orchestra_claims import build_claim_graph_from_materials
 from .orchestra_executor import ActionExecutor, ExecutionRecord
 from .orchestra_consensus import CriticConsensus
-from .orchestra_loop import FullLoopPlanner, LoopFacts
+from .loop_engine.orchestra import FullLoopPlanner, LoopFacts
 from .orchestra_materials import build_material_inventory, build_source_digest
 from .orchestra_omx import build_research_mission_invocation_evidence
 from .orchestra_omx_executor import OmxActionExecutor, OmxCommandRunner

@@ -1,0 +1,260 @@
+from __future__ import annotations
+
+from typing import Any
+
+JSON = dict[str, Any]
+
+
+def _schema(properties: JSON, required: list[str] | None = None) -> JSON:
+    schema: JSON = {"type": "object", "properties": properties}
+    if required:
+        schema["required"] = required
+    return schema
+
+
+TOOLS: list[JSON] = [
+    {
+        "name": "status",
+        "description": "Return the current PaperOrchestra session state.",
+        "inputSchema": _schema({"cwd": {"type": "string"}}),
+    },
+    {
+        "name": "init_session",
+        "description": "Initialize a PaperOrchestra session from input files.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "idea": {"type": "string"},
+                "experimental_log": {"type": "string"},
+                "template": {"type": "string"},
+                "guidelines": {"type": "string"},
+                "figures_dir": {"type": "string"},
+                "cutoff_date": {"type": "string"},
+                "venue": {"type": "string"},
+                "page_limit": {"type": "integer"},
+                "allow_outside_workspace": {"type": "boolean"},
+            },
+            ["idea", "experimental_log", "template", "guidelines"],
+        ),
+    },
+    {
+        "name": "inspect_state",
+        "description": "Inspect material readiness and next orchestration actions without live work.",
+        "inputSchema": _schema({"cwd": {"type": "string"}, "material": {"type": "string"}}),
+    },
+    {
+        "name": "orchestrate",
+        "description": "Run the orchestrator until the next bounded action or stop.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "material": {"type": "string"},
+                "execute_local": {"type": "boolean"},
+                "plan_full_loop": {"type": "boolean"},
+                "execute_omx": {"type": "boolean"},
+                "write_evidence": {"type": "boolean"},
+                "evidence_output": {"type": "string"},
+            }
+        ),
+    },
+    {
+        "name": "research_prior_work",
+        "description": "Generate/import a prior-work seed using the configured provider, including web-capable provider commands.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "provider": {"type": "string"},
+                "provider_command": {"type": "string"},
+                "output": {"type": "string"},
+                "paper": {"type": "string"},
+                "artifact_repo": {"type": "string"},
+                "runtime_mode": {"type": "string"},
+                "source": {"type": "string"},
+                "import_seed": {"type": "boolean"},
+                "require_complete_metadata": {"type": "boolean"},
+            }
+        ),
+    },
+    {
+        "name": "import_prior_work",
+        "description": "Import a curated prior-work seed file.",
+        "inputSchema": _schema(
+            {"cwd": {"type": "string"}, "seed_file": {"type": "string"}, "source": {"type": "string"}, "require_complete_metadata": {"type": "boolean"}},
+            ["seed_file"],
+        ),
+    },
+    {
+        "name": "write_sections",
+        "description": "Draft or rewrite manuscript sections.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "provider": {"type": "string"},
+                "provider_command": {"type": "string"},
+                "runtime_mode": {"type": "string"},
+                "only_sections": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+                "output_path": {"type": "string"},
+                "claim_safe": {"type": "boolean"},
+            }
+        ),
+    },
+    {
+        "name": "critique",
+        "description": "Run whole-paper, section, and citation critics and produce revision suggestions.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "provider": {"type": "string"},
+                "provider_command": {"type": "string"},
+                "source_paper": {"type": "string"},
+                "output_dir": {"type": "string"},
+                "runtime_mode": {"type": "string"},
+                "citation_evidence_mode": {"type": "string", "enum": ["heuristic", "model", "web", "source"]},
+            }
+        ),
+    },
+    {
+        "name": "quality_gate",
+        "description": "Run the draft-quality gate and produce a repair plan.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "output_path": {"type": "string"},
+                "plan_output_path": {"type": "string"},
+                "profile": {"type": "string"},
+                "quality_mode": {"type": "string"},
+                "max_iterations": {"type": "integer"},
+                "require_live_verification": {"type": "boolean"},
+                "accept_mixed_provenance": {"type": "boolean"},
+                "auto_refine": {"type": "boolean"},
+                "refine_iterations": {"type": "integer"},
+                "runtime_mode": {"type": "string"},
+                "require_compile_for_accept": {"type": "boolean"},
+                "provider": {"type": "string"},
+                "provider_command": {"type": "string"},
+            }
+        ),
+    },
+    {
+        "name": "qa_loop",
+        "description": "Build the next QA-loop repair plan.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "output_path": {"type": "string"},
+                "quality_eval": {"type": "string"},
+                "quality_mode": {"type": "string"},
+                "max_iterations": {"type": "integer"},
+                "accept_mixed_provenance": {"type": "boolean"},
+                "require_live_verification": {"type": "boolean"},
+            }
+        ),
+    },
+    {
+        "name": "qa_loop_step",
+        "description": "Execute one bounded QA-loop repair step.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "provider": {"type": "string"},
+                "provider_command": {"type": "string"},
+                "quality_mode": {"type": "string"},
+                "max_iterations": {"type": "integer"},
+                "require_live_verification": {"type": "boolean"},
+                "accept_mixed_provenance": {"type": "boolean"},
+                "runtime_mode": {"type": "string"},
+                "require_compile": {"type": "boolean"},
+                "citation_evidence_mode": {"type": "string"},
+                "citation_provider": {"type": "string"},
+                "citation_provider_command": {"type": "string"},
+                "quality_eval": {"type": "string"},
+                "plan": {"type": "string"},
+                "citation_support_review": {"type": "string"},
+            }
+        ),
+    },
+    {
+        "name": "ralph_start",
+        "description": "Create or launch an OMX Ralph handoff for the current QA loop.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "output_path": {"type": "string"},
+                "quality_mode": {"type": "string"},
+                "max_iterations": {"type": "integer"},
+                "require_live_verification": {"type": "boolean"},
+                "accept_mixed_provenance": {"type": "boolean"},
+                "evidence_root": {"type": "string"},
+                "launch": {"type": "boolean"},
+            }
+        ),
+    },
+    {
+        "name": "compile_current_paper",
+        "description": "Compile the current manuscript.",
+        "inputSchema": _schema({"cwd": {"type": "string"}}),
+    },
+    {
+        "name": "answer_human_needed",
+        "description": "Record an answer for a human_needed stop and optionally apply it.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "answer": {"type": "string"},
+                "packet_path": {"type": "string"},
+                "review_scope": {"type": "string"},
+                "intent": {"type": "string"},
+                "action_id": {"type": "string"},
+                "output_answer": {"type": "string"},
+                "output_feedback": {"type": "string"},
+                "redacted_answer_only": {"type": "boolean"},
+                "apply": {"type": "boolean"},
+                "imported_feedback_output": {"type": "string"},
+                "provider": {"type": "string"},
+                "provider_command": {"type": "string"},
+                "citation_provider": {"type": "string"},
+                "citation_provider_command": {"type": "string"},
+                "max_supervised_iterations": {"type": "integer"},
+                "quality_mode": {"type": "string"},
+                "max_iterations": {"type": "integer"},
+                "require_live_verification": {"type": "boolean"},
+                "accept_mixed_provenance": {"type": "boolean"},
+                "require_compile": {"type": "boolean"},
+                "runtime_mode": {"type": "string"},
+                "citation_evidence_mode": {"type": "string"},
+            },
+            ["answer"],
+        ),
+    },
+    {
+        "name": "export_current",
+        "description": "Copy current manuscript outputs to a destination directory.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "output": {"type": "string"},
+                "include_all_artifacts": {"type": "boolean"},
+            },
+            ["output"],
+        ),
+    },
+    {
+        "name": "run_pipeline",
+        "description": "Run the full PaperOrchestra pipeline.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "provider": {"type": "string"},
+                "provider_command": {"type": "string"},
+                "discovery_mode": {"type": "string"},
+                "verify_mode": {"type": "string"},
+                "verify_error_policy": {"type": "string"},
+                "verify_fallback_mode": {"type": "string"},
+                "require_live_verification": {"type": "boolean"},
+                "refine_iterations": {"type": "integer"},
+                "compile_paper": {"type": "boolean"},
+                "runtime_mode": {"type": "string"},
+            }
+        ),
+    },
+]

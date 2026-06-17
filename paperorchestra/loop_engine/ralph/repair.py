@@ -5,19 +5,19 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-from .citation_integrity import build_citation_integrity_audit
-from .io_utils import extract_latex, write_json
-from .models import utc_now_iso
-from .pipeline import (
+from ...citation_integrity import build_citation_integrity_audit
+from ...io_utils import extract_latex, write_json
+from ...models import utc_now_iso
+from ...pipeline import (
     ContractError,
     _build_completion_request,
     _complete_with_runtime_mode,
     compile_current_paper,
     record_current_validation_report,
 )
-from .providers import BaseProvider
-from .quality_loop_source_checks import _high_risk_claim_sweep
-from .ralph_bridge_state import (
+from ...providers import BaseProvider
+from ..quality.source_checks import _high_risk_claim_sweep
+from .state import (
     NON_SUPPORTED_CITATION_STATUSES,
     atomic_write_text,
     clear_pending_manuscript_write,
@@ -27,9 +27,9 @@ from .ralph_bridge_state import (
     _session_mutation_snapshot,
     recover_pending_manuscript_write,
 )
-from .session import artifact_path, load_session, save_session
-from .source_obligations import evaluate_source_obligations, source_obligations_path
-from .validator import allowed_citation_keys, canonical_citation_map, canonicalize_citation_keys, extract_citation_keys
+from ...session import artifact_path, load_session, save_session
+from ...source_obligations import evaluate_source_obligations, source_obligations_path
+from ...validator import allowed_citation_keys, canonical_citation_map, canonicalize_citation_keys, extract_citation_keys
 
 
 def _non_supported_citation_items(citation_review: dict[str, Any]) -> list[dict[str, Any]]:

@@ -30,7 +30,7 @@ Prefer high-level MCP tools when attached; otherwise use CLI fallback and say MC
 - `inspect_state`: inspect current session/material state and next valid actions.
 - `orchestrate`: bounded v1 orchestrator. With `execute_local=true`, it performs **one deterministic local step** only; this is **not a full pipeline** and not a full paper run.
 - `answer_human_needed`: record author judgment only when the engine explicitly asks.
-- `export-current`: CLI fallback for copying final TeX/Bib/PDF/session outputs.
+- `export_current` / `export-current`: copy final TeX/Bib/PDF/session outputs.
 
 When using `orchestrate`, prefer `write_evidence=true`. Report `Execution status`, action taken, adapter, reason, and next action. Evidence bundles are diagnostic artifacts, not readiness passes.
 
@@ -53,6 +53,6 @@ paperorchestra environment
 ```
 
 
-Core MCP tools: `status`, `research_prior_work`, `critique`, `write_sections`, `quality_gate`, `qa_loop`, `qa_loop_step`, and `ralph_start`. Prefer explicit workflow skills for sequencing.
+Core MCP tools: `status`, `research_prior_work`, `critique`, `write_sections`, `quality_gate`, `qa_loop`, `qa_loop_step`, `ralph_start`, and `export_current`. Prefer explicit workflow skills for sequencing.
 
 Keep specialized command sequencing in the explicit workflow skills, not here.

@@ -8,15 +8,15 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .critics import write_citation_support_review, write_section_review
-from .citation_integrity import (
+from ...critics import write_citation_support_review, write_section_review
+from ...citation_integrity import (
     write_citation_integrity_audit,
     write_citation_integrity_critic,
     write_rendered_reference_audit,
 )
-from .io_utils import extract_latex, write_json
-from .models import utc_now_iso
-from .pipeline import (
+from ...io_utils import extract_latex, write_json
+from ...models import utc_now_iso
+from ...pipeline import (
     ContractError,
     _build_completion_request,
     _complete_with_runtime_mode,
@@ -28,9 +28,9 @@ from .pipeline import (
     review_current_paper,
     write_figure_placement_review,
 )
-from .providers import BaseProvider, get_citation_support_provider
-from .source_obligations import write_source_obligations
-from .quality_loop import (
+from ...providers import BaseProvider, get_citation_support_provider
+from ...source_obligations import write_source_obligations
+from ..quality.loop import (
     CITATION_SUPPORT_REVIEW_REFRESH_CODES,
     DEFAULT_MAX_ITERATIONS,
     QA_LOOP_SUPPORTED_HANDLER_CODES,
@@ -40,20 +40,20 @@ from .quality_loop import (
     write_quality_eval,
     write_quality_loop_plan,
 )
-from .session import artifact_path, load_session, save_session
-from .validator import extract_citation_keys
-from .ralph_bridge_handoff import (
+from ...session import artifact_path, load_session, save_session
+from ...validator import extract_citation_keys
+from .handoff import (
     build_qa_loop_brief,
     build_ralph_start_payload,
     launch_omx_ralph,
     write_qa_loop_brief,
 )
-from .ralph_bridge_repair import (
+from .repair import (
     _non_supported_citation_items,
     _repair_prompt,
     repair_citation_claims,
 )
-from .ralph_bridge_state import (
+from .state import (
     EXIT_CODES,
     NON_SUPPORTED_CITATION_STATUSES,
     OMX_TMUX_INJECT_MARKER,

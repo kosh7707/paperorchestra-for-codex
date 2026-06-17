@@ -4,14 +4,14 @@ import shlex
 from pathlib import Path
 from typing import Any
 
-from .quality_loop_policy import (
+from .policy import (
     AUTO_REPAIR_CODES,
     FIGURE_REPAIR_CODES,
     MANUAL_REVIEW_CODES,
     QA_LOOP_SUPPORTED_HANDLER_CODES,
     SEMI_AUTO_REPAIR_CODES,
 )
-from .quality_loop_utils import _file_sha256, _read_json_if_exists
+from .utils import _file_sha256, _read_json_if_exists
 
 
 def _action(

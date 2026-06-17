@@ -13,9 +13,7 @@ Prefer MCP `inspect_state` when attached. CLI fallback:
 
 ```bash
 paperorchestra status --json
-paperorchestra status --json
-paperorchestra environment
-paperorchestra critique --citation-evidence-mode heuristic
+paperorchestra environment --summary
 ```
 
 Also inspect nearby artifacts when present: `.paper-orchestra/`, `paper.full.tex`, `citation_map.json`, `references.bib`, `citation_support_review.json`, `quality-eval.json`, `qa-loop.plan.json`, compile reports, and named round directories.

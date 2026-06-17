@@ -7,7 +7,7 @@ from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from .io_utils import write_json
-from .quality_loop_utils import _file_sha256, _read_json_if_exists
+from .loop_engine.quality.utils import _file_sha256, _read_json_if_exists
 from .session import artifact_path
 from .validator import extract_citation_keys
 

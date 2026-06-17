@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .io_utils import read_json
+from ...io_utils import read_json
 
 def _read_json_if_exists(path: str | Path | None) -> Any | None:
     if not path:

@@ -471,6 +471,6 @@ def require_fresh_planning_artifacts(cwd: str | Path | None) -> None:
     if status["status"] != "pass":
         raise RuntimeError(
             "Fresh narrative planning artifacts are required before writing. "
-            "Run `paperorchestra plan-narrative`. Failing codes: "
+            "Run `paperorchestra run --provider shell` or `paperorchestra orchestrate --execute-local`. Failing codes: "
             + ", ".join(status["failing_codes"])
         )

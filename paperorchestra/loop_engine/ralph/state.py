@@ -9,9 +9,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .models import utc_now_iso
-from .quality_loop_policy import QA_LOOP_SUPPORTED_HANDLER_CODES
-from .session import artifact_path, load_session, runtime_root, save_session
+from ...models import utc_now_iso
+from ..quality.policy import QA_LOOP_SUPPORTED_HANDLER_CODES
+from ...session import artifact_path, load_session, runtime_root, save_session
 
 QA_LOOP_EXECUTION_SCHEMA_VERSION = "qa-loop-execution/1"
 QA_LOOP_BRIEF_FILENAME = "ralph-brief.md"

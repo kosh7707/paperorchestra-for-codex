@@ -48,7 +48,7 @@ from .pipeline import (
     write_figure_placement_review,
 )
 from .providers import BaseProvider, ProviderError, TransientProviderError, get_citation_support_provider
-from .quality_loop import append_quality_loop_history, write_quality_eval, write_quality_loop_plan
+from .loop_engine.quality.loop import append_quality_loop_history, write_quality_eval, write_quality_loop_plan
 from .session import artifact_path, load_session, runtime_root, save_session
 
 OPERATOR_PACKET_SCHEMA_VERSION = "operator-review-packet/1"

@@ -3,8 +3,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from .quality_loop_policy import LEAKAGE_PATTERNS_ALWAYS, LEAKAGE_PATTERNS_VISUAL
-from .quality_loop_utils import _read_json_if_exists
+from .policy import LEAKAGE_PATTERNS_ALWAYS, LEAKAGE_PATTERNS_VISUAL
+from .utils import _read_json_if_exists
 
 PDF_TEXT_SCAN_UNAVAILABLE_CODE = "pdf_text_scan_unavailable"
 

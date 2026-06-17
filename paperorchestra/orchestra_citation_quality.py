@@ -13,7 +13,7 @@ from .citation_integrity import (
     rendered_reference_audit_path,
 )
 from .io_utils import write_json
-from .quality_loop_utils import _file_sha256, _read_json_if_exists
+from .loop_engine.quality.utils import _file_sha256, _read_json_if_exists
 from .session import artifact_path, load_session
 
 CITATION_QUALITY_GATE_SCHEMA_VERSION = "citation-quality-gate/2"

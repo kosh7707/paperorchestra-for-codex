@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .quality_loop_policy import MODE_THRESHOLDS, REQUIRED_REVIEW_AXES, SECTION_REVIEW_THRESHOLDS, TIER2_CLAIM_CODES
-from .quality_loop_utils import _file_sha256, _read_json_if_exists
-from .session import artifact_path, runtime_root
+from .policy import MODE_THRESHOLDS, REQUIRED_REVIEW_AXES, SECTION_REVIEW_THRESHOLDS, TIER2_CLAIM_CODES
+from .utils import _file_sha256, _read_json_if_exists
+from ...session import artifact_path, runtime_root
 
 
 def _validation_issue_counts(reproducibility: dict[str, Any]) -> dict[str, int]:
