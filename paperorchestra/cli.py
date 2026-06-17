@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .candidate_commands import candidate_apply, candidate_diff, candidate_list, candidate_reject
 from .compile_env import inspect_compile_environment
 from .cost import estimate_run_cost
 from .citation_integrity import (
@@ -500,6 +501,15 @@ def build_parser() -> argparse.ArgumentParser:
     _runtime_mode_args(qa_loop_step_parser, strict_flag=True)
     _common_provider_args(qa_loop_step_parser)
     _citation_provider_args(qa_loop_step_parser)
+    sub.add_parser("candidate-list", help="List candidate manuscripts available for explicit operator approval")
+    candidate_diff_parser = sub.add_parser("candidate-diff", help="Show a diff for a candidate manuscript")
+    candidate_diff_parser.add_argument("candidate_id")
+    candidate_apply_parser = sub.add_parser("candidate-apply", help="Apply a candidate manuscript after author approval")
+    candidate_apply_parser.add_argument("candidate_id")
+    candidate_apply_parser.add_argument("--as-author-approved", action="store_true")
+    candidate_reject_parser = sub.add_parser("candidate-reject", help="Reject a candidate manuscript with a reason")
+    candidate_reject_parser.add_argument("candidate_id")
+    candidate_reject_parser.add_argument("--reason", required=True)
     ralph_start_parser = sub.add_parser("ralph-start", help="Create or explicitly launch an OMX Ralph handoff for the current quality loop")
     ralph_start_parser.add_argument("--output")
     ralph_start_parser.add_argument("--quality-mode", default="claim_safe", choices=["draft", "ralph", "claim_safe"])
@@ -1614,6 +1624,24 @@ def main(argv: list[str] | None = None) -> int:
                 )
             print(json.dumps(payload, indent=2, ensure_ascii=False))
             return 0 if payload.get("accepted") else 1
+
+        if args.command == "candidate-list":
+            print(json.dumps(candidate_list(cwd), indent=2, ensure_ascii=False))
+            return 0
+
+        if args.command == "candidate-diff":
+            print(candidate_diff(cwd, args.candidate_id), end="")
+            return 0
+
+        if args.command == "candidate-apply":
+            payload = candidate_apply(cwd, args.candidate_id, as_author_approved=args.as_author_approved)
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            return 0
+
+        if args.command == "candidate-reject":
+            payload = candidate_reject(cwd, args.candidate_id, reason=args.reason)
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
+            return 0
 
         if args.command == "qa-loop-step":
             provider = _provider_from_args(args)

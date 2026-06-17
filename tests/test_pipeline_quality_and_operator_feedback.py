@@ -7858,6 +7858,72 @@ class PipelineQualityAndOperatorFeedbackTests(PipelineTestCase):
         self.assertEqual(runner.call_args.kwargs["qa_loop_plan_input_path"], "plan.custom.json")
         self.assertEqual(runner.call_args.kwargs["citation_support_review_path"], "citation.custom.json")
 
+    def test_candidate_apply_promotes_author_approved_candidate_to_session_manuscript(self) -> None:
+        from paperorchestra.candidate_commands import candidate_apply
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            editable = root / "paper" / "main.tex"
+            editable.parent.mkdir()
+            editable.write_text("OLD", encoding="utf-8")
+            state.artifacts.paper_full_tex = str(editable)
+            save_session(root, state)
+            candidate = artifact_path(root, "paper.citation-repair.approval-test.candidate.tex")
+            candidate.write_text("NEW", encoding="utf-8")
+
+            with patch("paperorchestra.candidate_commands.record_current_validation_report", return_value=(root / "validation.json", {"ok": True})):
+                with patch("paperorchestra.candidate_commands.compile_current_paper", return_value=root / "paper.pdf"):
+                    result = candidate_apply(root, candidate.name, as_author_approved=True)
+
+            promoted_state = load_session(root)
+            canonical = artifact_path(root, "paper.full.tex")
+            self.assertEqual(result["status"], "applied")
+            self.assertEqual(editable.read_text(encoding="utf-8"), "NEW")
+            self.assertEqual(canonical.read_text(encoding="utf-8"), "NEW")
+            self.assertEqual(promoted_state.artifacts.paper_full_tex, str(canonical))
+            self.assertEqual(result["validation"]["ok"], True)
+            self.assertEqual(result["compile"]["ok"], True)
+
+    def test_candidate_list_and_diff_resolve_candidate_files(self) -> None:
+        from paperorchestra.candidate_commands import candidate_diff, candidate_list
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = self._init_session_with_minimal_inputs(root)
+            paper = artifact_path(root, "paper.full.tex")
+            paper.write_text("OLD\n", encoding="utf-8")
+            state.artifacts.paper_full_tex = str(paper)
+            save_session(root, state)
+            candidate = artifact_path(root, "paper.citation-repair.approval-test.candidate.tex")
+            candidate.write_text("NEW\n", encoding="utf-8")
+
+            listing = candidate_list(root)
+            diff = candidate_diff(root, candidate.name)
+
+        self.assertEqual([item["filename"] for item in listing["candidates"]], [candidate.name])
+        self.assertIn("-OLD", diff)
+        self.assertIn("+NEW", diff)
+
+    def test_candidate_cli_routes_apply_and_reject_commands(self) -> None:
+        stdout = io.StringIO()
+        with patch("paperorchestra.cli.candidate_apply", return_value={"status": "applied"}) as apply:
+            with contextlib.redirect_stdout(stdout):
+                code = cli_main(["candidate-apply", "cand-1", "--as-author-approved"])
+
+        self.assertEqual(code, 0)
+        self.assertEqual(apply.call_args.args[1], "cand-1")
+        self.assertTrue(apply.call_args.kwargs["as_author_approved"])
+
+        stdout = io.StringIO()
+        with patch("paperorchestra.cli.candidate_reject", return_value={"status": "rejected"}) as reject:
+            with contextlib.redirect_stdout(stdout):
+                code = cli_main(["candidate-reject", "cand-1", "--reason", "not good enough"])
+
+        self.assertEqual(code, 0)
+        self.assertEqual(reject.call_args.args[1], "cand-1")
+        self.assertEqual(reject.call_args.kwargs["reason"], "not good enough")
+
     def test_qa_loop_step_model_evidence_defaults_to_shell_provider(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
