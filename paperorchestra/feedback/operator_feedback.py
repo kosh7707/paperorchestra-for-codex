@@ -9,8 +9,6 @@ from paperorchestra.runtime.providers import BaseProvider
 from paperorchestra.loop_engine.quality.loop import append_quality_loop_history
 from paperorchestra.core.session import artifact_path, load_session, save_session
 from paperorchestra.feedback.operator_execution import (
-    _session_snapshot,
-    _restore_session_snapshot,
     _issue_incorporation_detailed,
     _active_tier2_metric_delta,
     _quality_failing_codes,
@@ -36,6 +34,7 @@ from paperorchestra.feedback.operator_execution import (
 from paperorchestra.feedback.operator_context import (
     _write_operator_review_for_refiner,
 )
+from paperorchestra.feedback.operator_snapshots import _restore_session_snapshot, _session_snapshot
 from paperorchestra.feedback.operator_contract import (
     ACTIONABLE_FAILURE_OWNER_CATEGORIES,
     AXIS_CATASTROPHIC_DROP,
