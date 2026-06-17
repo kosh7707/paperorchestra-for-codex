@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import Any
 
 from paperorchestra.manuscript.sections import (
@@ -12,14 +11,62 @@ from paperorchestra.manuscript.sections import (
     _substantive_text,
 )
 
-FIGURE_ENV_RE = re.compile(r"\\begin\{(figure\*?)\}(?:\[([^\]]*)\])?(.*?)\\end\{\1\}", re.DOTALL)
-CAPTION_RE = re.compile(r"\\caption\{([^}]*)\}")
-REF_RE = re.compile(
-    r"\\(?:ref|autoref|cref|Cref|prettyref)\*?(?:\[[^\]]*\]){0,2}\{([^}]+)\}",
-    re.IGNORECASE,
+from paperorchestra.manuscript.figure_matching import (
+    _body_figure_has_nontechnical_asset,
+    _caption_has_process_or_placeholder_text,
+    _caption_manifest_relation,
+    _high_signal_tokens,
+    _included_asset_names,
+    _match_plot_manifest,
+    _normalize_figure_key,
+    _plot_asset_candidates,
+    _plot_manifest_candidates,
+    _asset_is_reviewable,
+    _figure_keys,
+    _NONTECHNICAL_VISUAL_STRONG_RE,
+    _NONTECHNICAL_VISUAL_CONTEXT_RE,
+    _DECORATIVE_VISUAL_RE,
+    _PROCESS_CAPTION_RE,
+    _UNRELATED_CAPTION_CUE_RE,
 )
-LABEL_RE = re.compile(r"\\label\{([^}]+)\}")
-INCLUDE_GRAPHICS_RE = re.compile(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}")
+from paperorchestra.manuscript.figure_patterns import (
+    CAPTION_RE,
+    DECORATIVE_VISUAL_RE,
+    FIGURE_ENV_RE,
+    INCLUDE_GRAPHICS_RE,
+    LABEL_RE,
+    NONTECHNICAL_VISUAL_CONTEXT_RE,
+    NONTECHNICAL_VISUAL_STRONG_RE,
+    PROCESS_CAPTION_RE,
+    REF_RE,
+    UNRELATED_CAPTION_CUE_RE,
+)
+
+__all__ = [
+    "CAPTION_RE",
+    "FIGURE_ENV_RE",
+    "INCLUDE_GRAPHICS_RE",
+    "LABEL_RE",
+    "REF_RE",
+    "NONTECHNICAL_VISUAL_STRONG_RE",
+    "NONTECHNICAL_VISUAL_CONTEXT_RE",
+    "DECORATIVE_VISUAL_RE",
+    "PROCESS_CAPTION_RE",
+    "UNRELATED_CAPTION_CUE_RE",
+    "FigurePlacementWarning",
+    "build_figure_placement_review",
+    "_normalize_figure_key",
+    "_high_signal_tokens",
+    "_plot_asset_candidates",
+    "_plot_manifest_candidates",
+    "_asset_is_reviewable",
+    "_figure_keys",
+    "_match_plot_manifest",
+    "_caption_manifest_relation",
+    "_included_asset_names",
+    "_body_figure_has_nontechnical_asset",
+    "_caption_has_process_or_placeholder_text",
+]
 
 
 @dataclass(frozen=True)
@@ -50,181 +97,12 @@ def _figure_source_origin(block: str, label: str | None, source_labels: set[str]
     return "model_written"
 
 
-def _normalize_figure_key(value: Any) -> str:
-    text = str(value or "").strip().lower()
-    text = re.sub(r"^fig(?:ure)?[:_\-\s]+", "", text)
-    text = Path(text).stem if "/" in text or "\\" in text or "." in Path(text).name else text
-    return re.sub(r"[^a-z0-9]+", "", text)
-
-
-def _high_signal_tokens(*values: Any) -> set[str]:
-    stop = {
-        "figure",
-        "plot",
-        "panel",
-        "overview",
-        "result",
-        "results",
-        "analysis",
-        "comparison",
-        "performance",
-        "benchmark",
-        "experiment",
-        "stage",
-        "across",
-        "system",
-        "method",
-        "data",
-        "model",
-        "show",
-        "shows",
-        "summarize",
-        "summarizes",
-        "summary",
-        "visual",
-        "asset",
-        "workflow",
-    }
-    tokens: set[str] = set()
-    for value in values:
-        for token in re.findall(r"[A-Za-z][A-Za-z0-9_-]{3,}", str(value or "").lower()):
-            normalized = token.replace("_", "").replace("-", "")
-            if normalized and normalized not in stop:
-                tokens.add(normalized)
-    return tokens
-
-
 def _compact_context(text: str, *, start: int, end: int, limit: int = 500) -> str:
     left = max(0, start - limit // 2)
     right = min(len(text), end + limit // 2)
     snippet = text[left:right]
     snippet = re.sub(r"\s+", " ", snippet).strip()
     return snippet[:limit]
-
-
-def _plot_asset_candidates(plot_assets_index: dict[str, Any] | None) -> list[dict[str, Any]]:
-    if not isinstance(plot_assets_index, dict):
-        return []
-    return [asset for asset in plot_assets_index.get("assets") or [] if isinstance(asset, dict)]
-
-
-def _plot_manifest_candidates(plot_manifest: dict[str, Any] | None) -> list[dict[str, Any]]:
-    if not isinstance(plot_manifest, dict):
-        return []
-    return [figure for figure in plot_manifest.get("figures") or [] if isinstance(figure, dict)]
-
-
-def _asset_is_reviewable(asset: dict[str, Any] | None) -> bool:
-    if not isinstance(asset, dict):
-        return True
-    return not (
-        asset.get("asset_kind") == "generated_placeholder"
-        or asset.get("review_status") == "human_final_artwork_required"
-    )
-
-
-def _figure_keys(figure: dict[str, Any]) -> set[str]:
-    keys = set()
-    for field in ("figure_id", "id", "label"):
-        value = figure.get(field)
-        if isinstance(value, str) and value.strip():
-            keys.add(_normalize_figure_key(value))
-    return {key for key in keys if key}
-
-
-def _match_plot_manifest(
-    *,
-    label: str | None,
-    caption: str,
-    included_assets: list[str],
-    plot_manifest: dict[str, Any] | None,
-    plot_assets_index: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    assets = _plot_asset_candidates(plot_assets_index)
-    figures = _plot_manifest_candidates(plot_manifest)
-    if not assets and not figures:
-        return None
-
-    def asset_keys(asset: dict[str, Any]) -> set[str]:
-        keys = set()
-        for field in ("filename", "latex_path", "latex_snippet_path"):
-            value = asset.get(field)
-            if isinstance(value, str) and value.strip():
-                keys.add(_normalize_figure_key(value))
-                keys.add(_normalize_figure_key(Path(value).name))
-        if asset.get("figure_id"):
-            keys.add(_normalize_figure_key(asset.get("figure_id")))
-        return {key for key in keys if key}
-
-    included_keys = {_normalize_figure_key(name) for name in included_assets if name}
-    matched_assets = [asset for asset in assets if included_keys & asset_keys(asset)]
-    asset_figure_ids = {
-        _normalize_figure_key(asset.get("figure_id"))
-        for asset in matched_assets
-        if isinstance(asset.get("figure_id"), str) and asset.get("figure_id")
-    }
-    matches = [figure for figure in figures if _figure_keys(figure) & asset_figure_ids]
-    precedence = "asset"
-    if not matches and label:
-        label_ids = {_normalize_figure_key(label)}
-        matches = [figure for figure in figures if _figure_keys(figure) & label_ids]
-        precedence = "label"
-    if not matches:
-        caption_tokens = _high_signal_tokens(caption)
-        matches = [
-            figure
-            for figure in figures
-            if len(caption_tokens & _high_signal_tokens(figure.get("title"), figure.get("caption"), figure.get("purpose"), figure.get("objective"))) >= 2
-        ]
-        precedence = "caption_tokens"
-    if not matches:
-        return None
-    status = "matched" if len(matches) == 1 else "ambiguous"
-    figure = matches[0]
-    matched_asset = matched_assets[0] if matched_assets else None
-    return {
-        "status": status,
-        "match_precedence": precedence,
-        "figure_id": figure.get("figure_id") or figure.get("id") or figure.get("label"),
-        "title": figure.get("title"),
-        "purpose": figure.get("purpose") or figure.get("objective"),
-        "caption": figure.get("caption"),
-        "reviewable": _asset_is_reviewable(matched_asset),
-        "asset": {
-            key: matched_asset.get(key)
-            for key in ("figure_id", "filename", "latex_path", "latex_snippet_path", "asset_kind", "review_status")
-            if isinstance(matched_asset, dict) and matched_asset.get(key)
-        }
-        if matched_asset
-        else None,
-        "candidate_count": len(matches),
-    }
-
-
-def _caption_manifest_relation(caption: str, manifest_match: dict[str, Any] | None) -> str:
-    if not manifest_match or manifest_match.get("status") != "matched" or not manifest_match.get("reviewable", True):
-        return "not_applicable"
-    manifest_tokens = _high_signal_tokens(
-        manifest_match.get("purpose"),
-        manifest_match.get("title"),
-        manifest_match.get("caption"),
-        manifest_match.get("figure_id"),
-    )
-    caption_tokens = _high_signal_tokens(caption)
-    if _UNRELATED_CAPTION_CUE_RE.search(caption or "") and len(manifest_tokens & caption_tokens) < 2:
-        return "mismatch"
-    if len(manifest_tokens) < 3 or len(caption_tokens) < 3:
-        return "insufficient_signal"
-    if manifest_tokens & caption_tokens:
-        return "matched"
-    if (
-        _PROCESS_CAPTION_RE.search(caption or "")
-        or _UNRELATED_CAPTION_CUE_RE.search(caption or "")
-        or _NONTECHNICAL_VISUAL_CONTEXT_RE.search(caption or "")
-        or _DECORATIVE_VISUAL_RE.search(caption or "")
-    ):
-        return "mismatch"
-    return "uncertain"
 
 
 def _figure_ref_labels(match: re.Match[str]) -> set[str]:
@@ -239,52 +117,6 @@ def _figure_warning(
 ) -> FigurePlacementWarning:
     subject = label or "<unlabeled>"
     return FigurePlacementWarning(code=code, message=f"{subject}: {detail}")
-
-
-_NONTECHNICAL_VISUAL_STRONG_RE = re.compile(
-    r"\b(?:headshot|author[_\s-]*photo)\b",
-    re.IGNORECASE,
-)
-_NONTECHNICAL_VISUAL_CONTEXT_RE = re.compile(
-    r"\b(?:author|biograph(?:y|ical)|profile)\b.*\b(?:portrait|headshot|photo|avatar)\b|"
-    r"\b(?:portrait|headshot|photo|avatar)\b.*\b(?:author|biograph(?:y|ical)|profile)\b",
-    re.IGNORECASE,
-)
-_DECORATIVE_VISUAL_RE = re.compile(
-    r"\b(?:decorative|ornamental|visual\s+divider)\b",
-    re.IGNORECASE,
-)
-_PROCESS_CAPTION_RE = re.compile(
-    r"\b(?:supplied\s+visual\s+asset|not\s+evidence\s+for\s+(?:any\s+)?technical\s+claim|"
-    r"placeholder\s+(?:figure|image|asset|caption)|caption\s+intent|figure\s+prompt|"
-    r"rendering[_\s-]*brief|source[_\s-]*fidelity|author\s+biograph(?:y|ical)|author\s+photo)\b",
-    re.IGNORECASE,
-)
-_UNRELATED_CAPTION_CUE_RE = re.compile(
-    r"\b(?:author|biograph(?:y|ical)|profile|decorative|placeholder|caption\s+intent|workflow|process|orchestration)\b",
-    re.IGNORECASE,
-)
-
-
-def _included_asset_names(body: str) -> list[str]:
-    names = [match.group(1).strip() for match in INCLUDE_GRAPHICS_RE.finditer(body)]
-    names.extend(match.group(1).strip() for match in re.finditer(r"\\input\{([^}]+)\}", body))
-    return names
-
-
-def _body_figure_has_nontechnical_asset(body: str, caption: str) -> bool:
-    haystacks = [Path(name).stem.replace("-", " ").replace("_", " ") for name in _included_asset_names(body)]
-    haystacks.append(caption)
-    text = " ".join(haystacks)
-    return bool(
-        _NONTECHNICAL_VISUAL_STRONG_RE.search(text)
-        or _NONTECHNICAL_VISUAL_CONTEXT_RE.search(text)
-        or _DECORATIVE_VISUAL_RE.search(text)
-    )
-
-
-def _caption_has_process_or_placeholder_text(caption: str) -> bool:
-    return bool(_PROCESS_CAPTION_RE.search(caption or ""))
 
 
 def build_figure_placement_review(
@@ -500,4 +332,3 @@ def build_figure_placement_review(
             "failing_codes": failing_codes,
         },
     }
-
