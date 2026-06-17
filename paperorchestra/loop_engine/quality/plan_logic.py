@@ -181,10 +181,6 @@ def _citation_support_gap_classification(citation_check: dict[str, Any]) -> dict
     }
 
 
-def _manual_check_classification(citation_check: dict[str, Any]) -> dict[str, Any]:
-    return _citation_support_gap_classification(citation_check)
-
-
 def _has_concrete_unbound_evidence_surface(item: dict[str, Any]) -> bool:
     evidence = item.get("evidence")
     if not isinstance(evidence, list):

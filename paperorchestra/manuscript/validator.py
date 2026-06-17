@@ -1035,13 +1035,6 @@ def _coverage_term_variants(term: str) -> tuple[str, ...]:
     return tuple(sorted(variants))
 
 
-def _coverage_term_position(section_text: str, term: str) -> int:
-    lowered = section_text.lower()
-    positions = [lowered.find(variant) for variant in _coverage_term_variants(term)]
-    found = [position for position in positions if position >= 0]
-    return min(found) if found else -1
-
-
 def _coverage_term_positions(section_text: str, term: str) -> tuple[int, ...]:
     lowered = section_text.lower()
     found: set[int] = set()

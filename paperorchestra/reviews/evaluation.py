@@ -117,13 +117,6 @@ def _extract_metric_range(text: str, metric_label: str) -> tuple[float, float] |
     return None
 
 
-def _extract_first_percent_range(text: str) -> tuple[float, float] | None:
-    match = _PERCENT_RANGE_RE.search(text)
-    if not match:
-        return None
-    return float(match.group(1)), float(match.group(2))
-
-
 def parse_reported_margin_ranges(text: str) -> dict[str, dict[str, Any]]:
     results: dict[str, dict[str, Any]] = {}
     for key, label in [

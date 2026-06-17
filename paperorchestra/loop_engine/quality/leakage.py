@@ -109,7 +109,3 @@ def _manuscript_prompt_leakage_report(state) -> dict[str, list[str]]:
 
 def _manuscript_prompt_leakage(state) -> list[str]:
     return _manuscript_prompt_leakage_report(state)["markers"]
-
-
-def _manuscript_pdf_text_scan_unavailable(state) -> list[str]:
-    return _pdf_text_prompt_leakage_scan(state.artifacts.compiled_pdf)["unavailable"]

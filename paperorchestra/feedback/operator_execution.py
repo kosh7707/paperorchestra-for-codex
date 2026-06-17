@@ -133,10 +133,6 @@ def _restore_session_snapshot(cwd: str | Path | None, snapshot: dict[str, Any]) 
     save_session(cwd, state)
 
 
-def _issue_incorporation(issues: list[dict[str, Any]], before_text: str, after_text: str, *, accepted: bool) -> list[dict[str, Any]]:
-    return _issue_incorporation_detailed(issues, before_text, after_text, blocking_codes=[] if accepted else ["candidate_rejected"])
-
-
 def _section_texts(latex: str) -> dict[str, str]:
     matches = list(re.finditer(r"\\section\*?\{([^}]+)\}", latex))
     if not matches:
@@ -1004,17 +1000,6 @@ def _ready_candidate_from_packet(packet: dict[str, Any], current_sha: str | None
         "executor_failure_category": "none",
         "executor_source_role": execution_role,
     }
-
-
-def _install_candidate_text(cwd: str | Path | None, candidate_path: str | Path) -> str:
-    state = load_session(cwd)
-    paper_path = Path(state.artifacts.paper_full_tex).resolve()
-    candidate_text = Path(candidate_path).read_text(encoding="utf-8")
-    paper_path.write_text(candidate_text, encoding="utf-8")
-    state.artifacts.paper_full_tex = str(paper_path)
-    state.active_artifact = paper_path.name
-    save_session(cwd, state)
-    return candidate_text
 
 
 def _stage_candidate_text_for_verification(cwd: str | Path | None, candidate_path: str | Path) -> str:

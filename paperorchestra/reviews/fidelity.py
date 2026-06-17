@@ -65,11 +65,6 @@ def _paper_source_candidates(cwd: str | Path | None) -> list[Path]:
     return candidates
 
 
-def _status_rank(status: str) -> int:
-    order = {"missing": 0, "partial": 1, "implemented": 2}
-    return order[status]
-
-
 def _status_histogram(checks: list[FidelityCheck]) -> dict[str, int]:
     counts = Counter(check.status for check in checks)
     return {
