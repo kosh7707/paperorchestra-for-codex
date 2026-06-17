@@ -23,8 +23,26 @@ def _state() -> SimpleNamespace:
 
 
 def test_refine_stages_facade_reexports_persistence_helpers() -> None:
+    assert refine_stages.apply_candidate_only_refinement_state is refine_persistence.apply_candidate_only_refinement_state
     assert refine_stages.apply_accepted_refinement_state is refine_persistence.apply_accepted_refinement_state
     assert refine_stages.apply_rejected_refinement_state is refine_persistence.apply_rejected_refinement_state
+
+
+def test_apply_candidate_only_refinement_state_restores_prior_review_state() -> None:
+    state = _state()
+
+    refine_persistence.apply_candidate_only_refinement_state(
+        state,
+        temp_state_paper="old-paper.tex",
+        temp_latest_review="old-review.json",
+        validation_path=Path("validation.json"),
+        temp_review_history_len=1,
+    )
+
+    assert state.artifacts.paper_full_tex == "old-paper.tex"
+    assert state.artifacts.latest_review_json == "old-review.json"
+    assert state.artifacts.latest_validation_json == "validation.json"
+    assert len(state.review_history) == 1
 
 
 def test_apply_accepted_refinement_state_sets_artifacts_and_notes() -> None:

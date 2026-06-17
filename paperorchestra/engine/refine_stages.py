@@ -64,6 +64,7 @@ from paperorchestra.engine.refine_manifests import (
 )
 from paperorchestra.engine.refine_persistence import (
     apply_accepted_refinement_state,
+    apply_candidate_only_refinement_state,
     apply_rejected_refinement_state,
 )
 from paperorchestra.engine.refine_review import (
@@ -313,10 +314,13 @@ def refine_current_paper(
         review_retry_scores: list[float] = []
         if candidate_only:
             state = load_session(cwd)
-            state.artifacts.paper_full_tex = temp_state_paper
-            state.artifacts.latest_review_json = temp_latest_review
-            state.artifacts.latest_validation_json = str(validation_path)
-            state.review_history = state.review_history[:temp_review_history_len]
+            apply_candidate_only_refinement_state(
+                state,
+                temp_state_paper=temp_state_paper,
+                temp_latest_review=temp_latest_review,
+                validation_path=validation_path,
+                temp_review_history_len=temp_review_history_len,
+            )
             save_session(cwd, state)
             accepted_results.append(
                 candidate_only_result(

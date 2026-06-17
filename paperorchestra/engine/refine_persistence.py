@@ -6,6 +6,21 @@ from typing import Any
 from paperorchestra.engine.authoring_common import _append_unique_note
 
 
+def apply_candidate_only_refinement_state(
+    state,
+    *,
+    temp_state_paper: str | None,
+    temp_latest_review: str | None,
+    validation_path: str | Path,
+    temp_review_history_len: int,
+) -> Any:
+    state.artifacts.paper_full_tex = temp_state_paper
+    state.artifacts.latest_review_json = temp_latest_review
+    state.artifacts.latest_validation_json = str(validation_path)
+    state.review_history = state.review_history[:temp_review_history_len]
+    return state
+
+
 def apply_accepted_refinement_state(
     state,
     *,
