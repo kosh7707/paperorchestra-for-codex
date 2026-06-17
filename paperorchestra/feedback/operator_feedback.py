@@ -3,11 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.core.models import utc_now_iso
 from paperorchestra.core.io import write_json
 from paperorchestra.runtime.providers import BaseProvider
 from paperorchestra.loop_engine.quality.loop import append_quality_loop_history
-from paperorchestra.core.session import artifact_path, load_session, save_session
+from paperorchestra.core.session import artifact_path, load_session
 from paperorchestra.feedback.operator_candidates import (
     _candidate_approval_source_role,
     _failed_operator_candidate_result,
@@ -26,7 +25,6 @@ from paperorchestra.feedback.operator_gates import (
     _attach_candidate_approval_from_attempt,
     _best_human_review_candidate_attempt,
     _candidate_hard_gate,
-    _operator_actionable_failure,
     _quality_failing_codes,
     _repeats_non_promotable_candidate,
     _tier_failing_codes,
@@ -36,7 +34,15 @@ from paperorchestra.feedback.operator_records import (
     _build_operator_attempt_record,
     _build_operator_execution_record,
     _build_operator_incorporation_report,
-    _operator_feedback_verdict,
+)
+from paperorchestra.feedback.operator_completion import (
+    _non_promoted_actionable_failure,
+    _operator_exception_actionable_failures,
+    _operator_exception_execution_update,
+    _operator_exception_history_extra,
+    _operator_executor_crashed,
+    _operator_final_execution_update,
+    _operator_history_extra,
 )
 from paperorchestra.feedback.operator_snapshots import _restore_session_snapshot, _session_snapshot
 from paperorchestra.feedback.operator_contexts.citations import _protected_supported_citation_regressions
@@ -256,10 +262,7 @@ def apply_operator_feedback(
 
         execution_path = artifact_path(cwd, "operator_feedback.execution.json")
         promoted = execution["promotion_status"] == "promoted"
-        executor_crashed = any(
-            str(attempt.get("executor_failure_category") or "none") != "none"
-            for attempt in execution.get("attempts") or []
-        )
+        executor_crashed = _operator_executor_crashed(execution)
         if not promoted and final_verification is None:
             final_verification = _verification_snapshot(
                 cwd,
@@ -277,24 +280,12 @@ def apply_operator_feedback(
             )
         final_state = load_session(cwd)
         after_sha = _file_sha256(final_state.artifacts.paper_full_tex)
-        if executor_crashed:
-            failure_reason = "supervised operator feedback command failed"
-            failure_category = "operator_execution_error"
-            failure_code = "operator_executor_crashed"
-        elif intent == "reject_candidate_with_reason":
-            failure_reason = "operator feedback explicitly rejected the candidate"
-            failure_category = "operator_rejected_candidate"
-            failure_code = "operator_rejected_candidate"
-        else:
-            failure_reason = "operator feedback did not produce an acceptable canonical manuscript update"
-            failure_category = "operator_candidate_failed_hard_gate"
-            failure_code = str(execution.get("promotion_reason") or "operator_candidate_failed_hard_gate")
-        non_promoted_actionable_failure = None if promoted else _operator_actionable_failure(
-            owner_categories,
-            failure_reason,
-            category=failure_category,
-            code=failure_code,
-            attempts=execution.get("attempts") or [],
+        non_promoted_actionable_failure = _non_promoted_actionable_failure(
+            promoted=promoted,
+            executor_crashed=executor_crashed,
+            intent=intent,
+            execution=execution,
+            owner_categories=owner_categories,
         )
         incorporation_report = _build_operator_incorporation_report(
             imported=imported,
@@ -307,21 +298,20 @@ def apply_operator_feedback(
         incorporation_path = artifact_path(cwd, "operator_feedback.incorporation.json")
         write_json(incorporation_path, incorporation_report)
         plan = final_verification["plan"] if final_verification else {}
-        verdict = _operator_feedback_verdict(executor_crashed=executor_crashed, promoted=promoted, plan=plan)
-        execution.update(
-            {
-                "completed_at": utc_now_iso(),
-                "verdict": verdict,
-                "supervised_iteration_index": len(execution["attempts"]),
-                "supervised_remaining": max(max_supervised_iterations - len(execution["attempts"]), 0),
-                "supervised_budget_exhausted": not promoted and len(execution["attempts"]) >= max_supervised_iterations,
-                "manuscript_sha256_after": after_sha,
-                "candidate_result": final_candidate_result,
-                "incorporation_report": str(incorporation_path),
-                "verification": _verification_block(final_verification) if final_verification else {},
-                "actionable_failure": non_promoted_actionable_failure,
-            }
+        final_update = _operator_final_execution_update(
+            execution=execution,
+            promoted=promoted,
+            executor_crashed=executor_crashed,
+            plan=plan,
+            max_supervised_iterations=max_supervised_iterations,
+            after_sha=after_sha,
+            final_candidate_result=final_candidate_result,
+            incorporation_path=str(incorporation_path),
+            verification_block=_verification_block(final_verification) if final_verification else {},
+            actionable_failure=non_promoted_actionable_failure,
         )
+        execution.update(final_update)
+        verdict = str(final_update["verdict"])
         if not promoted:
             best_attempt = _best_human_review_candidate_attempt(execution.get("attempts") or [])
             if best_attempt is not None:
@@ -343,15 +333,7 @@ def apply_operator_feedback(
                 execution_path=execution_path,
                 event_type="operator_feedback_cycle",
                 consumes_budget=False,
-                extra={
-                    "supervised_iteration_index": execution["supervised_iteration_index"],
-                    "supervised_max_iterations": execution["supervised_max_iterations"],
-                    "supervised_remaining": execution["supervised_remaining"],
-                    "supervised_budget_exhausted": execution["supervised_budget_exhausted"],
-                    "promotion_status": execution["promotion_status"],
-                    "post_promotion_qa_verdict": execution["post_promotion_qa_verdict"],
-                    "actionable_failure": non_promoted_actionable_failure,
-                },
+                extra=_operator_history_extra(execution, non_promoted_actionable_failure),
             )
         return execution_path, execution
     except Exception as exc:
@@ -379,33 +361,17 @@ def apply_operator_feedback(
             restored_block = _verification_block(rollback_verification)
         elif rollback_verification:
             restored_block = {"error": rollback_verification.get("error")}
-        exception_actionable_failure = _operator_actionable_failure(
-            owner_categories,
-            "supervised operator feedback command failed",
-            category="operator_execution_error",
-            code="supervised_operator_feedback_command_failed",
-            attempts=execution.get("attempts") or [],
-            execution_error=type(exc).__name__ + ": " + str(exc),
+        exception_actionable_failure, exception_history_actionable_failure = _operator_exception_actionable_failures(
+            owner_categories=owner_categories,
+            execution=execution,
+            exc=exc,
         )
-        exception_history_actionable_failure = _operator_actionable_failure(
-            owner_categories,
-            "supervised operator feedback command failed",
-            category="operator_execution_error",
-            code="supervised_operator_feedback_command_failed",
-            attempts=execution.get("attempts") or [],
-        )
-        exception_history_actionable_failure["error_type"] = type(exc).__name__
         execution.update(
-            {
-                "completed_at": utc_now_iso(),
-                "verdict": "execution_error",
-                "promotion_status": "rolled_back",
-                "post_promotion_qa_verdict": None,
-                "error": str(exc),
-                "candidate_rollback": {"reason": "exception", "restored_verification": restored_block},
-                "verification": {"restored_after_exception": restored_block},
-                "actionable_failure": exception_actionable_failure,
-            }
+            _operator_exception_execution_update(
+                exc=exc,
+                restored_block=restored_block,
+                actionable_failure=exception_actionable_failure,
+            )
         )
         execution_path = artifact_path(cwd, "operator_feedback.execution.json")
         write_json(execution_path, execution)
@@ -419,14 +385,6 @@ def apply_operator_feedback(
                 execution_path=execution_path,
                 event_type="operator_feedback_cycle",
                 consumes_budget=False,
-                extra={
-                    "supervised_iteration_index": len(execution.get("attempts") or []) or 1,
-                    "supervised_max_iterations": execution["supervised_max_iterations"],
-                    "supervised_remaining": max(execution["supervised_max_iterations"] - (len(execution.get("attempts") or []) or 1), 0),
-                    "supervised_budget_exhausted": True,
-                    "execution_error_type": type(exc).__name__,
-                    "promotion_status": "rolled_back",
-                    "actionable_failure": exception_history_actionable_failure,
-                },
+                extra=_operator_exception_history_extra(execution, exception_history_actionable_failure, exc),
             )
         return execution_path, execution
