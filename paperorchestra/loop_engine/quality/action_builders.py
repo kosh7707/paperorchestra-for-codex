@@ -95,7 +95,22 @@ def _append_tier1_structural_actions(actions: list[dict[str, Any]], tiers: dict[
 
 def _append_tier2_claim_safety_actions(actions: list[dict[str, Any]], tiers: dict[str, Any]) -> None:
     tier2 = tiers.get("tier_2_claim_safety") if isinstance(tiers.get("tier_2_claim_safety"), dict) else {}
-    figure_check = (tier2.get("checks") or {}).get("figure_grounding") if isinstance(tier2, dict) else None
+    if not isinstance(tier2, dict):
+        return
+    checks = tier2.get("checks") or {}
+    if not isinstance(checks, dict):
+        checks = {}
+    _append_figure_grounding_actions(actions, checks.get("figure_grounding"))
+    _append_citation_support_actions(actions, checks.get("citation_support_critic"))
+    _append_citation_quality_actions(actions, checks.get("citation_quality_gate"))
+    _append_citation_integrity_actions(actions, checks.get("citation_integrity_gate"))
+    _append_source_material_fidelity_actions(actions, checks.get("source_material_fidelity"))
+    _append_source_obligation_actions(actions, checks.get("source_obligations"))
+    _append_high_risk_claim_actions(actions, checks.get("high_risk_claim_sweep"))
+    _append_planning_satisfaction_actions(actions, checks.get("planning_satisfaction"))
+
+
+def _append_figure_grounding_actions(actions: list[dict[str, Any]], figure_check: Any) -> None:
     if isinstance(figure_check, dict):
         issue_items = [
             item
@@ -138,7 +153,9 @@ def _append_tier2_claim_safety_actions(actions: list[dict[str, Any]], tiers: dic
                         approval_required_from="figure_placement_review_critic",
                     )
                 )
-    citation_check = (tier2.get("checks") or {}).get("citation_support_critic") if isinstance(tier2, dict) else None
+
+
+def _append_citation_support_actions(actions: list[dict[str, Any]], citation_check: Any) -> None:
     if isinstance(citation_check, dict):
         citation_codes = set(citation_check.get("failing_codes") or [])
         for code in sorted(citation_codes & CITATION_SUPPORT_REVIEW_REFRESH_CODES):
@@ -256,8 +273,9 @@ def _append_tier2_claim_safety_actions(actions: list[dict[str, Any]], tiers: dic
                     approval_required_from="author_operator",
                 )
             )
-    citation_integrity_check = (tier2.get("checks") or {}).get("citation_integrity_gate") if isinstance(tier2, dict) else None
-    citation_quality_gate = (tier2.get("checks") or {}).get("citation_quality_gate") if isinstance(tier2, dict) else None
+
+
+def _append_citation_quality_actions(actions: list[dict[str, Any]], citation_quality_gate: Any) -> None:
     if isinstance(citation_quality_gate, dict):
         quality_codes = {str(code) for code in citation_quality_gate.get("hard_gate_failures") or []}
         refresh_codes = {"citation_quality_stale", "citation_quality_manuscript_missing"}
@@ -307,6 +325,9 @@ def _append_tier2_claim_safety_actions(actions: list[dict[str, Any]], tiers: dic
                     approval_required_from="citation_quality_gate",
                 )
             )
+
+
+def _append_citation_integrity_actions(actions: list[dict[str, Any]], citation_integrity_check: Any) -> None:
     if isinstance(citation_integrity_check, dict):
         integrity_codes = {str(code) for code in citation_integrity_check.get("failing_codes") or []}
         stale_or_missing_codes = {
@@ -371,7 +392,9 @@ def _append_tier2_claim_safety_actions(actions: list[dict[str, Any]], tiers: dic
                     approval_required_from="citation_integrity_critic",
                 )
             )
-    source_check = (tier2.get("checks") or {}).get("source_material_fidelity") if isinstance(tier2, dict) else None
+
+
+def _append_source_material_fidelity_actions(actions: list[dict[str, Any]], source_check: Any) -> None:
     if isinstance(source_check, dict) and source_check.get("status") == "fail":
         actions.append(
             _action(
@@ -392,7 +415,9 @@ def _append_tier2_claim_safety_actions(actions: list[dict[str, Any]], tiers: dic
                 approval_required_from="source_material_critic",
             )
         )
-    obligation_check = (tier2.get("checks") or {}).get("source_obligations") if isinstance(tier2, dict) else None
+
+
+def _append_source_obligation_actions(actions: list[dict[str, Any]], obligation_check: Any) -> None:
     if isinstance(obligation_check, dict):
         obligation_codes = {str(code) for code in obligation_check.get("failing_codes") or []}
         if obligation_codes & {"source_obligations_missing", "source_obligations_stale", "source_obligations_legacy_untrusted"}:
@@ -424,7 +449,9 @@ def _append_tier2_claim_safety_actions(actions: list[dict[str, Any]], tiers: dic
                     approval_required_from="source_material_critic",
                 )
             )
-    high_risk_check = (tier2.get("checks") or {}).get("high_risk_claim_sweep") if isinstance(tier2, dict) else None
+
+
+def _append_high_risk_claim_actions(actions: list[dict[str, Any]], high_risk_check: Any) -> None:
     if isinstance(high_risk_check, dict) and high_risk_check.get("status") == "fail":
         actions.append(
             _action(
@@ -445,7 +472,9 @@ def _append_tier2_claim_safety_actions(actions: list[dict[str, Any]], tiers: dic
                 approval_required_from="claim_safety_critic",
             )
         )
-    planning_check = (tier2.get("checks") or {}).get("planning_satisfaction") if isinstance(tier2, dict) else None
+
+
+def _append_planning_satisfaction_actions(actions: list[dict[str, Any]], planning_check: Any) -> None:
     if isinstance(planning_check, dict) and planning_check.get("status") == "fail":
         actions.append(
             _action(
