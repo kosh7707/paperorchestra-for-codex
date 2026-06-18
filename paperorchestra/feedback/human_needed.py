@@ -18,20 +18,7 @@ from paperorchestra.feedback.normalization import (
     actionable_candidate_approval_role,
     normalize_operator_feedback_draft,
 )
-from paperorchestra.feedback.operator_answer_metadata import (
-    HUMAN_NEEDED_METADATA_SCHEMA_VERSION,
-    HUMAN_NEEDED_PUBLIC_SCHEMA_VERSION,
-)
-from paperorchestra.feedback.human_needed_records import (
-    _action_id,
-    _artifact_source,
-    _draft_issue_for_action,
-    _metadata_without_targets,
-    feedback_draft,
-    private_answer_payload,
-    public_answer_payload,
-    public_result_payload,
-)
+from paperorchestra.feedback import human_needed_records as _records
 from paperorchestra.feedback.packets import _artifact_by_role, _file_sha256, _validate_operator_packet_artifact_bindings
 from paperorchestra.core.errors import ContractError
 from paperorchestra.runtime.providers import BaseProvider, MockProvider
@@ -112,7 +99,7 @@ def _classify_action(action: dict[str, Any] | None, *, candidate_role: str | Non
         return "reviewer_independence"
     if any(token in text for token in ("no_progress", "budget", "retry", "stuck")):
         return "no_progress_escalation"
-    if _action_id(action) or (action or {}).get("code"):
+    if _records._action_id(action) or (action or {}).get("code"):
         return "general_operator_feedback"
     return "unsupported_handler"
 
@@ -170,7 +157,7 @@ def _resolve_decision_kind(answer: str, intent: str | None, *, candidate_role: s
 
 def _select_action(actions: list[dict[str, Any]], action_id: str | None, *, candidate_role: str | None) -> dict[str, Any] | None:
     if action_id:
-        matches = [action for action in actions if _action_id(action) == action_id]
+        matches = [action for action in actions if _records._action_id(action) == action_id]
         if len(matches) != 1:
             raise ContractError(f"human_needed action_id not found or ambiguous: {action_id}")
         return matches[0]
@@ -256,7 +243,7 @@ def _write_private_answer_if_allowed(
     if raw_path is None:
         return answer_sha256, None
 
-    raw_payload = private_answer_payload(
+    raw_payload = _records.private_answer_payload(
         schema_version=HUMAN_NEEDED_ANSWER_SCHEMA_VERSION,
         recorded_at=utc_now_iso(),
         packet=packet,
@@ -284,7 +271,7 @@ def _write_public_answer_artifacts(
     candidate_role: str | None,
     output_feedback: str | Path | None,
 ) -> tuple[dict[str, Any], Path]:
-    metadata = _metadata_without_targets(
+    metadata = _records._metadata_without_targets(
         packet=packet,
         packet_file_sha256=packet_file_sha256,
         answer_sha256=answer_sha256,
@@ -294,7 +281,7 @@ def _write_public_answer_artifacts(
         action=action,
         candidate_role=candidate_role,
     )
-    draft = feedback_draft(
+    draft = _records.feedback_draft(
         action=action,
         handoff_type=handoff_type,
         decision_kind=decision_kind,
@@ -309,10 +296,10 @@ def _write_public_answer_artifacts(
     write_json(feedback_path, feedback)
 
     public_answer_artifact = artifact_path(cwd, "human_needed.answer.public.json")
-    public_payload = public_answer_payload(metadata)
+    public_payload = _records.public_answer_payload(metadata)
     write_json(public_answer_artifact, public_payload)
 
-    result = public_result_payload(public_payload)
+    result = _records.public_result_payload(public_payload)
     _attach_public_path_or_label(result, cwd, "feedback_path", feedback_path)
     result["feedback_sha256"] = _sha256_file(feedback_path)
     _attach_public_path_or_label(result, cwd, "public_answer_artifact", public_answer_artifact)

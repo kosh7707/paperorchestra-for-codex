@@ -1,17 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.feedback import human_needed, human_needed_records
-
-
-def test_human_needed_facade_reexports_record_helpers() -> None:
-    assert human_needed._action_id is human_needed_records._action_id
-    assert human_needed._artifact_source is human_needed_records._artifact_source
-    assert human_needed._draft_issue_for_action is human_needed_records._draft_issue_for_action
-    assert human_needed._metadata_without_targets is human_needed_records._metadata_without_targets
-    assert human_needed.feedback_draft is human_needed_records.feedback_draft
-    assert human_needed.private_answer_payload is human_needed_records.private_answer_payload
-    assert human_needed.public_answer_payload is human_needed_records.public_answer_payload
-    assert human_needed.public_result_payload is human_needed_records.public_result_payload
+from paperorchestra.feedback import human_needed_records
 
 
 def test_metadata_without_targets_binds_selected_handoff_source() -> None:
