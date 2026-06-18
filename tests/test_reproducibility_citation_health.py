@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from paperorchestra.reviews.reproducibility_citation_provenance import _citation_registry_live_provenance
+from paperorchestra.reviews.reproducibility_citation_registry import _citation_registry_live_provenance
 from paperorchestra.reviews.reproducibility_citations import _citation_surface_health
 
 

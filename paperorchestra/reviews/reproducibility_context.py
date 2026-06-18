@@ -11,7 +11,7 @@ from paperorchestra.reviews.reproducibility_artifacts import (
     _prompt_trace_files,
     _read_json_if_exists,
 )
-from paperorchestra.reviews.reproducibility_citation_provenance import (
+from paperorchestra.reviews.reproducibility_citation_registry import (
     _citation_registry_live_provenance,
     _mock_registry_entry_count,
 )
