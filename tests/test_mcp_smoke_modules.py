@@ -4,20 +4,7 @@ import io
 import json
 from pathlib import Path
 
-from paperorchestra.interfaces.mcp import smoke
-from paperorchestra.interfaces.mcp import smoke_config, smoke_probe, smoke_protocol, smoke_report, smoke_server
-
-
-def test_mcp_smoke_facade_reexports_split_modules() -> None:
-    assert smoke.read_codex_mcp_registration is smoke_config.read_codex_mcp_registration
-    assert smoke._config_path is smoke_config._config_path
-    assert smoke._command_exists is smoke_config._command_exists
-    assert smoke._write_message is smoke_protocol._write_message
-    assert smoke._read_message is smoke_protocol._read_message
-    assert smoke._probe_evidence_bundle is smoke_probe._probe_evidence_bundle
-    assert smoke._bundle_contains_text is smoke_probe._bundle_contains_text
-    assert smoke.smoke_mcp_server is smoke_server.smoke_mcp_server
-    assert smoke.build_mcp_smoke_report is smoke_report.build_mcp_smoke_report
+from paperorchestra.interfaces.mcp import smoke_config, smoke_probe, smoke_protocol, smoke_report
 
 
 def test_read_codex_mcp_registration_extracts_named_server(tmp_path: Path) -> None:

@@ -13,7 +13,7 @@ from paperorchestra.runtime.environment import (
     package_context,
 )
 from paperorchestra.reviews.reproducibility import build_reproducibility_audit
-from paperorchestra.interfaces.mcp.smoke import build_mcp_smoke_report
+from paperorchestra.interfaces.mcp.smoke_report import build_mcp_smoke_report
 from paperorchestra.runtime.omx_diagnostics import build_omx_deep_report
 from paperorchestra.runtime.omx_bridge import _resolve_omx_model, _resolve_omx_reasoning_effort
 from paperorchestra.core.session import get_current_session_id, load_session

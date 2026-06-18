@@ -5,19 +5,9 @@ import json
 import shlex
 from typing import Any
 
-from paperorchestra.interfaces.mcp.smoke_config import _command_exists, _config_path, read_codex_mcp_registration
-from paperorchestra.interfaces.mcp.smoke_probe import _bundle_contains_text, _probe_evidence_bundle
-from paperorchestra.interfaces.mcp.smoke_protocol import (
-    TRANSPORT_CHOICES,
-    TRANSPORT_CONTENT_LENGTH,
-    TRANSPORT_NEWLINE,
-    _read_exact,
-    _read_message,
-    _readline,
-    _write_message,
-)
-from paperorchestra.interfaces.mcp.smoke_report import build_mcp_smoke_report
-from paperorchestra.interfaces.mcp.smoke_server import EXPECTED_TOOLS, smoke_mcp_server
+from paperorchestra.interfaces.mcp import smoke_protocol as _protocol
+from paperorchestra.interfaces.mcp import smoke_report as _report
+from paperorchestra.interfaces.mcp import smoke_server as _server
 
 
 def _print_human(report: dict[str, Any]) -> None:
@@ -38,7 +28,7 @@ def _print_human(report: dict[str, Any]) -> None:
     print("Server:")
     print(f"  {'OK' if server.get('initialize_ok') else 'WARN'} initialize")
     print(f"  {'OK' if server.get('tools_list_ok') else 'WARN'} tools/list ({server.get('tool_count', 0)} tools)")
-    print(f"  {'OK' if server.get('expected_tools_present') else 'WARN'} expected tools: {', '.join(EXPECTED_TOOLS)}")
+    print(f"  {'OK' if server.get('expected_tools_present') else 'WARN'} expected tools: {', '.join(_server.EXPECTED_TOOLS)}")
     if server.get("status_call_reached_server"):
         print("  OK harmless status tool call reached server")
     evidence_probe = server.get("evidence_bundle_probe") if isinstance(server.get("evidence_bundle_probe"), dict) else {}
@@ -64,8 +54,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout-sec", type=float, default=5.0)
     parser.add_argument(
         "--transport",
-        choices=TRANSPORT_CHOICES,
-        default=TRANSPORT_CONTENT_LENGTH,
+        choices=_protocol.TRANSPORT_CHOICES,
+        default=_protocol.TRANSPORT_CONTENT_LENGTH,
         help="MCP stdio framing to smoke-test.",
     )
     parser.add_argument("--json", action="store_true")
@@ -76,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     command_args = shlex.split(args.args) if args.args else None
-    report = build_mcp_smoke_report(
+    report = _report.build_mcp_smoke_report(
         config_path=args.config,
         server_name=args.name,
         command=args.command,
