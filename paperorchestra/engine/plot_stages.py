@@ -1,83 +1,18 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-import json
 from pathlib import Path
-from typing import Any
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.core.io import extract_json, read_json, write_json
-from paperorchestra.core.session import artifact_path, build_path, load_session, save_session
-from paperorchestra.engine.completion import _build_completion_request, _complete_with_runtime_mode, _lane_owner
-from paperorchestra.engine.prompt_context import _data_block, _prompt_compact_text, _read_inputs
+from paperorchestra.core.io import read_json
+from paperorchestra.core.session import load_session, save_session
+from paperorchestra.engine.completion import _lane_owner
+from paperorchestra.engine.plot_artifacts import _write_plot_artifacts, _write_plot_assets
+from paperorchestra.engine.plot_payload import _build_plot_payload
 from paperorchestra.engine.plot_repairs import _inject_missing_plot_assets
 from paperorchestra.engine.research_discovery import _build_candidate_payload, _write_candidate_artifacts
-from paperorchestra.engine.schemas import PLOT_SCHEMA, validate_plot_manifest
-from paperorchestra.manuscript.plot_assets import render_plot_assets
-from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.runtime.parity import record_lane_manifest
 from paperorchestra.runtime.provider_base import BaseProvider
-
-
-def _fallback_plot_manifest(outline: dict[str, Any]) -> dict[str, Any]:
-    figures = []
-    for plot in outline.get("plotting_plan", []):
-        figures.append(
-            {
-                "figure_id": plot["figure_id"],
-                "title": plot["title"],
-                "plot_type": plot["plot_type"],
-                "data_source": plot["data_source"],
-                "objective": plot["objective"],
-                "aspect_ratio": plot["aspect_ratio"],
-                "rendering_brief": plot["objective"],
-                "caption": plot["title"],
-                "source_fidelity_notes": f"{plot['data_source']}: fallback manifest without model-authored caption.",
-            }
-        )
-    return {"figures": figures}
-
-
-def _build_plot_payload(outline: dict[str, Any], state, provider: BaseProvider | None, *, runtime_mode: str = "compatibility", cwd: str | Path | None = None) -> tuple[dict[str, Any], str, bool, list[str]]:
-    inputs = _read_inputs(state)
-    if provider is None:
-        return _fallback_plot_manifest(outline), "python", True, ["No provider available; fallback manifest used."]
-    prompt_idea = _prompt_compact_text(inputs["idea"], head_chars=5000, tail_chars=1000)
-    prompt_experimental_log = _prompt_compact_text(inputs["experimental_log"], head_chars=12000, tail_chars=3000)
-    user_prompt = f"""
-{_data_block('plotting_plan', json.dumps(outline['plotting_plan'], indent=2, ensure_ascii=False))}
-
-{_data_block('idea.md', prompt_idea)}
-
-{_data_block('experimental_log.md', prompt_experimental_log)}
-
-{_data_block('conference_guidelines.md', inputs['guidelines'])}
-""".strip()
-    response, lane_type, fallback_used, lane_notes = _complete_with_runtime_mode(
-        _build_completion_request(system_prompt=PROMPTS.plot_system, user_prompt=user_prompt),
-        provider=provider,
-        runtime_mode=runtime_mode,
-        cwd=cwd,
-        omx_lane_type="team",
-        trace_stage="plot",
-        output_schema=PLOT_SCHEMA,
-    )
-    return extract_json(response), lane_type, fallback_used, lane_notes
-
-
-def _write_plot_artifacts(cwd: str | Path | None, payload: dict[str, Any]) -> tuple[Path, Path]:
-    validate_plot_manifest(payload)
-    manifest_path = artifact_path(cwd, "plot_manifest.json")
-    captions_path = artifact_path(cwd, "plot_captions.json")
-    write_json(manifest_path, payload)
-    write_json(captions_path, {item["figure_id"]: item["caption"] for item in payload["figures"]})
-    return manifest_path, captions_path
-
-
-def _write_plot_assets(cwd: str | Path | None, payload: dict[str, Any]) -> tuple[Path, Path]:
-    assets_dir = build_path(cwd, "plot-assets")
-    output_dir, index_path = render_plot_assets(payload, assets_dir)
-    return output_dir, index_path
 
 
 def run_parallel_plot_and_literature(
@@ -159,7 +94,6 @@ def run_parallel_plot_and_literature(
     }
 
 
-
 def generate_plots(cwd: str | Path | None, provider: BaseProvider | None = None, *, runtime_mode: str = "compatibility") -> Path:
     state = load_session(cwd)
     if not state.artifacts.outline_json:
@@ -173,11 +107,7 @@ def generate_plots(cwd: str | Path | None, provider: BaseProvider | None = None,
         cwd=cwd,
     )
 
-    validate_plot_manifest(payload)
-    manifest_path = artifact_path(cwd, "plot_manifest.json")
-    captions_path = artifact_path(cwd, "plot_captions.json")
-    write_json(manifest_path, payload)
-    write_json(captions_path, {item["figure_id"]: item["caption"] for item in payload["figures"]})
+    manifest_path, captions_path = _write_plot_artifacts(cwd, payload)
     assets_dir, assets_index = _write_plot_assets(cwd, payload)
     lane_path = record_lane_manifest(
         cwd,
