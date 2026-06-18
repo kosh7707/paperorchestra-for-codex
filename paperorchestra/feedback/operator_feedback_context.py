@@ -6,7 +6,7 @@ from typing import Any
 
 from paperorchestra.core.errors import ContractError
 from paperorchestra.core.session import load_session
-from paperorchestra.feedback.operator_candidates import (
+from paperorchestra.feedback.operator_candidate_packets import (
     _load_packet_from_imported,
     _packet_artifact_payload,
     _packet_prior_operator_attempts,

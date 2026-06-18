@@ -6,14 +6,9 @@ from typing import Any
 
 from paperorchestra.core.errors import ContractError
 from paperorchestra.runtime.provider_base import BaseProvider
-from paperorchestra.feedback.operator_candidates import (
-    _candidate_approval_source_role,
-    _failed_operator_candidate_result,
-    _generate_operator_candidate,
-    _preserve_operator_candidate_for_attempt,
-    _ready_candidate_from_packet,
-    _stage_candidate_text_for_verification,
-)
+from paperorchestra.feedback.operator_candidate_approval import _candidate_approval_source_role, _ready_candidate_from_packet
+from paperorchestra.feedback.operator_candidate_files import _preserve_operator_candidate_for_attempt, _stage_candidate_text_for_verification
+from paperorchestra.feedback.operator_candidate_generation import _failed_operator_candidate_result, _generate_operator_candidate
 from paperorchestra.feedback.operator_snapshots import _restore_session_snapshot
 
 
