@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
-from paperorchestra.core.session import load_session
+from paperorchestra.core.session import artifact_path, load_session
 from paperorchestra.engine.planning_stages import plan_narrative_and_claims
 from paperorchestra.engine.refine_stages import refine_current_paper
 from paperorchestra.engine.review_stages import (
@@ -37,12 +37,79 @@ from paperorchestra.loop_engine.ralph.artifacts import (
     _refresh_citation_integrity_for_current_manuscript,
     _try_rebuild_bib_for_citation_quality,
 )
-from paperorchestra.loop_engine.ralph.citation_candidate_preservation import preserve_citation_candidate_for_approval
 from paperorchestra.loop_engine.ralph.repair import repair_citation_claims
-from paperorchestra.loop_engine.ralph.semantic_failure_payload import _citation_repair_failure_payload
+from paperorchestra.loop_engine.ralph.semantic_gate_summary import _semantic_recheck_gate_summary
+from paperorchestra.loop_engine.ralph.semantic_validation import _validation_failing_codes_from_repair
 from paperorchestra.loop_engine.ralph.state import _artifact_sha, guarded_replace_manuscript_text
 
 ActionHandler = Callable[[str, dict[str, Any], QaLoopActionDispatchContext, _QaLoopActionDispatchState], bool]
+
+_VALIDATION_FAILURE_NEXT_STEPS = [
+    "Inspect validation failing codes before retrying citation repair.",
+    "Refresh citation support evidence or weaken/delete unsupported claims.",
+    "Rerun paperorchestra qa-loop --quality-mode claim_safe after targeted changes.",
+]
+_SEMANTIC_RECHECK_FAILURE_NEXT_STEPS = [
+    "Inspect semantic_recheck blockers before retrying citation repair.",
+    "Use the semantic recheck artifacts to identify whether citation integrity or high-risk claim sweep failed to improve.",
+    "Weaken, split, or delete unsupported claims before rerunning paperorchestra qa-loop --quality-mode claim_safe.",
+]
+
+
+def preserve_citation_candidate_for_approval(
+    cwd: str | Path | None,
+    candidate_path: str | Path | None,
+) -> str | None:
+    if not candidate_path:
+        return None
+    source = Path(candidate_path).resolve()
+    if not source.exists() or not source.is_file():
+        return str(source)
+    digest = _artifact_sha(source)
+    if not digest:
+        return str(source)
+    short = digest.split(":", 1)[-1][:16]
+    preserved = artifact_path(cwd, f"paper.citation-repair.approval-{short}.candidate.tex")
+    if not preserved.exists() or _artifact_sha(preserved) != digest:
+        preserved.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    return str(preserved)
+
+
+def _citation_repair_failure_payload(code: str, repair: dict[str, Any]) -> dict[str, Any]:
+    validation = repair.get("validation") if isinstance(repair.get("validation"), dict) else {}
+    semantic_summary, semantic_blockers = _semantic_recheck_gate_summary(
+        repair.get("semantic_recheck") if isinstance(repair.get("semantic_recheck"), dict) else {}
+    )
+    payload = {
+        "code": code,
+        "handler": "repair_citation_claims",
+        "reason": str(repair.get("reason") or "repair_not_accepted"),
+        "issue_count": repair.get("issue_count"),
+        "claim_safety_issue_count": repair.get("claim_safety_issue_count"),
+        "candidate_path": repair.get("candidate_path"),
+        "validation": _validation_payload(validation, repair),
+        "semantic_recheck_blockers": semantic_blockers,
+        "next_steps": _next_steps_for_repair(repair),
+    }
+    if semantic_summary is not None:
+        payload["semantic_recheck"] = semantic_summary
+    return payload
+
+
+def _validation_payload(validation: Any, repair: dict[str, Any]) -> dict[str, Any]:
+    validation = validation if isinstance(validation, dict) else {}
+    return {
+        "path": validation.get("path"),
+        "ok": validation.get("ok"),
+        "blocking_issue_count": validation.get("blocking_issue_count"),
+        "failing_codes": _validation_failing_codes_from_repair(repair),
+    }
+
+
+def _next_steps_for_repair(repair: dict[str, Any]) -> list[str]:
+    if str(repair.get("reason") or "") == "semantic_recheck_failed":
+        return list(_SEMANTIC_RECHECK_FAILURE_NEXT_STEPS)
+    return list(_VALIDATION_FAILURE_NEXT_STEPS)
 
 
 def _handle_narrative_plan(
