@@ -3,16 +3,14 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from paperorchestra.manuscript.latex_inputs import (
+from paperorchestra.manuscript.latex_bibliography_inputs import (
     _copy_bibliography_input_files,
-    _force_latexmk_rerun_command,
-    _infer_project_root_from_source,
-    _infer_run_root_from_source,
     _is_relative_bibliography_path_safe,
     _prepare_compile_inputs,
-    _prepend_path,
     _referenced_bibliography_stems,
 )
+from paperorchestra.manuscript.latex_input_env import _force_latexmk_rerun_command, _prepend_path
+from paperorchestra.manuscript.latex_input_roots import _infer_project_root_from_source, _infer_run_root_from_source
 
 
 def test_infer_roots_and_prepare_default_references(tmp_path: Path) -> None:

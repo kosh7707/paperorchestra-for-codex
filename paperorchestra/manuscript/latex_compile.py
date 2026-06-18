@@ -12,15 +12,13 @@ from paperorchestra.manuscript.latex_commands import (
     _summarize_compile_warnings,
 )
 from paperorchestra.manuscript.latex_compile_runner import LatexCompileRun
-from paperorchestra.manuscript.latex_inputs import (
+from paperorchestra.manuscript.latex_bibliography_inputs import (
     _copy_bibliography_input_files,
-    _force_latexmk_rerun_command,
-    _infer_project_root_from_source,
-    _infer_run_root_from_source,
     _prepare_compile_inputs,
-    _prepend_path,
     _referenced_bibliography_stems,
 )
+from paperorchestra.manuscript.latex_input_env import _force_latexmk_rerun_command, _prepend_path
+from paperorchestra.manuscript.latex_input_roots import _infer_project_root_from_source, _infer_run_root_from_source
 from paperorchestra.manuscript.latex_messages import compile_opt_in_error_message, missing_compile_environment_message
 from paperorchestra.manuscript.latex_models import CompileResult, LatexBuildError
 from paperorchestra.manuscript.latex_safety import blocked_latex_pattern
