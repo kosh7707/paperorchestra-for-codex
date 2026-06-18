@@ -5,12 +5,8 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from paperorchestra.core.models import utc_now_iso
-from .plan_logic import (
-    _human_handoff,
-    _next_ralph_instruction,
-    _plan_reads,
-    _quality_eval_summary_for_plan,
-)
+from .plan_handoff import _human_handoff, _next_ralph_instruction
+from .plan_reads import _plan_reads, _quality_eval_summary_for_plan
 from .plan_sources import CitationReviewIdentity
 from .policy import QA_LOOP_PLAN_SCHEMA_VERSION
 

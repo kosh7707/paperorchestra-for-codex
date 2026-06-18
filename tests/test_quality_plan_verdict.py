@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from paperorchestra.loop_engine.quality.plan_logic import _plan_verdict, _quality_eval_ready
+from paperorchestra.loop_engine.quality.plan_readiness import _quality_eval_ready
+from paperorchestra.loop_engine.quality.plan_verdict import _plan_verdict
 
 
 def _quality_eval(*, status: str = "pass", provenance: str = "live", failing_codes: list[str] | None = None) -> dict:

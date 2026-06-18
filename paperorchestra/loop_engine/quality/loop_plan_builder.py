@@ -20,8 +20,8 @@ from paperorchestra.loop_engine.quality.citation_support import _citation_suppor
 from paperorchestra.loop_engine.quality.audit_snapshots import build_quality_audits
 from paperorchestra.loop_engine.quality.eval import build_quality_eval
 from paperorchestra.loop_engine.quality.plan_payload import QualityLoopPlanPayloadInput, build_quality_loop_plan_payload
-from paperorchestra.loop_engine.quality.plan_logic import _plan_verdict
 from paperorchestra.loop_engine.quality.plan_sources import build_quality_eval_for_plan
+from paperorchestra.loop_engine.quality.plan_verdict import _plan_verdict
 from paperorchestra.loop_engine.quality.policy import DEFAULT_MAX_ITERATIONS
 from paperorchestra.loop_engine.quality.provenance import _mixed_provenance_acceptance
 
