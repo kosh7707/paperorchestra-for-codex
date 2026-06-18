@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from paperorchestra.core.session import set_current_session
 from paperorchestra.loop_engine.quality.policy import REQUIRED_REVIEW_AXES
-from paperorchestra.loop_engine.quality.review_score_axes import _anti_inflation_violations, _numeric_axis_scores
+from paperorchestra.loop_engine.quality.review_score_gate import _anti_inflation_violations, _numeric_axis_scores
 from paperorchestra.loop_engine.quality.review_score_provenance import _review_provenance_failures
 from paperorchestra.loop_engine.quality.review_score_shape import _review_shape_failures
 from paperorchestra.loop_engine.quality.section_quality_check import _section_review_path
