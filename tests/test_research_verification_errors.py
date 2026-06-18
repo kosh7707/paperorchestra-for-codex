@@ -6,10 +6,6 @@ from paperorchestra.core.session import set_current_session
 from paperorchestra.engine import research_stages, research_verification_errors
 
 
-def test_research_stages_facade_reexports_verification_error_recorder() -> None:
-    assert research_stages._record_verification_errors is research_verification_errors._record_verification_errors
-
-
 def test_record_verification_errors_noops_without_errors(tmp_path) -> None:
     state = SimpleNamespace(artifacts=SimpleNamespace(latest_verification_errors_json=None), notes=[])
 

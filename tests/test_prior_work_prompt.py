@@ -3,11 +3,7 @@ from __future__ import annotations
 import html
 from pathlib import Path
 
-from paperorchestra.engine import prior_work_prompt, research_stages
-
-
-def test_research_stages_facade_reexports_prior_work_context_helper() -> None:
-    assert research_stages._prior_work_context_from_paths is prior_work_prompt.build_prior_work_context_from_paths
+from paperorchestra.engine import prior_work_prompt
 
 
 def test_prior_work_context_collects_paper_bib_and_artifact_materials(tmp_path: Path) -> None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from paperorchestra.core.models import VerifiedPaper
-from paperorchestra.engine.research_stages import (
+from paperorchestra.engine.research_registry import (
     _citation_map_from_registry,
     _merge_live_verified_with_prior_registry,
 )

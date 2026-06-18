@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from paperorchestra.core.models import VerifiedPaper
-from paperorchestra.engine import research_registry_io, research_stages
+from paperorchestra.engine import research_registry_io
 
 
 def _paper_payload(**overrides):
@@ -28,10 +28,6 @@ def _paper_payload(**overrides):
     }
     data.update(overrides)
     return data
-
-
-def test_research_stages_facade_reexports_prior_registry_loader() -> None:
-    assert research_stages.load_prior_citation_registry is research_registry_io.load_prior_citation_registry
 
 
 def test_load_prior_citation_registry_returns_empty_without_artifact() -> None:
