@@ -5,7 +5,7 @@ import pytest
 from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import write_json
 from paperorchestra.core.session import artifact_path, set_current_session
-from paperorchestra.feedback.packet_context import _packet_has_human_needed_context
+from paperorchestra.feedback.operator_feedback_importer import _packet_has_human_needed_context
 from paperorchestra.feedback.packet_plan_validation import _validate_current_operator_plan
 from paperorchestra.feedback.packet_records import _artifact_by_role
 

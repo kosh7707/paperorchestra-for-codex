@@ -16,7 +16,24 @@ from paperorchestra.feedback.operator_contract_constants import (
 from paperorchestra.feedback.operator_packet_io import _read_packet
 from paperorchestra.feedback.packet_artifacts import _file_sha256
 from paperorchestra.feedback.packet_artifact_validation import _validate_operator_packet_artifact_bindings
-from paperorchestra.feedback.packet_context import _packet_has_human_needed_context
+from paperorchestra.feedback.packet_records import _artifact_by_role
+
+
+_HUMAN_NEEDED_CONTEXT_ROLES = ("qa_loop_plan", "qa_loop_execution", "operator_feedback_execution")
+
+
+def _packet_has_human_needed_context(packet: dict[str, Any]) -> bool:
+    for role in _HUMAN_NEEDED_CONTEXT_ROLES:
+        record = _artifact_by_role(packet, role)
+        if not record:
+            continue
+        try:
+            payload = read_json(record["path"])
+        except Exception:
+            payload = None
+        if isinstance(payload, dict) and payload.get("verdict") == "human_needed":
+            return True
+    return False
 
 
 def import_operator_feedback(
