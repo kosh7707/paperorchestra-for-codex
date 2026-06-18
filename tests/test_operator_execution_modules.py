@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 import pytest
 
 from paperorchestra.core.errors import ContractError
+from paperorchestra.feedback.packet_bindings import _execution_payload_sha256
 from paperorchestra.runtime.provider_base import ProviderError, TransientProviderError
 from paperorchestra.feedback import operator_candidates, operator_verification
 
@@ -26,6 +29,45 @@ def test_candidate_approval_source_role_requires_single_supported_source() -> No
                 ]
             }
         )
+
+
+def test_ready_candidate_from_packet_verifies_candidate_and_source_hashes(tmp_path: Path) -> None:
+    candidate = tmp_path / "candidate.tex"
+    candidate.write_text("approved draft", encoding="utf-8")
+    execution_path = tmp_path / "qa-loop.execution.json"
+    base_sha = "b" * 64
+    candidate_sha = "sha256:" + hashlib.sha256(candidate.read_bytes()).hexdigest()
+    execution = {
+        "candidate_approval": {
+            "status": "human_needed_candidate_ready",
+            "candidate_path": str(candidate),
+            "candidate_sha256": candidate_sha,
+            "base_manuscript_sha256": "sha256:" + base_sha,
+            "source_execution_path": str(execution_path),
+            "source_execution_sha256": "pending",
+            "created_at": "2026-01-01T00:00:00Z",
+        },
+        "candidate_progress": {
+            "forward_progress": True,
+            "before_failing_codes": ["citation_missing"],
+            "after_failing_codes": [],
+            "citation_issue_delta": 0,
+        },
+        "candidate_state": {"verification": {"ok": True}},
+    }
+    execution["candidate_approval"]["source_execution_sha256"] = _execution_payload_sha256(execution)
+    execution_path.write_text(json.dumps(execution), encoding="utf-8")
+    packet = {"artifacts": [{"role": "qa_loop_execution", "path": str(execution_path)}]}
+
+    ready = operator_candidates._ready_candidate_from_packet(packet, base_sha, source_artifact_role="qa_loop_execution")
+
+    assert ready["candidate_path"] == str(candidate.resolve())
+    assert ready["candidate_sha256"] == candidate_sha
+    assert ready["executor_source_role"] == "qa_loop_execution"
+    execution["candidate_approval"]["source_execution_sha256"] = "sha256:" + "0" * 64
+    execution_path.write_text(json.dumps(execution), encoding="utf-8")
+    with pytest.raises(ContractError, match="source execution hash mismatch"):
+        operator_candidates._ready_candidate_from_packet(packet, base_sha, source_artifact_role="qa_loop_execution")
 
 
 def test_executor_failure_category_keeps_public_failure_taxonomy() -> None:
