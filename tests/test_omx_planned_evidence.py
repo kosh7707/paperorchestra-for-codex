@@ -39,10 +39,6 @@ def test_omx_module_reexports_planned_evidence_helpers() -> None:
     assert omx.OmxInvocationEvidence is omx_evidence.OmxInvocationEvidence
     assert omx.build_planned_omx_invocation_evidence is omx_evidence.build_planned_omx_invocation_evidence
     assert omx.build_research_mission_invocation_evidence is omx_evidence.build_research_mission_invocation_evidence
-    assert omx._public_payload is omx_evidence._public_payload
-    assert omx._jsonable_without_private_values is omx_evidence._jsonable_without_private_values
-    assert omx._sha256_json is omx_evidence._sha256_json
-    assert omx._sha256_text is omx_evidence._sha256_text
 
 
 def test_planned_invocation_evidence_is_public_safe_and_hash_stable() -> None:

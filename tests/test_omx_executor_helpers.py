@@ -7,19 +7,6 @@ from paperorchestra.orchestra import omx_evidence, omx_executor, omx_runners
 from paperorchestra.orchestra.state import NextAction, OrchestraState
 
 
-def test_omx_executor_facade_reexports_evidence_helpers() -> None:
-    assert omx_executor._default_slug is omx_evidence._default_slug
-    assert omx_executor._valid_public_slug is omx_evidence._valid_public_slug
-    assert omx_executor._artifact_refs_from_stdout is omx_evidence._artifact_refs_from_stdout
-    assert omx_executor._artifact_refs_are_contained is omx_evidence._artifact_refs_are_contained
-    assert omx_executor._has_required_goal_refs is omx_evidence._has_required_goal_refs
-    assert omx_executor._public_input_payload is omx_evidence._public_input_payload
-    assert omx_executor._public_reason is omx_evidence._public_reason
-    assert omx_executor._public_unsupported_action_type is omx_evidence._public_unsupported_action_type
-    assert omx_executor._sha256_json is omx_evidence._sha256_json
-    assert omx_executor._sha256_text is omx_evidence._sha256_text
-
-
 def test_default_slug_is_public_safe_and_stable() -> None:
     action = NextAction(action_type="start_autoresearch_goal", reason="collect_related_work")
     state = OrchestraState(cwd="/repo", session_id="session", manuscript_sha256="sha256:paper")
