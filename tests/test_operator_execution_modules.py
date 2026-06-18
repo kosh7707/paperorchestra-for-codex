@@ -6,21 +6,7 @@ import pytest
 
 from paperorchestra.core.errors import ContractError
 from paperorchestra.runtime.providers import ProviderError, TransientProviderError
-from paperorchestra.feedback import operator_execution
 from paperorchestra.feedback import operator_candidates, operator_verification
-
-
-def test_operator_execution_facade_reexports_candidate_helpers() -> None:
-    assert operator_execution._candidate_approval_source_role is operator_candidates._candidate_approval_source_role
-    assert operator_execution._candidate_source_execution_from_packet is operator_candidates._candidate_source_execution_from_packet
-    assert operator_execution._ready_candidate_from_packet is operator_candidates._ready_candidate_from_packet
-    assert operator_execution._generate_operator_candidate is operator_candidates._generate_operator_candidate
-    assert operator_execution._failed_operator_candidate_result is operator_candidates._failed_operator_candidate_result
-
-
-def test_operator_execution_facade_reexports_verification_helpers() -> None:
-    assert operator_execution._verification_snapshot is operator_verification._verification_snapshot
-    assert operator_execution._verification_block is operator_verification._verification_block
 
 
 def test_candidate_approval_source_role_requires_single_supported_source() -> None:

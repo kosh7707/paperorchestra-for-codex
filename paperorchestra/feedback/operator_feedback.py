@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from paperorchestra.feedback.operator_contexts.citations import _protected_supported_citation_regressions
 from paperorchestra.feedback.operator_feedback_flow import apply_operator_feedback
 
-__all__ = ["_protected_supported_citation_regressions", "apply_operator_feedback"]
+__all__ = ["apply_operator_feedback"]
