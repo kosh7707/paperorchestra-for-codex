@@ -56,7 +56,6 @@ def build_quality_gate_report(
 def _next_commands(verdict: str, profile: str) -> list[str]:
     commands = [
         "paperorchestra qa-loop --quality-mode claim_safe" if profile == "claim_safe" else "paperorchestra qa-loop --quality-mode draft",
-        "paperorchestra qa-loop --quality-mode claim_safe" if profile == "claim_safe" else "paperorchestra qa-loop --quality-mode draft",
     ]
     if verdict in {"block", "repairable"}:
         commands.append("paperorchestra quality-gate --auto-refine --refine-iterations 1")

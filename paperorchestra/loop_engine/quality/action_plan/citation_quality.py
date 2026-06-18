@@ -31,8 +31,6 @@ def _append_citation_quality_actions(actions: list[dict[str, Any]], citation_qua
                 suggested_commands=[
                     "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
                     "paperorchestra critique --citation-evidence-mode web",
-                    "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
-                    "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
                     "paperorchestra qa-loop --quality-mode claim_safe",
                 ],
                 ralph_instruction="Refresh citation-quality artifacts for the current manuscript before evaluating claim-safe readiness.",
@@ -50,7 +48,6 @@ def _append_citation_quality_actions(actions: list[dict[str, Any]], citation_qua
                 reason="Critical citation quality failed; resolve with machine citation support/search evidence before asking the author for final source-use judgment.",
                 suggested_commands=[
                     "paperorchestra critique --citation-evidence-mode web",
-                    "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
                     "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
                     "paperorchestra qa-loop --quality-mode claim_safe",
                 ],

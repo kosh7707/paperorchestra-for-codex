@@ -34,8 +34,6 @@ def _append_citation_integrity_actions(actions: list[dict[str, Any]], citation_i
                     reason="Claim-safe mode requires citation-integrity artifacts bound to the current manuscript and citation-support review.",
                     suggested_commands=[
                         "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
-                        "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
-                        "paperorchestra quality-gate --quality-mode claim_safe --no-fail-on-block",
                         "paperorchestra qa-loop --quality-mode claim_safe",
                     ],
                     ralph_instruction="Refresh rendered-reference and citation-integrity artifacts for the current manuscript before evaluating claim-safe readiness.",

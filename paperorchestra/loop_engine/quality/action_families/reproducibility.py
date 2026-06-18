@@ -137,7 +137,7 @@ def _warning_actions(reproducibility: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _fidelity_actions(fidelity: dict[str, Any]) -> list[dict[str, Any]]:
     critical_commands = {
-        "verified_citation_lane": ["paperorchestra run --provider shell --discovery-mode search-grounded", "paperorchestra run --provider shell --discovery-mode search-grounded", "paperorchestra quality-gate --no-fail-on-block"],
+        "verified_citation_lane": ["paperorchestra run --provider shell --discovery-mode search-grounded", "paperorchestra quality-gate --no-fail-on-block"],
         "section_writing_pipeline": ["paperorchestra write-sections", "paperorchestra critique", "paperorchestra quality-gate --no-fail-on-block"],
         "submission_ready_output": ["paperorchestra compile", "paperorchestra quality-gate --no-fail-on-block"],
         "compile_environment_ready": ["paperorchestra environment --summary"],

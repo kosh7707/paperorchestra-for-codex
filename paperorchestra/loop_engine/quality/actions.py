@@ -19,7 +19,6 @@ def _citation_actions(reproducibility: dict[str, Any]) -> list[dict[str, Any]]:
             reason="Final citation artifacts are empty, malformed, or inconsistent: " + "; ".join(str(item) for item in issues),
             suggested_commands=[
                 "paperorchestra run --provider shell --discovery-mode search-grounded",
-                "paperorchestra run --provider shell --discovery-mode search-grounded",
                 "paperorchestra quality-gate --no-fail-on-block",
             ],
             ralph_instruction="Rebuild or re-import the citation lane before attempting more prose refinement; do not accept a manuscript with empty or malformed citation artifacts.",

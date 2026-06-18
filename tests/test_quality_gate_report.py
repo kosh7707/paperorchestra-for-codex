@@ -85,6 +85,7 @@ def test_quality_gate_report_builds_claim_safe_dimensions_and_decision() -> None
         "qa_loop_plan": "plan.json",
         "extra": "artifact.json",
     }
+    assert len(report["next_commands"]) == len(set(report["next_commands"]))
     assert "paperorchestra quality-gate --auto-refine --refine-iterations 1" in report["next_commands"]
 
 

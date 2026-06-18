@@ -155,7 +155,6 @@ def _strict_content_actions(reproducibility: dict[str, Any]) -> list[dict[str, A
             automation = "automatic"
             commands = [
                 "paperorchestra quality-gate --no-fail-on-block",
-                "paperorchestra quality-gate --no-fail-on-block",
                 "paperorchestra qa-loop --quality-mode claim_safe",
             ]
             instruction = (

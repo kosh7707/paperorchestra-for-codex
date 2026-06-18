@@ -372,7 +372,6 @@ def build_environment_inventory() -> dict[str, Any]:
                 "sandbox_tools": ["bwrap", "firejail", "nsjail"],
                 "inspection_commands": [
                     "paperorchestra environment --summary",
-                    "paperorchestra environment --summary",
                 ],
             },
         },
