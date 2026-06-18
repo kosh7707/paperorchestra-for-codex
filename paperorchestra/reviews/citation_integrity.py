@@ -21,7 +21,6 @@ from paperorchestra.reviews.citation_integrity_paths import (
     citation_integrity_critic_path,
     citation_intent_plan_path,
     citation_source_match_path,
-    rendered_reference_audit_path,
 )
 from paperorchestra.reviews.citation_integrity_support import (
     _citation_support_review_path,
@@ -41,6 +40,7 @@ from paperorchestra.reviews.citation_integrity_support import (
     _v3_support_status,
 )
 from paperorchestra.reviews.citation_rendered_references import (
+    rendered_reference_audit_path,
     _duplicate_reference_identity_groups,
     _read_text,
     _reference_identity_label,

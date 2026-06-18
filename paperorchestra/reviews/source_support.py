@@ -7,7 +7,6 @@ from typing import Any
 
 from paperorchestra.core.io import read_json
 from paperorchestra.core.session import artifact_path, load_session
-from paperorchestra.reviews.citation_sentences import extract_cited_sentences
 from paperorchestra.reviews.citation_source_payload import _clean_optional_string, _lean_source_payload
 from paperorchestra.reviews import source_support_cases
 from paperorchestra.reviews.source_support_classifier import _classify_source_support

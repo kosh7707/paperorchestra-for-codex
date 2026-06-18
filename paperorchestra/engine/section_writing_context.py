@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
-
 from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import read_json, read_text
 from paperorchestra.core.models import SessionState

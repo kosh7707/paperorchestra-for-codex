@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.reviews.eval_text import _title_matches_reference, normalize_eval_title
+from paperorchestra.reviews.eval_text import _title_matches_reference
 
 
 def build_citation_partition_request(paper_text: str, references: list[dict[str, Any]]) -> dict[str, Any]:

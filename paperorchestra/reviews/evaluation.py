@@ -24,7 +24,7 @@ from paperorchestra.reviews.review_gate_comparison import (
     build_review_gate_comparison,
     write_review_gate_comparison,
 )
-from paperorchestra.reviews.eval_text import normalize_eval_title, parse_reported_margin_ranges
+from paperorchestra.reviews.eval_text import parse_reported_margin_ranges
 
 
 def _session_artifact_dir(state) -> Path | None:

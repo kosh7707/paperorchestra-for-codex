@@ -11,8 +11,8 @@ from paperorchestra.reviews.citation_integrity_paths import (
     citation_integrity_critic_path,
     citation_intent_plan_path,
     citation_source_match_path,
-    rendered_reference_audit_path,
 )
+from paperorchestra.reviews.citation_rendered_references import rendered_reference_audit_path
 
 
 def build_citation_integrity_critic(cwd: str | Path | None, *, quality_mode: str = "ralph") -> dict[str, Any]:

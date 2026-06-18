@@ -10,7 +10,6 @@ from paperorchestra.core.io import extract_json, read_json, write_json
 from paperorchestra.core.session import artifact_path, load_session, save_session
 from paperorchestra.engine.completion import _build_completion_request, _complete_with_runtime_mode, _lane_owner
 from paperorchestra.engine.prompt_context import (
-    _compact_outline_for_prompt,
     _data_block,
     _prompt_compact_text,
     _read_inputs,

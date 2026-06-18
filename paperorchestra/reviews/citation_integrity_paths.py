@@ -3,8 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from paperorchestra.core.session import artifact_path
-from paperorchestra.reviews.citation_rendered_references import rendered_reference_audit_path
-
 
 CITATION_INTEGRITY_AUDIT_FILENAME = "citation_integrity.audit.json"
 CITATION_INTEGRITY_CRITIC_FILENAME = "citation_integrity.critic.json"

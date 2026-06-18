@@ -10,7 +10,6 @@ from paperorchestra.loop_engine.ralph.state import (
     atomic_write_text,
     clear_pending_manuscript_write,
     _citation_summary,
-    _failing_codes,
     _restore_file_content_snapshot,
     _restore_session_mutation_snapshot,
     compute_progress_delta,

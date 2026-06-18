@@ -7,11 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.runtime.compile_env import inspect_compile_environment
-from paperorchestra.runtime.environment import (
-    build_environment_inventory,
-    build_readiness_profiles,
-    package_context,
-)
+from paperorchestra.runtime.environment import build_environment_inventory, package_context
+from paperorchestra.runtime.readiness_profiles import build_readiness_profiles
 from paperorchestra.reviews.reproducibility import build_reproducibility_audit
 from paperorchestra.interfaces.mcp.smoke_report import build_mcp_smoke_report
 from paperorchestra.runtime.omx_diagnostics import build_omx_deep_report

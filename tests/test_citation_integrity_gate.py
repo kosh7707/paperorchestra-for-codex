@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from paperorchestra.core.models import ArtifactIndex, InputBundle, SessionState, utc_now_iso
 from paperorchestra.core.session import save_session, set_current_session
 from paperorchestra.reviews import citation_integrity, citation_integrity_gate, citation_integrity_paths
+from paperorchestra.reviews.citation_rendered_references import rendered_reference_audit_path
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> Path:
@@ -79,7 +80,7 @@ def test_build_citation_integrity_critic_reviews_bound_artifacts(tmp_path: Path)
     paper_path = _write_session(tmp_path)
     manuscript_sha = citation_integrity_gate._file_sha256(paper_path)
     for artifact_path in (
-        citation_integrity_paths.rendered_reference_audit_path(tmp_path),
+        rendered_reference_audit_path(tmp_path),
         citation_integrity_paths.citation_intent_plan_path(tmp_path),
         citation_integrity_paths.citation_source_match_path(tmp_path),
         citation_integrity_paths.citation_integrity_audit_path(tmp_path),

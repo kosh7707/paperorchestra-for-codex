@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.boundary import control_prose_markers
-from paperorchestra.core.models import utc_now_iso
 from paperorchestra.core.session import artifact_path, load_session, save_session
 from paperorchestra.manuscript.validator import extract_citation_keys
 
