@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import pkgutil
 from pathlib import Path
 import unittest
@@ -89,6 +90,11 @@ class PublicSurfaceTest(unittest.TestCase):
             },
         )
         self.assertEqual(names, set(TOOL_HANDLERS))
+
+    def test_mcp_tool_contract_matches_snapshot(self) -> None:
+        snapshot = Path(__file__).resolve().parent / "snapshots" / "mcp_tools.json"
+        self.maxDiff = None
+        self.assertEqual(TOOLS, json.loads(snapshot.read_text(encoding="utf-8")))
 
     def test_loop_engine_modules_import_from_new_packages(self) -> None:
         for module in (
