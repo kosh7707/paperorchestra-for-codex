@@ -9,7 +9,7 @@ from paperorchestra.manuscript.latex_bibliography_inputs import (
     _prepare_compile_inputs,
     _referenced_bibliography_stems,
 )
-from paperorchestra.manuscript.latex_input_env import _force_latexmk_rerun_command, _prepend_path
+from paperorchestra.manuscript.latex_compile import _force_latexmk_rerun_command, _prepend_path
 from paperorchestra.manuscript.latex_input_roots import _infer_project_root_from_source, _infer_run_root_from_source
 
 

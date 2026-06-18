@@ -18,7 +18,6 @@ from paperorchestra.manuscript.latex_bibliography_inputs import (
     _prepare_compile_inputs,
     _referenced_bibliography_stems,
 )
-from paperorchestra.manuscript.latex_input_env import _force_latexmk_rerun_command, _prepend_path
 from paperorchestra.manuscript.latex_input_roots import _infer_project_root_from_source, _infer_run_root_from_source
 from paperorchestra.manuscript.latex_messages import compile_opt_in_error_message, missing_compile_environment_message
 from paperorchestra.manuscript.latex_models import CompileResult, LatexBuildError
@@ -38,6 +37,26 @@ DANGEROUS_TEX_PATTERNS = [
         r"\\immediate\s*\\write",
     ]
 ]
+
+
+def _prepend_path(env: dict[str, str], key: str, *paths: Path) -> None:
+    existing = env.get(key, "")
+    parts = [str(path) for path in paths if str(path)]
+    if existing:
+        parts.append(existing)
+        env[key] = os.pathsep.join(parts)
+    elif parts:
+        env[key] = os.pathsep.join(parts) + os.pathsep
+
+
+def _force_latexmk_rerun_command(full_cmd: list[str]) -> list[str]:
+    if "latexmk" not in full_cmd:
+        return list(full_cmd)
+    command = list(full_cmd)
+    if "-g" not in command:
+        insert_at = command.index("latexmk") + 1
+        command.insert(insert_at, "-g")
+    return command
 
 
 def blocked_latex_pattern(source_text: str) -> str | None:
