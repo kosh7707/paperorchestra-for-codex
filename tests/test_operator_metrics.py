@@ -37,6 +37,38 @@ def test_claim_safe_tier2_metric_counts_reads_nested_quality_eval_counts() -> No
     assert metrics["source_obligation_numeric_mismatch"] == 1
 
 
+def test_claim_safe_tier2_metric_counts_prefers_explicit_counts_and_integer_floats() -> None:
+    quality_eval = {
+        "tiers": {
+            "tier_2_claim_safety": {
+                "checks": {
+                    "citation_support_critic": {
+                        "unsupported_count": 2.0,
+                        "weakly_supported_count": True,
+                        "canonical_summary": {
+                            "unsupported": 99,
+                            "weakly_supported": 3,
+                        },
+                    },
+                    "citation_quality_gate": {
+                        "counts": {
+                            "critical_unsupported_count": 4.0,
+                            "critical_need_count": False,
+                        }
+                    },
+                }
+            }
+        }
+    }
+
+    metrics = operator_metrics._claim_safe_tier2_metric_counts(quality_eval)
+
+    assert metrics["citation_support_unsupported"] == 2
+    assert metrics["citation_support_weak"] == 3
+    assert metrics["critical_unsupported_citation"] == 4
+    assert "critical_citation_support_missing" not in metrics
+
+
 def test_active_tier2_metric_delta_tracks_only_comparable_active_codes() -> None:
     base = {
         "tiers": {
