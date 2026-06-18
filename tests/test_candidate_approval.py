@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from paperorchestra.core.io import write_json
-from paperorchestra.feedback import candidate_approval
+from paperorchestra.feedback.candidate_approval_issues import candidate_approval_issues_for_role
+from paperorchestra.feedback.candidate_approval_roles import actionable_candidate_approval_role
 
 
 def _approval_artifact(tmp_path: Path, role: str, *, candidate_sha: str = "candidate", nested: bool = False, blocked: bool = False) -> dict[str, str]:
@@ -28,7 +29,7 @@ def test_actionable_candidate_approval_prefers_operator_feedback_role(tmp_path: 
         ],
     }
 
-    assert candidate_approval.actionable_candidate_approval_role(packet) == "operator_feedback_execution"
+    assert actionable_candidate_approval_role(packet) == "operator_feedback_execution"
 
 
 def test_actionable_candidate_approval_ignores_current_hash_and_blocked_nested_attempt(tmp_path: Path) -> None:
@@ -40,7 +41,7 @@ def test_actionable_candidate_approval_ignores_current_hash_and_blocked_nested_a
         ],
     }
 
-    assert candidate_approval.actionable_candidate_approval_role(packet) is None
+    assert actionable_candidate_approval_role(packet) is None
 
 
 def test_candidate_approval_issues_for_role_filters_matching_source() -> None:
@@ -50,7 +51,7 @@ def test_candidate_approval_issues_for_role_filters_matching_source() -> None:
         "ignored",
     ]
 
-    assert candidate_approval.candidate_approval_issues_for_role(issues, "qa_loop_execution") == [
+    assert candidate_approval_issues_for_role(issues, "qa_loop_execution") == [
         {"source_artifact_role": "qa_loop_execution", "id": "qa"}
     ]
-    assert candidate_approval.candidate_approval_issues_for_role(issues, None) == []
+    assert candidate_approval_issues_for_role(issues, None) == []
