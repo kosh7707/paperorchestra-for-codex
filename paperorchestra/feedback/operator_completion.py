@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from paperorchestra.core.models import utc_now_iso
-from paperorchestra.feedback.operator_failures import _operator_actionable_failure
+from paperorchestra.feedback.operator_failure_payload import _operator_actionable_failure
 from paperorchestra.feedback.operator_records import _operator_feedback_verdict
 
 
