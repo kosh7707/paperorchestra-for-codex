@@ -2,7 +2,35 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.manuscript.figure_review_types import FigurePlacementWarning
+from paperorchestra.manuscript.figure_review_types import FigureContext, FigurePlacementWarning
+
+
+def _figure_payload(
+    context: FigureContext,
+    *,
+    warnings: list[FigurePlacementWarning],
+    failures: list[FigurePlacementWarning],
+) -> dict[str, Any]:
+    return {
+        "label": context.payload_label,
+        "caption": context.caption,
+        "section_title": context.section_title,
+        "figure_line": context.start_line,
+        "figure_end_line": context.end_line,
+        "figure_page": None,
+        "first_reference_line": context.first_ref_line,
+        "first_reference_page": None,
+        "reference_distance_lines": context.first_ref_distance_lines,
+        "reference_distance_pages": None,
+        "placement_environment": context.env,
+        "placement_specifier": context.placement,
+        "included_assets": context.included_assets,
+        "nearby_reference_context": context.nearby_reference_context,
+        "plot_manifest_match": context.plot_match,
+        "source_origin": context.source_origin,
+        "failing_codes": [failure.code for failure in failures],
+        "warning_codes": [warning.code for warning in warnings],
+    }
 
 
 def build_review_payload(
