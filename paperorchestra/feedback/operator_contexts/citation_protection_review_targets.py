@@ -2,8 +2,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.feedback.operator_contexts.citation_protection_statuses import _PROBLEMATIC_STATUSES
 from paperorchestra.feedback.operator_contexts.text import _normalized_context_text
+
+_PROBLEMATIC_STATUSES = {
+    "weakly_supported",
+    "unsupported",
+    "contradicted",
+    "insufficient_evidence",
+    "needs_manual_check",
+    "manual_check",
+    "metadata_only",
+    "evidence_missing",
+    "weak",
+    "fail",
+    "human_needed",
+}
 
 
 def _review_problem_targets(citation_review_payload: dict[str, Any] | None) -> tuple[set[str], set[str]]:
