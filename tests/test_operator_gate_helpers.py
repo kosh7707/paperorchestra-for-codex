@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from paperorchestra.feedback.operator_gates import (
-    _candidate_hard_gate,
+from paperorchestra.feedback.operator_candidate_hard_gate import _candidate_hard_gate
+from paperorchestra.feedback.operator_candidate_progress import (
     _candidate_reduces_citation_issue_count,
     _catastrophic_review_regression,
-    _quality_failing_codes,
-    _tier_failing_codes,
 )
+from paperorchestra.feedback.operator_quality_codes import _quality_failing_codes, _tier_failing_codes
 
 
 def test_quality_failing_codes_and_tier_codes_are_deduped_and_status_scoped() -> None:

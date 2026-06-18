@@ -12,7 +12,7 @@ from paperorchestra.feedback.operator_candidate_packets import (
     _packet_prior_operator_attempts,
 )
 from paperorchestra.feedback.operator_contract import _load_imported_feedback
-from paperorchestra.feedback.operator_gates import _quality_failing_codes, _tier_failing_codes
+from paperorchestra.feedback.operator_quality_codes import _quality_failing_codes, _tier_failing_codes
 from paperorchestra.feedback.operator_records import _build_operator_execution_record
 from paperorchestra.feedback.packet_artifacts import _file_sha256
 

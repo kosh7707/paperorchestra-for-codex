@@ -13,10 +13,8 @@ from paperorchestra.feedback.operator_completion import (
     _operator_final_execution_update,
     _operator_history_extra,
 )
-from paperorchestra.feedback.operator_gates import (
-    _attach_candidate_approval_from_attempt,
-    _best_human_review_candidate_attempt,
-)
+from paperorchestra.feedback.operator_human_review_approval import _attach_candidate_approval_from_attempt
+from paperorchestra.feedback.operator_human_review_readiness import _best_human_review_candidate_attempt
 from paperorchestra.feedback.operator_records import _build_operator_incorporation_report
 from paperorchestra.feedback.operator_verification import _verification_block
 from paperorchestra.feedback.packet_artifacts import _file_sha256
