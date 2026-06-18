@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.loop_engine.ralph.auto_commit import _auto_commit_progressive_citation_candidate
+from paperorchestra.loop_engine.ralph.auto_commit_gate import _auto_commit_progressive_citation_candidate
 from paperorchestra.loop_engine.ralph.bridge_candidate_resolution import (
     CandidateResolutionRequest,
     PostActionState,
