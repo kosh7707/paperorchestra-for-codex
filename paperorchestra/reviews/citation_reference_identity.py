@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from paperorchestra.reviews.citation_reference_duplicates import _duplicate_reference_identity_groups
+from typing import Any
+
 from paperorchestra.reviews.citation_reference_normalizers import (
     _hash_identity,
     _namespace_for_report,
@@ -19,6 +20,25 @@ from paperorchestra.reviews.citation_reference_unknowns import (
     _has_known_field,
     _is_unknown_value,
 )
+
+
+def _duplicate_reference_identity_groups(visible_keys: list[str], entries: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    by_identity: dict[str, list[str]] = {}
+    for key in visible_keys:
+        entry = entries.get(key)
+        if not entry:
+            continue
+        identity = _reference_identity_label(entry)
+        if not identity:
+            continue
+        by_identity.setdefault(identity, []).append(key)
+    groups = [
+        {"identity": identity, "keys": sorted(dict.fromkeys(keys))}
+        for identity, keys in by_identity.items()
+        if len(set(keys)) > 1
+    ]
+    return sorted(groups, key=lambda group: (str(group["identity"]), list(group["keys"])))
+
 
 __all__ = [
     "_REFERENCE_IDENTITY_FALLBACK_FIELDS",
