@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.session import artifact_path, load_session
-from paperorchestra.reviews.source_support_classifier import _classify_source_support
+from paperorchestra.reviews.source_support_classifier_core import _classify_source_support
 from paperorchestra.reviews.source_support_resolution import _reference_case_dir
 from paperorchestra.reviews.source_support_retrieval import _download_source_evidence
 
