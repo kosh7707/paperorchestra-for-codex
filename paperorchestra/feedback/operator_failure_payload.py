@@ -3,13 +3,22 @@ from __future__ import annotations
 from typing import Any
 
 from paperorchestra.feedback.operator_failure_attempts import _compact_operator_attempt_failure
-from paperorchestra.feedback.operator_failure_base import _actionable_failure
 
 _OPERATOR_FAILURE_NEXT_STEPS = [
     "Inspect latest_gate_reasons before retrying operator feedback.",
     "Address new Tier 2 failures before promoting a candidate.",
     "Avoid identical or no-progress candidates; rerun the QA loop after targeted changes.",
 ]
+
+
+def _actionable_failure(owner_categories: list[str], reason: str, *, execution_error: str | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "reason": reason,
+        "owner_categories": sorted(dict.fromkeys(owner_categories or ["author"])),
+    }
+    if execution_error:
+        payload["execution_error"] = execution_error
+    return payload
 
 
 def _operator_actionable_failure(
