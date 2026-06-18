@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from paperorchestra.reviews import citation_integrity_artifacts
+from paperorchestra.reviews import citation_integrity_gate as citation_integrity_artifacts
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> Path:
