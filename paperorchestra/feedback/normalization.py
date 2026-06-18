@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.feedback.candidate_approval import actionable_candidate_approval_role, candidate_approval_issues_for_role
+from paperorchestra.feedback.candidate_approval_issues import candidate_approval_issues_for_role
+from paperorchestra.feedback.candidate_approval_roles import actionable_candidate_approval_role
 from paperorchestra.feedback.operator_answer_metadata import (
     HUMAN_NEEDED_ANSWER_SCHEMA_VERSIONS,
     validate_operator_review_notes,

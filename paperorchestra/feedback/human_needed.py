@@ -24,7 +24,7 @@ from paperorchestra.feedback.operator_contract import (
     build_operator_review_packet,
     import_operator_feedback,
 )
-from paperorchestra.feedback.candidate_approval import actionable_candidate_approval_role
+from paperorchestra.feedback.candidate_approval_roles import actionable_candidate_approval_role
 from paperorchestra.feedback.packet_artifacts import _file_sha256
 from paperorchestra.feedback.packet_artifact_validation import _validate_operator_packet_artifact_bindings
 from paperorchestra.runtime.mock_provider import MockProvider

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.feedback.candidate_approval import candidate_approval_issues_for_role
+from paperorchestra.feedback.candidate_approval_issues import candidate_approval_issues_for_role
 from paperorchestra.feedback.operator_answer_metadata import OPERATOR_FEEDBACK_INTENTS
 from paperorchestra.feedback.operator_issue_contract import (
     ACTIONABLE_FAILURE_OWNER_CATEGORIES,
