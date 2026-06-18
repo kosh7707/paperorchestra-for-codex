@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from paperorchestra.reviews.source_support_html import (
     _blocked_html_reason,
     _collapse_ws,
@@ -8,7 +10,6 @@ from paperorchestra.reviews.source_support_html import (
     _response_final_url,
 )
 from paperorchestra.reviews.source_support_pdf_links import _candidate_pdf_links, _pdf_candidate_priority
-from paperorchestra.reviews.source_support_pdf_public import _public_pdf_candidate_decisions
 from paperorchestra.reviews.source_support_pdf_trust import (
     DISALLOWED_PDF_HOST_MARKERS,
     _candidate_redirect_rejection,
@@ -17,6 +18,21 @@ from paperorchestra.reviews.source_support_pdf_trust import (
     _host,
     _is_same_host_or_subdomain,
 )
+
+
+def _public_pdf_candidate_decisions(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    public: list[dict[str, Any]] = []
+    for item in candidates:
+        row = {
+            "url": str(item.get("url") or ""),
+            "decision": str(item.get("decision") or ""),
+            "reason": str(item.get("reason") or ""),
+        }
+        if item.get("final_url"):
+            row["final_url"] = str(item.get("final_url"))
+        public.append(row)
+    return public
+
 
 __all__ = [
     "DISALLOWED_PDF_HOST_MARKERS",
