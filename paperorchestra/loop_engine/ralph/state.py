@@ -260,11 +260,6 @@ def _restore_file_content_snapshot(snapshot: dict[str, Any]) -> None:
         path.unlink()
 
 
-
-def _plan_path(cwd: str | Path | None, name: str) -> Path:
-    return artifact_path(cwd, name)
-
-
 def _next_execution_path(cwd: str | Path | None) -> tuple[int, Path]:
     root = runtime_root(cwd)
     existing = sorted(root.glob("qa-loop-execution.iter-*.json"))
