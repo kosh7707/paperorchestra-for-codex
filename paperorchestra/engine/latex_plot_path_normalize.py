@@ -1,6 +1,0 @@
-from __future__ import annotations
-
-from paperorchestra.engine.latex_plot_generated_paths import _normalize_generated_plot_paths
-from paperorchestra.engine.latex_plot_source_paths import _normalize_source_figure_paths
-
-__all__ = ["_normalize_generated_plot_paths", "_normalize_source_figure_paths"]
