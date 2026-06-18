@@ -28,6 +28,11 @@ class RenderedReferenceAuditTest(unittest.TestCase):
 
         self.assertEqual(groups, [{"identity": "doi:10.1000/example", "keys": ["a", "b"]}])
 
+    def test_reference_identity_uses_report_namespace_and_number(self) -> None:
+        identity = _reference_identity_label({"organization": "NIST", "reportnumber": "SP 800-53"})
+
+        self.assertEqual(identity, "report:nist:sp-800-53")
+
 
 if __name__ == "__main__":
     unittest.main()
