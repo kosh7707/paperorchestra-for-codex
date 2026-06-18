@@ -9,7 +9,7 @@ from paperorchestra.orchestra.executor import ActionExecutor, ExecutionRecord
 from paperorchestra.orchestra.consensus import CriticConsensus
 from paperorchestra.loop_engine.orchestra import FullLoopPlanner, LoopFacts
 from paperorchestra.orchestra.materials import build_material_inventory, build_source_digest
-from paperorchestra.orchestra.omx import build_research_mission_invocation_evidence
+from paperorchestra.orchestra.omx_evidence import build_research_mission_invocation_evidence
 from paperorchestra.orchestra.omx_executor import OmxActionExecutor, OmxCommandRunner
 from paperorchestra.orchestra.planner import ActionPlanner
 from paperorchestra.orchestra.references import build_reference_metadata_audit

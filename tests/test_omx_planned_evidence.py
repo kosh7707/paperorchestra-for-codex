@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from paperorchestra.orchestra import omx, omx_evidence
+from paperorchestra.orchestra import omx_evidence
 from paperorchestra.orchestra.research import EvidenceResearchMission, ResearchTask
 
 
@@ -32,13 +32,6 @@ def _mission(*, desired_surface: str | None = "$autoresearch", task_count: int =
         task_count=task_count,
         tasks=tasks,
     )
-
-
-def test_omx_module_reexports_planned_evidence_helpers() -> None:
-    assert omx.EvidenceResearchMission is EvidenceResearchMission
-    assert omx.OmxInvocationEvidence is omx_evidence.OmxInvocationEvidence
-    assert omx.build_planned_omx_invocation_evidence is omx_evidence.build_planned_omx_invocation_evidence
-    assert omx.build_research_mission_invocation_evidence is omx_evidence.build_research_mission_invocation_evidence
 
 
 def test_planned_invocation_evidence_is_public_safe_and_hash_stable() -> None:
