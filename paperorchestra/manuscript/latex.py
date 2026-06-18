@@ -11,6 +11,16 @@ import subprocess
 from pathlib import Path
 
 from paperorchestra.runtime.compile_env import ensure_sandbox_wrapper, inspect_compile_environment
+from paperorchestra.manuscript.latex_inputs import (
+    _copy_bibliography_input_files,
+    _force_latexmk_rerun_command,
+    _infer_project_root_from_source,
+    _infer_run_root_from_source,
+    _prepare_compile_inputs,
+    _prepend_path,
+    _referenced_bibliography_stems,
+)
+from paperorchestra.manuscript.latex_safety import blocked_latex_pattern
 
 
 class LatexBuildError(RuntimeError):
@@ -33,24 +43,11 @@ class CompileResult:
         return asdict(self)
 
 
-DANGEROUS_TEX_PATTERNS = [
-    re.compile(pattern, re.IGNORECASE)
-    for pattern in [
-        r"\\write18",
-        r"\\openout",
-        r"\\readline",
-        r"\\input\s*/",
-        r"\\include\s*/",
-        r"\\usepackage\s*\{shellesc\}",
-        r"\\immediate\s*\\write",
-    ]
-]
-
 
 def validate_latex_source(source_text: str) -> None:
-    for pattern in DANGEROUS_TEX_PATTERNS:
-        if pattern.search(source_text):
-            raise LatexBuildError(f"LaTeX source contains a blocked pattern: {pattern.pattern}")
+    blocked_pattern = blocked_latex_pattern(source_text)
+    if blocked_pattern:
+        raise LatexBuildError(f"LaTeX source contains a blocked pattern: {blocked_pattern}")
 
 
 def _parse_sandbox_command(raw: str) -> list[str]:
@@ -65,20 +62,6 @@ def _parse_sandbox_command(raw: str) -> list[str]:
             raise LatexBuildError("PAPERO_TEX_SANDBOX_CMD JSON must be a non-empty string array.")
         return parsed
     return shlex.split(raw)
-
-
-def _infer_project_root_from_source(source_path: Path) -> Path:
-    for parent in source_path.parents:
-        if parent.name == ".paper-orchestra":
-            return parent.parent
-    return source_path.parent
-
-
-def _infer_run_root_from_source(source_path: Path) -> Path:
-    for parent in source_path.parents:
-        if parent.name == "artifacts":
-            return parent.parent
-    return source_path.parent
 
 
 def _compile_opt_in_error_message() -> str:
@@ -179,90 +162,6 @@ def _run_wrapped_command(full_cmd: list[str], *, env: dict[str, str], cwd: Path,
         )
     except subprocess.TimeoutExpired as exc:
         raise LatexBuildError(f"LaTeX build timed out after {timeout_seconds} seconds.") from exc
-
-
-def _prepare_compile_inputs(source_path: Path, workdir_path: Path) -> None:
-    references_source = source_path.parent / "references.bib"
-    if references_source.exists():
-        shutil.copy2(references_source, workdir_path / "references.bib")
-
-
-def _referenced_bibliography_stems(source_text: str) -> list[str]:
-    stems: list[str] = []
-    for raw_group in re.findall(r"\\bibliography\s*\{([^}]+)\}", source_text):
-        for raw_stem in raw_group.split(","):
-            stem = raw_stem.strip()
-            if stem and stem not in stems:
-                stems.append(stem)
-    return stems
-
-
-def _is_relative_bibliography_path_safe(raw_stem: str) -> bool:
-    raw_path = Path(raw_stem)
-    return bool(raw_stem) and not raw_path.is_absolute() and ".." not in raw_path.parts
-
-
-def _is_regular_file_within_root(candidate: Path, base: Path) -> bool:
-    if candidate.is_symlink() or not candidate.exists() or not candidate.is_file():
-        return False
-    try:
-        relative_parts = candidate.relative_to(base).parts
-    except ValueError:
-        return False
-    current = base
-    for part in relative_parts:
-        current = current / part
-        if current.is_symlink():
-            return False
-    try:
-        candidate.resolve().relative_to(base.resolve())
-    except ValueError:
-        return False
-    return True
-
-
-def _copy_bibliography_input_files(
-    *,
-    bibliography_stems: list[str],
-    source_path: Path,
-    run_root: Path,
-    workdir_path: Path,
-) -> None:
-    search_roots = [source_path.parent, run_root]
-    project_root = _infer_project_root_from_source(source_path)
-    if project_root not in search_roots:
-        search_roots.append(project_root)
-    for raw_stem in bibliography_stems:
-        if not _is_relative_bibliography_path_safe(raw_stem):
-            continue
-        candidate_rel = Path(f"{raw_stem}.bib")
-        for base in search_roots:
-            candidate = base / candidate_rel
-            if _is_regular_file_within_root(candidate, base):
-                destination = workdir_path / candidate_rel
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(candidate, destination)
-                break
-
-
-def _prepend_path(env: dict[str, str], key: str, *paths: Path) -> None:
-    existing = env.get(key, "")
-    parts = [str(path) for path in paths if str(path)]
-    if existing:
-        parts.append(existing)
-        env[key] = os.pathsep.join(parts)
-    elif parts:
-        env[key] = os.pathsep.join(parts) + os.pathsep
-
-
-def _force_latexmk_rerun_command(full_cmd: list[str]) -> list[str]:
-    if "latexmk" not in full_cmd:
-        return list(full_cmd)
-    command = list(full_cmd)
-    if "-g" not in command:
-        insert_at = command.index("latexmk") + 1
-        command.insert(insert_at, "-g")
-    return command
 
 
 def compile_latex_with_report(source: str | Path, *, workdir: str | Path, output_log: str | Path) -> CompileResult:
