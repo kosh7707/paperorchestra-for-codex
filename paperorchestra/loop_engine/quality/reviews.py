@@ -8,7 +8,8 @@ from .reviewer_independence import (
     _reviewer_independence_acceptance,
     _reviewer_independence_check,
 )
-from .section_quality import _section_quality_check, _section_review_path
+from .section_quality_check import _section_quality_check
+from .section_quality_path import _section_review_path
 from .validation_issues import _validation_issue_counts
 
 
