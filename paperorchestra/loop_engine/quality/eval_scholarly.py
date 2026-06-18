@@ -5,11 +5,9 @@ from typing import Any
 
 from paperorchestra.loop_engine.quality.eval_tiers import _status_from_failures, _tier
 from paperorchestra.loop_engine.quality.policy import MODE_THRESHOLDS
-from paperorchestra.loop_engine.quality.reviews import (
-    _review_score_check,
-    _reviewer_independence_check,
-    _section_quality_check,
-)
+from paperorchestra.loop_engine.quality.review_score_gate import _review_score_check
+from paperorchestra.loop_engine.quality.reviewer_independence import _reviewer_independence_check
+from paperorchestra.loop_engine.quality.section_quality_check import _section_quality_check
 
 
 def build_scholarly_quality_tier(*, cwd: str | Path | None, state, mode: str) -> dict[str, Any]:

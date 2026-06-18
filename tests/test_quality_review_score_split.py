@@ -4,11 +4,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from paperorchestra.core.session import set_current_session
-from paperorchestra.loop_engine.quality import reviews as quality_reviews
 from paperorchestra.loop_engine.quality.policy import REQUIRED_REVIEW_AXES
 from paperorchestra.loop_engine.quality.review_score_axes import _anti_inflation_violations, _numeric_axis_scores
 from paperorchestra.loop_engine.quality.review_score_provenance import _review_provenance_failures
 from paperorchestra.loop_engine.quality.review_score_shape import _review_shape_failures
+from paperorchestra.loop_engine.quality.section_quality_path import _section_review_path
 from paperorchestra.loop_engine.quality.utils import _file_sha256
 
 
@@ -106,4 +106,4 @@ def test_review_section_path_still_resolves_path_objects(tmp_path: Path) -> None
         )
     )
 
-    assert quality_reviews._section_review_path(tmp_path, state) == review_path
+    assert _section_review_path(tmp_path, state) == review_path
