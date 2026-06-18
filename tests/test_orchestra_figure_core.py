@@ -6,13 +6,10 @@ from paperorchestra.orchestra import figure_core, figures
 from paperorchestra.orchestra.state import OrchestraFacets, OrchestraState
 
 
-def test_figures_facade_reexports_core_models_and_helpers() -> None:
+def test_figures_facade_preserves_public_models_and_policy_adapter() -> None:
     assert figures.FIGURE_EXTENSIONS is figure_core.FIGURE_EXTENSIONS
     assert figures.FIGURE_GATE_SCHEMA_VERSION == figure_core.FIGURE_GATE_SCHEMA_VERSION
     assert figures.FIGURE_GATE_REPORT_FILENAME == figure_core.FIGURE_GATE_REPORT_FILENAME
-    assert figures._PRIVATE_MARKERS is figure_core._PRIVATE_MARKERS
-    assert figures._SAFE_SLOT_ID_RE is figure_core._SAFE_SLOT_ID_RE
-    assert figures._STOPWORDS is figure_core._STOPWORDS
     assert figures.FigureAsset is figure_core.FigureAsset
     assert figures.FigureInventory is figure_core.FigureInventory
     assert figures.FigureSlot is figure_core.FigureSlot
@@ -23,12 +20,6 @@ def test_figures_facade_reexports_core_models_and_helpers() -> None:
     assert issubclass(figures.FigureGatePolicy, figure_core.FigureGatePolicy)
     assert not hasattr(figure_core.FigureGatePolicy, "apply_to_state")
     assert hasattr(figures.FigureGatePolicy, "apply_to_state")
-    assert figures._redacted_label is figure_core._redacted_label
-    assert figures._contains_private_marker is figure_core._contains_private_marker
-    assert figures._is_public_safe_identifier is figure_core._is_public_safe_identifier
-    assert figures._sha256 is figure_core._sha256
-    assert figures._sha256_text is figure_core._sha256_text
-    assert figures._decision_summary is figure_core._decision_summary
     assert figures.inventory_figure_assets is figure_core.inventory_figure_assets
 
 

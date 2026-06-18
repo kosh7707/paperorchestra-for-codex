@@ -8,14 +8,9 @@ from paperorchestra.core.session import save_session, set_current_session
 from paperorchestra.orchestra import figure_reports, figures
 
 
-def test_figures_facade_reexports_report_helpers() -> None:
+def test_figures_facade_preserves_public_report_entrypoints() -> None:
     assert figures.figure_gate_report_path is figure_reports.figure_gate_report_path
-    assert figures._read_json_if_exists is figure_reports._read_json_if_exists
-    assert figures._slot_from_mapping is figure_reports._slot_from_mapping
-    assert figures._resolve_existing_plot_asset_path is figure_reports._resolve_existing_plot_asset_path
-    assert figures._generated_figure_availability_from_plot_assets is figure_reports._generated_figure_availability_from_plot_assets
     assert figures.derive_figure_slots is figure_reports.derive_figure_slots
-    assert figures._session_paths is figure_reports._session_paths
     assert figures.build_figure_gate_report is not figure_reports.build_figure_gate_report
     assert figures.write_figure_gate_report is not figure_reports.write_figure_gate_report
 
