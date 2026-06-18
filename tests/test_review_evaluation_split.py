@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from paperorchestra.reviews import generated_citations, review_gate_comparison
+from paperorchestra.reviews import generated_citations
+from paperorchestra.reviews.evaluation_constants import (
+    EXPECTED_CITATION_STATISTICS_KEYS,
+    EXPECTED_REVIEW_SUMMARY_KEYS,
+)
+from paperorchestra.reviews.review_gate_payload import build_review_gate_payload
 
 
 def test_review_gate_comparison_payload_detects_missing_shape_and_anti_inflation() -> None:
@@ -17,7 +22,7 @@ def test_review_gate_comparison_payload_detects_missing_shape_and_anti_inflation
         "penalties": [],
     }
 
-    payload = review_gate_comparison.build_review_gate_payload(
+    payload = build_review_gate_payload(
         session_id="s1",
         review_path="review.json",
         latest_review=latest_review,
@@ -38,7 +43,7 @@ def test_review_gate_comparison_payload_detects_missing_shape_and_anti_inflation
 
 
 def test_review_gate_payload_preserves_malformed_truthy_review_as_partial() -> None:
-    payload = review_gate_comparison.build_review_gate_payload(
+    payload = build_review_gate_payload(
         session_id="s1",
         review_path="review.json",
         latest_review=["malformed but present"],
@@ -48,8 +53,8 @@ def test_review_gate_payload_preserves_malformed_truthy_review_as_partial() -> N
     assert payload["has_citation_statistics"] is False
     assert payload["has_summary"] is False
     assert payload["has_questions"] is False
-    assert payload["missing_citation_statistics_keys"] == review_gate_comparison.EXPECTED_CITATION_STATISTICS_KEYS
-    assert payload["missing_summary_keys"] == review_gate_comparison.EXPECTED_REVIEW_SUMMARY_KEYS
+    assert payload["missing_citation_statistics_keys"] == EXPECTED_CITATION_STATISTICS_KEYS
+    assert payload["missing_summary_keys"] == EXPECTED_REVIEW_SUMMARY_KEYS
 
 
 def test_generated_citation_titles_extracts_and_deduplicates_resolved_titles() -> None:
