@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 from paperorchestra.orchestra.figure_core import FigureSlot
-from paperorchestra.orchestra.figure_slot_io import _read_json_if_exists
 from paperorchestra.orchestra.figure_slot_mapping import _slot_from_mapping
 from paperorchestra.orchestra.figure_slot_sources import _slots_from_captions, _slots_from_manifest, _slots_from_plot_assets
+
+
+def _read_json_if_exists(path: str | Path | None) -> Any:
+    if not path:
+        return None
+    candidate = Path(path)
+    if not candidate.exists():
+        return None
+    return json.loads(candidate.read_text(encoding="utf-8"))
 
 
 def derive_figure_slots(
