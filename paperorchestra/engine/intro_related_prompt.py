@@ -9,7 +9,7 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import read_json
 from paperorchestra.core.models import SessionState
 from paperorchestra.engine.citation_coverage import _citation_coverage_target
-from paperorchestra.engine.planning_stages import (
+from paperorchestra.engine.planning_payloads import (
     _author_facing_writer_brief_block,
     _filter_planning_payloads_for_sections,
     _planning_payloads_for_prompt,

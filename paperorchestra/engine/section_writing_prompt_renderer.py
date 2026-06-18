@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from paperorchestra.engine.planning_stages import _author_facing_writer_brief_block
+from paperorchestra.engine.planning_payloads import _author_facing_writer_brief_block
 from paperorchestra.engine.prompt_context import _data_block, _prompt_compact_text
 from paperorchestra.engine.section_writing_types import SectionPromptContext
 from paperorchestra.manuscript.citations import canonical_citation_keys

@@ -5,7 +5,7 @@ from typing import Any
 
 from paperorchestra.core.errors import ContractError
 from paperorchestra.core.session import load_session
-from paperorchestra.engine.planning_stages import _planning_payloads_for_prompt, _writer_brief_from_planning
+from paperorchestra.engine.planning_payloads import _planning_payloads_for_prompt, _writer_brief_from_planning
 from paperorchestra.engine.refine_iteration import run_refinement_iteration
 from paperorchestra.runtime.provider_base import BaseProvider
 

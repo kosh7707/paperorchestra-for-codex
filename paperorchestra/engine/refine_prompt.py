@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from paperorchestra.engine.planning_stages import _author_facing_writer_brief_block
+from paperorchestra.engine.planning_payloads import _author_facing_writer_brief_block
 from paperorchestra.engine.prompt_context import _data_block
 from paperorchestra.engine.refine_review import _redact_review_scores_for_writer
 

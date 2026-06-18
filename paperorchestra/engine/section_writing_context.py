@@ -10,7 +10,7 @@ from paperorchestra.engine.latex_postprocess import (
     _reviewable_plot_assets_index,
     _reviewable_plot_manifest,
 )
-from paperorchestra.engine.planning_stages import (
+from paperorchestra.engine.planning_payloads import (
     _filter_planning_payloads_for_sections,
     _planning_payloads_for_prompt,
     _writer_brief_from_planning,
