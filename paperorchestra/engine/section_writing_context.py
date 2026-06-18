@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from paperorchestra.core.errors import ContractError
+from paperorchestra.core.io import read_text
 from paperorchestra.core.models import SessionState
 from paperorchestra.engine.prompt_context import (
     _raise_if_strict_source_citations_unmapped,
@@ -15,9 +17,42 @@ from paperorchestra.engine.section_writing_artifact_contexts import (
     _plot_context,
     _template_context,
 )
-from paperorchestra.engine.section_writing_planning_context import _planning_payloads
-from paperorchestra.engine.section_writing_scope_context import _current_source_for_scope
-from paperorchestra.engine.section_writing_types import SectionPromptContext
+from paperorchestra.engine.planning_payloads import (
+    _filter_planning_payloads_for_sections,
+    _planning_payloads_for_prompt,
+    _writer_brief_from_planning,
+)
+from paperorchestra.engine.section_scope import _resolve_selected_sections
+from paperorchestra.engine.section_writing_types import PlanningPromptPayloads, SectionPromptContext
+
+
+def _current_source_for_scope(state: SessionState, selected_sections: list[str]) -> tuple[str | None, list[str]]:
+    if selected_sections and not state.artifacts.paper_full_tex:
+        raise ContractError("Need an existing paper.full.tex before rewriting only selected sections.")
+    current_source = (
+        read_text(state.artifacts.paper_full_tex)
+        if selected_sections and state.artifacts.paper_full_tex
+        else None
+    )
+    if current_source is not None:
+        selected_sections = _resolve_selected_sections(current_source, selected_sections)
+    return current_source, selected_sections
+
+
+def _planning_payloads(cwd: str | Path | None, selected_sections: list[str]) -> PlanningPromptPayloads:
+    narrative_plan, claim_map, citation_placement_plan = _planning_payloads_for_prompt(cwd)
+    narrative_plan, claim_map, citation_placement_plan = _filter_planning_payloads_for_sections(
+        narrative_plan,
+        claim_map,
+        citation_placement_plan,
+        selected_sections,
+    )
+    return PlanningPromptPayloads(
+        narrative_plan=narrative_plan,
+        claim_map=claim_map,
+        citation_placement_plan=citation_placement_plan,
+        writer_brief=_writer_brief_from_planning(narrative_plan, claim_map, citation_placement_plan),
+    )
 
 
 def build_section_prompt_context(
