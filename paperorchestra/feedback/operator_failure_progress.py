@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.feedback.operator_contexts.metrics import _compact_metric_delta_records
+from paperorchestra.feedback.operator_contexts.metric_delta import _compact_metric_delta_records
 
 
 def _compact_blocked_candidate_progress(attempt: dict[str, Any]) -> dict[str, Any] | None:

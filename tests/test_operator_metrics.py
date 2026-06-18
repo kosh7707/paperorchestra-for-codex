@@ -126,9 +126,9 @@ def test_active_tier2_metric_delta_tracks_only_comparable_active_codes() -> None
 
 
 def test_operator_refinement_constraints_deduplicate_quality_and_integrity_codes() -> None:
-    from paperorchestra.feedback.operator_contexts import metrics
+    from paperorchestra.feedback.operator_contexts.refinement_constraints import _operator_refinement_constraints
 
-    constraints = metrics._operator_refinement_constraints(
+    constraints = _operator_refinement_constraints(
         {"tiers": {"tier_2_claim_safety": {"failing_codes": ["b", "a", "a", ""]}}},
         {"failing_codes": ["c", "b", None]},
     )
@@ -139,7 +139,7 @@ def test_operator_refinement_constraints_deduplicate_quality_and_integrity_codes
 
 
 def test_compact_prior_rejected_attempts_keeps_only_bounded_private_safe_fields() -> None:
-    from paperorchestra.feedback.operator_contexts import metrics
+    from paperorchestra.feedback.operator_contexts.prior_attempts import _compact_prior_rejected_attempts
 
     attempts = [
         {"gate_passed": True, "gate_reasons": ["ignored"]},
@@ -165,7 +165,7 @@ def test_compact_prior_rejected_attempts_keeps_only_bounded_private_safe_fields(
         {"attempt_index": 2, "candidate_sha256": "sha2", "gate_reasons": ["latest"]},
     ]
 
-    compact = metrics._compact_prior_rejected_attempts(attempts, limit=1)
+    compact = _compact_prior_rejected_attempts(attempts, limit=1)
 
     assert compact == [
         {

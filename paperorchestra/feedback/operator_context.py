@@ -11,8 +11,9 @@ from paperorchestra.feedback.operator_issue_contract import OPERATOR_SOURCE
 from paperorchestra.feedback.operator_contexts import citations as _citations
 from paperorchestra.feedback.operator_contexts import claims as _claims
 from paperorchestra.feedback.operator_contexts import figures as _figures
-from paperorchestra.feedback.operator_contexts import metrics as _metrics
 from paperorchestra.feedback.operator_contexts import packet as _packet
+from paperorchestra.feedback.operator_contexts.prior_attempts import _compact_prior_rejected_attempts
+from paperorchestra.feedback.operator_contexts.refinement_constraints import _operator_refinement_constraints
 
 
 def _operator_review_payload(imported: dict[str, Any], *, prior_attempts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -63,7 +64,7 @@ def _operator_issue_context(imported: dict[str, Any], *, prior_attempts: list[di
     quality_eval = _packet._packet_payload_by_role(packet, "quality_eval")
     citation_integrity_audit = _packet._packet_payload_by_role(packet, "citation_integrity_audit")
     figure_placement_review = _packet._packet_payload_by_role(packet, "figure_placement_review")
-    prior_rejected_attempts = _metrics._compact_prior_rejected_attempts(prior_attempts)
+    prior_rejected_attempts = _compact_prior_rejected_attempts(prior_attempts)
     protected_supported = _citations._protected_supported_citation_context(citation_review, citation_integrity_audit)
     context = {
         "problematic_citation_items": _citations._problematic_citation_context(citation_review),
@@ -71,7 +72,7 @@ def _operator_issue_context(imported: dict[str, Any], *, prior_attempts: list[di
         "citation_density_issues": _citations._citation_density_context(citation_integrity_audit),
         "citation_duplicate_support_issues": _citations._duplicate_support_context(citation_integrity_audit, citation_review),
         "figure_placement_issues": _figures._figure_issue_context(figure_placement_review),
-        "refinement_constraints": _metrics._operator_refinement_constraints(quality_eval, citation_integrity_audit),
+        "refinement_constraints": _operator_refinement_constraints(quality_eval, citation_integrity_audit),
         "writer_instruction": (
             "Use these concrete sentences as the primary repair targets. Do not add new bibliography keys; "
             "either ground each sentence with existing directly supporting evidence, soften it into scoped author-material prose, or remove it. "
