@@ -9,7 +9,7 @@ from paperorchestra.loop_engine.ralph.citation_candidate_preservation import (
     preserve_citation_candidate_for_approval as _preserve_citation_candidate_for_approval,
 )
 from paperorchestra.loop_engine.ralph.repair import repair_citation_claims as _repair_citation_claims
-from paperorchestra.loop_engine.ralph.semantic_recheck import _citation_repair_failure_payload
+from paperorchestra.loop_engine.ralph.semantic_failure_payload import _citation_repair_failure_payload
 from paperorchestra.loop_engine.ralph.state import _artifact_sha as _artifact_sha_real
 from paperorchestra.loop_engine.ralph.state import guarded_replace_manuscript_text as _guarded_replace_manuscript_text
 

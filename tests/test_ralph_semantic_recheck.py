@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from paperorchestra.loop_engine.ralph.semantic_recheck import (
+    _citation_repair_failure_payload,
     _semantic_recheck_gate_summary,
     _validation_failing_codes_from_repair,
 )
@@ -40,6 +41,32 @@ class RalphSemanticRecheckTest(unittest.TestCase):
             codes = _validation_failing_codes_from_repair({"validation": {"path": str(validation_path)}})
 
         self.assertEqual(codes, ["numeric_grounding", "unknown_citation"])
+
+    def test_citation_repair_failure_payload_projects_semantic_recheck_failure(self) -> None:
+        repair = {
+            "reason": "semantic_recheck_failed",
+            "issue_count": 4,
+            "validation": {"ok": False, "blocking_issue_count": 2},
+            "semantic_recheck": {
+                "status": "fail",
+                "high_risk_claim_sweep": {
+                    "targeted": True,
+                    "improved": False,
+                    "before": {"item_count": 3},
+                    "after": {"item_count": 3},
+                    "path": "sweep.json",
+                    "sha256": "sha256:sweep",
+                },
+            },
+        }
+
+        payload = _citation_repair_failure_payload("citation_repair_failed", repair)
+
+        self.assertEqual(payload["reason"], "semantic_recheck_failed")
+        self.assertEqual(payload["validation"]["failing_codes"], ["validation_failed"])
+        self.assertEqual(payload["semantic_recheck_blockers"], ["high_risk_claim_sweep_not_improved"])
+        self.assertEqual(payload["semantic_recheck"]["high_risk_claim_sweep"]["after_count"], 3)
+        self.assertIn("Inspect semantic_recheck blockers", payload["next_steps"][0])
 
 
 if __name__ == "__main__":
