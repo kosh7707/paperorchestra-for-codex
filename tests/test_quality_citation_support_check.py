@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 from paperorchestra.loop_engine.quality.citation_support import _citation_support_check
 from paperorchestra.loop_engine.quality.utils import _file_sha256
@@ -12,7 +13,16 @@ def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, sort_keys=True, ensure_ascii=False), encoding="utf-8")
 
 
-def _state_with_legacy_review(tmp_path: Path, *, support_status: str = "supported", manuscript_sha: str | None = None) -> SimpleNamespace:
+def _read_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _state_with_legacy_review(
+    tmp_path: Path,
+    *,
+    support_status: str = "supported",
+    manuscript_sha: str | None = None,
+) -> SimpleNamespace:
     paper = tmp_path / "paper.tex"
     paper.write_text("Prior work supports the setup \\cite{KeyA}.\n", encoding="utf-8")
     citation_map = tmp_path / "citation_map.json"
@@ -98,3 +108,36 @@ def test_legacy_citation_support_check_canonicalizes_manual_and_invalid_status(t
     assert result["invalid_status_values"] == ["not_a_status"]
     assert "citation_support_invalid_status" in result["failing_codes"]
     assert "citation_support_summary_mismatch" not in result["failing_codes"]
+
+
+def test_legacy_citation_support_check_reports_summary_and_citation_map_stale(tmp_path: Path) -> None:
+    state = _state_with_legacy_review(tmp_path)
+    review = tmp_path / "citation_support_review.json"
+    payload = _read_json(review)
+    payload["summary"] = {"unsupported": 1}
+    _write_json(review, payload)
+    citation_map = Path(state.artifacts.citation_map_json)
+    citation_payload = _read_json(citation_map)
+    citation_payload["KeyA"]["note"] = "same title but changed map identity"
+    _write_json(citation_map, citation_payload)
+
+    result = _citation_support_check(tmp_path, state)
+
+    assert result["status"] == "fail"
+    assert result["canonical_summary"] == {"supported": 1}
+    assert result["reported_summary"] == {"unsupported": 1}
+    assert "citation_support_summary_mismatch" in result["failing_codes"]
+    assert "citation_support_citation_map_stale" in result["failing_codes"]
+    assert result["expected_citation_map_sha256"] == _file_sha256(citation_map)
+    assert result["citation_map_sha256"] == payload["citation_map_sha256"]
+
+
+def test_legacy_citation_support_check_rejects_non_web_supported_in_claim_safe_mode(tmp_path: Path) -> None:
+    state = _state_with_legacy_review(tmp_path)
+
+    result = _citation_support_check(tmp_path, state, quality_mode="claim_safe")
+
+    assert result["status"] == "fail"
+    assert result["non_web_supported_count"] == 1
+    assert "citation_support_non_web_supported" in result["failing_codes"]
+    assert "citation_support_trace_missing" not in result["failing_codes"]
