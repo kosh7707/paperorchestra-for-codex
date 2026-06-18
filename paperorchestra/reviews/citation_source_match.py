@@ -7,11 +7,8 @@ from paperorchestra.core.io import write_json
 from paperorchestra.core.session import load_session
 from paperorchestra.loop_engine.quality.utils import _file_sha256, _read_json_if_exists
 from paperorchestra.reviews.citation_integrity_paths import citation_source_match_path
-from paperorchestra.reviews.citation_integrity_support import (
-    _citation_support_review_path,
-    _status_counts,
-    _support_items,
-)
+from paperorchestra.reviews.citation_integrity_helpers import _status_counts
+from paperorchestra.reviews.citation_support_items import _citation_support_review_path, _support_items
 
 
 def build_citation_source_match(cwd: str | Path | None, *, quality_mode: str = "ralph") -> dict[str, Any]:

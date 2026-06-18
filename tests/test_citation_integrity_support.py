@@ -5,8 +5,10 @@ from types import SimpleNamespace
 
 from paperorchestra.core.models import ArtifactIndex, InputBundle, SessionState, utc_now_iso
 from paperorchestra.core.session import save_session, set_current_session
+from paperorchestra.reviews import citation_claim_context as claim_context
 from paperorchestra.reviews import citation_integrity as integrity
 from paperorchestra.reviews import citation_integrity_support as support
+from paperorchestra.reviews import citation_placement_roles as placement_roles
 
 
 def _write_citation_session(tmp_path: Path, *, session_id: str = "citation-test") -> str:
@@ -94,7 +96,7 @@ def test_duplicate_support_failures_require_repeated_key_without_distinct_roles(
 def test_claim_map_context_violations_flag_own_contribution_citations_and_missing_required_sources(monkeypatch) -> None:
     state = SimpleNamespace(artifacts=SimpleNamespace(claim_map_json="claim-map.json"))
     monkeypatch.setattr(
-        support,
+        claim_context,
         "_read_json_if_exists",
         lambda path: {
             "claims": [
@@ -132,3 +134,43 @@ def test_write_citation_integrity_audit_keeps_audit_builder_imports_live(tmp_pat
     assert payload["checks"]["claim_source_match"]["status"] == "pass"
     assert Path(payload["source_artifacts"]["citation_intent_plan"]).exists()
     assert Path(payload["source_artifacts"]["citation_source_match"]).exists()
+
+
+def test_placement_roles_collects_key_alias_fields_and_role_tokens(monkeypatch) -> None:
+    state = SimpleNamespace(artifacts=SimpleNamespace(citation_placement_plan_json="placement.json"))
+    monkeypatch.setattr(
+        placement_roles,
+        "_read_json_if_exists",
+        lambda path: {
+            "placements": [
+                {
+                    "citation_key": "A",
+                    "citation_keys": ["B", ""],
+                    "claim_ids": ["C1", "C2"],
+                    "citation_roles": ["motivation", "method"],
+                },
+                {"key": "A", "support_role": "background"},
+                "ignored",
+            ]
+        },
+    )
+
+    roles = support._placement_roles(state)
+
+    assert roles["A"] == {"C1", "C2", "motivation", "method", "background"}
+    assert roles["B"] == {"C1", "C2", "motivation", "method"}
+
+
+def test_claim_map_by_key_indexes_non_empty_citation_keys(monkeypatch) -> None:
+    state = SimpleNamespace(artifacts=SimpleNamespace(claim_map_json="claim-map.json"))
+    claim_a = {"id": "A", "citation_keys": ["Key1", ""]}
+    claim_b = {"id": "B", "citation_keys": ["Key1", "Key2"]}
+    monkeypatch.setattr(
+        claim_context,
+        "_read_json_if_exists",
+        lambda path: {"claims": [claim_a, claim_b, "ignored"]},
+    )
+
+    by_key = support._claim_map_by_key(state)
+
+    assert by_key == {"Key1": [claim_a, claim_b], "Key2": [claim_b]}

@@ -7,16 +7,16 @@ from paperorchestra.core.io import write_json
 from paperorchestra.core.session import load_session
 from paperorchestra.loop_engine.quality.utils import _file_sha256
 from paperorchestra.reviews.citation_integrity_paths import citation_intent_plan_path
-from paperorchestra.reviews.citation_integrity_support import (
+from paperorchestra.reviews.citation_claim_context import _claim_map_by_key
+from paperorchestra.reviews.citation_integrity_helpers import (
     _cite_key_counts_from_text,
-    _claim_map_by_key,
-    _placement_roles,
     _role_tokens,
     _section_for_sentence,
-    _support_items,
     _support_items_by_key,
     _support_items_by_sentence,
 )
+from paperorchestra.reviews.citation_placement_roles import _placement_roles
+from paperorchestra.reviews.citation_support_items import _support_items
 from paperorchestra.reviews.citation_rendered_references import _read_text
 
 
