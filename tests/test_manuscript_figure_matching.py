@@ -31,7 +31,10 @@ def test_figure_validation_facade_reexports_patterns_and_matching_helpers() -> N
     assert figure_validation._caption_manifest_relation is figure_matching._caption_manifest_relation
     assert figure_validation._included_asset_names is figure_matching._included_asset_names
     assert figure_validation._body_figure_has_nontechnical_asset is figure_matching._body_figure_has_nontechnical_asset
-    assert figure_validation._caption_has_process_or_placeholder_text is figure_matching._caption_has_process_or_placeholder_text
+    assert (
+        figure_validation._caption_has_process_or_placeholder_text
+        is figure_matching._caption_has_process_or_placeholder_text
+    )
 
 
 def test_match_plot_manifest_prefers_asset_and_marks_placeholder_unreviewable() -> None:
@@ -107,3 +110,90 @@ Figure~\ref{fig:bench} summarizes benchmark results.
     assert review["status"] == "fail"
     assert "figure_caption_plot_purpose_mismatch" in review["failing_codes"]
     assert review["figures"][0]["plot_manifest_match"]["figure_id"] == "bench"
+
+
+def test_build_figure_placement_review_records_source_origin() -> None:
+    source_latex = r"""
+\section{Method}
+\begin{figure}[t]
+\includegraphics{pipeline.pdf}
+\caption{Pipeline overview.}
+\label{fig:pipeline}
+\end{figure}
+"""
+    latex = r"""
+\section{Method}
+Figure~\ref{fig:pipeline} explains the preserved source figure.
+\begin{figure}[t]
+\includegraphics{pipeline.pdf}
+\caption{Pipeline overview.}
+\label{fig:pipeline}
+\end{figure}
+"""
+
+    review = figure_validation.build_figure_placement_review(
+        latex,
+        source_latex=source_latex,
+    )
+
+    assert review["summary"]["figure_count"] == 1
+    assert review["figures"][0]["source_origin"] == "source_preserved"
+
+
+def test_build_figure_placement_review_records_tail_clump_for_each_late_figure() -> None:
+    latex = r"""
+\section{Method}
+Figure~\ref{fig:pipeline} explains the preserved source figure.
+\begin{figure}[t]
+\includegraphics{pipeline.pdf}
+\caption{Pipeline overview.}
+\label{fig:pipeline}
+\end{figure}
+\section{Discussion}
+Discussion filler.
+
+
+
+
+
+
+\begin{figure}[t]
+\includegraphics{late-a.pdf}
+\caption{Late A.}
+\label{fig:late-a}
+\end{figure}
+\begin{figure}[t]
+\includegraphics{late-b.pdf}
+\caption{Late B.}
+\label{fig:late-b}
+\end{figure}
+"""
+
+    review = figure_validation.build_figure_placement_review(
+        latex,
+        tail_ratio_threshold=0.5,
+    )
+
+    assert review["status"] == "warn"
+    assert "tail_clump" in review["warning_codes"]
+    assert review["summary"]["figure_count"] == 3
+    assert review["figures"][1]["source_origin"] == "model_written"
+    assert review["figures"][1]["warning_codes"].count("tail_clump") == 1
+    assert review["figures"][2]["warning_codes"].count("tail_clump") == 1
+    assert sum(1 for warning in review["warnings"] if warning["code"] == "tail_clump") == 2
+
+
+def test_build_figure_placement_review_marks_auto_repaired_origin() -> None:
+    latex = r"""
+\section{Method}
+% PaperOrchestra:auto-repaired
+\begin{figure}[t]
+\includegraphics{auto.pdf}
+\caption{Auto repaired figure.}
+\label{fig:auto}
+\end{figure}
+"""
+
+    review = figure_validation.build_figure_placement_review(latex)
+
+    assert review["figures"][0]["source_origin"] == "auto_repaired"
