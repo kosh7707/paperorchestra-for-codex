@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from paperorchestra.orchestra import acceptance
+from paperorchestra.orchestra import acceptance_ledger, final_audit_bug_ledger
 
 
 def _bug(status: str = "open", *, resolution: str | None = None) -> dict[str, object]:
@@ -24,7 +24,7 @@ def _bug(status: str = "open", *, resolution: str | None = None) -> dict[str, ob
 
 
 def test_final_audit_bug_ledger_status_and_summary_are_stable() -> None:
-    ledger = acceptance.build_final_audit_bug_ledger(
+    ledger = final_audit_bug_ledger.build_final_audit_bug_ledger(
         {
             "bugs": [
                 _bug("fixed", resolution="recompiled successfully"),
@@ -33,13 +33,13 @@ def test_final_audit_bug_ledger_status_and_summary_are_stable() -> None:
         }
     )
 
-    assert ledger["schema_version"] == acceptance.FINAL_AUDIT_BUG_LEDGER_SCHEMA_VERSION
+    assert ledger["schema_version"] == final_audit_bug_ledger.FINAL_AUDIT_BUG_LEDGER_SCHEMA_VERSION
     assert ledger["overall_status"] == "blocked"
     assert ledger["bug_count"] == 2
     assert ledger["private_safe_summary"] is True
     assert ledger["bugs"][0]["resolution"] == "recompiled successfully"
 
-    summary = acceptance.render_final_audit_bug_ledger_summary(ledger)
+    summary = final_audit_bug_ledger.render_final_audit_bug_ledger_summary(ledger)
 
     assert "Final audit bug ledger" in summary
     assert "overall: blocked" in summary
@@ -50,43 +50,20 @@ def test_final_audit_bug_ledger_status_and_summary_are_stable() -> None:
 
 def test_final_audit_bug_ledger_rejects_private_paths_commands_and_missing_resolution() -> None:
     with pytest.raises(ValueError, match="requires a resolution"):
-        acceptance.build_final_audit_bug_ledger({"bugs": [_bug("fixed")]})
+        final_audit_bug_ledger.build_final_audit_bug_ledger({"bugs": [_bug("fixed")]})
     with pytest.raises(ValueError, match="Unsafe raw command text"):
-        acceptance.build_final_audit_bug_ledger({"bugs": [{**_bug(), "command": "omx trace summary"}]})
+        final_audit_bug_ledger.build_final_audit_bug_ledger({"bugs": [{**_bug(), "command": "omx trace summary"}]})
     with pytest.raises(ValueError, match="must be workspace-relative"):
-        acceptance.build_final_audit_bug_ledger({"bugs": [{**_bug(), "artifact_ref": "../outside.json"}]})
+        final_audit_bug_ledger.build_final_audit_bug_ledger({"bugs": [{**_bug(), "artifact_ref": "../outside.json"}]})
     with pytest.raises(ValueError, match="Unsafe private marker"):
-        acceptance.build_final_audit_bug_ledger({"bugs": [{**_bug(), "actual": "TOKEN leaked"}]})
-
-
-
-
-def test_acceptance_module_keeps_public_acceptance_ledger_compatibility() -> None:
-    from paperorchestra.orchestra import acceptance_ledger
-
-    assert acceptance.SCHEMA_VERSION == acceptance_ledger.SCHEMA_VERSION
-    assert acceptance.ACCEPTANCE_GATE_IDS == acceptance_ledger.ACCEPTANCE_GATE_IDS
-    assert acceptance.AcceptanceGate is acceptance_ledger.AcceptanceGate
-    assert acceptance.AcceptanceLedger is acceptance_ledger.AcceptanceLedger
-    from paperorchestra.orchestra.acceptance import build_acceptance_ledger, render_acceptance_ledger_summary
-
-    assert acceptance.build_acceptance_ledger is acceptance_ledger.build_acceptance_ledger
-    assert acceptance.render_acceptance_ledger_summary is acceptance_ledger.render_acceptance_ledger_summary
-    assert build_acceptance_ledger is acceptance_ledger.build_acceptance_ledger
-    assert render_acceptance_ledger_summary is acceptance_ledger.render_acceptance_ledger_summary
-
-def test_acceptance_module_keeps_public_final_audit_compatibility() -> None:
-    from paperorchestra.orchestra import final_audit_bug_ledger
-
-    assert acceptance.build_final_audit_bug_ledger is final_audit_bug_ledger.build_final_audit_bug_ledger
-    assert acceptance.render_final_audit_bug_ledger_summary is final_audit_bug_ledger.render_final_audit_bug_ledger_summary
+        final_audit_bug_ledger.build_final_audit_bug_ledger({"bugs": [{**_bug(), "actual": "TOKEN leaked"}]})
 
 
 def test_acceptance_ledger_still_rejects_unsafe_evidence_after_safety_split() -> None:
-    gate_id = acceptance.ACCEPTANCE_GATE_IDS[0]
+    gate_id = acceptance_ledger.ACCEPTANCE_GATE_IDS[0]
     safe_sha = "a" * 64
 
-    acceptance.build_acceptance_ledger(
+    acceptance_ledger.build_acceptance_ledger(
         {gate_id: {"status": "pass", "evidence_refs": [{"kind": "unit", "path": "artifacts/report.json", "sha256": safe_sha}]}}
     )
 
@@ -99,4 +76,4 @@ def test_acceptance_ledger_still_rejects_unsafe_evidence_after_safety_split() ->
     ]
     for entry, message in unsafe_cases:
         with pytest.raises(ValueError, match=message):
-            acceptance.build_acceptance_ledger({gate_id: {"status": "pass", **entry}})
+            acceptance_ledger.build_acceptance_ledger({gate_id: {"status": "pass", **entry}})
