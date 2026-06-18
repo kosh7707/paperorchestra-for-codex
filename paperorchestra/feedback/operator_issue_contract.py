@@ -5,8 +5,20 @@ from typing import Any
 
 from paperorchestra.core.errors import ContractError
 from paperorchestra.feedback.operator_answer_metadata import OPERATOR_FEEDBACK_INTENTS
-from paperorchestra.feedback.operator_issue_constants import ACTIONABLE_FAILURE_OWNER_CATEGORIES, OPERATOR_SOURCE
 from paperorchestra.feedback.packet_artifacts import _canonical_sha256, _sha256_bytes
+
+OPERATOR_SOURCE = "codex_operator"
+
+ACTIONABLE_FAILURE_OWNER_CATEGORIES = {
+    "author",
+    "evidence",
+    "experiment",
+    "layout",
+    "proof",
+    "bibliography",
+    "implementation",
+    "execution_error",
+}
 
 _REQUIRED_OPERATOR_ISSUE_FIELDS = (
     "id",
