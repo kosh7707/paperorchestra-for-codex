@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from paperorchestra.orchestra.draft_control_criticality import claim_signal_criticality
+from paperorchestra.orchestra.draft_control_evaluation import DraftControlEvaluation
 from paperorchestra.orchestra.draft_control_models import (
     HIGH_CRITICAL_CLAIM_TYPES,
     HIGH_CRITICAL_GRAPH_ROLES,
@@ -11,7 +12,11 @@ from paperorchestra.orchestra.draft_control_models import (
     DraftControlInput,
     EvidenceObligationSignal,
 )
-from paperorchestra.orchestra.draft_control_policy import DraftControlPolicy
+
+
+class DraftControlPolicy:
+    def evaluate(self, inputs: DraftControlInput) -> DraftControlDecision:
+        return DraftControlEvaluation(inputs).run()
 
 __all__ = [
     "CitationObligationSignal",
