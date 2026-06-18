@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -9,9 +10,7 @@ from paperorchestra.engine.completion import _build_completion_request, _complet
 from paperorchestra.engine.latex_postprocess import _stabilize_figure_float_placement
 from paperorchestra.engine.plot_stages import _inject_missing_plot_assets
 from paperorchestra.engine.reports import _blocking_issues
-from paperorchestra.engine.section_writing_repair_notes import citation_alias_note, dropped_citation_note
 from paperorchestra.engine.section_writing_repair_prompt import build_section_repair_retry_prompt
-from paperorchestra.engine.section_writing_repair_types import SectionRepairResult
 from paperorchestra.engine.section_writing_support import (
     SectionDraftContext,
     SectionValidationContext,
@@ -21,6 +20,28 @@ from paperorchestra.engine.section_writing_support import (
 from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.manuscript.structure import _canonical_generated_section_title
 from paperorchestra.runtime.provider_base import BaseProvider
+
+
+@dataclass(frozen=True)
+class SectionRepairResult:
+    latex: str
+    validation_issues: list[Any]
+    blocking_issues: list[Any]
+    lane_notes: list[str]
+    lane_type: str
+    fallback_used: bool
+
+
+def citation_alias_note(prefix: str, replacements: dict[str, str]) -> str:
+    return prefix + ": " + ", ".join(f"{src}->{dst}" for src, dst in sorted(replacements.items()))
+
+
+def dropped_citation_note(*, strict_claim_safe_prompt: bool, retry: bool, dropped_citations: dict[str, int]) -> str:
+    action = "Blocked" if strict_claim_safe_prompt else "Dropped"
+    strict = "strict " if strict_claim_safe_prompt else ""
+    retry_label = "retry " if retry else ""
+    note_prefix = f"{action} unsupported citation keys in {strict}section {retry_label}draft: "
+    return note_prefix + ", ".join(f"{key}({count})" for key, count in sorted(dropped_citations.items()))
 
 
 def repair_retry_draft(
