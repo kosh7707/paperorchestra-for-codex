@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import urllib.parse
 import urllib.request
 from typing import Any, Callable
 from urllib.error import HTTPError
@@ -9,8 +10,23 @@ from paperorchestra.research.s2_constants import SEMANTIC_SCHOLAR_GRAPH_BASE_URL
 from paperorchestra.research.s2_errors import SemanticScholarError
 from paperorchestra.research.s2_http_errors import api_error_for_http, retry_after_seconds
 from paperorchestra.research.s2_policy import S2RateLimiter, S2RetryPolicy
-from paperorchestra.research.s2_request import s2_headers, s2_url
 from paperorchestra.research.s2_transport import request_json_with_retries
+
+
+def s2_headers(*, api_key: str | None, user_agent: str) -> dict[str, str]:
+    headers = {
+        "User-Agent": user_agent,
+        "Accept": "application/json",
+    }
+    if api_key:
+        headers["x-api-key"] = api_key
+    return headers
+
+
+def s2_url(base_url: str, path: str, params: dict[str, Any] | None = None) -> str:
+    normalized_path = path if path.startswith("/") else "/" + path
+    query = urllib.parse.urlencode({key: value for key, value in (params or {}).items() if value is not None})
+    return f"{base_url.rstrip('/')}{normalized_path}" + (f"?{query}" if query else "")
 
 
 class SemanticScholarClient:
