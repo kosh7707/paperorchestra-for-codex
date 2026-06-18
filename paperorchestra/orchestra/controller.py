@@ -4,20 +4,25 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.orchestra.claims import build_claim_graph_from_materials
-from paperorchestra.orchestra.executor import ActionExecutor, ExecutionRecord
-from paperorchestra.orchestra.consensus import CriticConsensus
 from paperorchestra.loop_engine.orchestra import FullLoopPlanner, LoopFacts
-from paperorchestra.orchestra.materials import build_material_inventory, build_source_digest
-from paperorchestra.orchestra.omx_evidence import build_research_mission_invocation_evidence
+from paperorchestra.orchestra.consensus import CriticConsensus
+from paperorchestra.orchestra.controller_inspection import _inspect_state
+from paperorchestra.orchestra.controller_run_loop import _run_until_blocked
+from paperorchestra.orchestra.controller_transitions import (
+    _apply_claim_graph_transition,
+    _apply_local_execution_record,
+    _apply_source_digest_transition,
+    _execution_label,
+    _first_evidence_payload,
+    _valid_claim_graph_payload,
+    _valid_source_digest_payload,
+)
+from paperorchestra.orchestra.executor import ActionExecutor, ExecutionRecord
 from paperorchestra.orchestra.omx_action_executor import OmxActionExecutor
 from paperorchestra.orchestra.omx_runners import OmxCommandRunner
 from paperorchestra.orchestra.planner import ActionPlanner
-from paperorchestra.orchestra.references import build_reference_metadata_audit
-from paperorchestra.orchestra.research import build_evidence_research_mission
 from paperorchestra.orchestra.scoring import ScholarlyScore, ScoringInputBundle
-from paperorchestra.orchestra.state import OrchestraFacets, OrchestraState, file_sha256
-from paperorchestra.core.session import load_session
+from paperorchestra.orchestra.state import OrchestraState
 
 
 @dataclass
@@ -180,203 +185,5 @@ def inspect_state(cwd: str | Path | None = None, *, material_path: str | Path | 
     return OrchestraOrchestrator(cwd).inspect_state(material_path=material_path, strict_omx=strict_omx)
 
 
-def _inspect_state(cwd: str | Path | None = None, *, material_path: str | Path | None = None, strict_omx: bool = False) -> OrchestraState:
-    root = Path(cwd or ".").resolve()
-    facets = OrchestraFacets()
-    session_id = None
-    manuscript_sha256 = None
-    blocking_reasons: list[str] = []
-    evidence_refs: list[dict[str, object]] = []
-
-    if material_path is not None:
-        material = Path(material_path)
-        if not material.exists():
-            facets.material = "missing"
-            blocking_reasons.append("material_path_missing")
-        else:
-            inventory = build_material_inventory(material)
-            digest = build_source_digest(inventory)
-            if digest.sufficient:
-                facets.material = "inventoried_sufficient"
-                facets.source_digest = "ready"
-                facets.artifacts = "fresh"
-            else:
-                facets.material = "inventoried_insufficient"
-                facets.source_digest = "blocked"
-                blocking_reasons.extend(digest.blocking_reasons)
-            evidence_refs.extend([
-                {"kind": "material_inventory", "payload": inventory.to_public_dict()},
-                {"kind": "source_digest", "payload": digest.to_public_dict()},
-            ])
-
-    try:
-        session = load_session(root)
-    except FileNotFoundError:
-        session = None
-
-    if session is not None:
-        session_id = session.session_id
-        facets.session = "initialized"
-        if facets.material == "missing":
-            facets.material = "inventoried_sufficient"
-        paper_path = Path(session.artifacts.paper_full_tex) if session.artifacts.paper_full_tex else None
-        pdf_path = Path(session.artifacts.compiled_pdf) if session.artifacts.compiled_pdf else None
-        if paper_path and paper_path.exists():
-            facets.session = "draft_available"
-            facets.writing = "draft_available"
-            facets.artifacts = "fresh"
-            manuscript_sha256 = file_sha256(paper_path)
-        if pdf_path and pdf_path.exists():
-            facets.session = "compiled"
-            facets.artifacts = "fresh"
-
-    if strict_omx:
-        facets.omx = "required_missing"
-
-    state = OrchestraState.new(
-        cwd=root,
-        session_id=session_id,
-        manuscript_sha256=manuscript_sha256,
-        facets=facets,
-        blocking_reasons=blocking_reasons,
-    )
-    state.evidence_refs = evidence_refs
-    state.next_actions = ActionPlanner().plan(state, strict_omx=strict_omx)
-    return state
-
-
 def run_until_blocked(cwd: str | Path | None = None, *, material_path: str | Path | None = None) -> OrchestraState:
     return OrchestraOrchestrator(cwd).run_until_blocked(material_path=material_path).state
-
-
-def _execution_label(record: ExecutionRecord) -> str:
-    if record.adapter == "local":
-        return "bounded_local_execution"
-    if record.adapter == "fake":
-        return "bounded_fake_execution"
-    return "bounded_step_execution"
-
-
-def _apply_local_execution_record(state: OrchestraState, record_public: dict[str, Any]) -> None:
-    if record_public.get("adapter") != "local" or record_public.get("status") != "executed_local":
-        return
-    action_type = record_public.get("action_type")
-    if action_type == "build_source_digest":
-        if not _apply_source_digest_transition(state, record_public):
-            return
-    elif action_type == "build_claim_graph":
-        if not _apply_claim_graph_transition(state, record_public):
-            return
-    elif action_type == "inspect_material":
-        return
-    else:
-        return
-    state.refresh_derived_fields()
-    state.next_actions = ActionPlanner().plan(state)
-
-
-def _apply_source_digest_transition(state: OrchestraState, record_public: dict[str, Any]) -> bool:
-    payload = _first_evidence_payload(record_public, "source_digest")
-    if not _valid_source_digest_payload(payload):
-        return False
-    state.facets.material = "inventoried_sufficient"
-    state.facets.source_digest = "ready"
-    state.facets.artifacts = "fresh"
-    return True
-
-
-def _apply_claim_graph_transition(state: OrchestraState, record_public: dict[str, Any]) -> bool:
-    payload = _first_evidence_payload(record_public, "claim_graph")
-    if not _valid_claim_graph_payload(payload):
-        return False
-    state.facets.claims = "candidate"
-    evidence_obligations = payload.get("evidence_obligations", [])
-    citation_obligations = payload.get("citation_obligations", [])
-    if any(
-        isinstance(item, dict)
-        and item.get("criticality") == "high"
-        and item.get("status") == "research_needed"
-        for item in evidence_obligations
-    ):
-        state.facets.evidence = "research_needed"
-    if any(
-        isinstance(item, dict)
-        and item.get("critical") is True
-        and item.get("status") == "unknown_reference"
-        for item in citation_obligations
-    ):
-        state.facets.citations = "unknown_refs"
-    for reason in payload.get("blocking_reasons", []):
-        if isinstance(reason, str) and reason not in state.blocking_reasons:
-            state.blocking_reasons.append(reason)
-    return True
-
-
-def _first_evidence_payload(record_public: dict[str, Any], kind: str) -> dict[str, Any] | None:
-    evidence_refs = record_public.get("evidence_refs")
-    if not isinstance(evidence_refs, list):
-        return None
-    for ref in evidence_refs:
-        if not isinstance(ref, dict) or ref.get("kind") != kind:
-            continue
-        payload = ref.get("payload")
-        return payload if isinstance(payload, dict) else None
-    return None
-
-
-def _valid_source_digest_payload(payload: dict[str, Any] | None) -> bool:
-    return bool(
-        payload
-        and payload.get("schema_version") == "source-digest/1"
-        and payload.get("sufficient") is True
-        and payload.get("private_safe_summary") is True
-    )
-
-
-def _valid_claim_graph_payload(payload: dict[str, Any] | None) -> bool:
-    return bool(
-        payload
-        and payload.get("schema_version") == "claim-graph/1"
-        and payload.get("ready") is True
-        and isinstance(payload.get("evidence_obligations"), list)
-        and isinstance(payload.get("citation_obligations"), list)
-        and payload.get("private_safe_summary") is True
-    )
-
-
-def _run_until_blocked(cwd: str | Path | None = None, *, material_path: str | Path | None = None) -> OrchestraState:
-    """Run deterministic local orchestration until the next live/external action is needed."""
-
-    state = _inspect_state(cwd, material_path=material_path)
-    if material_path is None or state.facets.material != "inventoried_sufficient" or state.facets.source_digest != "ready":
-        return state
-
-    material = Path(material_path)
-    if not material.exists():
-        return state
-
-    inventory = build_material_inventory(material)
-    digest = build_source_digest(inventory)
-    reference_audit = build_reference_metadata_audit(material)
-    state.evidence_refs.append({"kind": "reference_metadata_audit", "payload": reference_audit.to_public_dict()})
-    if reference_audit.status == "fail":
-        state.facets.citations = "unknown_refs"
-        if "reference_metadata_incomplete" not in state.blocking_reasons:
-            state.blocking_reasons.append("reference_metadata_incomplete")
-    report = build_claim_graph_from_materials(material, inventory, digest)
-    state.evidence_refs.append({"kind": "claim_graph", "payload": report.to_public_dict()})
-    if report.ready:
-        mission = build_evidence_research_mission(report)
-        state.evidence_refs.append({"kind": "evidence_research_mission", "payload": mission.to_public_dict()})
-        invocation = build_research_mission_invocation_evidence(mission)
-        if invocation is not None:
-            state.evidence_refs.append({"kind": "omx_invocation_evidence", "payload": invocation.to_public_dict()})
-        state.facets.claims = "candidate"
-        if mission.task_count:
-            state.facets.evidence = "durable_research_needed" if mission.durable_required else "research_needed"
-        if any(citation.status == "unknown_reference" and citation.critical for citation in report.citation_obligations):
-            state.facets.citations = "unknown_refs"
-        state.blocking_reasons.extend(reason for reason in report.blocking_reasons if reason not in state.blocking_reasons)
-        state.refresh_derived_fields()
-        state.next_actions = ActionPlanner().plan(state)
-    return state
