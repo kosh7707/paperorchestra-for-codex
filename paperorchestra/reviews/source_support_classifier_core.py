@@ -3,9 +3,53 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from paperorchestra.reviews.source_support_case_terms import _cited_key_terms, _target_subject_terms
-from paperorchestra.reviews.source_support_contradiction import _window_has_in_scope_contradiction
-from paperorchestra.reviews.source_support_terms import _meaningful_terms, _source_text_windows
+from paperorchestra.manuscript.citations import CITE_COMMAND_RE
+from paperorchestra.reviews.source_support_terms import (
+    _meaningful_term_sequence,
+    _meaningful_terms,
+    _source_text_windows,
+)
+
+_CONTRADICTION_MARKERS = (
+    "does not",
+    "do not",
+    "did not",
+    "is not",
+    "are not",
+    "not use",
+    "not uses",
+    "without",
+    "no evidence",
+    "fails to",
+    "unrelated to",
+    "contradicts",
+)
+
+
+def _cited_key_terms(case: dict[str, Any]) -> set[str]:
+    keys = {str(case.get("key") or "")}
+    for match in CITE_COMMAND_RE.finditer(str(case.get("anchor") or "")):
+        keys.update(item.strip() for item in match.group(2).split(",") if item.strip())
+    return {term for key in keys for term in _meaningful_term_sequence(key)}
+
+
+def _target_subject_terms(case: dict[str, Any], target_terms: set[str]) -> set[str]:
+    key_terms = set(_meaningful_term_sequence(str(case.get("key") or "")))
+    subject = key_terms & target_terms
+    if subject:
+        return subject
+    sequence = _meaningful_term_sequence(str(case.get("target") or ""))
+    return {sequence[0]} if sequence else set()
+
+
+def _window_has_in_scope_contradiction(window: str, subject_terms: set[str], relation_terms: set[str]) -> bool:
+    terms = _meaningful_terms(window)
+    if subject_terms and not (subject_terms & terms):
+        return False
+    if len(relation_terms & terms) < min(2, len(relation_terms)):
+        return False
+    lower = window.lower().replace("not only", "").replace("not merely", "")
+    return any(marker in lower for marker in _CONTRADICTION_MARKERS)
 
 
 def _classify_source_support(case: dict[str, Any], source_text: str) -> tuple[str, str]:
