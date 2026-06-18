@@ -33,6 +33,16 @@ class RenderedReferenceAuditTest(unittest.TestCase):
 
         self.assertEqual(identity, "report:nist:sp-800-53")
 
+    def test_reference_identity_uses_arxiv_before_generic_eprint(self) -> None:
+        identity = _reference_identity_label({"arxiv": " arXiv:2301.01234v2 ", "eprint": "9999.1"})
+
+        self.assertEqual(identity, "arxiv:2301.01234v2")
+
+    def test_reference_identity_namespaces_generic_eprint_archive(self) -> None:
+        identity = _reference_identity_label({"archiveprefix": " HAL Archive ", "eprint": " HAL-123 "})
+
+        self.assertEqual(identity, "hal-archive:hal-123")
+
 
 if __name__ == "__main__":
     unittest.main()
