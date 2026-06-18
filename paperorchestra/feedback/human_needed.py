@@ -1,314 +1,34 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from pathlib import Path
-import re
 from typing import Any
 
-from paperorchestra.core.io import read_json, write_json
-from paperorchestra.core.models import utc_now_iso
+from paperorchestra.core.errors import ContractError
+from paperorchestra.core.session import load_session
+from paperorchestra.feedback.human_needed_artifacts import (
+    _packet_file_sha256_after_canonical_validation,
+    _sha256_file,
+    _write_private_answer_if_allowed,
+    _write_public_answer_artifacts,
+)
+from paperorchestra.feedback.human_needed_decision import (
+    _classify_action,
+    _human_needed_actions,
+    _resolve_decision_kind,
+    _select_action,
+)
+from paperorchestra.feedback.human_needed_paths import _attach_public_path_or_label
 from paperorchestra.feedback.operator_feedback_flow import apply_operator_feedback
 from paperorchestra.feedback.operator_contract import (
     _read_packet,
     build_operator_review_packet,
     import_operator_feedback,
 )
-from paperorchestra.feedback.normalization import (
-    actionable_candidate_approval_role,
-    normalize_operator_feedback_draft,
-)
-from paperorchestra.feedback import human_needed_records as _records
+from paperorchestra.feedback.normalization import actionable_candidate_approval_role
 from paperorchestra.feedback.packet_artifacts import _file_sha256
-from paperorchestra.feedback.packets import _artifact_by_role, _validate_operator_packet_artifact_bindings
-from paperorchestra.core.errors import ContractError
+from paperorchestra.feedback.packets import _validate_operator_packet_artifact_bindings
 from paperorchestra.runtime.mock_provider import MockProvider
 from paperorchestra.runtime.provider_base import BaseProvider
-from paperorchestra.core.session import artifact_path, load_session, project_root, run_dir, runtime_root
-
-HUMAN_NEEDED_ANSWER_SCHEMA_VERSION = "human-needed-answer/1"
-
-HUMAN_NEEDED_DECISION_KINDS = {
-    "approve_existing_candidate",
-    "generate_new_operator_candidate",
-    "reject_candidate_with_reason",
-}
-
-
-def _sha256_text(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def _sha256_file(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _canonical_json(payload: Any) -> str:
-    return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
-
-
-def _packet_file_sha256_after_canonical_validation(packet_path: Path, packet: dict[str, Any]) -> str:
-    """Return the packet file hash after rejecting non-canonical packet bytes.
-
-    The packet's embedded packet_sha256 protects semantic JSON contents.  The
-    human-needed answer also binds to the exact file handed to the operator, so
-    whitespace-only post-generation edits must not silently pass as the reviewed
-    artifact.
-    """
-
-    text = packet_path.read_text(encoding="utf-8")
-    if text != _canonical_json(packet):
-        raise ContractError("operator review packet file hash does not match canonical contents")
-    return _sha256_file(packet_path)
-
-
-def _load_artifact_payload(packet: dict[str, Any], role: str) -> dict[str, Any] | None:
-    record = _artifact_by_role(packet, role)
-    if not record:
-        return None
-    try:
-        payload = read_json(record["path"])
-    except Exception:
-        return None
-    return payload if isinstance(payload, dict) else None
-
-
-def _human_needed_actions(packet: dict[str, Any]) -> list[dict[str, Any]]:
-    plan = _load_artifact_payload(packet, "qa_loop_plan")
-    if not isinstance(plan, dict):
-        return []
-    result: list[dict[str, Any]] = []
-    for action in plan.get("repair_actions") or []:
-        if isinstance(action, dict) and str(action.get("automation") or "") == "human_needed":
-            result.append(action)
-    return result
-
-
-def _classify_action(action: dict[str, Any] | None, *, candidate_role: str | None = None) -> str:
-    if candidate_role:
-        return "candidate_approval"
-    text = " ".join(
-        str((action or {}).get(key) or "")
-        for key in ("id", "action_id", "code", "target", "reason", "suggested_action")
-    ).lower()
-    if any(token in text for token in ("citation", "reference", "bibliography", "claim")):
-        return "citation_author_judgment"
-    if any(token in text for token in ("figure", "plot", "caption", "asset")):
-        return "figure_grounding_decision"
-    if any(token in text for token in ("environment", "dependency", "compile", "sandbox")):
-        return "environment_dependency"
-    if "reviewer" in text or "independent" in text:
-        return "reviewer_independence"
-    if any(token in text for token in ("no_progress", "budget", "retry", "stuck")):
-        return "no_progress_escalation"
-    if _records._action_id(action) or (action or {}).get("code"):
-        return "general_operator_feedback"
-    return "unsupported_handler"
-
-
-def _explicit_reject(answer: str) -> bool:
-    lowered = answer.lower()
-    return any(
-        token in lowered
-        for token in (
-            "reject",
-            "do not",
-            "don't",
-            "rollback",
-            "거절",
-            "반려",
-            "하지마",
-            "하지 마",
-            "승인하지",
-            "approve하지",
-        )
-    )
-
-
-def _explicit_approve(answer: str) -> bool:
-    lowered = answer.lower()
-    # Candidate promotion is a stronger act than "continue the loop".  Avoid
-    # broad conversational/proceed tokens such as "좋아", "반영", or "진행";
-    # those should generate a new bounded operator candidate unless the caller
-    # supplies --intent approve_existing_candidate.
-    approval_patterns = (
-        r"\bapprove_existing_candidate\b",
-        r"\bapprove\s+(?:the\s+)?(?:existing\s+|ready\s+)?candidate\b",
-        r"\bpromote\s+(?:the\s+)?(?:existing\s+|ready\s+)?candidate\b",
-        r"\baccept\s+(?:the\s+)?(?:existing\s+|ready\s+)?candidate\b",
-        r"후보(?:를)?\s*승인",
-        r"후보(?:를)?\s*채택",
-        r"candidate(?:를)?\s*승인",
-    )
-    return any(re.search(pattern, lowered) for pattern in approval_patterns)
-
-
-def _resolve_decision_kind(answer: str, intent: str | None, *, candidate_role: str | None) -> str:
-    if _explicit_reject(answer):
-        return "reject_candidate_with_reason"
-    if intent:
-        if intent not in HUMAN_NEEDED_DECISION_KINDS:
-            raise ContractError(f"unsupported human_needed intent: {intent}")
-        if intent == "approve_existing_candidate" and not candidate_role:
-            raise ContractError("approve_existing_candidate requires an actionable candidate approval artifact")
-        return intent
-    if candidate_role and _explicit_approve(answer):
-        return "approve_existing_candidate"
-    return "generate_new_operator_candidate"
-
-
-def _select_action(actions: list[dict[str, Any]], action_id: str | None, *, candidate_role: str | None) -> dict[str, Any] | None:
-    if action_id:
-        matches = [action for action in actions if _records._action_id(action) == action_id]
-        if len(matches) != 1:
-            raise ContractError(f"human_needed action_id not found or ambiguous: {action_id}")
-        return matches[0]
-    if len(actions) > 1 and not candidate_role:
-        raise ContractError("multiple human_needed actions require --action-id")
-    if len(actions) == 1:
-        return actions[0]
-    return None
-
-
-def _project_root_for_path(cwd: str | Path | None) -> Path:
-    return project_root(cwd).resolve()
-
-
-def _is_within(path: Path, parent: Path) -> bool:
-    try:
-        path.resolve().relative_to(parent.resolve())
-        return True
-    except ValueError:
-        return False
-
-
-def _private_answer_path(
-    cwd: str | Path | None,
-    session_id: str,
-    answer_id: str,
-    output_answer: str | Path | None,
-    *,
-    redacted_answer_only: bool,
-) -> Path | None:
-    if redacted_answer_only:
-        return None
-    private_root = runtime_root(cwd) / "private" / "human-needed" / session_id
-    if output_answer is None:
-        return private_root / f"{answer_id}.json"
-    candidate = Path(output_answer).resolve()
-    repo = _project_root_for_path(cwd)
-    allowed_private = private_root.resolve()
-    if _is_within(candidate, allowed_private):
-        return candidate
-    if not _is_within(candidate, repo):
-        return candidate
-    raise ContractError("private answer output must be under .paper-orchestra/private/human-needed, outside the project root, or omitted")
-
-
-def _public_result_path(cwd: str | Path | None, path: str | Path) -> str | None:
-    candidate = Path(path).resolve()
-    try:
-        candidate.relative_to(run_dir(cwd).resolve())
-        return str(candidate)
-    except ValueError:
-        return None
-
-
-def _attach_public_path_or_label(result: dict[str, Any], cwd: str | Path | None, key: str, path: str | Path) -> None:
-    public_path = _public_result_path(cwd, path)
-    if public_path:
-        result[key] = public_path
-    else:
-        result[f"{key}_label"] = "redacted_external_or_private_path"
-
-
-def _write_private_answer_if_allowed(
-    cwd: str | Path | None,
-    *,
-    answer: str,
-    packet: dict[str, Any],
-    packet_file_sha256: str,
-    decision_kind: str,
-    handoff_type: str,
-    action: dict[str, Any] | None,
-    output_answer: str | Path | None,
-    redacted_answer_only: bool,
-) -> tuple[str, str | None]:
-    answer_sha256 = _sha256_text(answer)
-    raw_path = _private_answer_path(
-        cwd,
-        str(packet.get("session_id") or "unknown-session"),
-        f"answer-{answer_sha256[:16]}",
-        output_answer,
-        redacted_answer_only=redacted_answer_only,
-    )
-    if raw_path is None:
-        return answer_sha256, None
-
-    raw_payload = _records.private_answer_payload(
-        schema_version=HUMAN_NEEDED_ANSWER_SCHEMA_VERSION,
-        recorded_at=utc_now_iso(),
-        packet=packet,
-        packet_file_sha256=packet_file_sha256,
-        answer_sha256=answer_sha256,
-        answer=answer,
-        decision_kind=decision_kind,
-        handoff_type=handoff_type,
-        action=action,
-    )
-    write_json(raw_path, raw_payload)
-    return answer_sha256, _sha256_file(raw_path)
-
-
-def _write_public_answer_artifacts(
-    cwd: str | Path | None,
-    *,
-    packet: dict[str, Any],
-    packet_file_sha256: str,
-    answer_sha256: str,
-    private_answer_artifact_sha256: str | None,
-    decision_kind: str,
-    handoff_type: str,
-    action: dict[str, Any] | None,
-    candidate_role: str | None,
-    output_feedback: str | Path | None,
-) -> tuple[dict[str, Any], Path]:
-    metadata = _records._metadata_without_targets(
-        packet=packet,
-        packet_file_sha256=packet_file_sha256,
-        answer_sha256=answer_sha256,
-        private_answer_artifact_sha256=private_answer_artifact_sha256,
-        decision_kind=decision_kind,
-        handoff_type=handoff_type,
-        action=action,
-        candidate_role=candidate_role,
-    )
-    draft = _records.feedback_draft(
-        action=action,
-        handoff_type=handoff_type,
-        decision_kind=decision_kind,
-        candidate_role=candidate_role,
-        metadata=metadata,
-    )
-    feedback = normalize_operator_feedback_draft(packet, draft)
-    metadata["target_issue_ids"] = [str(issue.get("id") or "") for issue in feedback.get("issues") or [] if str(issue.get("id") or "")]
-    feedback["human_needed_answer"] = dict(metadata)
-
-    feedback_path = Path(output_feedback).resolve() if output_feedback else artifact_path(cwd, "human_needed.operator_feedback.json")
-    write_json(feedback_path, feedback)
-
-    public_answer_artifact = artifact_path(cwd, "human_needed.answer.public.json")
-    public_payload = _records.public_answer_payload(metadata)
-    write_json(public_answer_artifact, public_payload)
-
-    result = _records.public_result_payload(public_payload)
-    _attach_public_path_or_label(result, cwd, "feedback_path", feedback_path)
-    result["feedback_sha256"] = _sha256_file(feedback_path)
-    _attach_public_path_or_label(result, cwd, "public_answer_artifact", public_answer_artifact)
-    result["public_answer_artifact_sha256"] = _sha256_file(public_answer_artifact)
-    return result, feedback_path
-
-
 def record_human_needed_answer(
     cwd: str | Path | None,
     answer: str,
