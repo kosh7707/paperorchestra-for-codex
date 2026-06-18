@@ -172,8 +172,9 @@ def build_parser() -> argparse.ArgumentParser:
     ralph_parser.add_argument("--require-live-verification", action="store_true")
     ralph_parser.add_argument("--accept-mixed-provenance", action="store_true")
     ralph_parser.add_argument("--evidence-root")
-    ralph_parser.add_argument("--dry-run", action="store_true")
-    ralph_parser.add_argument("--launch", action="store_true")
+    ralph_mode = ralph_parser.add_mutually_exclusive_group()
+    ralph_mode.add_argument("--dry-run", action="store_true")
+    ralph_mode.add_argument("--launch", action="store_true")
 
     run_parser = sub.add_parser("run", help="Run the full PaperOrchestra pipeline")
     run_parser.add_argument("--discovery-mode", default="model", choices=["model", "scholar-only", "search-grounded"])
