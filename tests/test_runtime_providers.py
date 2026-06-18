@@ -7,14 +7,16 @@ import pytest
 from paperorchestra.runtime.mock_provider import MockProvider
 from paperorchestra.runtime.provider_base import CompletionRequest, ProviderError, TransientProviderError
 from paperorchestra.runtime.provider_registry import get_provider
-from paperorchestra.runtime.provider_web import (
-    default_codex_web_provider_command,
-    exec_argv_prefix_proves_web_search,
-    hashlib_sha256_json,
-    provider_command_digest,
+from paperorchestra.runtime.provider_web_capability import (
     provider_supports_web_search,
     provider_web_search_capability_proof,
 )
+from paperorchestra.runtime.provider_web_command import (
+    default_codex_web_provider_command,
+    hashlib_sha256_json,
+    provider_command_digest,
+)
+from paperorchestra.runtime.provider_web_prefix import exec_argv_prefix_proves_web_search
 from paperorchestra.runtime.shell_provider import ShellProvider
 
 
