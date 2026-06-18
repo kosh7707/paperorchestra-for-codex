@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from paperorchestra.core.models import InputBundle
 from paperorchestra.core.session import create_session
+from paperorchestra.loop_engine.ralph import action_dispatch_citation_refresh as citation_refresh
 from paperorchestra.loop_engine.ralph import action_dispatch_citation_repair as citation_repair
 from paperorchestra.loop_engine.ralph import action_dispatch_handlers as handlers
 from paperorchestra.loop_engine.ralph.action_dispatch import dispatch_qa_loop_actions
@@ -65,12 +66,12 @@ def test_dispatch_routes_refresh_action_families_and_skips_unknown(tmp_path: Pat
         lambda cwd, name: (tmp_path / name, {"ok": True}),
     )
     monkeypatch.setattr(
-        handlers,
+        citation_refresh,
         "write_citation_support_review",
         lambda cwd, provider, evidence_mode: tmp_path / "citation-review.json",
     )
     monkeypatch.setattr(
-        handlers,
+        citation_refresh,
         "_refresh_citation_integrity_for_current_manuscript",
         lambda cwd, quality_mode: {"integrity": "refreshed"},
     )

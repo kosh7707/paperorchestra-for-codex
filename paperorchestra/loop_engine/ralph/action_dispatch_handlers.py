@@ -12,7 +12,6 @@ from paperorchestra.engine.review_stages import (
     write_figure_placement_review,
 )
 from paperorchestra.manuscript.source_obligations import write_source_obligations
-from paperorchestra.reviews.citation_model_writer import write_citation_support_review
 from paperorchestra.reviews.section_review import write_section_review
 from paperorchestra.loop_engine.ralph.action_dispatch_codes import (
     CITATION_INTEGRITY_REFRESH_CODES,
@@ -32,9 +31,10 @@ from paperorchestra.loop_engine.ralph.action_dispatch_types import (
     QaLoopActionDispatchContext,
     _QaLoopActionDispatchState,
 )
-from paperorchestra.loop_engine.ralph.artifacts import (
-    _refresh_citation_integrity_for_current_manuscript,
-    _try_rebuild_bib_for_citation_quality,
+from paperorchestra.loop_engine.ralph.action_dispatch_citation_refresh import (
+    handle_citation_integrity_refresh,
+    handle_citation_quality_refresh,
+    handle_citation_support_review,
 )
 from paperorchestra.loop_engine.ralph.action_dispatch_citation_repair import handle_citation_repair
 
@@ -88,63 +88,6 @@ def _handle_figure_placement_review(
     )
     execution["actions_attempted"].append(
         {"code": code, "handler": "review_figure_placement", "path": str(figure_path), "warning_count": warning_count}
-    )
-    return True
-
-
-def _handle_citation_support_review(
-    code: str,
-    execution: dict[str, Any],
-    context: QaLoopActionDispatchContext,
-    state: _QaLoopActionDispatchState,
-) -> bool:
-    review_path = write_citation_support_review(
-        context.cwd,
-        provider=context.citation_provider,
-        evidence_mode=context.citation_evidence_mode,
-    )
-    execution["actions_attempted"].append({"code": code, "handler": "critique_citations", "path": str(review_path)})
-    return True
-
-
-def _handle_citation_quality_refresh(
-    code: str,
-    execution: dict[str, Any],
-    context: QaLoopActionDispatchContext,
-    state: _QaLoopActionDispatchState,
-) -> bool:
-    bibtex_rebuild = (
-        _try_rebuild_bib_for_citation_quality(context.cwd)
-        if code == "critical_weak_reference_identity"
-        else None
-    )
-    review_path = write_citation_support_review(
-        context.cwd,
-        provider=context.citation_provider,
-        evidence_mode=context.citation_evidence_mode,
-    )
-    refreshed = _refresh_citation_integrity_for_current_manuscript(context.cwd, quality_mode=context.quality_mode)
-    attempted: dict[str, Any] = {
-        "code": code,
-        "handler": "refresh_citation_quality",
-        "citation_support_review": str(review_path),
-        "citation_integrity": refreshed,
-    }
-    if bibtex_rebuild is not None:
-        attempted["bibtex_rebuild"] = bibtex_rebuild
-    execution["actions_attempted"].append(attempted)
-    return True
-
-
-def _handle_citation_integrity_refresh(
-    code: str,
-    execution: dict[str, Any],
-    context: QaLoopActionDispatchContext,
-    state: _QaLoopActionDispatchState,
-) -> bool:
-    refreshed = _refresh_citation_integrity_for_current_manuscript(context.cwd, quality_mode=context.quality_mode)
-    execution["actions_attempted"].append(
-        {"code": code, "handler": "refresh_citation_integrity", "artifacts": refreshed}
     )
     return True
 
@@ -236,9 +179,9 @@ ACTION_HANDLER_REGISTRY: tuple[tuple[frozenset[str], ActionHandler], ...] = (
     (frozenset(NARRATIVE_PLAN_CODES), _handle_narrative_plan),
     (frozenset(VALIDATION_REFRESH_CODES), _handle_validation_refresh),
     (frozenset(FIGURE_PLACEMENT_REVIEW_CODES), _handle_figure_placement_review),
-    (frozenset(CITATION_SUPPORT_REVIEW_CODES), _handle_citation_support_review),
-    (frozenset(CITATION_QUALITY_REFRESH_CODES), _handle_citation_quality_refresh),
-    (frozenset(CITATION_INTEGRITY_REFRESH_CODES), _handle_citation_integrity_refresh),
+    (frozenset(CITATION_SUPPORT_REVIEW_CODES), handle_citation_support_review),
+    (frozenset(CITATION_QUALITY_REFRESH_CODES), handle_citation_quality_refresh),
+    (frozenset(CITATION_INTEGRITY_REFRESH_CODES), handle_citation_integrity_refresh),
     (frozenset(REVIEW_REFRESH_CODES), _handle_review_refresh),
     (frozenset(COMPILE_CODES), _handle_compile),
     (frozenset(SECTION_REVIEW_CODES), _handle_section_review),
