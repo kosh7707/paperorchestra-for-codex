@@ -3,12 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.research.prior_work_seed_formats import (
-    _extract_bibtex_field,
-    _parse_bibtex_seed,
-    _parse_json_seed,
-    _parse_markdown_seed,
-)
+from paperorchestra.research.prior_work_seed_bibtex import _extract_bibtex_field, _parse_bibtex_seed
+from paperorchestra.research.prior_work_seed_json import _parse_json_seed
+from paperorchestra.research.prior_work_seed_markdown import _parse_markdown_seed
 from paperorchestra.research.prior_work_seed_normalization import (
     _coerce_year,
     _entry_external_ids,
