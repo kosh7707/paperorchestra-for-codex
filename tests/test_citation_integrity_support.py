@@ -7,8 +7,11 @@ from paperorchestra.core.models import ArtifactIndex, InputBundle, SessionState,
 from paperorchestra.core.session import save_session, set_current_session
 from paperorchestra.reviews import citation_claim_context as claim_context
 from paperorchestra.reviews import citation_integrity as integrity
-from paperorchestra.reviews import citation_integrity_support as support
 from paperorchestra.reviews import citation_placement_roles as placement_roles
+from paperorchestra.reviews.citation_claim_context import _claim_map_by_key, _claim_map_context_violations
+from paperorchestra.reviews.citation_integrity_helpers import _duplicate_support_failures
+from paperorchestra.reviews.citation_placement_roles import _placement_roles
+from paperorchestra.reviews.citation_support_v3 import _support_items_from_v3_cases
 
 
 def _write_citation_session(tmp_path: Path, *, session_id: str = "citation-test") -> str:
@@ -60,7 +63,7 @@ def test_v3_support_items_require_readable_text_evidence(tmp_path: Path) -> None
     evidence_path = tmp_path / "evidence.txt"
     evidence_path.write_text("supporting passage", encoding="utf-8")
 
-    items = support._support_items_from_v3_cases(
+    items = _support_items_from_v3_cases(
         [
             {"id": "c1", "key": "KeyA", "verdict": "pass", "evidence": {"status": "text", "path": str(evidence_path)}},
             {"id": "c2", "key": "KeyB", "verdict": "pass", "evidence": {"status": "text", "path": "missing.txt"}},
@@ -77,7 +80,7 @@ def test_v3_support_items_require_readable_text_evidence(tmp_path: Path) -> None
 
 
 def test_duplicate_support_failures_require_repeated_key_without_distinct_roles() -> None:
-    assert support._duplicate_support_failures([], {"A": 4, "B": 4}, {"B": {"motivation", "method"}}) == ["A"]
+    assert _duplicate_support_failures([], {"A": 4, "B": 4}, {"B": {"motivation", "method"}}) == ["A"]
 
     items = [
         {"citation_keys": ["C"], "claim_id": "same"},
@@ -90,7 +93,7 @@ def test_duplicate_support_failures_require_repeated_key_without_distinct_roles(
         {"citation_keys": ["D"], "claim_id": "two"},
     ]
 
-    assert support._duplicate_support_failures(items, {}, {}) == ["C"]
+    assert _duplicate_support_failures(items, {}, {}) == ["C"]
 
 
 def test_claim_map_context_violations_flag_own_contribution_citations_and_missing_required_sources(monkeypatch) -> None:
@@ -107,7 +110,7 @@ def test_claim_map_context_violations_flag_own_contribution_citations_and_missin
         },
     )
 
-    assert support._claim_map_context_violations(state) == ["own", "required"]
+    assert _claim_map_context_violations(state) == ["own", "required"]
 
 
 def test_build_citation_intent_plan_uses_reexported_role_tokens(tmp_path: Path) -> None:
@@ -155,7 +158,7 @@ def test_placement_roles_collects_key_alias_fields_and_role_tokens(monkeypatch) 
         },
     )
 
-    roles = support._placement_roles(state)
+    roles = _placement_roles(state)
 
     assert roles["A"] == {"C1", "C2", "motivation", "method", "background"}
     assert roles["B"] == {"C1", "C2", "motivation", "method"}
@@ -171,6 +174,6 @@ def test_claim_map_by_key_indexes_non_empty_citation_keys(monkeypatch) -> None:
         lambda path: {"claims": [claim_a, claim_b, "ignored"]},
     )
 
-    by_key = support._claim_map_by_key(state)
+    by_key = _claim_map_by_key(state)
 
     assert by_key == {"Key1": [claim_a, claim_b], "Key2": [claim_b]}
