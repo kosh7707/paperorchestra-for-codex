@@ -118,8 +118,8 @@ def test_quality_gate_report_mock_profile_warns_on_claim_reviewer_and_repro_fail
     assert report["dimensions"]["reproducibility"]["blocking"] is False
 
 
-def test_quality_gate_private_helper_aliases_remain_available() -> None:
-    from paperorchestra.loop_engine.quality import gate
+def test_quality_gate_dimension_helpers_live_in_owner_module() -> None:
+    from paperorchestra.loop_engine.quality import gate, gate_dimensions
 
     quality_eval = {
         "mode": "claim_safe",
@@ -127,9 +127,20 @@ def test_quality_gate_private_helper_aliases_remain_available() -> None:
     }
     plan = {"repair_actions": [{"id": "repair-1", "code": "compile_not_clean"}]}
 
-    assert gate._normalize_profile("auto", quality_eval) == "claim_safe"
-    assert gate._tier_status(quality_eval, "tier_1_structural") == "fail"
-    assert gate._tier_codes(quality_eval, "tier_1_structural") == ["compile_not_clean"]
-    assert gate._status_for_profile("warn", profile="claim_safe", axis="story_logic") == ("block", True)
-    assert gate._repair_action_ids(plan, {"compile_not_clean"}) == ["repair-1"]
-    assert gate._dimension(name="Demo", status="pass", blocking=False)["name"] == "Demo"
+    assert not any(
+        hasattr(gate, name)
+        for name in (
+            "_dimension",
+            "_normalize_profile",
+            "_repair_action_ids",
+            "_status_for_profile",
+            "_tier_codes",
+            "_tier_status",
+        )
+    )
+    assert gate_dimensions.normalize_profile("auto", quality_eval) == "claim_safe"
+    assert gate_dimensions.tier_status(quality_eval, "tier_1_structural") == "fail"
+    assert gate_dimensions.tier_codes(quality_eval, "tier_1_structural") == ["compile_not_clean"]
+    assert gate_dimensions.status_for_profile("warn", profile="claim_safe", axis="story_logic") == ("block", True)
+    assert gate_dimensions.repair_action_ids(plan, {"compile_not_clean"}) == ["repair-1"]
+    assert gate_dimensions.dimension(name="Demo", status="pass", blocking=False)["name"] == "Demo"

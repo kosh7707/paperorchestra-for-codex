@@ -7,37 +7,11 @@ from paperorchestra.core.io import write_json
 from paperorchestra.core.models import utc_now_iso
 from paperorchestra.core.session import artifact_path, load_session, save_session
 from paperorchestra.engine.refine_stages import refine_current_paper
-from paperorchestra.loop_engine.quality.gate_dimensions import (
-    QUALITY_GATE_PROFILES,
-    build_quality_gate_dimension_bundle,
-    dimension as _dimension,
-    normalize_profile as _normalize_profile,
-    repair_action_ids as _repair_action_ids,
-    status_for_profile as _status_for_profile,
-    tier_codes as _tier_codes,
-    tier_status as _tier_status,
-)
+from paperorchestra.loop_engine.quality.gate_dimensions import build_quality_gate_dimension_bundle
 from paperorchestra.loop_engine.quality.history import _failing_codes_from_quality_eval
 from paperorchestra.loop_engine.quality.loop import write_quality_eval, write_quality_loop_plan
 
 QUALITY_GATE_SCHEMA_VERSION = "quality-gate/1"
-
-# Compatibility aliases for legacy tests/extensions that imported private
-# helpers from this module before dimension logic was split out.
-__all__ = [
-    "QUALITY_GATE_PROFILES",
-    "QUALITY_GATE_SCHEMA_VERSION",
-    "_dimension",
-    "_normalize_profile",
-    "_next_commands",
-    "_repair_action_ids",
-    "_status_for_profile",
-    "_tier_codes",
-    "_tier_status",
-    "build_quality_gate_report",
-    "write_quality_gate",
-]
-
 
 def build_quality_gate_report(
     quality_eval: dict[str, Any],
