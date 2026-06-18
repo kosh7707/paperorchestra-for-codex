@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -21,8 +22,29 @@ from paperorchestra.manuscript.latex_input_env import _force_latexmk_rerun_comma
 from paperorchestra.manuscript.latex_input_roots import _infer_project_root_from_source, _infer_run_root_from_source
 from paperorchestra.manuscript.latex_messages import compile_opt_in_error_message, missing_compile_environment_message
 from paperorchestra.manuscript.latex_models import CompileResult, LatexBuildError
-from paperorchestra.manuscript.latex_safety import blocked_latex_pattern
 from paperorchestra.runtime.compile_env import ensure_sandbox_wrapper, inspect_compile_environment
+
+
+
+DANGEROUS_TEX_PATTERNS = [
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in [
+        r"\\write18",
+        r"\\openout",
+        r"\\readline",
+        r"\\input\s*/",
+        r"\\include\s*/",
+        r"\\usepackage\s*\{shellesc\}",
+        r"\\immediate\s*\\write",
+    ]
+]
+
+
+def blocked_latex_pattern(source_text: str) -> str | None:
+    for pattern in DANGEROUS_TEX_PATTERNS:
+        if pattern.search(source_text):
+            return pattern.pattern
+    return None
 
 
 def validate_latex_source(source_text: str) -> None:
