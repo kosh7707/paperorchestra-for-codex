@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.session import load_session
-from paperorchestra.loop_engine.ralph.io_state import _read_json
+from paperorchestra.loop_engine.ralph.io_files import _read_json
 
 
 def _failing_codes(quality_eval: dict[str, Any]) -> list[str]:
