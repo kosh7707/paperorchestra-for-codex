@@ -196,3 +196,52 @@ def test_protected_citation_target_context_collects_problematic_review_and_integ
     assert targets["ids"] == {"weak-item", "bad-case"}
     assert targets["texts"] == {"Weak sentence.", "Failed anchor.", "Dense sentence."}
     assert targets["key_exclusions"] == {"DupKey", "DenseA", "DenseB", "ParaA", "ParaB"}
+
+
+def test_protected_supported_citation_context_excludes_active_targets_and_caps() -> None:
+    from paperorchestra.feedback.operator_contexts.citation_protection_supported import (
+        _protected_item_text,
+        _protected_supported_citation_context,
+    )
+
+    protected = _protected_supported_citation_context(
+        {
+            "items": [
+                {"id": "bad-id", "support_status": "weak", "sentence": "Bad id target.", "citation_keys": ["SafeA"]},
+                {"id": "bad-id", "support_status": "supported", "sentence": "Bad id sentence.", "citation_keys": ["SafeA"]},
+                {"id": "bad-text", "support_status": "supported", "sentence": "Bad text sentence.", "citation_keys": ["SafeB"]},
+                {"id": "bad-key", "support_status": "supported", "sentence": "Bad key sentence.", "citation_keys": ["DupKey"]},
+                {"id": "safe-item", "support_status": "supported", "sentence": "Safe supported sentence.", "citation_keys": ["SafeC"]},
+                {"id": "unsupported", "support_status": "unsupported", "sentence": "Unsupported sentence.", "citation_keys": ["SafeD"]},
+            ],
+            "cases": [
+                {"id": "safe-case", "verdict": "pass", "anchor": "Safe supported anchor.", "key": "SafeCase"},
+            ],
+        },
+        {
+            "checks": {
+                "duplicate_support": {"duplicate_keys": ["DupKey"]},
+                "citation_density": {"bomb_sentences": [{"sentence": "Bad text sentence.", "citation_keys": []}]},
+            }
+        },
+        limit=2,
+    )
+
+    assert protected == [
+        {
+            "id": "safe-item",
+            "citation_keys": ["SafeC"],
+            "sentence": "Safe supported sentence.",
+            "source_shape": "items",
+            "required_action": "preserve this already-supported citation-bearing sentence unless an active issue explicitly targets it",
+        },
+        {
+            "id": "safe-case",
+            "citation_keys": ["SafeCase"],
+            "anchor": "Safe supported anchor.",
+            "source_shape": "cases",
+            "required_action": "preserve this already-supported citation-bearing anchor unless an active issue explicitly targets it",
+        },
+    ]
+    assert _protected_item_text(protected[0]) == "Safe supported sentence."
+    assert _protected_item_text(protected[1]) == "Safe supported anchor."
