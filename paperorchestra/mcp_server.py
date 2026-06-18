@@ -7,10 +7,76 @@ from typing import Any
 from paperorchestra.interfaces.mcp.authoring_tool_definitions import AUTHORING_TOOLS
 from paperorchestra.interfaces.mcp.handlers import TOOL_HANDLERS
 from paperorchestra.interfaces.mcp.quality_tool_definitions import QUALITY_TOOLS
-from paperorchestra.interfaces.mcp.session_tool_definitions import SESSION_TOOLS
-from paperorchestra.interfaces.mcp.utility_tool_definitions import UTILITY_TOOLS
+from paperorchestra.interfaces.mcp.tool_schema import _schema
 
 JSON = dict[str, Any]
+
+SESSION_TOOLS: list[JSON] = [
+    {
+        "name": "status",
+        "description": "Return the current PaperOrchestra session state.",
+        "inputSchema": _schema({"cwd": {"type": "string"}}),
+    },
+    {
+        "name": "init_session",
+        "description": "Initialize a PaperOrchestra session from input files.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "idea": {"type": "string"},
+                "experimental_log": {"type": "string"},
+                "template": {"type": "string"},
+                "guidelines": {"type": "string"},
+                "figures_dir": {"type": "string"},
+                "cutoff_date": {"type": "string"},
+                "venue": {"type": "string"},
+                "page_limit": {"type": "integer"},
+                "allow_outside_workspace": {"type": "boolean"},
+            },
+            ["idea", "experimental_log", "template", "guidelines"],
+        ),
+    },
+    {
+        "name": "inspect_state",
+        "description": "Inspect material readiness and next orchestration actions without live work.",
+        "inputSchema": _schema({"cwd": {"type": "string"}, "material": {"type": "string"}}),
+    },
+]
+
+UTILITY_TOOLS: list[JSON] = [
+    {
+        "name": "export_current",
+        "description": "Copy current manuscript outputs to a destination directory.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "output": {"type": "string"},
+                "include_all_artifacts": {"type": "boolean"},
+            },
+            ["output"],
+        ),
+    },
+    {
+        "name": "run_pipeline",
+        "description": "Run the full PaperOrchestra pipeline.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "provider": {"type": "string"},
+                "provider_command": {"type": "string"},
+                "discovery_mode": {"type": "string"},
+                "verify_mode": {"type": "string"},
+                "verify_error_policy": {"type": "string"},
+                "verify_fallback_mode": {"type": "string"},
+                "require_live_verification": {"type": "boolean"},
+                "refine_iterations": {"type": "integer"},
+                "compile_paper": {"type": "boolean"},
+                "runtime_mode": {"type": "string"},
+            }
+        ),
+    },
+]
+
 TOOLS: list[JSON] = [
     *SESSION_TOOLS,
     *AUTHORING_TOOLS,
