@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from paperorchestra.reviews.citation_model_review import (
-    _heuristic_citation_items,
-    citation_item_has_valid_supporting_evidence,
-)
+from paperorchestra.reviews.citation_evidence import citation_item_has_valid_supporting_evidence
+from paperorchestra.reviews.citation_items import _heuristic_citation_items
 
 
 class CitationModelReviewTest(unittest.TestCase):

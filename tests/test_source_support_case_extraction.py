@@ -8,14 +8,6 @@ from paperorchestra.core.session import save_session, set_current_session
 from paperorchestra.reviews import source_support, source_support_cases
 
 
-def test_source_support_facade_reexports_case_helpers() -> None:
-    assert source_support._strip_cites is source_support_cases._strip_cites
-    assert source_support._collapse_ws is source_support_cases._collapse_ws
-    assert source_support._sentence_for_cite_in_paragraph is source_support_cases._sentence_for_cite_in_paragraph
-    assert source_support._looks_like_section_heading is source_support_cases._looks_like_section_heading
-    assert source_support.build_source_backed_citation_cases_from_latex is source_support_cases.build_source_backed_citation_cases_from_latex
-
-
 def test_build_source_backed_citation_cases_from_latex_tracks_sections_paragraphs_and_titles() -> None:
     latex = r"""
 \documentclass{article}

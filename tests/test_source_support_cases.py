@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from paperorchestra.reviews.source_support import _sentence_for_cite_in_paragraph
+from paperorchestra.reviews.source_support_cases import _sentence_for_cite_in_paragraph
 
 
 class SourceSupportCasesTest(unittest.TestCase):

@@ -5,7 +5,6 @@ import json
 import pytest
 
 from paperorchestra.reviews import citation_model_prompt as prompt
-from paperorchestra.reviews import citation_model_review
 from paperorchestra.runtime.provider_base import BaseProvider, CompletionRequest
 
 
@@ -32,10 +31,6 @@ def _review_item() -> dict[str, object]:
         "heuristic_risk": "medium",
         "extra_internal": "must not be sent",
     }
-
-
-def test_citation_model_review_facade_exports_prompt_builder() -> None:
-    assert citation_model_review._build_model_citation_review is prompt._build_model_citation_review
 
 
 def test_model_citation_review_sends_bounded_prompt_and_returns_trace() -> None:

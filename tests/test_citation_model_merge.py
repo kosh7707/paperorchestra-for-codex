@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from paperorchestra.reviews import citation_model_merge as merge
-from paperorchestra.reviews import citation_model_review
 
 
 def _heuristic_item() -> dict[str, object]:
@@ -15,10 +14,6 @@ def _heuristic_item() -> dict[str, object]:
         "heuristic_risk": "medium",
         "suggested_fix": "Add direct evidence.",
     }
-
-
-def test_citation_model_review_facade_exports_merge_policy() -> None:
-    assert citation_model_review._merge_model_citation_review is merge._merge_model_citation_review
 
 
 def test_merge_model_review_marks_omitted_items_for_manual_check() -> None:

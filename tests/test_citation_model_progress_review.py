@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 
 from paperorchestra.reviews import citation_model_progress_review as progress_review
-from paperorchestra.reviews import citation_model_review
 from paperorchestra.runtime.provider_base import BaseProvider, CompletionRequest
 
 
@@ -54,10 +53,6 @@ def _item(item_id: str, key: str = "KeyA") -> dict[str, object]:
         "support_status": "metadata_only",
         "risk": "medium",
     }
-
-
-def test_citation_model_review_facade_exports_progress_review_builder() -> None:
-    assert citation_model_review._build_model_citation_review_with_progress is progress_review._build_model_citation_review_with_progress
 
 
 def test_progress_model_review_checkpoint_reuses_completed_claim(tmp_path: Path) -> None:

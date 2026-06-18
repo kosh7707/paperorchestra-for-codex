@@ -7,19 +7,11 @@ from types import SimpleNamespace
 from paperorchestra.core.models import ArtifactIndex, InputBundle, SessionState, utc_now_iso
 from paperorchestra.core.session import load_session, save_session, set_current_session
 from paperorchestra.reviews import citation_model_cache as cache
-from paperorchestra.reviews import citation_model_review
 from paperorchestra.runtime.provider_base import BaseProvider
 
 
 class FakeProvider(BaseProvider):
     name = "fake"
-
-
-def test_citation_model_review_facade_exports_cache_helpers() -> None:
-    assert citation_model_review._citation_support_provider_identity is cache._citation_support_provider_identity
-    assert citation_model_review._citation_support_cache_dir is cache._citation_support_cache_dir
-    assert citation_model_review._citation_support_cache_key is cache._citation_support_cache_key
-    assert citation_model_review._reuse_cached_citation_review is cache._reuse_cached_citation_review
 
 
 def test_citation_support_cache_key_tracks_inputs_and_provider_identity(tmp_path: Path) -> None:

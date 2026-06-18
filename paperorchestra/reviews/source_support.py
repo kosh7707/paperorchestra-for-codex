@@ -9,13 +9,7 @@ from paperorchestra.core.io import read_json
 from paperorchestra.core.session import artifact_path, load_session
 from paperorchestra.reviews.citation_sentences import extract_cited_sentences
 from paperorchestra.reviews.citation_source_payload import _clean_optional_string, _lean_source_payload
-from paperorchestra.reviews.source_support_cases import (
-    _collapse_ws,
-    _looks_like_section_heading,
-    _sentence_for_cite_in_paragraph,
-    _strip_cites,
-    build_source_backed_citation_cases_from_latex,
-)
+from paperorchestra.reviews import source_support_cases
 from paperorchestra.reviews.source_support_classifier import _classify_source_support
 from paperorchestra.reviews.source_support_retrieval import (
     _download_source_evidence,
@@ -49,7 +43,7 @@ def build_source_backed_citation_cases(
         raise ValueError("Need paper.full.tex before citation support review.")
     latex = Path(state.artifacts.paper_full_tex).read_text(encoding="utf-8")
     citation_map = read_json(state.artifacts.citation_map_json) if state.artifacts.citation_map_json else {}
-    cases = build_source_backed_citation_cases_from_latex(latex, citation_map)
+    cases = source_support_cases.build_source_backed_citation_cases_from_latex(latex, citation_map)
     if resolve_evidence:
         for case in cases:
             case["_cwd"] = cwd
@@ -293,7 +287,7 @@ def _source_review_summary(cases: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def _short_markdown_value(value: Any, *, limit: int = 240) -> str:
-    text = _collapse_ws(str(value or ""))
+    text = source_support_cases._collapse_ws(str(value or ""))
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
