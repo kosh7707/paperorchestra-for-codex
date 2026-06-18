@@ -109,22 +109,16 @@ class DraftControlPolicy:
             state.next_actions = [action]
             return DraftControlDecision("research_needed", state, [action], reasons, draft_allowed=False)
 
-        durable_gap = self._first_obligation(inputs.evidence_obligations, {"durable_research_needed"})
-        if durable_gap is not None:
+        if any(obligation.status == "durable_research_needed" for obligation in inputs.evidence_obligations):
             state.facets.evidence = "durable_research_needed"
             actions = ActionPlanner().plan(state)
             state.next_actions = actions
             return DraftControlDecision("research_needed", state, actions, ["durable_research_needed"], False)
 
-        machine_gap = next(
-            (
-                obligation
-                for obligation in inputs.evidence_obligations
-                if obligation.machine_solvable and obligation.status in {"missing", "research_needed"}
-            ),
-            None,
-        )
-        if machine_gap is not None:
+        if any(
+            obligation.machine_solvable and obligation.status in {"missing", "research_needed"}
+            for obligation in inputs.evidence_obligations
+        ):
             state.facets.evidence = "research_needed"
             actions = ActionPlanner().plan(state)
             state.next_actions = actions
@@ -144,24 +138,19 @@ class DraftControlPolicy:
             state.next_actions = actions
             return DraftControlDecision("human_needed", state, actions, ["high_criticality_claim_conflict"], False)
 
-        low_unsupported = next(
-            (
-                claim
-                for claim in inputs.claims
-                if self._criticality(claim) == "low"
-                and (
-                    claim.evidence_status in {"missing", "unknown"}
-                    or any(
-                        obligation.claim_id == claim.claim_id
-                        and obligation.status in {"missing", "unsupported"}
-                        and not obligation.machine_solvable
-                        for obligation in inputs.evidence_obligations
-                    )
+        if any(
+            self._criticality(claim) == "low"
+            and (
+                claim.evidence_status in {"missing", "unknown"}
+                or any(
+                    obligation.claim_id == claim.claim_id
+                    and obligation.status in {"missing", "unsupported"}
+                    and not obligation.machine_solvable
+                    for obligation in inputs.evidence_obligations
                 )
-            ),
-            None,
-        )
-        if low_unsupported is not None:
+            )
+            for claim in inputs.claims
+        ):
             state.facets.claims = "candidate"
             action = NextAction(
                 "auto_weaken_or_delete_claim",
@@ -203,8 +192,3 @@ class DraftControlPolicy:
         if claim.claim_type in MEDIUM_CRITICAL_CLAIM_TYPES:
             return "medium"
         return "low"
-
-    def _first_obligation(
-        self, obligations: list[EvidenceObligationSignal], statuses: set[str]
-    ) -> EvidenceObligationSignal | None:
-        return next((obligation for obligation in obligations if obligation.status in statuses), None)
