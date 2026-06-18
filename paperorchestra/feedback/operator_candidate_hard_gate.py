@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.feedback import operator_metrics as _metrics
 from paperorchestra.feedback.operator_candidate_progress import _candidate_reduces_citation_issue_count, _catastrophic_review_regression
 from paperorchestra.feedback.operator_contract import HUMAN_REVIEWABLE_NEW_TIER2_CODES
+from paperorchestra.feedback.operator_metric_delta import _active_tier2_metric_delta
 from paperorchestra.feedback.operator_quality_codes import _tier_status
 
 
@@ -92,7 +92,7 @@ def _append_tier2_regression_reasons(
     ]
     if quality_mode == "claim_safe" and hard_new_tier2_failures:
         reasons.append("tier2_claim_safety_new_failures")
-    metric_delta = _metrics._active_tier2_metric_delta(
+    metric_delta = _active_tier2_metric_delta(
         base_quality_eval,
         quality_eval,
         base_active_failures=base_active_failures,

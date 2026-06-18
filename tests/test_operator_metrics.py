@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from paperorchestra.feedback import operator_metrics
+from paperorchestra.feedback.operator_metric_counts import _claim_safe_tier2_metric_counts
+from paperorchestra.feedback.operator_metric_delta import _active_tier2_metric_delta
 
 
 def test_claim_safe_tier2_metric_counts_reads_nested_quality_eval_counts() -> None:
@@ -25,7 +26,7 @@ def test_claim_safe_tier2_metric_counts_reads_nested_quality_eval_counts() -> No
         }
     }
 
-    metrics = operator_metrics._claim_safe_tier2_metric_counts(quality_eval)
+    metrics = _claim_safe_tier2_metric_counts(quality_eval)
 
     assert metrics["citation_support_unsupported"] == 2
     assert metrics["citation_support_weak"] == 3
@@ -61,7 +62,7 @@ def test_claim_safe_tier2_metric_counts_prefers_explicit_counts_and_integer_floa
         }
     }
 
-    metrics = operator_metrics._claim_safe_tier2_metric_counts(quality_eval)
+    metrics = _claim_safe_tier2_metric_counts(quality_eval)
 
     assert metrics["citation_support_unsupported"] == 2
     assert metrics["citation_support_weak"] == 3
@@ -95,7 +96,7 @@ def test_active_tier2_metric_delta_tracks_only_comparable_active_codes() -> None
         }
     }
 
-    delta = operator_metrics._active_tier2_metric_delta(
+    delta = _active_tier2_metric_delta(
         base,
         candidate,
         base_active_failures=[
