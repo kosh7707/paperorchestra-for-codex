@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.manuscript.repair import _insert_block_into_section, _preferred_section_name
+from paperorchestra.manuscript.structure import _insert_block_into_section, _preferred_section_name
 from paperorchestra.manuscript.validator import (
     CITE_COMMAND_RE,
     FIGURE_ENV_RE,

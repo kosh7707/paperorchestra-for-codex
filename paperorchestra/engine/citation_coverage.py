@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.manuscript.repair import _section_range_map
+from paperorchestra.manuscript.structure import _section_range_map
 from paperorchestra.manuscript.validator import (
     allowed_citation_keys,
     canonical_citation_key,

@@ -1,13 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.manuscript import labels, repair, structure
-
-
-def test_repair_facade_reexports_structure_and_label_helpers() -> None:
-    assert repair._section_range_map is structure._section_range_map
-    assert repair._canonical_generated_section_title is structure._canonical_generated_section_title
-    assert repair._restore_missing_referenced_labels is labels._restore_missing_referenced_labels
-    assert repair._restore_common_generated_section_labels is labels._restore_common_generated_section_labels
+from paperorchestra.manuscript import labels, repair
 
 
 def test_remove_material_packet_sections_preserves_macros_in_preamble() -> None:

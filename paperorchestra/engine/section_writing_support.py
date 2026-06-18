@@ -20,11 +20,11 @@ from paperorchestra.engine.section_scope import (
     _preserve_existing_sections,
     _selected_section_template,
 )
+from paperorchestra.manuscript.labels import _restore_missing_referenced_labels
 from paperorchestra.manuscript.repair import (
     _ensure_discussion_section_for_claim_boundaries,
     _ensure_required_claim_scope_notes,
     _remove_material_packet_sections,
-    _restore_missing_referenced_labels,
 )
 from paperorchestra.manuscript.validator import canonicalize_citation_keys
 

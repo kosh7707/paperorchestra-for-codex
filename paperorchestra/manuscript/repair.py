@@ -6,23 +6,7 @@ from typing import Any
 from paperorchestra.core.boundary import is_material_packet_section_title, normalized_claim_projection
 from paperorchestra.manuscript.validator import canonical_citation_key, canonical_citation_map, extract_citation_keys
 
-from paperorchestra.manuscript.labels import (
-    COMMON_GENERATED_SECTION_LABELS,
-    _restore_common_generated_section_labels,
-    _restore_missing_referenced_labels,
-    _restore_missing_subsection_reference_labels,
-)
-from paperorchestra.manuscript.structure import (
-    LABEL_RE,
-    SECTION_COMMAND_RE,
-    SUBSECTION_COMMAND_RE,
-    _canonical_generated_section_title,
-    _insert_block_into_section,
-    _normalized_section_range_map,
-    _paragraph_insertion_index,
-    _preferred_section_name,
-    _section_range_map,
-)
+from paperorchestra.manuscript import structure as _structure
 
 LATEX_CITATION_COMMAND_RE = re.compile(
     r"\\(?P<name>(?!nocite\b)[A-Za-z]*cite[A-Za-z]*)(?P<star>\*)?(?P<opts>(?:\s*\[[^\]]*\]){0,2})\s*\{(?P<keys>[^}]+)\}",
@@ -152,7 +136,7 @@ def _remove_material_packet_sections(latex: str) -> str:
     constraints. They should shape the draft, not appear as final manuscript
     sections. Macro definitions are preserved by moving them into the preamble.
     """
-    ranges = _section_range_map(latex)
+    ranges = _structure._section_range_map(latex)
     rendered = latex
     for title, (start, end) in sorted(ranges.items(), key=lambda item: item[1][0], reverse=True):
         if not is_material_packet_section_title(title):
@@ -169,7 +153,7 @@ def _ensure_discussion_section_for_claim_boundaries(latex: str, claim_map: dict[
         claim
         for claim in (claim_map or {}).get("claims", [])
         if isinstance(claim, dict)
-        and _canonical_generated_section_title(str(claim.get("target_section") or "")) == "discussion"
+        and _structure._canonical_generated_section_title(str(claim.get("target_section") or "")) == "discussion"
         and claim.get("required", True)
     ]
     if not claims:
@@ -193,14 +177,14 @@ def _ensure_discussion_section_for_claim_boundaries(latex: str, claim_map: dict[
             "This scope is part of the paper's stated technical model and does not extend beyond the presented assumptions, measurements, or evidence."
         )
     boundary_paragraph = "\n\n".join(boundary_notes) + "\n\n"
-    ranges = _normalized_section_range_map(latex)
+    ranges = _structure._normalized_section_range_map(latex)
     if "discussion" in ranges:
         start, end = ranges["discussion"]
         discussion_block = latex[start:end]
         if all(note in discussion_block for note in boundary_notes):
             return latex
         section_title_end = latex.find("}", start, end)
-        insert_at = _paragraph_insertion_index(latex, section_title_end + 1 if section_title_end != -1 else start, end)
+        insert_at = _structure._paragraph_insertion_index(latex, section_title_end + 1 if section_title_end != -1 else start, end)
         return latex[:insert_at] + "\n" + boundary_paragraph + latex[insert_at:]
     discussion = f"\\section{{{preferred_title}}}\n" + boundary_paragraph
     conclusion_match = re.search(r"\\section\{Conclusion\}", latex)
@@ -345,8 +329,8 @@ def _ensure_required_claim_scope_notes(latex: str, claim_map: dict[str, Any] | N
         note = _required_claim_scope_note(claim)
         if not note:
             continue
-        target = _canonical_generated_section_title(str(claim.get("target_section") or ""))
-        ranges = _normalized_section_range_map(rendered)
+        target = _structure._canonical_generated_section_title(str(claim.get("target_section") or ""))
+        ranges = _structure._normalized_section_range_map(rendered)
         if target not in ranges:
             continue
         start, end = ranges[target]
@@ -354,7 +338,7 @@ def _ensure_required_claim_scope_notes(latex: str, claim_map: dict[str, Any] | N
         if note.strip() in section_block:
             continue
         section_title_end = rendered.find("}", start, end)
-        insert_at = _paragraph_insertion_index(rendered, section_title_end + 1 if section_title_end != -1 else start, end)
+        insert_at = _structure._paragraph_insertion_index(rendered, section_title_end + 1 if section_title_end != -1 else start, end)
         rendered = rendered[:insert_at] + "\n" + note + rendered[insert_at:]
     return _repair_inline_math_surplus_closing_brace(rendered)
 
@@ -362,7 +346,7 @@ def _ensure_required_claim_scope_notes(latex: str, claim_map: dict[str, Any] | N
 def _citation_map_for_selected_sections(source_latex: str, citation_map: dict[str, Any], selected_sections: list[str]) -> dict[str, Any]:
     if not citation_map:
         return {}
-    ranges = _section_range_map(source_latex)
+    ranges = _structure._section_range_map(source_latex)
     selected_keys: set[str] = set()
     for section_name in selected_sections:
         section_range = ranges.get(section_name.strip().lower())

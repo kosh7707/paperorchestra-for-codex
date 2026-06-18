@@ -19,7 +19,7 @@ from paperorchestra.engine.section_writing_support import (
     validate_section_draft,
 )
 from paperorchestra.manuscript.prompts import PROMPTS
-from paperorchestra.manuscript.repair import _canonical_generated_section_title
+from paperorchestra.manuscript.structure import _canonical_generated_section_title
 from paperorchestra.runtime.providers import BaseProvider
 
 
