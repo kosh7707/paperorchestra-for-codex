@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import re
+
 from paperorchestra.core.models import VerifiedPaper
 from paperorchestra.engine.research_registry_authority import merge_authoritative_external_ids, prior_work_metadata_is_authoritative
 from paperorchestra.engine.research_registry_entry_merge import merge_verified_entry_with_prior_keys
-from paperorchestra.engine.research_registry_titles import normalized_registry_title_key
 from paperorchestra.research.bibtex import ensure_unique_bibtex_keys
 
 
@@ -40,6 +41,10 @@ def _remember_by_title(merged_by_title: dict[str, VerifiedPaper], ordered_titles
     title_key = normalized_registry_title_key(paper)
     if title_key:
         _remember_title_key(merged_by_title, ordered_titles, title_key, paper)
+
+
+def normalized_registry_title_key(paper: VerifiedPaper) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", paper.title.lower())).strip()
 
 
 def _remember_title_key(
