@@ -25,7 +25,7 @@ from paperorchestra.engine.review_stages import (
     review_current_paper,
     write_figure_placement_review,
 )
-from paperorchestra.reviews.fidelity import write_reproducibility_audit
+from paperorchestra.reviews.reproducibility import write_reproducibility_audit
 from paperorchestra.runtime.parity import record_runtime_parity_report
 from paperorchestra.runtime.providers import BaseProvider
 

@@ -6,7 +6,6 @@ from pathlib import Path
 
 from paperorchestra.core.models import ArtifactIndex, InputBundle, SessionState
 from paperorchestra.core.session import save_session, set_current_session
-import paperorchestra.reviews.fidelity as fidelity_module
 from paperorchestra.reviews.fidelity import run_fidelity_audit
 
 
@@ -30,34 +29,6 @@ EXPECTED_FIDELITY_CHECK_CODES = [
     "generated_citation_title_surface",
     "citation_partition_scaffold_surface",
 ]
-
-LEGACY_FIDELITY_EXPORTS = [
-    "EXPECTED_LITERATURE_REVIEW_AXES",
-    "EXPECTED_OUTLINE_KEYS",
-    "PAPER_SOURCE_ENV_VAR",
-    "PAPER_SOURCE_NAME",
-    "FidelityCheck",
-    "_citation_surface_health",
-    "_ensure_default_citation_partition_request",
-    "_file_sha256",
-    "_overall_status",
-    "_paper_source_candidates",
-    "_read_json_if_exists",
-    "_status_histogram",
-    "_summary_descriptor",
-    "build_fidelity_checks",
-    "build_generated_citation_titles",
-    "build_reproducibility_audit",
-    "build_review_gate_comparison",
-    "build_session_eval_summary",
-    "canonical_citation_map",
-    "prompt_module",
-    "read_json",
-    "run_fidelity_audit",
-    "write_citation_partition_request",
-    "write_reproducibility_audit",
-]
-
 
 def _write_json(path: Path, payload: object) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -86,12 +57,6 @@ def _save_current_session(tmp_path: Path, artifacts: ArtifactIndex | None = None
     )
     save_session(tmp_path, state)
     set_current_session(tmp_path, state.session_id)
-
-
-def test_fidelity_facade_preserves_legacy_helper_imports() -> None:
-    assert sorted(fidelity_module.__all__) == sorted(LEGACY_FIDELITY_EXPORTS)
-    missing = [name for name in LEGACY_FIDELITY_EXPORTS if not hasattr(fidelity_module, name)]
-    assert missing == []
 
 
 def test_fidelity_audit_empty_session_preserves_contract(tmp_path: Path) -> None:

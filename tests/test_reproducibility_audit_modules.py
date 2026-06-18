@@ -165,21 +165,6 @@ def test_reproducibility_report_preserves_public_payload_shape() -> None:
     assert payload["paper_has_mock_watermark"] is False
 
 
-def test_reproducibility_facade_preserves_legacy_private_helpers() -> None:
-    from paperorchestra.reviews import reproducibility
-    from paperorchestra.reviews import reproducibility_artifacts, reproducibility_citations, reproducibility_validation
-
-    assert reproducibility._read_json_if_exists is reproducibility_artifacts._read_json_if_exists
-    assert reproducibility._prompt_trace_files is reproducibility_artifacts._prompt_trace_files
-    assert reproducibility._note_occurrence_count is reproducibility_artifacts._note_occurrence_count
-    assert reproducibility._lane_completed is reproducibility_artifacts._lane_completed
-    assert reproducibility._mock_registry_entry_count is reproducibility_citations._mock_registry_entry_count
-    assert reproducibility._citation_support_review_provenance is reproducibility_citations._citation_support_review_provenance
-    assert reproducibility._strict_content_gates_enabled is reproducibility_validation._strict_content_gates_enabled
-    assert reproducibility._strict_content_gate_issues is reproducibility_validation._strict_content_gate_issues
-    assert reproducibility._validation_warning_reports is reproducibility_validation._validation_warning_reports
-
-
 def test_collect_reproducibility_context_uses_runtime_and_prompt_fallbacks(monkeypatch, tmp_path) -> None:
     from paperorchestra.reviews import reproducibility_context
 

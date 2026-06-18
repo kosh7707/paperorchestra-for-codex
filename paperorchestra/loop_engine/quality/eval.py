@@ -42,7 +42,8 @@ from paperorchestra.loop_engine.quality.provenance import (
 )
 from paperorchestra.loop_engine.quality.utils import _file_sha256
 from paperorchestra.manuscript.narrative import planning_artifact_status
-from paperorchestra.reviews.fidelity import build_reproducibility_audit, run_fidelity_audit
+from paperorchestra.reviews.fidelity import run_fidelity_audit
+from paperorchestra.reviews.reproducibility import build_reproducibility_audit
 
 
 def _normalize_quality_mode(mode: str | None) -> str:

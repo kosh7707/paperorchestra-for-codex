@@ -8,7 +8,8 @@ from paperorchestra.core.io import read_json, write_json
 from paperorchestra.core.models import utc_now_iso
 from paperorchestra.core.session import artifact_path, load_session, save_session
 from paperorchestra.manuscript.source_obligations import source_obligations_path
-from paperorchestra.reviews.fidelity import build_reproducibility_audit, run_fidelity_audit, write_reproducibility_audit
+from paperorchestra.reviews.fidelity import run_fidelity_audit
+from paperorchestra.reviews.reproducibility import build_reproducibility_audit, write_reproducibility_audit
 
 from .actions import (
     _action,
