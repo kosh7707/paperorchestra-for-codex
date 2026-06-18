@@ -9,7 +9,7 @@ from typing import Any
 from paperorchestra.core.io import read_json
 from paperorchestra.core.session import artifact_path, save_session
 from paperorchestra.runtime.provider_base import BaseProvider
-from paperorchestra.runtime.provider_web import provider_web_search_capability_proof
+from paperorchestra.runtime.provider_web_capability import provider_web_search_capability_proof
 from paperorchestra.runtime.shell_provider import ShellProvider
 
 

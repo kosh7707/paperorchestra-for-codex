@@ -4,7 +4,8 @@ import os
 
 from paperorchestra.runtime.mock_provider import MockProvider
 from paperorchestra.runtime.provider_base import BaseProvider, ProviderError
-from paperorchestra.runtime.provider_web import default_codex_web_provider_command, provider_supports_web_search
+from paperorchestra.runtime.provider_web_capability import provider_supports_web_search
+from paperorchestra.runtime.provider_web_command import default_codex_web_provider_command
 from paperorchestra.runtime.shell_provider import ShellProvider
 
 

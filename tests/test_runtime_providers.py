@@ -152,3 +152,35 @@ def test_shell_provider_raises_transient_after_retryable_failure_exhausted(monke
 
     with pytest.raises(TransientProviderError, match="retryable transport"):
         provider.complete(CompletionRequest(system_prompt="s", user_prompt="u"))
+
+
+def test_provider_wrapper_contract_web_search_capability_proof(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("PAPERO_MODEL_CMD", raising=False)
+    wrapper = tmp_path / "provider-wrap.sh"
+    wrapper.write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+    monkeypatch.setenv("PAPERO_ALLOWED_PROVIDER_BINARIES", "codex,bash")
+    import hashlib
+
+    wrapper_sha = hashlib.sha256(wrapper.read_bytes()).hexdigest()
+    contract = {
+        "schema_version": "provider-wrapper-contract/1",
+        "wrapper_path": str(wrapper),
+        "wrapper_sha256": wrapper_sha,
+        "modes": {
+            "web": {
+                "trace_wrapped": True,
+                "web_search_capable": True,
+                "exec_argv_prefix": ["codex", "--search", "exec"],
+            }
+        },
+    }
+    (tmp_path / "provider-wrap.contract.json").write_text(json.dumps(contract), encoding="utf-8")
+    provider = ShellProvider(command=json.dumps(["bash", str(wrapper), "web"]))
+
+    proof = provider_web_search_capability_proof(provider)
+
+    assert proof is not None
+    assert proof["provider_capability_proof"] == "provider-wrapper-contract/1"
+    assert proof["provider_wrapper_path"] == str(wrapper.resolve())
+    assert proof["provider_wrapper_sha256"] == wrapper_sha
+    assert proof["provider_wrapper_exec_argv_prefix"] == ["codex", "--search", "exec"]

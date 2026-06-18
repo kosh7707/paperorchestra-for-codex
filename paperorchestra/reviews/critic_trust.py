@@ -4,7 +4,7 @@ import os
 from typing import Any
 
 from paperorchestra.runtime.provider_base import ProviderError
-from paperorchestra.runtime.provider_web import provider_web_search_capability_proof
+from paperorchestra.runtime.provider_web_capability import provider_web_search_capability_proof
 from paperorchestra.runtime.shell_provider import ShellProvider
 
 
