@@ -7,21 +7,23 @@ from pathlib import Path
 import pytest
 
 from paperorchestra.core.errors import ContractError
+from paperorchestra.feedback.operator_candidate_approval import _candidate_approval_source_role, _ready_candidate_from_packet
+from paperorchestra.feedback.operator_candidate_generation import _executor_failure_category
 from paperorchestra.feedback.packet_bindings import _execution_payload_sha256
 from paperorchestra.runtime.provider_base import ProviderError, TransientProviderError
-from paperorchestra.feedback import operator_candidates, operator_verification
+from paperorchestra.feedback import operator_verification
 
 
 def test_candidate_approval_source_role_requires_single_supported_source() -> None:
-    assert operator_candidates._candidate_approval_source_role({"issues": []}) is None
+    assert _candidate_approval_source_role({"issues": []}) is None
     assert (
-        operator_candidates._candidate_approval_source_role(
+        _candidate_approval_source_role(
             {"issues": [{"source_artifact_role": "qa_loop_execution"}, {"source_artifact_role": "ignored"}]}
         )
         == "qa_loop_execution"
     )
     with pytest.raises(ContractError, match="exactly one"):
-        operator_candidates._candidate_approval_source_role(
+        _candidate_approval_source_role(
             {
                 "issues": [
                     {"source_artifact_role": "qa_loop_execution"},
@@ -59,7 +61,7 @@ def test_ready_candidate_from_packet_verifies_candidate_and_source_hashes(tmp_pa
     execution_path.write_text(json.dumps(execution), encoding="utf-8")
     packet = {"artifacts": [{"role": "qa_loop_execution", "path": str(execution_path)}]}
 
-    ready = operator_candidates._ready_candidate_from_packet(packet, base_sha, source_artifact_role="qa_loop_execution")
+    ready = _ready_candidate_from_packet(packet, base_sha, source_artifact_role="qa_loop_execution")
 
     assert ready["candidate_path"] == str(candidate.resolve())
     assert ready["candidate_sha256"] == candidate_sha
@@ -67,16 +69,16 @@ def test_ready_candidate_from_packet_verifies_candidate_and_source_hashes(tmp_pa
     execution["candidate_approval"]["source_execution_sha256"] = "sha256:" + "0" * 64
     execution_path.write_text(json.dumps(execution), encoding="utf-8")
     with pytest.raises(ContractError, match="source execution hash mismatch"):
-        operator_candidates._ready_candidate_from_packet(packet, base_sha, source_artifact_role="qa_loop_execution")
+        _ready_candidate_from_packet(packet, base_sha, source_artifact_role="qa_loop_execution")
 
 
 def test_executor_failure_category_keeps_public_failure_taxonomy() -> None:
-    assert operator_candidates._executor_failure_category(TransientProviderError("retry exhausted")) == "provider_transient_retry_exhausted"
-    assert operator_candidates._executor_failure_category(ProviderError("provider died")) == "provider_error"
-    assert operator_candidates._executor_failure_category(TimeoutError("slow")) == "timeout"
-    assert operator_candidates._executor_failure_category(ContractError("latex extraction failed")) == "extraction_failed"
-    assert operator_candidates._executor_failure_category(ContractError("bad state")) == "contract_error"
-    assert operator_candidates._executor_failure_category(RuntimeError("boom")) == "unexpected_exception"
+    assert _executor_failure_category(TransientProviderError("retry exhausted")) == "provider_transient_retry_exhausted"
+    assert _executor_failure_category(ProviderError("provider died")) == "provider_error"
+    assert _executor_failure_category(TimeoutError("slow")) == "timeout"
+    assert _executor_failure_category(ContractError("latex extraction failed")) == "extraction_failed"
+    assert _executor_failure_category(ContractError("bad state")) == "contract_error"
+    assert _executor_failure_category(RuntimeError("boom")) == "unexpected_exception"
 
 
 def test_verification_block_projects_nested_quality_evidence(tmp_path: Path) -> None:
