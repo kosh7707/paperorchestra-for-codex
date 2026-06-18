@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from paperorchestra.reviews import reproducibility_payloads
+from paperorchestra.reviews.reproducibility_citation_map_payload import _is_valid_citation_map_entry
+from paperorchestra.reviews.reproducibility_verified_paper_payload import _is_valid_verified_paper_payload
 
 
 def test_verified_paper_payload_validator_accepts_realistic_registry_entry() -> None:
-    assert reproducibility_payloads._is_valid_verified_paper_payload(
+    assert _is_valid_verified_paper_payload(
         {
             "paper_id": "paper-1",
             "title": "A Useful Paper",
@@ -27,7 +28,7 @@ def test_verified_paper_payload_validator_accepts_realistic_registry_entry() -> 
 
 
 def test_verified_paper_payload_validator_rejects_empty_key_and_bool_counts() -> None:
-    assert not reproducibility_payloads._is_valid_verified_paper_payload(
+    assert not _is_valid_verified_paper_payload(
         {
             "paper_id": "paper-1",
             "title": "A Useful Paper",
@@ -38,7 +39,7 @@ def test_verified_paper_payload_validator_rejects_empty_key_and_bool_counts() ->
             "bibtex_key": "Useful2024",
         }
     )
-    assert not reproducibility_payloads._is_valid_verified_paper_payload(
+    assert not _is_valid_verified_paper_payload(
         {
             "paper_id": "paper-1",
             "title": "A Useful Paper",
@@ -52,7 +53,7 @@ def test_verified_paper_payload_validator_rejects_empty_key_and_bool_counts() ->
 
 
 def test_citation_map_entry_validator_accepts_provenance_payload() -> None:
-    assert reproducibility_payloads._is_valid_citation_map_entry(
+    assert _is_valid_citation_map_entry(
         "Useful2024",
         {
             "title": "A Useful Paper",
@@ -70,12 +71,12 @@ def test_citation_map_entry_validator_accepts_provenance_payload() -> None:
 
 def test_citation_map_entry_validator_rejects_bad_key_author_and_provenance() -> None:
     valid_entry = {"title": "A Useful Paper", "authors": ["Ada"], "year": 2024}
-    assert not reproducibility_payloads._is_valid_citation_map_entry("", valid_entry)
-    assert not reproducibility_payloads._is_valid_citation_map_entry(
+    assert not _is_valid_citation_map_entry("", valid_entry)
+    assert not _is_valid_citation_map_entry(
         "Useful2024",
         {"title": "A Useful Paper", "authors": ["Ada", 5], "year": 2024},
     )
-    assert not reproducibility_payloads._is_valid_citation_map_entry(
+    assert not _is_valid_citation_map_entry(
         "Useful2024",
         {"title": "A Useful Paper", "authors": ["Ada"], "year": 2024, "provenance": "manual"},
     )

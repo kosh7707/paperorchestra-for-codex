@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.manuscript.citations import canonical_citation_key
-from paperorchestra.reviews import reproducibility_payloads as _payloads
+from paperorchestra.reviews.reproducibility_citation_map_payload import _is_valid_citation_map_entry
+from paperorchestra.reviews.reproducibility_verified_paper_payload import _is_valid_verified_paper_payload
 
 
 def _bibtex_keys_from_text(text: str) -> set[str]:
@@ -22,7 +23,7 @@ def _registry_surface_health(registry_exists: bool, registry_payload: Any) -> tu
     registry_keys: set[str] = set()
     registry_alias_keys: set[str] = set()
     for item in registry_payload:
-        if not _payloads._is_valid_verified_paper_payload(item):
+        if not _is_valid_verified_paper_payload(item):
             invalid += 1
             continue
         key = item.get("bibtex_key")
@@ -48,7 +49,7 @@ def _citation_map_surface_health(citation_map_exists: bool, citation_map_payload
     citation_map_keys: set[str] = set()
     citation_map_canonical_keys: set[str] = set()
     for key, entry in citation_map_payload.items():
-        if not _payloads._is_valid_citation_map_entry(key, entry):
+        if not _is_valid_citation_map_entry(key, entry):
             invalid += 1
             continue
         citation_map_keys.add(key.strip())
