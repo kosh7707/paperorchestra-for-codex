@@ -9,7 +9,9 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import read_json, write_json
 from paperorchestra.core.models import ArtifactIndex, InputBundle
 from paperorchestra.core.session import artifact_path, create_session, load_session, save_session
+from paperorchestra.engine.research_candidate_verification import verify_candidate_registry
 from paperorchestra.engine import research_verification_stage
+from paperorchestra.research.literature import mock_verified_paper
 
 
 def _session_with_candidates(tmp_path: Path) -> None:
@@ -84,6 +86,37 @@ def test_verify_papers_live_fail_records_errors_and_blocks_session(tmp_path: Pat
     assert errors["error_count"] == 1
     assert errors["errors"][0]["action"] == "failed"
     assert errors["errors"][0]["title_guess"] == "Evidence Grounded Agents for SAST Alert Triage"
+
+
+def test_candidate_registry_live_skip_collects_errors_and_dedupes_verified_papers() -> None:
+    candidates = {
+        "macro_candidates": [
+            {"title_guess": "Verified Paper", "origin_query": "verified"},
+            {"title_guess": "Broken Paper", "origin_query": "broken"},
+        ],
+        "micro_candidates": [
+            {"title_guess": "Verified Paper", "origin_query": "duplicate"},
+        ],
+    }
+
+    def verifier(title: str, **kwargs):
+        if title == "Broken Paper":
+            raise RuntimeError("semantic scholar down")
+        return mock_verified_paper(title, abstract_hint="", cutoff_date="2030-01-01")
+
+    result = verify_candidate_registry(
+        candidates,
+        cutoff_date="2030-01-01",
+        mode="live",
+        min_ratio=70.0,
+        on_error="skip",
+        live_verifier=verifier,
+    )
+
+    assert len(result.registry) == 1
+    assert result.errors[0]["title_guess"] == "Broken Paper"
+    assert result.errors[0]["action"] == "skipped"
+    assert result.candidate_count == 3
 
 
 def test_build_bib_writes_references_and_updates_session_state(tmp_path: Path) -> None:

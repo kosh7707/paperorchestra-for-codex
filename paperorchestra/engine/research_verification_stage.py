@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import read_json, write_json, write_text
-from paperorchestra.core.models import VerifiedPaper
 from paperorchestra.core.session import artifact_path, load_session, save_session
 from paperorchestra.engine.research_bib_stage import build_bib
+from paperorchestra.engine.research_candidate_verification import (
+    CandidateVerificationFailure,
+    verify_candidate_registry,
+)
 from paperorchestra.engine.research_registry import (
     _citation_map_from_registry,
     _merge_live_verified_with_prior_registry,
@@ -15,11 +17,7 @@ from paperorchestra.engine.research_registry import (
 from paperorchestra.engine.research_registry_io import load_prior_citation_registry
 from paperorchestra.engine.research_verification_errors import _record_verification_errors
 from paperorchestra.research.bibtex import ensure_unique_bibtex_keys, registry_to_bibtex
-from paperorchestra.research.literature import (
-    mock_verified_paper,
-    serialize_registry,
-    verify_candidate_title,
-)
+from paperorchestra.research.literature import serialize_registry, verify_candidate_title
 
 
 def verify_papers(
@@ -35,65 +33,34 @@ def verify_papers(
     if not state.artifacts.candidate_papers_json:
         raise ContractError("Run discover-papers before verify-papers.")
     candidates = read_json(state.artifacts.candidate_papers_json)
-    registry: list[VerifiedPaper] = []
-    seen_ids: set[str] = set()
-    verification_errors: list[dict[str, Any]] = []
-    candidate_count = 0
-    for bucket in ["macro_candidates", "micro_candidates"]:
-        for candidate in candidates.get(bucket, []):
-            title = candidate.get("title_guess")
-            if not title:
-                continue
-            candidate_count += 1
-            if mode == "mock":
-                paper = mock_verified_paper(
-                    title,
-                    abstract_hint=candidate.get("why_relevant", ""),
-                    cutoff_date=state.inputs.cutoff_date,
-                    origin=bucket,
-                    query_hint=candidate.get("origin_query") or title,
-                )
-            elif mode == "live":
-                try:
-                    paper = verify_candidate_title(
-                        title,
-                        cutoff_date=state.inputs.cutoff_date,
-                        query_hint=candidate.get("origin_query") or title,
-                        min_ratio=min_ratio,
-                    )
-                except Exception as exc:
-                    error = {
-                        "bucket": bucket,
-                        "title_guess": title,
-                        "query_hint": candidate.get("origin_query") or title,
-                        "error_type": type(exc).__name__,
-                        "message": str(exc),
-                        "action": "failed" if on_error == "fail" else "skipped",
-                    }
-                    verification_errors.append(error)
-                    if on_error == "fail":
-                        error_path = _record_verification_errors(
-                            cwd,
-                            state,
-                            verification_errors,
-                            mode=mode,
-                            on_error=on_error,
-                        )
-                        state.current_phase = "blocked"
-                        state.active_artifact = Path(error_path).name if error_path else "verification_errors.json"
-                        save_session(cwd, state)
-                        raise ContractError(
-                            f"Live verification failed for candidate {title!r}: {exc}. "
-                            "Set SEMANTIC_SCHOLAR_API_KEY, retry with --on-error skip, or use --verify-mode mock for offline demos."
-                        ) from exc
-                    continue
-            else:
-                raise ContractError(f"Unsupported verify mode: {mode}")
-            if not paper or paper.is_after_cutoff or paper.paper_id in seen_ids:
-                continue
-            paper.origin = bucket
-            registry.append(paper)
-            seen_ids.add(paper.paper_id)
+    try:
+        verified = verify_candidate_registry(
+            candidates,
+            cutoff_date=state.inputs.cutoff_date,
+            mode=mode,
+            min_ratio=min_ratio,
+            on_error=on_error,
+            live_verifier=verify_candidate_title,
+        )
+    except CandidateVerificationFailure as exc:
+        error_path = _record_verification_errors(
+            cwd,
+            state,
+            exc.errors,
+            mode=mode,
+            on_error=on_error,
+        )
+        state.current_phase = "blocked"
+        state.active_artifact = Path(error_path).name if error_path else "verification_errors.json"
+        save_session(cwd, state)
+        raise ContractError(
+            f"Live verification failed for candidate {exc.title!r}: {exc.original}. "
+            "Set SEMANTIC_SCHOLAR_API_KEY, retry with --on-error skip, or use --verify-mode mock for offline demos."
+        ) from exc.original
+
+    registry = verified.registry
+    verification_errors = verified.errors
+    candidate_count = verified.candidate_count
 
     prior_registry = load_prior_citation_registry(
         state,
