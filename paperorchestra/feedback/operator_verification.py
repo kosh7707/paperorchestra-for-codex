@@ -14,7 +14,8 @@ from paperorchestra.loop_engine.quality.loop import write_quality_eval, write_qu
 from paperorchestra.reviews.citation_integrity import write_citation_integrity_audit
 from paperorchestra.reviews.citation_integrity_gate import write_citation_integrity_critic
 from paperorchestra.reviews.citation_rendered_references import write_rendered_reference_audit
-from paperorchestra.reviews.critics import write_citation_support_review, write_section_review
+from paperorchestra.reviews.citation_model_writer import write_citation_support_review
+from paperorchestra.reviews.section_review import write_section_review
 from paperorchestra.runtime.providers import BaseProvider, get_citation_support_provider
 
 

@@ -13,7 +13,8 @@ from paperorchestra.loop_engine.quality.citation_support_legacy_proof import (
 from paperorchestra.loop_engine.quality.policy import CITATION_SUPPORT_STATUSES
 from paperorchestra.loop_engine.quality.utils import _file_sha256, _read_json_if_exists
 from paperorchestra.manuscript.validator import citation_entry_for_key
-from paperorchestra.reviews.critics import citation_item_has_valid_supporting_evidence, extract_cited_sentences
+from paperorchestra.reviews.citation_evidence import citation_item_has_valid_supporting_evidence
+from paperorchestra.reviews.citation_sentences import extract_cited_sentences
 from paperorchestra.runtime.providers import ShellProvider, get_citation_support_provider
 
 

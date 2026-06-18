@@ -13,7 +13,8 @@ from paperorchestra.engine.section_writing_stage import write_sections
 from paperorchestra.interfaces.cli_commands.common import provider_from_args, strict_omx_env
 from paperorchestra.manuscript.revisions import write_revision_suggestions
 from paperorchestra.reviews.critic_trust import build_critic_trust_card, require_live_critic_trust
-from paperorchestra.reviews.critics import write_citation_support_review, write_section_review
+from paperorchestra.reviews.citation_model_writer import write_citation_support_review
+from paperorchestra.reviews.section_review import write_section_review
 from paperorchestra.runtime.providers import get_citation_support_provider
 
 

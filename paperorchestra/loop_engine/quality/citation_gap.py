@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.reviews.critics import citation_item_has_valid_supporting_evidence
+from paperorchestra.reviews.citation_evidence import citation_item_has_valid_supporting_evidence
 from .utils import _read_json_if_exists
 
 

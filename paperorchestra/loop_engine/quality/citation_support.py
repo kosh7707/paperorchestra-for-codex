@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.reviews.critics import build_source_backed_citation_cases
+from paperorchestra.reviews.source_support import build_source_backed_citation_cases
 from .utils import _file_sha256, _read_json_if_exists
 from paperorchestra.core.session import artifact_path
 from paperorchestra.loop_engine.quality.citation_support_legacy import (

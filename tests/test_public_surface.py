@@ -81,7 +81,8 @@ class PublicSurfaceTest(unittest.TestCase):
             "paperorchestra.manuscript.validator",
             "paperorchestra.orchestra.controller",
             "paperorchestra.research.literature",
-            "paperorchestra.reviews.critics",
+            "paperorchestra.reviews.citation_model_writer",
+            "paperorchestra.reviews.section_review",
             "paperorchestra.runtime.doctor",
         ):
             with self.subTest(module=module):

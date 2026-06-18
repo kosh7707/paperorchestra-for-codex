@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
-from paperorchestra.reviews.critics import write_citation_support_review, write_section_review
+from paperorchestra.reviews.citation_model_writer import write_citation_support_review
+from paperorchestra.reviews.section_review import write_section_review
 from paperorchestra.interfaces.exporting import export_current_artifacts
 from paperorchestra.feedback.human_needed import record_human_needed_answer
 from paperorchestra.core.models import InputBundle
