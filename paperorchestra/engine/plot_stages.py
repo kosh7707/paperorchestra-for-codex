@@ -4,15 +4,31 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.core.io import read_json
-from paperorchestra.core.session import load_session, save_session
+from paperorchestra.core.io import read_json, write_json
+from paperorchestra.core.session import artifact_path, build_path, load_session, save_session
 from paperorchestra.engine.completion import _lane_owner
-from paperorchestra.engine.plot_artifacts import _write_plot_artifacts, _write_plot_assets
 from paperorchestra.engine.plot_payload import _build_plot_payload
+from paperorchestra.engine.schemas import validate_plot_manifest
 from paperorchestra.engine.plot_repairs import _inject_missing_plot_assets
 from paperorchestra.engine.research_discovery import _build_candidate_payload, _write_candidate_artifacts
+from paperorchestra.manuscript.plot_assets import render_plot_assets
 from paperorchestra.runtime.parity import record_lane_manifest
 from paperorchestra.runtime.provider_base import BaseProvider
+
+
+def _write_plot_artifacts(cwd: str | Path | None, payload: dict) -> tuple[Path, Path]:
+    validate_plot_manifest(payload)
+    manifest_path = artifact_path(cwd, "plot_manifest.json")
+    captions_path = artifact_path(cwd, "plot_captions.json")
+    write_json(manifest_path, payload)
+    write_json(captions_path, {item["figure_id"]: item["caption"] for item in payload["figures"]})
+    return manifest_path, captions_path
+
+
+def _write_plot_assets(cwd: str | Path | None, payload: dict) -> tuple[Path, Path]:
+    assets_dir = build_path(cwd, "plot-assets")
+    output_dir, index_path = render_plot_assets(payload, assets_dir)
+    return output_dir, index_path
 
 
 def run_parallel_plot_and_literature(
