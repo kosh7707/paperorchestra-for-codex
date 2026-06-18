@@ -5,13 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.manuscript.structure import _insert_block_into_section, _preferred_section_name
-from paperorchestra.manuscript.validator import (
-    CITE_COMMAND_RE,
-    FIGURE_ENV_RE,
-    LABEL_RE,
-    allowed_citation_keys,
-    extract_citation_keys,
-)
+from paperorchestra.manuscript.citations import CITE_COMMAND_RE, allowed_citation_keys, extract_citation_keys
+from paperorchestra.manuscript.figure_patterns import FIGURE_ENV_RE, LABEL_RE
 
 
 def _normalize_plot_context_key(value: Any) -> str:

@@ -13,7 +13,7 @@ from paperorchestra.reviews.evaluation import (
     build_session_eval_summary,
     write_citation_partition_request,
 )
-from paperorchestra.manuscript.validator import canonical_citation_map
+from paperorchestra.manuscript.citations import canonical_citation_map
 from paperorchestra.reviews.fidelity_sources import paper_source_candidates
 from paperorchestra.reviews.fidelity_types import FidelityCheck
 from paperorchestra.reviews.reproducibility_artifacts import _file_sha256, _read_json_if_exists

@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from paperorchestra.core.boundary import is_material_packet_section_title, normalized_claim_projection
-from paperorchestra.manuscript.validator import canonical_citation_key, canonical_citation_map, extract_citation_keys
+from paperorchestra.manuscript.citations import canonical_citation_key, canonical_citation_map, extract_citation_keys
 
 from paperorchestra.manuscript import structure as _structure
 

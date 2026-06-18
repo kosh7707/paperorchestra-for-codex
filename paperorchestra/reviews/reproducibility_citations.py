@@ -6,7 +6,7 @@ from typing import Any
 
 from paperorchestra.core.io import read_json
 from paperorchestra.core.session import artifact_path
-from paperorchestra.manuscript.validator import canonical_citation_key, extract_citation_keys
+from paperorchestra.manuscript.citations import canonical_citation_key, extract_citation_keys
 from paperorchestra.reviews.reproducibility_artifacts import (
     _read_json_if_exists,
     _read_json_payload_if_exists,

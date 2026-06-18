@@ -9,7 +9,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from paperorchestra.core.io import write_json
 from paperorchestra.core.session import artifact_path
 from paperorchestra.loop_engine.quality.utils import _file_sha256, _read_json_if_exists
-from paperorchestra.manuscript.validator import extract_citation_keys
+from paperorchestra.manuscript.citations import extract_citation_keys
 
 RENDERED_REFERENCE_AUDIT_FILENAME = "rendered_reference_audit.json"
 

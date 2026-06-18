@@ -12,29 +12,13 @@ from paperorchestra.manuscript.claim_validation import (
 )
 from paperorchestra.manuscript.validation_types import ValidationIssue as _ValidationIssue
 from paperorchestra.manuscript.citations import (
-    CITE_COMMAND_RE,
     allowed_citation_keys,
     canonical_citation_key,
     canonical_citation_keys,
-    canonical_citation_map,
-    canonicalize_citation_keys,
-    citation_entry_for_key,
     extract_citation_keys,
     noncanonical_citation_aliases,
 )
-from paperorchestra.manuscript.figure_patterns import (
-    CAPTION_RE,
-    FIGURE_ENV_RE,
-    INCLUDE_GRAPHICS_RE,
-    LABEL_RE,
-    REF_RE,
-)
-from paperorchestra.manuscript.sections import (
-    SECTION_RE,
-    _normalize_section_title,
-    _section_bodies,
-    _substantive_text,
-)
+from paperorchestra.manuscript.sections import _normalize_section_title, _section_bodies, _substantive_text
 
 COMPARATIVE_CLAIM_PATTERNS = [
     "state-of-the-art",

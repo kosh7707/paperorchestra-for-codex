@@ -26,7 +26,7 @@ from paperorchestra.manuscript.repair import (
     _ensure_required_claim_scope_notes,
     _remove_material_packet_sections,
 )
-from paperorchestra.manuscript.validator import canonicalize_citation_keys
+from paperorchestra.manuscript.citations import canonicalize_citation_keys
 
 
 SECTION_REPAIRABLE_CODES = {

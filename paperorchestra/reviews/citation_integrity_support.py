@@ -6,7 +6,7 @@ from typing import Any
 
 from paperorchestra.core.session import artifact_path
 from paperorchestra.loop_engine.quality.utils import _read_json_if_exists
-from paperorchestra.manuscript.validator import extract_citation_keys
+from paperorchestra.manuscript.citations import extract_citation_keys
 
 
 def _citation_support_review_path(cwd: str | Path | None, state: Any) -> Path:

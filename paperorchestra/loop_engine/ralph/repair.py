@@ -32,7 +32,7 @@ from .state import (
     recover_pending_manuscript_write,
 )
 from paperorchestra.core.session import artifact_path, load_session, save_session
-from paperorchestra.manuscript.validator import allowed_citation_keys, canonical_citation_map, canonicalize_citation_keys, extract_citation_keys
+from paperorchestra.manuscript.citations import allowed_citation_keys, canonical_citation_map, canonicalize_citation_keys, extract_citation_keys
 
 
 def repair_citation_claims(

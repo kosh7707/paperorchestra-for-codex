@@ -9,7 +9,7 @@ from paperorchestra.engine.reports import _blocking_issues, collect_paper_contra
 from paperorchestra.engine.section_scope import _preserve_all_except_sections
 from paperorchestra.engine.intro_related_prompt import IntroRelatedPromptPlan
 from paperorchestra.manuscript.repair import _remove_material_packet_sections, _sanitize_manuscript_control_prose
-from paperorchestra.manuscript.validator import canonicalize_citation_keys
+from paperorchestra.manuscript.citations import canonicalize_citation_keys
 
 INTRO_RELATED_REPAIRABLE_CODES = {
     "unknown_citation_keys",

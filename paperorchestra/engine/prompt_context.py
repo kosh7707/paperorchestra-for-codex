@@ -9,7 +9,7 @@ from paperorchestra.core.boundary import sanitize_author_facing_text
 from paperorchestra.core.io import read_text
 from paperorchestra.domains import get_domain
 from paperorchestra.engine.completion import _env_flag
-from paperorchestra.manuscript.validator import CITE_COMMAND_RE, allowed_citation_keys, canonical_citation_map
+from paperorchestra.manuscript.citations import CITE_COMMAND_RE, allowed_citation_keys, canonical_citation_map
 
 
 def _read_inputs(state) -> dict[str, str]:

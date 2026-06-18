@@ -6,7 +6,7 @@ from typing import Any
 
 from paperorchestra.core.io import read_json
 from paperorchestra.core.session import load_session
-from paperorchestra.manuscript.validator import canonical_citation_keys
+from paperorchestra.manuscript.citations import canonical_citation_keys
 from paperorchestra.reviews.citation_partition import (
     build_citation_partition_request,
     compute_partitioned_citation_coverage,

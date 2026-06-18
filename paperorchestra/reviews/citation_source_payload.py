@@ -4,7 +4,7 @@ import re
 import urllib.parse
 from typing import Any
 
-from paperorchestra.manuscript.validator import citation_entry_for_key
+from paperorchestra.manuscript.citations import citation_entry_for_key
 
 
 def _clean_optional_string(value: Any) -> str | None:

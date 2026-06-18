@@ -4,7 +4,7 @@ import math
 import re
 from typing import Any
 
-from paperorchestra.manuscript.validator import CITE_COMMAND_RE
+from paperorchestra.manuscript.citations import CITE_COMMAND_RE
 
 
 def _collapse_ws(text: str) -> str:

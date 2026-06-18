@@ -9,7 +9,7 @@ from paperorchestra.core.boundary import normalized_claim_projection
 from paperorchestra.domains import detect_domain_for_text
 from paperorchestra.manuscript.narrative_sections import NarrativeSectionTargets
 from paperorchestra.manuscript.narrative_sources import _anchor, _planning_source_text, _salient_terms
-from paperorchestra.manuscript.validator import canonical_citation_map
+from paperorchestra.manuscript.citations import canonical_citation_map
 
 LATEX_COMMAND_RE = re.compile(r"\\[A-Za-z]+\*?(?:\{[^}]*\})?")
 

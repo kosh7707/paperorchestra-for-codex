@@ -6,7 +6,7 @@ from typing import Any
 
 from paperorchestra.core.io import read_json
 from paperorchestra.core.session import load_session
-from paperorchestra.manuscript.validator import citation_entry_for_key
+from paperorchestra.manuscript.citations import citation_entry_for_key
 from paperorchestra.reviews.eval_text import normalize_eval_title
 from paperorchestra.reviews.evaluation_io import _write_json_artifact
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from paperorchestra.manuscript.validator import CITE_COMMAND_RE
+from paperorchestra.manuscript.citations import CITE_COMMAND_RE
 from paperorchestra.reviews.citation_sentences import _citation_review_body, _sentence_end, _sentence_start
 from paperorchestra.reviews.citation_source_payload import _lean_source_payload
 
