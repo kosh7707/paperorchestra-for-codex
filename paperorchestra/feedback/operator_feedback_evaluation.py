@@ -17,7 +17,7 @@ from paperorchestra.feedback.operator_gates import (
 from paperorchestra.feedback.operator_incorporation import _issue_incorporation_detailed
 from paperorchestra.feedback.operator_records import _build_operator_attempt_record
 from paperorchestra.feedback.operator_verification import _verification_block, _verification_snapshot
-from paperorchestra.feedback.packets import _file_sha256, _sha256_digest, _sha256_prefixed
+from paperorchestra.feedback.packet_artifacts import _file_sha256, _sha256_digest, _sha256_prefixed
 
 
 @dataclass(frozen=True)

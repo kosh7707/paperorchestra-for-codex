@@ -3,14 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from paperorchestra.feedback import packet_bindings, packets
-
-
-def test_packets_facade_reexports_packet_binding_helpers() -> None:
-    assert packets._normalized_sha is packet_bindings._normalized_sha
-    assert packets._artifact_payload is packet_bindings._artifact_payload
-    assert packets._artifact_bound_manuscript_sha is packet_bindings._artifact_bound_manuscript_sha
-    assert packets._execution_payload_sha256 is packet_bindings._execution_payload_sha256
+from paperorchestra.feedback import packet_bindings
 
 
 def test_artifact_bound_manuscript_sha_reads_known_role_shapes() -> None:

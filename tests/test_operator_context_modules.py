@@ -6,7 +6,7 @@ from pathlib import Path
 from paperorchestra.feedback import operator_context
 from paperorchestra.feedback.operator_contexts import citations, claims, figures, metrics, packet, text
 from paperorchestra.feedback.operator_contract import OPERATOR_PACKET_SCHEMA_VERSION
-from paperorchestra.feedback.packets import _file_sha256, _packet_sha256
+from paperorchestra.feedback.packet_artifacts import _file_sha256, _packet_sha256
 
 
 def _write_json(path: Path, payload: dict) -> Path:

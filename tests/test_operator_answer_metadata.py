@@ -8,7 +8,7 @@ import pytest
 from paperorchestra.core.errors import ContractError
 from paperorchestra.feedback import operator_answer_metadata as answer
 from paperorchestra.feedback import operator_contract
-from paperorchestra.feedback.packets import _file_sha256, _packet_sha256
+from paperorchestra.feedback.packet_artifacts import _file_sha256, _packet_sha256
 
 
 HEX_A = "a" * 64

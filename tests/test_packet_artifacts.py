@@ -6,18 +6,7 @@ from pathlib import Path
 import pytest
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.feedback import packet_artifacts, packets
-
-
-def test_packets_facade_reexports_packet_artifact_helpers() -> None:
-    assert packets._sha256_bytes is packet_artifacts._sha256_bytes
-    assert packets._file_sha256 is packet_artifacts._file_sha256
-    assert packets._sha256_digest is packet_artifacts._sha256_digest
-    assert packets._sha256_prefixed is packet_artifacts._sha256_prefixed
-    assert packets._canonical_sha256 is packet_artifacts._canonical_sha256
-    assert packets._packet_sha256 is packet_artifacts._packet_sha256
-    assert packets._artifact_record is packet_artifacts._artifact_record
-    assert packets._snapshot_operator_packet_artifacts is packet_artifacts._snapshot_operator_packet_artifacts
+from paperorchestra.feedback import packet_artifacts
 
 
 def test_artifact_record_requires_existing_file(tmp_path: Path) -> None:

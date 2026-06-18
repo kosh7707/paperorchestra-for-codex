@@ -6,7 +6,8 @@ from typing import Any
 
 from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import read_json
-from paperorchestra.feedback.packets import _artifact_by_role, _file_sha256
+from paperorchestra.feedback.packet_artifacts import _file_sha256
+from paperorchestra.feedback.packets import _artifact_by_role
 
 OPERATOR_FEEDBACK_INTENTS = {
     "approve_existing_candidate",

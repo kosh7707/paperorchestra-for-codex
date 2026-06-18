@@ -22,13 +22,8 @@ from paperorchestra.feedback.operator_contract import (
     HUMAN_REVIEWABLE_NEW_TIER2_CODES,
     OVERALL_CATASTROPHIC_DROP,
 )
-from paperorchestra.feedback.packets import (
-    _execution_payload_sha256,
-    _file_sha256,
-    _normalized_sha,
-    _sha256_digest,
-    _sha256_prefixed,
-)
+from paperorchestra.feedback.packet_artifacts import _file_sha256, _sha256_digest, _sha256_prefixed
+from paperorchestra.feedback.packet_bindings import _execution_payload_sha256, _normalized_sha
 
 
 def _quality_failing_codes(quality_eval: dict[str, Any]) -> list[str]:

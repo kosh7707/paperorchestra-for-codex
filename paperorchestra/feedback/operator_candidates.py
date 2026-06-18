@@ -10,15 +10,13 @@ from paperorchestra.core.session import artifact_path, load_session, save_sessio
 from paperorchestra.engine.pipeline import refine_current_paper
 from paperorchestra.feedback.operator_context import _write_operator_review_for_refiner
 from paperorchestra.feedback.operator_contract import _read_packet
-from paperorchestra.feedback.packets import (
+from paperorchestra.feedback.packet_artifacts import _file_sha256, _sha256_digest, _sha256_prefixed
+from paperorchestra.feedback.packet_bindings import (
     _artifact_bound_manuscript_sha,
-    _artifact_by_role,
     _execution_payload_sha256,
-    _file_sha256,
     _normalized_sha,
-    _sha256_digest,
-    _sha256_prefixed,
 )
+from paperorchestra.feedback.packets import _artifact_by_role
 from paperorchestra.runtime.providers import BaseProvider, ProviderError, TransientProviderError
 
 

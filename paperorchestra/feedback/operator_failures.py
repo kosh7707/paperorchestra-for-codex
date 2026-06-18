@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from paperorchestra.feedback.operator_context import _compact_metric_delta_records
-from paperorchestra.feedback.packets import _normalized_sha
+from paperorchestra.feedback.packet_bindings import _normalized_sha
 
 
 def _actionable_failure(owner_categories: list[str], reason: str, *, execution_error: str | None = None) -> dict[str, Any]:

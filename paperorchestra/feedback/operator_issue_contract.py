@@ -5,7 +5,7 @@ from typing import Any
 
 from paperorchestra.core.errors import ContractError
 from paperorchestra.feedback.operator_answer_metadata import OPERATOR_FEEDBACK_INTENTS
-from paperorchestra.feedback.packets import _canonical_sha256, _sha256_bytes
+from paperorchestra.feedback.packet_artifacts import _canonical_sha256, _sha256_bytes
 
 OPERATOR_SOURCE = "codex_operator"
 

@@ -9,7 +9,7 @@ from paperorchestra.feedback.operator_contract import (
     OPERATOR_FEEDBACK_INCORPORATION_SCHEMA_VERSION,
     OPERATOR_SOURCE,
 )
-from paperorchestra.feedback.packets import _file_sha256
+from paperorchestra.feedback.packet_artifacts import _file_sha256
 
 
 def _build_operator_execution_record(

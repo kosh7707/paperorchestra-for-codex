@@ -32,15 +32,17 @@ from paperorchestra.feedback.operator_issue_contract import (
     _validate_operator_issue,
     derive_operator_issue_id,
 )
-from paperorchestra.feedback.packets import (
+from paperorchestra.feedback.packet_artifacts import (
     _artifact_record,
     _file_sha256,
+    _packet_sha256,
+    _snapshot_operator_packet_artifacts,
+)
+from paperorchestra.feedback.packets import (
     _first_current_bound_existing,
     _first_existing,
     _operator_review_human_needed_artifacts,
     _packet_has_human_needed_context,
-    _packet_sha256,
-    _snapshot_operator_packet_artifacts,
     _validate_operator_packet_artifact_bindings,
 )
 from paperorchestra.reviews.citation_integrity import citation_integrity_audit_path, citation_integrity_critic_path

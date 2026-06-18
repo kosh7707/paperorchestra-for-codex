@@ -6,24 +6,8 @@ from typing import Any
 from paperorchestra.core.io import read_json
 from paperorchestra.core.errors import ContractError
 from paperorchestra.core.session import artifact_path, load_session, runtime_root
-from paperorchestra.feedback.packet_artifacts import (
-    _artifact_record,
-    _canonical_json_bytes,
-    _canonical_sha256,
-    _file_sha256,
-    _packet_sha256,
-    _safe_packet_artifact_name,
-    _sha256_bytes,
-    _sha256_digest,
-    _sha256_prefixed,
-    _snapshot_operator_packet_artifacts,
-)
-from paperorchestra.feedback.packet_bindings import (
-    _artifact_bound_manuscript_sha,
-    _artifact_payload,
-    _execution_payload_sha256,
-    _normalized_sha,
-)
+from paperorchestra.feedback import packet_artifacts as _packet_artifacts
+from paperorchestra.feedback import packet_bindings as _packet_bindings
 
 
 def _first_existing(*paths: str | Path | None) -> Path | None:
@@ -84,7 +68,7 @@ def _execution_payload_opens_candidate_review(
     approval = payload.get("candidate_approval")
     if not isinstance(approval, dict) or approval.get("status") != "human_needed_candidate_ready":
         return False
-    if _normalized_sha(approval.get("base_manuscript_sha256")) != current_manuscript_sha256:
+    if _packet_bindings._normalized_sha(approval.get("base_manuscript_sha256")) != current_manuscript_sha256:
         return False
     if not approval.get("created_at"):
         return False
@@ -96,13 +80,13 @@ def _execution_payload_opens_candidate_review(
             return False
     except Exception:
         return False
-    if str(approval.get("source_execution_sha256") or "") != _execution_payload_sha256(payload):
+    if str(approval.get("source_execution_sha256") or "") != _packet_bindings._execution_payload_sha256(payload):
         return False
     candidate_path = approval.get("candidate_path")
-    candidate_sha = _normalized_sha(approval.get("candidate_sha256"))
+    candidate_sha = _packet_bindings._normalized_sha(approval.get("candidate_sha256"))
     if not candidate_path or not candidate_sha:
         return False
-    if _normalized_sha(_file_sha256(candidate_path)) != candidate_sha:
+    if _packet_bindings._normalized_sha(_packet_artifacts._file_sha256(candidate_path)) != candidate_sha:
         return False
     progress = payload.get("candidate_progress")
     if isinstance(progress, dict) and progress.get("forward_progress") is not True:
@@ -136,7 +120,7 @@ def _execution_payload_opens_operator_review(
         return True
     if payload.get("verdict") != "human_needed":
         return False
-    bound_sha = _artifact_bound_manuscript_sha("qa_loop_execution", payload)
+    bound_sha = _packet_bindings._artifact_bound_manuscript_sha("qa_loop_execution", payload)
     if bound_sha != current_manuscript_sha256:
         return False
     if payload.get("no_progress_override") is True:
@@ -159,7 +143,7 @@ def _current_bound_execution_path(path: Path | None, *, role: str, current_manus
         return path
     if not isinstance(payload, dict):
         return path
-    bound_sha = _artifact_bound_manuscript_sha(role, payload)
+    bound_sha = _packet_bindings._artifact_bound_manuscript_sha(role, payload)
     if role == "figure_placement_review" and bound_sha is None:
         return None
     if bound_sha is not None and bound_sha != current_manuscript_sha256:
@@ -198,7 +182,7 @@ def _operator_review_human_needed_artifacts(cwd: str | Path | None) -> tuple[Pat
     qa_execution_path = _latest_human_needed_execution(cwd)
     operator_execution_path = _latest_human_needed_operator_feedback_execution(cwd)
     state = load_session(cwd)
-    current_sha = _normalized_sha(_file_sha256(state.artifacts.paper_full_tex))
+    current_sha = _packet_bindings._normalized_sha(_packet_artifacts._file_sha256(state.artifacts.paper_full_tex))
     if qa_plan_path is not None:
         plan = read_json(qa_plan_path)
         if isinstance(plan, dict) and plan.get("verdict") == "human_needed":
@@ -285,7 +269,7 @@ def _validate_current_operator_plan(
         raise ContractError("operator feedback requires current qa-loop.plan.json verdict=human_needed")
     if plan.get("session_id") != session_id:
         raise ContractError("operator feedback current qa-loop.plan.json session_id mismatch")
-    bound_sha = _artifact_bound_manuscript_sha("qa_loop_plan", plan)
+    bound_sha = _packet_bindings._artifact_bound_manuscript_sha("qa_loop_plan", plan)
     if bound_sha is None:
         raise ContractError("operator feedback current qa-loop.plan.json lacks manuscript hash binding")
     if bound_sha != current_manuscript_sha256:
@@ -300,7 +284,7 @@ def _validate_operator_packet_artifact_bindings(
     state = load_session(cwd)
     if packet.get("session_id") != state.session_id:
         raise ContractError("operator review packet session_id does not match current session")
-    current_sha = _file_sha256(state.artifacts.paper_full_tex)
+    current_sha = _packet_artifacts._file_sha256(state.artifacts.paper_full_tex)
     if current_sha != current_manuscript_sha256:
         raise ContractError("operator review packet manuscript hash is stale for the current manuscript")
 
@@ -309,7 +293,7 @@ def _validate_operator_packet_artifact_bindings(
     qa_execution_payload = None
     qa_execution_record = records_by_role.get("qa_loop_execution")
     if qa_execution_record:
-        qa_execution_payload = _artifact_payload(qa_execution_record)
+        qa_execution_payload = _packet_bindings._artifact_payload(qa_execution_record)
     has_operator_review_context = (
         isinstance(qa_execution_payload, dict)
         and _execution_payload_opens_operator_review(
@@ -327,7 +311,7 @@ def _validate_operator_packet_artifact_bindings(
     plan_record = records_by_role.get("qa_loop_plan")
     if not plan_record:
         raise ContractError("operator review packet requires a current qa_loop_plan artifact")
-    plan_payload = _artifact_payload(plan_record)
+    plan_payload = _packet_bindings._artifact_payload(plan_record)
     if not isinstance(plan_payload, dict):
         raise ContractError("operator review packet requires readable qa_loop_plan artifact")
     if has_operator_review_context:
@@ -350,10 +334,10 @@ def _validate_operator_packet_artifact_bindings(
         record = records_by_role.get(role)
         if not record:
             continue
-        payload = _artifact_payload(record)
+        payload = _packet_bindings._artifact_payload(record)
         if payload is None:
             raise ContractError(f"operator review packet artifact is unreadable: {role}")
-        bound_sha = _artifact_bound_manuscript_sha(role, payload)
+        bound_sha = _packet_bindings._artifact_bound_manuscript_sha(role, payload)
         if bound_sha is None:
             if role in {"qa_loop_plan", "figure_placement_review"}:
                 raise ContractError(f"operator review packet artifact lacks manuscript hash binding: {role}")

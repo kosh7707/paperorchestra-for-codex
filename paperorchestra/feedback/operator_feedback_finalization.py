@@ -19,7 +19,7 @@ from paperorchestra.feedback.operator_gates import (
 )
 from paperorchestra.feedback.operator_records import _build_operator_incorporation_report
 from paperorchestra.feedback.operator_verification import _verification_block
-from paperorchestra.feedback.packets import _file_sha256
+from paperorchestra.feedback.packet_artifacts import _file_sha256
 
 
 @dataclass(frozen=True)

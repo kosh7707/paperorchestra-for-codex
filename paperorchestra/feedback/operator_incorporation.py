@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from paperorchestra.feedback.packets import _sha256_bytes, _sha256_prefixed
+from paperorchestra.feedback.packet_artifacts import _sha256_bytes, _sha256_prefixed
 
 
 def _section_texts(latex: str) -> dict[str, str]:
