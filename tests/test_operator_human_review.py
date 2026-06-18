@@ -3,7 +3,8 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from paperorchestra.feedback import operator_human_review
+from paperorchestra.feedback.operator_human_review_approval import _attach_candidate_approval_from_attempt
+from paperorchestra.feedback.operator_human_review_readiness import _best_human_review_candidate_attempt
 from paperorchestra.feedback.packet_bindings import _execution_payload_sha256
 
 
@@ -13,7 +14,7 @@ def test_best_human_review_candidate_attempt_requires_safe_forward_progress(tmp_
     weaker_candidate.write_text("weaker", encoding="utf-8")
     stronger_candidate.write_text("stronger", encoding="utf-8")
 
-    best = operator_human_review._best_human_review_candidate_attempt(
+    best = _best_human_review_candidate_attempt(
         [
             {"attempt_index": 1, "resolved_active_failures": ["a"], "candidate_path": str(weaker_candidate)},
             {
@@ -47,7 +48,7 @@ def test_attach_candidate_approval_from_attempt_records_hash_bound_progress(tmp_
     execution_path = tmp_path / "operator_feedback.execution.json"
     execution = {"manuscript_sha256_before": "a" * 64}
 
-    operator_human_review._attach_candidate_approval_from_attempt(
+    _attach_candidate_approval_from_attempt(
         execution,
         {
             "candidate_path": str(candidate),
