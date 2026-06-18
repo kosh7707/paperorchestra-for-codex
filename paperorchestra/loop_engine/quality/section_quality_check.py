@@ -5,12 +5,26 @@ from typing import Any
 
 from paperorchestra.loop_engine.quality.policy import SECTION_REVIEW_THRESHOLDS
 from paperorchestra.loop_engine.quality.section_quality_items import _numeric_score, _section_failing_codes, _section_quality_groups
-from paperorchestra.loop_engine.quality.section_quality_path import _section_review_path
+from paperorchestra.core.session import artifact_path
 from paperorchestra.loop_engine.quality.section_quality_trust import (
     _current_manuscript_sha,
     _loaded_section_review,
     _section_review_trust_failure,
 )
+
+
+def _section_review_path(cwd: str | Path | None, state) -> Path:
+    candidates: list[Path] = []
+    latest = getattr(state.artifacts, "latest_section_review_json", None)
+    if latest:
+        candidates.append(Path(latest))
+    if state.artifacts.paper_full_tex:
+        candidates.append(Path(state.artifacts.paper_full_tex).resolve().parent / "section_review.json")
+    candidates.append(artifact_path(cwd, "section_review.json"))
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def _section_quality_check(cwd: str | Path | None, state, *, quality_mode: str) -> dict[str, Any]:
