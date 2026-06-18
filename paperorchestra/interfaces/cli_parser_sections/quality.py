@@ -1,0 +1,82 @@
+from __future__ import annotations
+
+from typing import Any
+
+from paperorchestra.interfaces.cli_parser_sections.common import (
+    add_citation_provider_args,
+    add_common_provider_args,
+    add_runtime_mode_args,
+)
+
+
+def register_quality_commands(subparsers: Any) -> None:
+    answer_parser = subparsers.add_parser("answer-human-needed", help="Record an answer for a human_needed stop and optionally apply it")
+    answer_parser.add_argument("--answer", required=True)
+    answer_parser.add_argument("--packet")
+    answer_parser.add_argument("--review-scope", choices=["pdf_and_tex", "tex_only"])
+    answer_parser.add_argument("--intent", choices=["approve_existing_candidate", "generate_new_operator_candidate", "reject_candidate_with_reason"])
+    answer_parser.add_argument("--action-id")
+    answer_parser.add_argument("--output-answer")
+    answer_parser.add_argument("--output-feedback")
+    answer_parser.add_argument("--redacted-answer-only", action="store_true")
+    answer_parser.add_argument("--apply", action="store_true")
+    answer_parser.add_argument("--imported-feedback-output")
+    answer_parser.add_argument("--max-supervised-iterations", type=int, default=1)
+    answer_parser.add_argument("--quality-mode", default="claim_safe", choices=["draft", "ralph", "claim_safe"])
+    answer_parser.add_argument("--max-iterations", type=int, default=10)
+    answer_parser.add_argument("--require-live-verification", action="store_true")
+    answer_parser.add_argument("--accept-mixed-provenance", action="store_true")
+    answer_parser.add_argument("--require-compile", action="store_true")
+    answer_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web", "source"])
+    add_runtime_mode_args(answer_parser, strict_flag=True)
+    add_common_provider_args(answer_parser)
+    add_citation_provider_args(answer_parser)
+    answer_parser.add_argument("--json", action="store_true")
+
+    quality_gate_parser = subparsers.add_parser("quality-gate", help="Run the draft-quality gate")
+    quality_gate_parser.add_argument("--output")
+    quality_gate_parser.add_argument("--plan-output")
+    quality_gate_parser.add_argument("--profile", default="auto", choices=["auto", "mock", "ralph", "claim_safe"])
+    quality_gate_parser.add_argument("--quality-mode", default="draft", choices=["draft", "ralph", "claim_safe"])
+    quality_gate_parser.add_argument("--max-iterations", type=int, default=10)
+    quality_gate_parser.add_argument("--require-live-verification", action="store_true")
+    quality_gate_parser.add_argument("--accept-mixed-provenance", action="store_true")
+    quality_gate_parser.add_argument("--auto-refine", action="store_true")
+    quality_gate_parser.add_argument("--refine-iterations", type=int, default=1)
+    quality_gate_parser.add_argument("--require-compile-for-accept", action="store_true")
+    quality_gate_parser.add_argument("--no-fail-on-block", action="store_true")
+    add_runtime_mode_args(quality_gate_parser, strict_flag=True)
+    add_common_provider_args(quality_gate_parser)
+
+    qa_loop_parser = subparsers.add_parser("qa-loop", help="Build the next QA-loop repair plan")
+    qa_loop_parser.add_argument("--output")
+    qa_loop_parser.add_argument("--quality-eval")
+    qa_loop_parser.add_argument("--quality-mode", default="ralph", choices=["draft", "ralph", "claim_safe"])
+    qa_loop_parser.add_argument("--max-iterations", type=int, default=10)
+    qa_loop_parser.add_argument("--accept-mixed-provenance", action="store_true")
+    qa_loop_parser.add_argument("--require-live-verification", action="store_true")
+
+    qa_step_parser = subparsers.add_parser("qa-loop-step", help="Execute one bounded QA-loop repair step")
+    qa_step_parser.add_argument("--quality-mode", default="claim_safe", choices=["draft", "ralph", "claim_safe"])
+    qa_step_parser.add_argument("--max-iterations", type=int, default=10)
+    qa_step_parser.add_argument("--accept-mixed-provenance", action="store_true")
+    qa_step_parser.add_argument("--require-live-verification", action="store_true")
+    qa_step_parser.add_argument("--require-compile", action="store_true")
+    qa_step_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web", "source"])
+    qa_step_parser.add_argument("--quality-eval")
+    qa_step_parser.add_argument("--plan")
+    qa_step_parser.add_argument("--citation-support-review")
+    add_runtime_mode_args(qa_step_parser, strict_flag=True)
+    add_common_provider_args(qa_step_parser)
+    add_citation_provider_args(qa_step_parser)
+
+    ralph_parser = subparsers.add_parser("ralph-start", help="Create or launch an OMX Ralph handoff for the current QA loop")
+    ralph_parser.add_argument("--output")
+    ralph_parser.add_argument("--quality-mode", default="claim_safe", choices=["draft", "ralph", "claim_safe"])
+    ralph_parser.add_argument("--max-iterations", type=int, default=10)
+    ralph_parser.add_argument("--require-live-verification", action="store_true")
+    ralph_parser.add_argument("--accept-mixed-provenance", action="store_true")
+    ralph_parser.add_argument("--evidence-root")
+    ralph_mode = ralph_parser.add_mutually_exclusive_group()
+    ralph_mode.add_argument("--dry-run", action="store_true")
+    ralph_mode.add_argument("--launch", action="store_true")
