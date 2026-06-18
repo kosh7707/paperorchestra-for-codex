@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from paperorchestra.feedback import operator_failures
+from paperorchestra.feedback.operator_failure_attempts import _compact_operator_attempt_failure
+from paperorchestra.feedback.operator_failure_payload import _operator_actionable_failure
+from paperorchestra.feedback.operator_failure_progress import _compact_blocked_candidate_progress
+from paperorchestra.feedback.operator_failure_repetition import _repeats_non_promotable_candidate
 
 
 def test_compact_operator_attempt_failure_keeps_only_code_count_diagnostics() -> None:
-    payload = operator_failures._compact_operator_attempt_failure(
+    payload = _compact_operator_attempt_failure(
         [
             {
                 "attempt_index": 2,
@@ -38,13 +41,13 @@ def test_compact_operator_attempt_failure_keeps_only_code_count_diagnostics() ->
 
 
 def test_compact_blocked_candidate_progress_returns_none_without_progress() -> None:
-    assert operator_failures._compact_blocked_candidate_progress({"gate_passed": True}) is None
-    assert operator_failures._compact_blocked_candidate_progress({"gate_passed": False, "gate_reasons": ["blocked"]}) is None
+    assert _compact_blocked_candidate_progress({"gate_passed": True}) is None
+    assert _compact_blocked_candidate_progress({"gate_passed": False, "gate_reasons": ["blocked"]}) is None
 
 
 def test_repeats_non_promotable_candidate_ignores_promoted_or_reasonless_prior_attempts() -> None:
     assert (
-        operator_failures._repeats_non_promotable_candidate(
+        _repeats_non_promotable_candidate(
             [
                 {"candidate_sha256": "sha256:abc", "gate_passed": True, "gate_reasons": ["blocked"]},
                 {"candidate_sha256": "abc", "gate_passed": False, "gate_reasons": []},
@@ -54,11 +57,11 @@ def test_repeats_non_promotable_candidate_ignores_promoted_or_reasonless_prior_a
         )
         is True
     )
-    assert operator_failures._repeats_non_promotable_candidate([], "abc") is False
+    assert _repeats_non_promotable_candidate([], "abc") is False
 
 
 def test_operator_actionable_failure_adds_category_code_steps_and_execution_error() -> None:
-    payload = operator_failures._operator_actionable_failure(
+    payload = _operator_actionable_failure(
         ["operator", "author", "operator"],
         "candidate blocked",
         category="candidate_gate",
