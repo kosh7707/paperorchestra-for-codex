@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import hashlib
 from pathlib import Path
 from typing import Any
 
 from paperorchestra.orchestra.scorecard import build_scorecard_summary
 from paperorchestra.orchestra.state_axis_status import derive_five_axis_status
-from paperorchestra.orchestra.state_files import file_sha256
 from paperorchestra.orchestra.state_models import (
     SCHEMA_VERSION,
     HardGateStatus,
@@ -16,6 +16,14 @@ from paperorchestra.orchestra.state_models import (
     ScoreSummary,
 )
 from paperorchestra.orchestra.state_readiness_rules import derive_readiness
+
+
+def file_sha256(path: str | Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 @dataclass
