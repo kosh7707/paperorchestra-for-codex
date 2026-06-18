@@ -23,7 +23,7 @@ from paperorchestra.loop_engine.quality.plan_payload import QualityLoopPlanPaylo
 from paperorchestra.loop_engine.quality.plan_sources import build_quality_eval_for_plan
 from paperorchestra.loop_engine.quality.plan_verdict import _plan_verdict
 from paperorchestra.loop_engine.quality.policy import DEFAULT_MAX_ITERATIONS
-from paperorchestra.loop_engine.quality.provenance import _mixed_provenance_acceptance
+from paperorchestra.loop_engine.quality.mixed_provenance_acceptance import _mixed_provenance_acceptance
 
 
 def build_quality_loop_plan(

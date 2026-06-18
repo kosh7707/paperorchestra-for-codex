@@ -21,9 +21,7 @@ from paperorchestra.loop_engine.quality.eval_tiers import (
 )
 from paperorchestra.loop_engine.quality.history import _build_cross_iteration, _failing_codes_from_quality_eval
 from paperorchestra.loop_engine.quality.policy import DEFAULT_MAX_ITERATIONS, QUALITY_MODES
-from paperorchestra.loop_engine.quality.provenance import (
-    _provenance_trust,
-)
+from paperorchestra.loop_engine.quality.provenance_trust import _provenance_trust
 from paperorchestra.loop_engine.quality.ralph_evidence_check import _ralph_evidence_check
 from paperorchestra.loop_engine.quality.utils import _file_sha256
 from paperorchestra.manuscript.narrative_artifacts import planning_artifact_status

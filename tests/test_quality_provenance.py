@@ -4,14 +4,15 @@ import json
 from pathlib import Path
 
 from paperorchestra.core.session import runtime_root
-from paperorchestra.loop_engine.quality import provenance
+from paperorchestra.loop_engine.quality.mixed_provenance_acceptance import _mixed_provenance_acceptance
+from paperorchestra.loop_engine.quality.provenance_trust import _provenance_trust
 from paperorchestra.loop_engine.quality.utils import _sha256_jsonable
 
 
 def test_provenance_trust_classifies_mock_mixed_and_live_evidence() -> None:
-    assert provenance._provenance_trust({"latest_provider_name": "mock"})["level"] == "mock"
+    assert _provenance_trust({"latest_provider_name": "mock"})["level"] == "mock"
 
-    mixed = provenance._provenance_trust(
+    mixed = _provenance_trust(
         {
             "prompt_trace_file_count": 0,
             "lane_manifest_summary": {"manifest_count": 0},
@@ -24,7 +25,7 @@ def test_provenance_trust_classifies_mock_mixed_and_live_evidence() -> None:
     assert "prompt_trace_missing" in mixed["mixed_evidence"]
     assert "citation_registry_live_verification_not_invoked" in mixed["mixed_evidence"]
 
-    live = provenance._provenance_trust(
+    live = _provenance_trust(
         {
             "prompt_trace_file_count": 2,
             "lane_manifest_summary": {"manifest_count": 1},
@@ -49,7 +50,7 @@ def test_mixed_provenance_acceptance_requires_independent_fresh_bound_payload(tm
         },
     }
 
-    missing = provenance._mixed_provenance_acceptance(tmp_path, quality)
+    missing = _mixed_provenance_acceptance(tmp_path, quality)
     assert missing["status"] == "missing"
     assert missing["failing_codes"] == ["mixed_provenance_acceptance_missing"]
 
@@ -72,14 +73,14 @@ def test_mixed_provenance_acceptance_requires_independent_fresh_bound_payload(tm
         encoding="utf-8",
     )
 
-    accepted = provenance._mixed_provenance_acceptance(tmp_path, quality)
+    accepted = _mixed_provenance_acceptance(tmp_path, quality)
     assert accepted["status"] == "pass"
     assert accepted["failing_codes"] == []
     assert accepted["sha256"]
 
     stale = dict(quality)
     stale["manuscript_hash"] = "0" * 64
-    assert "mixed_provenance_acceptance_stale" in provenance._mixed_provenance_acceptance(tmp_path, stale)["failing_codes"]
+    assert "mixed_provenance_acceptance_stale" in _mixed_provenance_acceptance(tmp_path, stale)["failing_codes"]
 
 
 def test_mixed_provenance_acceptance_rejects_operator_or_incomplete_payload(tmp_path: Path) -> None:
@@ -102,7 +103,7 @@ def test_mixed_provenance_acceptance_rejects_operator_or_incomplete_payload(tmp_
         encoding="utf-8",
     )
 
-    result = provenance._mixed_provenance_acceptance(tmp_path, quality)
+    result = _mixed_provenance_acceptance(tmp_path, quality)
     assert result["status"] == "fail"
     assert result["failing_codes"] == [
         "mixed_provenance_acceptance_incomplete",
