@@ -7,7 +7,7 @@ from paperorchestra.core.io import read_json, write_json
 from paperorchestra.core.models import InputBundle
 from paperorchestra.core.session import artifact_path, create_session, load_session, save_session
 from paperorchestra.engine.intro_related_stage import write_intro_related
-from paperorchestra.manuscript.narrative import write_planning_artifacts
+from paperorchestra.manuscript.narrative_artifacts import write_planning_artifacts
 from paperorchestra.runtime.mock_provider import MockProvider
 from paperorchestra.runtime.providers import BaseProvider, CompletionRequest
 

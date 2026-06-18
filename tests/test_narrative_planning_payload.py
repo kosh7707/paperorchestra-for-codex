@@ -6,7 +6,7 @@ from pathlib import Path
 from paperorchestra.core.io import write_json
 from paperorchestra.core.models import InputBundle, SessionState
 from paperorchestra.core.session import artifact_path, create_session, save_session
-from paperorchestra.manuscript.narrative import build_planning_payloads
+from paperorchestra.manuscript.narrative_payloads import build_planning_payloads
 
 
 def _write(path: Path, text: str) -> str:

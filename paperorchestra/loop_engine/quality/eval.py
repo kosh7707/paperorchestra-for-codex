@@ -26,7 +26,7 @@ from paperorchestra.loop_engine.quality.provenance import (
     _provenance_trust,
 )
 from paperorchestra.loop_engine.quality.utils import _file_sha256
-from paperorchestra.manuscript.narrative import planning_artifact_status
+from paperorchestra.manuscript.narrative_artifacts import planning_artifact_status
 from paperorchestra.reviews.fidelity import run_fidelity_audit
 from paperorchestra.reviews.reproducibility import build_reproducibility_audit
 

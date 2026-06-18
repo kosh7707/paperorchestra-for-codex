@@ -16,7 +16,7 @@ from paperorchestra.engine.prompt_context import (
     _read_inputs,
 )
 from paperorchestra.engine.schemas import OUTLINE_SCHEMA, normalize_outline_payload, validate_outline
-from paperorchestra.manuscript.narrative import require_fresh_planning_artifacts, write_planning_artifacts
+from paperorchestra.manuscript.narrative_artifacts import require_fresh_planning_artifacts, write_planning_artifacts
 from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.runtime.parity import record_lane_manifest
 from paperorchestra.runtime.providers import BaseProvider

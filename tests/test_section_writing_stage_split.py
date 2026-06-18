@@ -24,7 +24,7 @@ from paperorchestra.core.io import write_json
 from paperorchestra.core.models import InputBundle
 from paperorchestra.core.session import artifact_path, create_session, load_session, save_session
 from paperorchestra.engine.section_writing_stage import write_sections
-from paperorchestra.manuscript.narrative import write_planning_artifacts
+from paperorchestra.manuscript.narrative_artifacts import write_planning_artifacts
 from paperorchestra.runtime.providers import BaseProvider, CompletionRequest
 
 

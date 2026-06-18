@@ -28,7 +28,7 @@ from paperorchestra.engine.reports import _record_validation_report, collect_pap
 from paperorchestra.engine.schemas import REVIEW_SCHEMA
 from paperorchestra.engine.section_scope import _expected_section_titles_from_outline
 from paperorchestra.manuscript.latex import compile_latex_with_report
-from paperorchestra.manuscript.narrative import planning_artifact_status
+from paperorchestra.manuscript.narrative_artifacts import planning_artifact_status
 from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.manuscript.validator import build_figure_placement_review, canonical_citation_keys
 from paperorchestra.runtime.parity import record_lane_manifest
