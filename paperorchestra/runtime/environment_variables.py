@@ -2,11 +2,65 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.runtime.environment_compile_variables import COMPILE_VARIABLES
 from paperorchestra.runtime.environment_core_variables import CORE_RUNTIME_VARIABLES
 from paperorchestra.runtime.environment_shell_provider_variables import SHELL_PROVIDER_VARIABLES
 from paperorchestra.runtime.environment_spec import EnvironmentVariableSpec
-from paperorchestra.runtime.environment_verification_variables import VERIFICATION_VARIABLES
+
+VERIFICATION_VARIABLES: tuple[EnvironmentVariableSpec, ...] = (
+    EnvironmentVariableSpec(
+        name='SEMANTIC_SCHOLAR_API_KEY',
+        category='verification',
+        operator_settable=True,
+        default=None,
+        example='<your-key>',
+        description='Improves reliability of live citation verification and search-grounded discovery.',
+        required_for=('live_verification_ready', 'full_live_run_ready', 'claim_safe_full_run_ready'),
+        notes=(),
+    ),
+    EnvironmentVariableSpec(
+        name='PAPERO_SEARCH_GROUNDED_MODE',
+        category='verification',
+        operator_settable=True,
+        default='unset',
+        example='live',
+        description='Force search-grounded discovery mode (`live` or `mock`) for literature runs.',
+        required_for=(),
+        notes=('Optional; defaults are set by CLI flags.',),
+    ),
+)
+
+COMPILE_VARIABLES: tuple[EnvironmentVariableSpec, ...] = (
+    EnvironmentVariableSpec(
+        name='PAPERO_ALLOW_TEX_COMPILE',
+        category='compile',
+        operator_settable=True,
+        default='0',
+        example='1',
+        description='Required opt-in before any TeX compilation can run.',
+        required_for=('compile_ready', 'full_live_run_ready', 'claim_safe_full_run_ready'),
+        notes=(),
+    ),
+    EnvironmentVariableSpec(
+        name='PAPERO_TEX_SANDBOX_CMD',
+        category='compile',
+        operator_settable=True,
+        default='auto-configured when a supported sandbox exists',
+        example='["/path/to/tex-sandbox.sh"]',
+        description='Override the sandbox wrapper used for LaTeX compilation.',
+        required_for=(),
+        notes=('Advanced compile knob; usually auto-configured by `paperorchestra environment --summary`.',),
+    ),
+    EnvironmentVariableSpec(
+        name='TEXINPUTS',
+        category='compile',
+        operator_settable=True,
+        default='unset',
+        example='/path/to/custom/texmf:',
+        description='Additional TeX search paths for custom classes/styles when compiling manuscripts.',
+        required_for=(),
+        notes=('Advanced compile knob for venue-specific assets.',),
+    ),
+)
 
 ENVIRONMENT_VARIABLE_ORDER = (
     'PAPERO_OMX_MODEL',
