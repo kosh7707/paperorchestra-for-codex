@@ -1,6 +1,0 @@
-from __future__ import annotations
-
-from paperorchestra.loop_engine.quality.action_families.figure_placeholder_actions import _generated_placeholder_figure_actions
-from paperorchestra.loop_engine.quality.action_families.figure_review_actions import _figure_review_actions
-
-__all__ = ["_figure_review_actions", "_generated_placeholder_figure_actions"]

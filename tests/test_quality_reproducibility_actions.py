@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from paperorchestra.loop_engine.quality.action_families import reproducibility
+from paperorchestra.loop_engine.quality.action_families.reproducibility_fidelity import _fidelity_actions
+from paperorchestra.loop_engine.quality.action_families.reproducibility_mode import _mode_actions
+from paperorchestra.loop_engine.quality.action_families.reproducibility_warnings import _warning_actions
 
 
 def test_mode_actions_classify_mock_provider_and_mixed_provenance() -> None:
-    produced = reproducibility._mode_actions(
+    produced = _mode_actions(
         {
             "blocking_reasons": [
                 "Provider was mock; manuscript output is not live.",
@@ -25,7 +27,7 @@ def test_mode_actions_classify_mock_provider_and_mixed_provenance() -> None:
 
 
 def test_warning_actions_ignore_non_blocking_validation_noise() -> None:
-    produced = reproducibility._warning_actions(
+    produced = _warning_actions(
         {
             "warning_reasons": [
                 "non-blocking validation warning: ignored",
@@ -50,7 +52,7 @@ def test_warning_actions_ignore_non_blocking_validation_noise() -> None:
 
 
 def test_fidelity_actions_only_emit_unimplemented_critical_checks() -> None:
-    produced = reproducibility._fidelity_actions(
+    produced = _fidelity_actions(
         {
             "checks": [
                 {"code": "verified_citation_lane", "status": "missing", "rationale": "not rebuilt"},

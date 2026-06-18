@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from paperorchestra.loop_engine.quality.action_families import validation as validation_family
+from paperorchestra.loop_engine.quality.action_families.strict_content import _strict_content_actions
+from paperorchestra.loop_engine.quality.action_families.validation_warnings import _validation_actions
 
 
 def test_validation_actions_build_section_scoped_commands_and_approval(tmp_path: Path) -> None:
@@ -30,7 +31,7 @@ def test_validation_actions_build_section_scoped_commands_and_approval(tmp_path:
         encoding="utf-8",
     )
 
-    produced = validation_family._validation_actions({"validation_warning_reports": [{"path": str(report)}]})
+    produced = _validation_actions({"validation_warning_reports": [{"path": str(report)}]})
 
     assert len(produced) == 1
     action = produced[0]
@@ -43,7 +44,7 @@ def test_validation_actions_build_section_scoped_commands_and_approval(tmp_path:
 
 
 def test_strict_content_actions_classify_figure_warnings_as_human_needed() -> None:
-    produced = validation_family._strict_content_actions(
+    produced = _strict_content_actions(
         {
             "strict_content_gate_issues": [
                 {
@@ -65,7 +66,7 @@ def test_strict_content_actions_classify_figure_warnings_as_human_needed() -> No
 
 
 def test_strict_content_actions_regenerate_stale_validation_reports_automatically() -> None:
-    produced = validation_family._strict_content_actions(
+    produced = _strict_content_actions(
         {
             "strict_content_gate_issues": [
                 {

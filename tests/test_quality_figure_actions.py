@@ -4,8 +4,9 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+from paperorchestra.loop_engine.quality.action_families.figure_placeholder_actions import _generated_placeholder_figure_actions
+from paperorchestra.loop_engine.quality.action_families.figure_review_actions import _figure_review_actions
 from paperorchestra.loop_engine.quality.utils import _file_sha256
-from paperorchestra.loop_engine.quality.action_families import figures
 
 
 def _state(*, review_path: Path | None = None, paper_path: Path | None = None, assets_path: Path | None = None):
@@ -42,7 +43,7 @@ def test_figure_review_actions_emit_human_needed_context_for_failures(tmp_path: 
         encoding="utf-8",
     )
 
-    produced = figures._figure_review_actions(_state(review_path=review, paper_path=paper))
+    produced = _figure_review_actions(_state(review_path=review, paper_path=paper))
 
     assert [action["code"] for action in produced] == ["missing_technical_grounding", "tail_clump"]
     assert all(action["automation"] == "human_needed" for action in produced)
@@ -60,7 +61,7 @@ def test_figure_review_actions_ignore_stale_review(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    assert figures._figure_review_actions(_state(review_path=review, paper_path=paper)) == []
+    assert _figure_review_actions(_state(review_path=review, paper_path=paper)) == []
 
 
 def test_generated_placeholder_figure_actions_require_placeholder_usage(tmp_path: Path) -> None:
@@ -82,7 +83,7 @@ def test_generated_placeholder_figure_actions_require_placeholder_usage(tmp_path
         encoding="utf-8",
     )
 
-    produced = figures._generated_placeholder_figure_actions(_state(paper_path=paper, assets_path=assets))
+    produced = _generated_placeholder_figure_actions(_state(paper_path=paper, assets_path=assets))
 
     assert len(produced) == 1
     assert produced[0]["code"] == "final_figure_assets_non_reviewable"
