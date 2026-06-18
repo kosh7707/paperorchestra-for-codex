@@ -11,11 +11,13 @@ from paperorchestra.reviews.reproducibility_artifacts import (
     _prompt_trace_files,
     _read_json_if_exists,
 )
-from paperorchestra.reviews.reproducibility_citations import (
+from paperorchestra.reviews.reproducibility_citation_provenance import (
     _citation_registry_live_provenance,
+    _mock_registry_entry_count,
+)
+from paperorchestra.reviews.reproducibility_citations import (
     _citation_support_review_provenance,
     _citation_surface_health,
-    _mock_registry_entry_count,
 )
 from paperorchestra.reviews.reproducibility_validation import (
     _strict_content_gate_issues,
