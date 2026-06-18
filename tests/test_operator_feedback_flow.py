@@ -5,7 +5,6 @@ from types import SimpleNamespace
 import pytest
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.feedback import operator_feedback
 from paperorchestra.feedback import operator_feedback_flow
 from paperorchestra.feedback.operator_feedback_loop import OperatorFeedbackLoopResult
 from paperorchestra.feedback.operator_feedback_options import OperatorFeedbackOptions
@@ -29,7 +28,7 @@ def test_apply_operator_feedback_rejects_invalid_iteration_count_before_context_
     )
 
     with pytest.raises(ContractError, match="max_supervised_iterations must be >= 1"):
-        operator_feedback.apply_operator_feedback(
+        operator_feedback_flow.apply_operator_feedback(
             cwd="repo",
             provider=object(),
             imported_feedback_path="imported.json",
@@ -93,7 +92,7 @@ def test_apply_operator_feedback_runs_loop_fallback_and_finalization(monkeypatch
     monkeypatch.setattr(operator_feedback_flow, "ensure_operator_feedback_final_verification", ensure)
     monkeypatch.setattr(operator_feedback_flow, "finalize_operator_feedback_execution", finalize)
 
-    path, execution = operator_feedback.apply_operator_feedback(
+    path, execution = operator_feedback_flow.apply_operator_feedback(
         cwd="repo",
         provider="provider",
         imported_feedback_path="imported.json",
@@ -149,7 +148,7 @@ def test_apply_operator_feedback_routes_loop_exception_to_exception_handler(monk
     monkeypatch.setattr(operator_feedback_flow, "run_operator_feedback_attempts", raise_loop)
     monkeypatch.setattr(operator_feedback_flow, "handle_operator_feedback_exception", handle)
 
-    path, execution = operator_feedback.apply_operator_feedback(
+    path, execution = operator_feedback_flow.apply_operator_feedback(
         cwd="repo",
         provider="provider",
         imported_feedback_path="imported.json",

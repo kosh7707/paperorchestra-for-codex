@@ -14,7 +14,6 @@ def _imports_from(path: str, module: str) -> list[str]:
 
 
 def test_normalization_imports_operator_contract_directly() -> None:
-    assert _imports_from("paperorchestra/feedback/normalization.py", "paperorchestra.feedback.operator_feedback") == []
     assert _imports_from("paperorchestra/feedback/normalization.py", "paperorchestra.feedback.operator_contract") == [
         "OPERATOR_FEEDBACK_SCHEMA_VERSION"
     ]
@@ -34,8 +33,8 @@ def test_normalization_imports_operator_contract_directly() -> None:
     }
 
 
-def test_human_needed_only_imports_apply_from_operator_feedback() -> None:
-    assert _imports_from("paperorchestra/feedback/human_needed.py", "paperorchestra.feedback.operator_feedback") == [
+def test_human_needed_imports_apply_from_flow() -> None:
+    assert _imports_from("paperorchestra/feedback/human_needed.py", "paperorchestra.feedback.operator_feedback_flow") == [
         "apply_operator_feedback"
     ]
     assert set(_imports_from("paperorchestra/feedback/human_needed.py", "paperorchestra.feedback.operator_contract")) >= {
@@ -45,8 +44,8 @@ def test_human_needed_only_imports_apply_from_operator_feedback() -> None:
     }
 
 
-def test_operator_feedback_routes_imported_contract_loading_through_context() -> None:
-    assert _imports_from("paperorchestra/feedback/operator_feedback.py", "paperorchestra.feedback.operator_contract") == []
+def test_operator_feedback_flow_routes_imported_contract_loading_through_context() -> None:
+    assert _imports_from("paperorchestra/feedback/operator_feedback_flow.py", "paperorchestra.feedback.operator_contract") == []
     assert _imports_from("paperorchestra/feedback/operator_feedback_context.py", "paperorchestra.feedback.operator_contract") == [
         "_load_imported_feedback"
     ]
