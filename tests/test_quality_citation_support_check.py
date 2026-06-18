@@ -141,3 +141,51 @@ def test_legacy_citation_support_check_rejects_non_web_supported_in_claim_safe_m
     assert result["non_web_supported_count"] == 1
     assert "citation_support_non_web_supported" in result["failing_codes"]
     assert "citation_support_trace_missing" not in result["failing_codes"]
+
+
+def test_v3_citation_support_check_reports_summary_context_and_evidence(monkeypatch, tmp_path: Path) -> None:
+    paper = tmp_path / "paper.tex"
+    paper.write_text("Claim \\cite{KeyA}.\nSecond claim \\cite{KeyB}.\n", encoding="utf-8")
+    evidence = tmp_path / "evidence.txt"
+    evidence.write_text("source text", encoding="utf-8")
+    cases = [
+        {
+            "id": "S1",
+            "key": "KeyA",
+            "loc": "L1",
+            "paragraph": "Claim \\cite{KeyA}.",
+            "anchor": "Claim",
+            "target": "Claim",
+            "verdict": "pass",
+            "evidence": {"status": "pdf", "text": str(evidence)},
+        },
+        {
+            "id": "S2",
+            "key": "KeyB",
+            "loc": "L2",
+            "paragraph": "Second claim \\cite{KeyB}.",
+            "anchor": "Second",
+            "target": "Second claim",
+            "verdict": "weak",
+            "evidence": {"status": "html", "text": str(evidence)},
+        },
+    ]
+    _write_json(
+        tmp_path / "citation_support_review.json",
+        {"schema": "citation-support-review/3", "mode": "model", "summary": {"pass": 1, "weak": 1, "fail": 0, "human_needed": 0}, "cases": cases},
+    )
+    monkeypatch.setattr(
+        "paperorchestra.loop_engine.quality.citation_support.build_source_backed_citation_cases",
+        lambda cwd, resolve_evidence=False: cases,
+    )
+    state = SimpleNamespace(artifacts=SimpleNamespace(paper_full_tex=str(paper)))
+
+    result = _citation_support_check(tmp_path, state)
+
+    assert result["status"] == "fail"
+    assert result["summary"] == {"pass": 1, "weak": 1, "fail": 0, "human_needed": 0}
+    assert result["weakly_supported_count"] == 1
+    assert result["evidence_missing_count"] == 0
+    assert result["context_mismatch_count"] == 0
+    assert result["invalid_status_values"] == []
+    assert result["failing_codes"] == ["citation_support_weak"]
