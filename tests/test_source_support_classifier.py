@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.reviews.source_support_classifier import _classify_source_support
+from paperorchestra.reviews.source_support_classifier_core import _classify_source_support
 
 
 def test_source_support_classifier_passes_local_claim_support() -> None:
