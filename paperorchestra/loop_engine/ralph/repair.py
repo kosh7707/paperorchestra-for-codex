@@ -19,7 +19,7 @@ from paperorchestra.loop_engine.ralph.repair_issue_packet import (
     _source_obligation_repair_context,
 )
 from paperorchestra.loop_engine.ralph.repair_prompt import _repair_prompt
-from paperorchestra.loop_engine.ralph.repair_recheck import _candidate_semantic_recheck
+from paperorchestra.loop_engine.ralph.repair_recheck_candidate import _candidate_semantic_recheck
 from paperorchestra.loop_engine.ralph.repair_runner import CitationClaimRepairRunner
 from paperorchestra.runtime.provider_base import BaseProvider
 from .state import (
