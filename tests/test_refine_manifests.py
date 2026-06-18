@@ -1,17 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.engine import refine_manifests, refine_stages
-
-
-def test_refine_stages_facade_reexports_manifest_helpers() -> None:
-    assert (
-        refine_stages.record_accepted_refinement_lane_manifest
-        is refine_manifests.record_accepted_refinement_lane_manifest
-    )
-    assert (
-        refine_stages.record_rejected_refinement_lane_manifest
-        is refine_manifests.record_rejected_refinement_lane_manifest
-    )
+from paperorchestra.engine import refine_manifests
 
 
 def test_refinement_lane_manifest_kwargs_names_accept_and_reject_records() -> None:

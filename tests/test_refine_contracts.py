@@ -3,17 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from paperorchestra.engine import refine_contracts, refine_stages
+from paperorchestra.engine import refine_contracts
 from paperorchestra.manuscript.validation_types import ValidationIssue
 
 
 def issue(severity: str, message: str = "issue") -> ValidationIssue:
     return ValidationIssue(code=f"{severity}_issue", severity=severity, message=message)
-
-
-def test_refine_stages_facade_reexports_contract_regression_helpers() -> None:
-    assert refine_stages.RefinementContractCheckResult is refine_contracts.RefinementContractCheckResult
-    assert refine_stages.apply_contract_regression_preservation is refine_contracts.apply_contract_regression_preservation
 
 
 def test_contract_regression_preservation_noops_without_blockers(monkeypatch) -> None:

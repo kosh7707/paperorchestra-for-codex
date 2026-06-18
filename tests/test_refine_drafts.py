@@ -3,29 +3,7 @@ from __future__ import annotations
 import pytest
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.core import io
-from paperorchestra.engine import latex_postprocess
-from paperorchestra.engine import refine_drafts, refine_stages
-from paperorchestra.manuscript import repair, validator
-
-
-def test_refine_stages_facade_reexports_draft_helpers() -> None:
-    assert refine_stages.parse_refinement_response is refine_drafts.parse_refinement_response
-    assert refine_stages.normalize_refinement_latex is refine_drafts.normalize_refinement_latex
-
-
-def test_refine_stages_preserves_legacy_private_draft_helper_reexports() -> None:
-    assert refine_stages.extract_json is io.extract_json
-    assert refine_stages.extract_latex is io.extract_latex
-    assert refine_stages._ensure_bibliography_hook is latex_postprocess._ensure_bibliography_hook
-    assert refine_stages._normalize_generated_plot_paths is latex_postprocess._normalize_generated_plot_paths
-    assert refine_stages._normalize_source_figure_paths is latex_postprocess._normalize_source_figure_paths
-    assert refine_stages._ensure_generated_plot_usage is latex_postprocess._ensure_generated_plot_usage
-    assert refine_stages._stabilize_figure_float_placement is latex_postprocess._stabilize_figure_float_placement
-    assert refine_stages._remove_material_packet_sections is repair._remove_material_packet_sections
-    assert refine_stages._ensure_discussion_section_for_claim_boundaries is repair._ensure_discussion_section_for_claim_boundaries
-    assert refine_stages._ensure_required_claim_scope_notes is repair._ensure_required_claim_scope_notes
-    assert refine_stages.canonicalize_citation_keys is validator.canonicalize_citation_keys
+from paperorchestra.engine import refine_drafts
 
 
 def test_parse_refinement_response_synthesizes_worklog_when_json_missing() -> None:

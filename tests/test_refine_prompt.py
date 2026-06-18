@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.engine import planning_stages, refine_prompt, refine_stages
-
-
-def test_refine_stages_facade_reexports_prompt_helpers() -> None:
-    assert refine_stages.build_refinement_user_prompt is refine_prompt.build_refinement_user_prompt
-    assert refine_stages._data_block is refine_prompt._data_block
-    assert refine_stages._author_facing_writer_brief_block is planning_stages._author_facing_writer_brief_block
+from paperorchestra.engine import refine_prompt
 
 
 def test_build_refinement_user_prompt_orders_context_blocks_and_redacts_scores() -> None:

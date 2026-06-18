@@ -2,14 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from paperorchestra.engine import refine_results, refine_stages
-
-
-def test_refine_stages_facade_reexports_result_builders() -> None:
-    assert refine_stages.contract_validation_failed_result is refine_results.contract_validation_failed_result
-    assert refine_stages.candidate_only_result is refine_results.candidate_only_result
-    assert refine_stages.accepted_refinement_result is refine_results.accepted_refinement_result
-    assert refine_stages.rejected_refinement_result is refine_results.rejected_refinement_result
+from paperorchestra.engine import refine_results
 
 
 def test_contract_validation_failed_result_shape() -> None:

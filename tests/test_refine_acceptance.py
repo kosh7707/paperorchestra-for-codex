@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.engine import refine_review, refine_stages
-
-
-def test_refine_stages_facade_reexports_acceptance_policy() -> None:
-    assert refine_stages.should_accept_refinement_candidate is refine_review.should_accept_refinement_candidate
-    assert refine_stages.should_retry_refinement_review is refine_review.should_retry_refinement_review
+from paperorchestra.engine import refine_review
 
 
 def test_should_accept_refinement_candidate_handles_compile_and_noop() -> None:

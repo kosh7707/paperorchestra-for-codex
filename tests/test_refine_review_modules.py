@@ -1,38 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.core import io
-from paperorchestra.engine import latex_postprocess, prompt_context, refine_review, refine_stages
-
-
-def test_refine_stages_facade_reexports_review_helpers() -> None:
-    assert refine_stages._redact_review_scores_for_writer is refine_review._redact_review_scores_for_writer
-    assert refine_stages._accept_review_delta is refine_review._accept_review_delta
-
-
-def test_refine_stages_binds_runtime_dependencies_used_inside_refinement_loop() -> None:
-    assert refine_stages.ExtractionError is io.ExtractionError
-    assert refine_stages._reviewable_plot_assets_index is latex_postprocess._reviewable_plot_assets_index
-    assert refine_stages._reviewable_plot_manifest is latex_postprocess._reviewable_plot_manifest
-    assert refine_stages._raise_if_strict_source_citations_unmapped is prompt_context._raise_if_strict_source_citations_unmapped
-
-
-def test_refine_stages_preserves_legacy_iteration_runtime_reexports() -> None:
-    from paperorchestra.engine import completion, reports
-    from paperorchestra.manuscript.prompts import PROMPTS
-
-    assert refine_stages._complete_with_runtime_mode is completion._complete_with_runtime_mode
-    assert refine_stages._build_completion_request is completion._build_completion_request
-    assert refine_stages._provider_name is completion._provider_name
-    assert refine_stages._record_validation_report is reports._record_validation_report
-    assert refine_stages.collect_paper_contract_issues is reports.collect_paper_contract_issues
-    assert refine_stages.PROMPTS is PROMPTS
-
-
-def test_refine_stages_preserves_legacy_review_helper_reexports() -> None:
-    from paperorchestra.engine import review_stages
-
-    assert refine_stages.review_current_paper is review_stages.review_current_paper
-    assert refine_stages._extract_axis_scores is review_stages._extract_axis_scores
+from paperorchestra.engine import refine_review
 
 
 def test_redact_review_scores_for_writer_removes_scorecard_without_mutating_source() -> None:

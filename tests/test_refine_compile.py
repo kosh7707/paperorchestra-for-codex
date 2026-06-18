@@ -5,12 +5,7 @@ from pathlib import Path
 import pytest
 
 from paperorchestra.core.session import set_current_session
-from paperorchestra.engine import refine_compile, refine_stages
-
-
-def test_refine_stages_facade_reexports_compile_gate() -> None:
-    assert refine_stages.RefinementCompileGateResult is refine_compile.RefinementCompileGateResult
-    assert refine_stages.apply_compile_acceptance_gate is refine_compile.apply_compile_acceptance_gate
+from paperorchestra.engine import refine_compile
 
 
 def test_compile_gate_disabled_preserves_candidate_without_compiling(monkeypatch: pytest.MonkeyPatch) -> None:

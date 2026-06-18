@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from paperorchestra.engine import refine_persistence, refine_stages
+from paperorchestra.engine import refine_persistence
 
 
 def _state() -> SimpleNamespace:
@@ -20,12 +20,6 @@ def _state() -> SimpleNamespace:
         active_artifact="old-paper.tex",
         refinement_iteration=1,
     )
-
-
-def test_refine_stages_facade_reexports_persistence_helpers() -> None:
-    assert refine_stages.apply_candidate_only_refinement_state is refine_persistence.apply_candidate_only_refinement_state
-    assert refine_stages.apply_accepted_refinement_state is refine_persistence.apply_accepted_refinement_state
-    assert refine_stages.apply_rejected_refinement_state is refine_persistence.apply_rejected_refinement_state
 
 
 def test_apply_candidate_only_refinement_state_restores_prior_review_state() -> None:

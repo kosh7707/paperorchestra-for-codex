@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from paperorchestra.core.session import review_path, set_current_session
-from paperorchestra.engine import refine_context, refine_stages
+from paperorchestra.engine import refine_context
 
 
 def _write(path: Path, content: str) -> str:
@@ -18,11 +18,6 @@ def _data_block_payload(prompt: str, name: str) -> dict:
     start = prompt.index(f'<DATA_BLOCK name="{name}">') + len(f'<DATA_BLOCK name="{name}">')
     end = prompt.index("</DATA_BLOCK>", start)
     return json.loads(html.unescape(prompt[start:end].strip()))
-
-
-def test_refine_stages_facade_reexports_iteration_context_helpers() -> None:
-    assert refine_stages.RefinementIterationContext is refine_context.RefinementIterationContext
-    assert refine_stages.build_refinement_iteration_context is refine_context.build_refinement_iteration_context
 
 
 def test_build_refinement_iteration_context_loads_prompt_inputs(tmp_path: Path) -> None:

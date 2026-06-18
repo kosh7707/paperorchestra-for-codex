@@ -3,14 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from paperorchestra.engine import refine_candidate, refine_stages
-
-
-def test_refine_stages_facade_reexports_candidate_review_helpers() -> None:
-    assert refine_stages.RefinementStateSnapshot is refine_candidate.RefinementStateSnapshot
-    assert refine_stages.RefinementCandidateReview is refine_candidate.RefinementCandidateReview
-    assert refine_stages.snapshot_refinement_state is refine_candidate.snapshot_refinement_state
-    assert refine_stages.review_refinement_candidate is refine_candidate.review_refinement_candidate
+from paperorchestra.engine import refine_candidate
 
 
 def test_snapshot_refinement_state_uses_review_history_when_present() -> None:

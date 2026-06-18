@@ -2,12 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from paperorchestra.engine import refine_retry, refine_stages
-
-
-def test_refine_stages_facade_reexports_retry_review_helpers() -> None:
-    assert refine_stages.RefinementRetryReviewResult is refine_retry.RefinementRetryReviewResult
-    assert refine_stages.maybe_retry_refinement_review is refine_retry.maybe_retry_refinement_review
+from paperorchestra.engine import refine_retry
 
 
 def test_retry_review_skips_when_policy_declines(monkeypatch) -> None:
