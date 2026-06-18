@@ -4,10 +4,19 @@ import json
 import sys
 from typing import Any
 
+from paperorchestra.interfaces.mcp.authoring_tool_definitions import AUTHORING_TOOLS
 from paperorchestra.interfaces.mcp.handlers import TOOL_HANDLERS
-from paperorchestra.interfaces.mcp.tools import TOOLS
+from paperorchestra.interfaces.mcp.quality_tool_definitions import QUALITY_TOOLS
+from paperorchestra.interfaces.mcp.session_tool_definitions import SESSION_TOOLS
+from paperorchestra.interfaces.mcp.utility_tool_definitions import UTILITY_TOOLS
 
 JSON = dict[str, Any]
+TOOLS: list[JSON] = [
+    *SESSION_TOOLS,
+    *AUTHORING_TOOLS,
+    *QUALITY_TOOLS,
+    *UTILITY_TOOLS,
+]
 
 SERVER_INFO = {"name": "paperorchestra-mcp", "version": "0.1.0"}
 MCP_PROTOCOL_SUPPORTED = {"2024-11-05", "2025-06-18"}
