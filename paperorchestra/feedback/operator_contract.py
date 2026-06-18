@@ -9,6 +9,19 @@ from paperorchestra.core.models import utc_now_iso
 from paperorchestra.core.session import artifact_path, load_session
 from paperorchestra.feedback import operator_answer_metadata as _answer_metadata
 from paperorchestra.feedback import operator_issue_contract as _issues
+from paperorchestra.feedback.operator_contract_constants import (
+    AXIS_CATASTROPHIC_DROP,
+    HUMAN_REVIEWABLE_NEW_TIER2_CODES,
+    OPERATOR_FEEDBACK_EXECUTION_SCHEMA_VERSION,
+    OPERATOR_FEEDBACK_IMPORT_SCHEMA_VERSION,
+    OPERATOR_FEEDBACK_INCORPORATION_SCHEMA_VERSION,
+    OPERATOR_FEEDBACK_SCHEMA_VERSION,
+    OPERATOR_PACKET_SCHEMA_VERSION,
+    OPERATOR_PUBLIC_ENTRYPOINTS,
+    OPERATOR_REFINEMENT_FORBIDDEN_NEW_TIER2_CODES,
+    OVERALL_CATASTROPHIC_DROP,
+)
+from paperorchestra.feedback.operator_packet_io import _load_imported_feedback, _read_packet
 from paperorchestra.feedback.packet_artifacts import (
     _artifact_record,
     _file_sha256,
@@ -23,54 +36,6 @@ from paperorchestra.feedback.packets import (
     _validate_operator_packet_artifact_bindings,
 )
 from paperorchestra.reviews.citation_integrity_paths import citation_integrity_audit_path, citation_integrity_critic_path
-
-
-OPERATOR_PACKET_SCHEMA_VERSION = "operator-review-packet/1"
-
-
-OPERATOR_FEEDBACK_SCHEMA_VERSION = "operator-feedback/1"
-
-
-OPERATOR_FEEDBACK_IMPORT_SCHEMA_VERSION = "operator-feedback-import/1"
-
-
-OPERATOR_FEEDBACK_EXECUTION_SCHEMA_VERSION = "operator-feedback-execution/1"
-
-
-OPERATOR_FEEDBACK_INCORPORATION_SCHEMA_VERSION = "operator-feedback-incorporation/1"
-
-
-OPERATOR_PUBLIC_ENTRYPOINTS = {
-    "build-operator-review-packet",
-    "import-operator-feedback",
-    "apply-operator-feedback",
-}
-
-
-OVERALL_CATASTROPHIC_DROP = 8.0
-
-
-AXIS_CATASTROPHIC_DROP = 15.0
-
-
-HUMAN_REVIEWABLE_NEW_TIER2_CODES = {
-    "citation_support_manual_check",
-}
-
-
-OPERATOR_REFINEMENT_FORBIDDEN_NEW_TIER2_CODES = {
-    "citation_duplicate_support",
-    "citation_integrity_failed",
-    "citation_integrity_audit_fail",
-    "citation_support_weak",
-    "citation_support_manual_check",
-    "citation_support_unsupported",
-    "citation_support_contradicted",
-    "citation_support_metadata_only",
-    "citation_support_insufficient_evidence",
-    "citation_support_evidence_missing",
-    "high_risk_uncited_claim",
-}
 
 
 def _review_scope(require_pdf: bool, review_scope: str | None, pdf_path: str | Path | None) -> str:
@@ -135,30 +100,9 @@ def build_operator_review_packet(
                 artifact_path(cwd, "section_review.json"),
             ),
         ),
-        (
-            "quality_eval",
-            _first_current_bound_existing(
-                "quality_eval",
-                manuscript_sha256,
-                artifact_path(cwd, "quality-eval.json"),
-            ),
-        ),
-        (
-            "citation_integrity_audit",
-            _first_current_bound_existing(
-                "citation_integrity_audit",
-                manuscript_sha256,
-                citation_integrity_audit_path(cwd),
-            ),
-        ),
-        (
-            "citation_integrity_critic",
-            _first_current_bound_existing(
-                "citation_integrity_critic",
-                manuscript_sha256,
-                citation_integrity_critic_path(cwd),
-            ),
-        ),
+        ("quality_eval", _first_current_bound_existing("quality_eval", manuscript_sha256, artifact_path(cwd, "quality-eval.json"))),
+        ("citation_integrity_audit", _first_current_bound_existing("citation_integrity_audit", manuscript_sha256, citation_integrity_audit_path(cwd))),
+        ("citation_integrity_critic", _first_current_bound_existing("citation_integrity_critic", manuscript_sha256, citation_integrity_critic_path(cwd))),
         ("qa_loop_plan", qa_plan_path),
         ("qa_loop_execution", qa_execution_path),
         ("operator_feedback_execution", operator_execution_path),
@@ -197,32 +141,10 @@ def build_operator_review_packet(
         },
     }
     assert manuscript_sha256 is not None
-    _validate_operator_packet_artifact_bindings(
-        cwd=cwd,
-        packet=packet,
-        current_manuscript_sha256=manuscript_sha256,
-    )
+    _validate_operator_packet_artifact_bindings(cwd=cwd, packet=packet, current_manuscript_sha256=manuscript_sha256)
     packet["packet_sha256"] = _packet_sha256(packet)
     write_json(packet_path, packet)
     return packet_path, packet
-
-
-def _read_packet(path: str | Path) -> dict[str, Any]:
-    packet = read_json(path)
-    if not isinstance(packet, dict):
-        raise ContractError("operator review packet must be a JSON object")
-    if packet.get("schema_version") != OPERATOR_PACKET_SCHEMA_VERSION:
-        raise ContractError("operator review packet has an unsupported schema_version")
-    expected = _packet_sha256(packet)
-    if packet.get("packet_sha256") != expected:
-        raise ContractError("operator review packet hash does not match packet contents")
-    for artifact in packet.get("artifacts") or []:
-        if not isinstance(artifact, dict):
-            raise ContractError("operator review packet artifact entry must be an object")
-        actual = _file_sha256(artifact.get("path"))
-        if not actual or actual != artifact.get("sha256"):
-            raise ContractError(f"operator review packet artifact is missing or stale: {artifact.get('role')}")
-    return packet
 
 
 def import_operator_feedback(
@@ -299,30 +221,3 @@ def import_operator_feedback(
     path = Path(output_path).resolve() if output_path else artifact_path(cwd, "operator_feedback.imported.json")
     write_json(path, imported)
     return path, imported
-
-
-def _load_imported_feedback(imported_feedback_path: str | Path) -> dict[str, Any]:
-    payload = read_json(imported_feedback_path)
-    if not isinstance(payload, dict) or payload.get("schema_version") != OPERATOR_FEEDBACK_IMPORT_SCHEMA_VERSION:
-        raise ContractError("imported operator feedback has an unsupported schema_version")
-    if payload.get("source") != _issues.OPERATOR_SOURCE or payload.get("not_independent_human_review") is not True:
-        raise ContractError("imported operator feedback lost non-independent provenance")
-    packet = _read_packet(payload.get("packet_path"))
-    if payload.get("packet_sha256") != packet.get("packet_sha256"):
-        raise ContractError("imported operator feedback packet hash is stale")
-    if "human_needed_answer" in payload:
-        _answer_metadata._validate_human_needed_answer_metadata(
-            payload.get("human_needed_answer"),
-            packet,
-            {str(issue.get("id") or "") for issue in payload.get("issues") or [] if isinstance(issue, dict)},
-            packet_path=payload.get("packet_path"),
-            intent=str(payload.get("intent") or ""),
-            imported_issue_roles={
-                str(issue.get("source_artifact_role") or "")
-                for issue in payload.get("issues") or []
-                if isinstance(issue, dict)
-            },
-        )
-    if "operator_review_notes" in payload:
-        _answer_metadata.validate_operator_review_notes(payload.get("operator_review_notes"))
-    return payload
