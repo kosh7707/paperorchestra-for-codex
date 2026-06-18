@@ -14,7 +14,7 @@ from paperorchestra.loop_engine.quality.source_checks import (
     _source_material_fidelity_check,
 )
 from paperorchestra.manuscript.source_obligations import evaluate_source_obligations
-from paperorchestra.reviews.citation_integrity import citation_integrity_check
+from paperorchestra.reviews.citation_integrity_gate import citation_integrity_check
 from paperorchestra.reviews.citation_quality import build_citation_quality_gate_internal
 
 

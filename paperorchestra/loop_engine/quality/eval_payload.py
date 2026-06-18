@@ -7,13 +7,13 @@ from paperorchestra.core.models import utc_now_iso
 from paperorchestra.loop_engine.quality.policy import QUALITY_EVAL_SCHEMA_VERSION
 from paperorchestra.loop_engine.quality.utils import _file_sha256, _sha256_jsonable
 from paperorchestra.manuscript.source_obligations import source_obligations_path
-from paperorchestra.reviews.citation_integrity import (
+from paperorchestra.reviews.citation_integrity_paths import (
     citation_integrity_audit_path,
     citation_integrity_critic_path,
     citation_intent_plan_path,
     citation_source_match_path,
-    rendered_reference_audit_path,
 )
+from paperorchestra.reviews.citation_rendered_references import rendered_reference_audit_path
 from paperorchestra.reviews.citation_quality import citation_quality_gate_path
 
 def build_human_finalization_tier() -> dict[str, Any]:

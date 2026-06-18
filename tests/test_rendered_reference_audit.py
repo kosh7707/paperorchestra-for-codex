@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from paperorchestra.reviews.citation_integrity import (
+from paperorchestra.reviews.citation_rendered_references import (
     _duplicate_reference_identity_groups,
     _reference_identity_label,
 )

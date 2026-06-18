@@ -11,11 +11,8 @@ from paperorchestra.reviews.citation_quality_report import (
     CitationQualityGateReport,
     CitationQualityItem,
 )
-from paperorchestra.reviews.citation_integrity import (
-    citation_integrity_audit_path,
-    citation_source_match_path,
-    rendered_reference_audit_path,
-)
+from paperorchestra.reviews.citation_integrity_paths import citation_integrity_audit_path, citation_source_match_path
+from paperorchestra.reviews.citation_rendered_references import rendered_reference_audit_path
 from paperorchestra.core.io import write_json
 from paperorchestra.loop_engine.quality.utils import _file_sha256, _read_json_if_exists
 from paperorchestra.core.session import artifact_path, load_session

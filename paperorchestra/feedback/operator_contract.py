@@ -22,7 +22,7 @@ from paperorchestra.feedback.packets import (
     _packet_has_human_needed_context,
     _validate_operator_packet_artifact_bindings,
 )
-from paperorchestra.reviews.citation_integrity import citation_integrity_audit_path, citation_integrity_critic_path
+from paperorchestra.reviews.citation_integrity_paths import citation_integrity_audit_path, citation_integrity_critic_path
 
 
 OPERATOR_PACKET_SCHEMA_VERSION = "operator-review-packet/1"

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from paperorchestra.core.models import ArtifactIndex, InputBundle, SessionState, utc_now_iso
 from paperorchestra.core.session import save_session, set_current_session
-from paperorchestra.reviews import citation_integrity, citation_integrity_gate, citation_integrity_paths
+from paperorchestra.reviews import citation_integrity_gate, citation_integrity_paths
 from paperorchestra.reviews.citation_rendered_references import rendered_reference_audit_path
 
 
@@ -37,17 +37,6 @@ def _write_session(tmp_path: Path) -> Path:
     save_session(tmp_path, state)
     set_current_session(tmp_path, state.session_id)
     return paper_path
-
-
-def test_citation_integrity_facade_reexports_paths_and_gate_helpers() -> None:
-    assert citation_integrity.CITATION_INTEGRITY_AUDIT_FILENAME == citation_integrity_paths.CITATION_INTEGRITY_AUDIT_FILENAME
-    assert citation_integrity.citation_integrity_audit_path is citation_integrity_paths.citation_integrity_audit_path
-    assert citation_integrity.citation_integrity_critic_path is citation_integrity_paths.citation_integrity_critic_path
-    assert citation_integrity.citation_intent_plan_path is citation_integrity_paths.citation_intent_plan_path
-    assert citation_integrity.citation_source_match_path is citation_integrity_paths.citation_source_match_path
-    assert citation_integrity.build_citation_integrity_critic is citation_integrity_gate.build_citation_integrity_critic
-    assert citation_integrity.write_citation_integrity_critic is citation_integrity_gate.write_citation_integrity_critic
-    assert citation_integrity.citation_integrity_check is citation_integrity_gate.citation_integrity_check
 
 
 def test_citation_integrity_check_allows_missing_artifacts_outside_claim_safe(tmp_path: Path) -> None:
