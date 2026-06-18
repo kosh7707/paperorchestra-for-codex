@@ -2,18 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.loop_engine.quality.action_plan.citation_integrity import _append_citation_integrity_actions
-from paperorchestra.loop_engine.quality.action_plan.citation_quality import _append_citation_quality_actions
-from paperorchestra.loop_engine.quality.action_plan.citation_support import _append_citation_support_actions
-from paperorchestra.loop_engine.quality.action_plan.claim_review import (
-    _append_high_risk_claim_actions,
-    _append_planning_satisfaction_actions,
-)
-from paperorchestra.loop_engine.quality.action_plan.figure_grounding import _append_figure_grounding_actions
-from paperorchestra.loop_engine.quality.action_plan.source_material import (
-    _append_source_material_fidelity_actions,
-    _append_source_obligation_actions,
-)
+from paperorchestra.loop_engine.quality.action_plan import citation_integrity as _citation_integrity
+from paperorchestra.loop_engine.quality.action_plan import citation_quality as _citation_quality
+from paperorchestra.loop_engine.quality.action_plan import citation_support as _citation_support
+from paperorchestra.loop_engine.quality.action_plan import claim_review as _claim_review
+from paperorchestra.loop_engine.quality.action_plan import figure_grounding as _figure_grounding
+from paperorchestra.loop_engine.quality.action_plan import source_material as _source_material
 
 
 def _append_tier2_claim_safety_actions(actions: list[dict[str, Any]], tiers: dict[str, Any]) -> None:
@@ -23,11 +17,11 @@ def _append_tier2_claim_safety_actions(actions: list[dict[str, Any]], tiers: dic
     checks = tier2.get("checks") or {}
     if not isinstance(checks, dict):
         checks = {}
-    _append_figure_grounding_actions(actions, checks.get("figure_grounding"))
-    _append_citation_support_actions(actions, checks.get("citation_support_critic"))
-    _append_citation_quality_actions(actions, checks.get("citation_quality_gate"))
-    _append_citation_integrity_actions(actions, checks.get("citation_integrity_gate"))
-    _append_source_material_fidelity_actions(actions, checks.get("source_material_fidelity"))
-    _append_source_obligation_actions(actions, checks.get("source_obligations"))
-    _append_high_risk_claim_actions(actions, checks.get("high_risk_claim_sweep"))
-    _append_planning_satisfaction_actions(actions, checks.get("planning_satisfaction"))
+    _figure_grounding._append_figure_grounding_actions(actions, checks.get("figure_grounding"))
+    _citation_support._append_citation_support_actions(actions, checks.get("citation_support_critic"))
+    _citation_quality._append_citation_quality_actions(actions, checks.get("citation_quality_gate"))
+    _citation_integrity._append_citation_integrity_actions(actions, checks.get("citation_integrity_gate"))
+    _source_material._append_source_material_fidelity_actions(actions, checks.get("source_material_fidelity"))
+    _source_material._append_source_obligation_actions(actions, checks.get("source_obligations"))
+    _claim_review._append_high_risk_claim_actions(actions, checks.get("high_risk_claim_sweep"))
+    _claim_review._append_planning_satisfaction_actions(actions, checks.get("planning_satisfaction"))
