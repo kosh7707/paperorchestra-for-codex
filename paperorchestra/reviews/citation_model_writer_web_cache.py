@@ -8,11 +8,11 @@ from paperorchestra.core.io import read_json
 from paperorchestra.reviews.citation_items import _heuristic_citation_items
 from paperorchestra.reviews.citation_model_cache import _citation_support_cache_key
 from paperorchestra.reviews.citation_model_writer_types import CitationWriteCacheState
-from paperorchestra.reviews.citation_web_evidence import (
-    _build_web_evidence_retrieval,
+from paperorchestra.reviews.citation_web_evidence_cache import (
     _retrieved_evidence_file_sha256,
     _retrieved_web_evidence_is_reusable,
 )
+from paperorchestra.reviews.citation_web_evidence_retrieval import _build_web_evidence_retrieval
 from paperorchestra.runtime.provider_base import BaseProvider
 
 

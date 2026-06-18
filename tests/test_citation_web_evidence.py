@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import io
 
-from paperorchestra.reviews.citation_web_evidence import (
-    _build_web_evidence_retrieval,
+from paperorchestra.reviews.citation_web_evidence_cache import (
     _citation_support_retrieved_evidence_sha256,
     _retrieved_web_evidence_for_item_ids,
     _retrieved_web_evidence_is_reusable,
 )
+from paperorchestra.reviews.citation_web_evidence_retrieval import _build_web_evidence_retrieval
 from paperorchestra.runtime.provider_base import BaseProvider, CompletionRequest
 
 

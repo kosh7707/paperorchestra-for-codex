@@ -13,7 +13,7 @@ from paperorchestra.reviews.citation_progress import (
     _emit_citation_progress,
     _load_citation_progress_checkpoint,
 )
-from paperorchestra.reviews.citation_web_evidence import _retrieved_web_evidence_for_item_ids
+from paperorchestra.reviews.citation_web_evidence_cache import _retrieved_web_evidence_for_item_ids
 from paperorchestra.runtime.provider_base import BaseProvider
 
 
