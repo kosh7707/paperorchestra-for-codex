@@ -20,11 +20,8 @@ from paperorchestra.engine.research_registry import (
 from paperorchestra.engine.research_registry_io import load_prior_citation_registry
 from paperorchestra.engine.schemas import PRIOR_WORK_SEED_SCHEMA
 from paperorchestra.research.bibtex import registry_to_bibtex
-from paperorchestra.research.literature import (
-    load_prior_work_seed,
-    prior_work_entries_to_verified_papers,
-    serialize_registry,
-)
+from paperorchestra.research.literature import serialize_registry
+from paperorchestra.research.prior_work_seed import load_prior_work_seed, prior_work_entries_to_verified_papers
 from paperorchestra.runtime.parity import record_lane_manifest
 from paperorchestra.runtime.providers import BaseProvider
 

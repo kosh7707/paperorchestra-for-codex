@@ -14,20 +14,7 @@ from urllib.error import HTTPError
 from paperorchestra.core.models import VerifiedPaper
 from paperorchestra.research.s2_api import SemanticScholarClient, SemanticScholarError, get_default_semantic_scholar_client
 from paperorchestra.research.bibtex import make_bibtex_key
-from paperorchestra.research.dates import parse_cutoff, parse_publication_date, year_month_passes_cutoff
-from paperorchestra.research.prior_work_seed import (
-    _coerce_year,
-    _entry_external_ids,
-    _extract_bibtex_field,
-    _normalize_doi,
-    _normalize_seed_entry,
-    _parse_bibtex_seed,
-    _parse_json_seed,
-    _parse_markdown_seed,
-    _split_authors,
-    load_prior_work_seed,
-    prior_work_entries_to_verified_papers,
-)
+from paperorchestra.research import dates as _dates
 from paperorchestra.research.matching import (
     _is_exact_seed_query,
     _seed_query_matches_result,
@@ -148,7 +135,7 @@ def build_search_grounded_candidates(
             if not normalized:
                 return
             return
-        if not year_month_passes_cutoff(year, cutoff_date, publication_date):
+        if not _dates.year_month_passes_cutoff(year, cutoff_date, publication_date):
             return
         seen_titles.add(normalized)
         candidate = {
@@ -289,7 +276,7 @@ def verify_candidate_title(
         url=best.get("url"),
         matched_query=query_hint or title,
         title_match_ratio=round(min(best_ratio, 100.0), 2),
-        is_after_cutoff=not year_month_passes_cutoff(best.get("year"), cutoff_date, best.get("publicationDate")),
+        is_after_cutoff=not _dates.year_month_passes_cutoff(best.get("year"), cutoff_date, best.get("publicationDate")),
     )
     paper.bibtex_key = make_bibtex_key(paper)
     return paper
@@ -312,7 +299,7 @@ def mock_verified_paper(
     paper = VerifiedPaper(
         paper_id=f"mock-{synthetic_id}",
         title=title.strip(),
-        year=parse_cutoff(cutoff_date).year if cutoff_date else None,
+        year=_dates.parse_cutoff(cutoff_date).year if cutoff_date else None,
         publication_date=None,
         venue="Mock Venue",
         abstract=abstract_hint.strip() or f"Mock abstract for {title.strip()}",

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.research.literature import load_prior_work_seed
+from paperorchestra.research.prior_work_seed import load_prior_work_seed
 
 REFERENCE_SEED_EXTENSIONS = {".bib", ".bibtex"}
 UNKNOWN_VALUES = {"", "unknown", "n/a", "na", "none", "null", "tbd", "todo", "anonymous"}

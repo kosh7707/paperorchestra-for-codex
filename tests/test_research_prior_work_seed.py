@@ -3,15 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from paperorchestra.research import dates, prior_work_seed
-from paperorchestra.research import literature
-
-
-def test_literature_facade_reexports_prior_work_seed_helpers() -> None:
-    assert literature.parse_cutoff is dates.parse_cutoff
-    assert literature.year_month_passes_cutoff is dates.year_month_passes_cutoff
-    assert literature.load_prior_work_seed is prior_work_seed.load_prior_work_seed
-    assert literature.prior_work_entries_to_verified_papers is prior_work_seed.prior_work_entries_to_verified_papers
+from paperorchestra.research import prior_work_seed
 
 
 def test_load_prior_work_seed_parses_json_bibtex_and_markdown(tmp_path: Path) -> None:
