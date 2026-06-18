@@ -19,9 +19,11 @@ from paperorchestra.reviews.reproducibility_citations import (
     _citation_support_review_provenance,
     _citation_surface_health,
 )
-from paperorchestra.reviews.reproducibility_validation import (
+from paperorchestra.reviews.reproducibility_strict_content import (
     _strict_content_gate_issues,
     _strict_content_gates_enabled,
+)
+from paperorchestra.reviews.reproducibility_validation_reports import (
     _validation_warning_reports,
 )
 from paperorchestra.runtime.parity import build_lane_manifest_summary
