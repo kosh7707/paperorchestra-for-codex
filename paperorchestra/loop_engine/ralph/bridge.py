@@ -4,7 +4,8 @@ from pathlib import Path
 
 from paperorchestra.core.models import utc_now_iso
 from paperorchestra.loop_engine.quality.loop import DEFAULT_MAX_ITERATIONS
-from paperorchestra.loop_engine.ralph.action_dispatch import QaLoopActionDispatchContext, dispatch_qa_loop_actions
+from paperorchestra.loop_engine.ralph.action_dispatch import dispatch_qa_loop_actions
+from paperorchestra.loop_engine.ralph.action_dispatch_types import QaLoopActionDispatchContext
 from paperorchestra.loop_engine.ralph.bridge_candidate_flow import resolve_post_dispatch_candidate
 from paperorchestra.loop_engine.ralph.bridge_lifecycle import (
     finish_execution_error,

@@ -4,8 +4,8 @@ from typing import Any
 
 from paperorchestra.loop_engine.ralph.action_dispatch_handlers import handler_for_code
 from paperorchestra.loop_engine.ralph.action_dispatch_types import (
-    QaLoopActionDispatchContext,
-    QaLoopActionDispatchResult,
+    QaLoopActionDispatchContext as _QaLoopActionDispatchContext,
+    QaLoopActionDispatchResult as _QaLoopActionDispatchResult,
     _QaLoopActionDispatchState,
 )
 
@@ -13,8 +13,8 @@ from paperorchestra.loop_engine.ralph.action_dispatch_types import (
 def dispatch_qa_loop_actions(
     actions: list[dict[str, Any]],
     execution: dict[str, Any],
-    context: QaLoopActionDispatchContext,
-) -> QaLoopActionDispatchResult:
+    context: _QaLoopActionDispatchContext,
+) -> _QaLoopActionDispatchResult:
     state = _QaLoopActionDispatchState()
     for action in actions:
         code = str(action.get("code"))
@@ -24,7 +24,7 @@ def dispatch_qa_loop_actions(
             continue
         if not handler(code, execution, context, state):
             break
-    return QaLoopActionDispatchResult(
+    return _QaLoopActionDispatchResult(
         citation_candidate_applied=state.citation_candidate_applied,
         citation_candidate_path=state.citation_candidate_path,
     )

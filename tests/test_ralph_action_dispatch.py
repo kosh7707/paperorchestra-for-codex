@@ -6,8 +6,8 @@ from types import SimpleNamespace
 from paperorchestra.core.models import InputBundle
 from paperorchestra.core.session import create_session
 from paperorchestra.loop_engine.ralph import action_dispatch_handlers as handlers
-from paperorchestra.loop_engine.ralph import action_dispatch
-from paperorchestra.loop_engine.ralph.action_dispatch import QaLoopActionDispatchContext, dispatch_qa_loop_actions
+from paperorchestra.loop_engine.ralph.action_dispatch import dispatch_qa_loop_actions
+from paperorchestra.loop_engine.ralph.action_dispatch_types import QaLoopActionDispatchContext
 from paperorchestra.loop_engine.quality.policy import QA_LOOP_SUPPORTED_HANDLER_CODES
 from paperorchestra.runtime.mock_provider import MockProvider
 
@@ -50,11 +50,6 @@ def _seed_runtime_session(tmp_path: Path) -> None:
 
 def test_supported_handler_codes_are_covered_by_registry() -> None:
     assert handlers.handled_action_codes() == set(QA_LOOP_SUPPORTED_HANDLER_CODES)
-
-
-def test_action_dispatch_facade_reexports_public_types() -> None:
-    assert action_dispatch.QaLoopActionDispatchContext is QaLoopActionDispatchContext
-    assert action_dispatch.QaLoopActionDispatchResult.__name__ == "QaLoopActionDispatchResult"
 
 
 def test_dispatch_routes_refresh_action_families_and_skips_unknown(tmp_path: Path, monkeypatch) -> None:
