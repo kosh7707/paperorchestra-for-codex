@@ -1,25 +1,20 @@
 from __future__ import annotations
 
-import json
 import os
-import socket
-import urllib.parse
 import urllib.request
 from typing import Any, Callable
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 
 from paperorchestra.research.s2_constants import SEMANTIC_SCHOLAR_GRAPH_BASE_URL, SEMANTIC_SCHOLAR_SEARCH_FIELDS
-from paperorchestra.research.s2_errors import SemanticScholarApiError, SemanticScholarError, SemanticScholarRateLimitError
+from paperorchestra.research.s2_errors import SemanticScholarError
+from paperorchestra.research.s2_http_errors import api_error_for_http, retry_after_seconds
 from paperorchestra.research.s2_policy import S2RateLimiter, S2RetryPolicy
+from paperorchestra.research.s2_request import s2_headers, s2_url
+from paperorchestra.research.s2_transport import request_json_with_retries
 
 
 class SemanticScholarClient:
-    """Small, testable wrapper around the Semantic Scholar Graph API.
-
-    The wrapper centralizes API-key injection, 1 RPS throttling, bounded retries,
-    JSON decoding, optional explicit fallback, and HTTP error normalization. It
-    deliberately keeps the key out of returned errors and logs.
-    """
+    """Small, testable wrapper around the Semantic Scholar Graph API."""
 
     def __init__(
         self,
@@ -48,89 +43,32 @@ class SemanticScholarClient:
         self.last_response_was_fallback = False
 
     def _headers(self) -> dict[str, str]:
-        headers = {
-            "User-Agent": self.user_agent,
-            "Accept": "application/json",
-        }
-        if self.api_key:
-            headers["x-api-key"] = self.api_key
-        return headers
+        return s2_headers(api_key=self.api_key, user_agent=self.user_agent)
 
     def _url(self, path: str, params: dict[str, Any] | None = None) -> str:
-        normalized_path = path if path.startswith("/") else "/" + path
-        query = urllib.parse.urlencode({k: v for k, v in (params or {}).items() if v is not None})
-        return f"{self.base_url}{normalized_path}" + (f"?{query}" if query else "")
+        return s2_url(self.base_url, path, params)
 
     @staticmethod
     def _retry_after_seconds(error: HTTPError) -> float | None:
-        raw = error.headers.get("Retry-After") if error.headers else None
-        if not raw:
-            return None
-        try:
-            value = float(raw)
-        except (TypeError, ValueError):
-            return None
-        return value if value >= 0 else None
+        return retry_after_seconds(error)
 
     @staticmethod
     def _api_error_for_http(error: HTTPError) -> SemanticScholarError:
-        if error.code == 429:
-            retry_after = SemanticScholarClient._retry_after_seconds(error)
-            suffix = f" Retry-After={retry_after:g}s." if retry_after is not None else ""
-            return SemanticScholarRateLimitError(
-                "Semantic Scholar rate-limited the request (HTTP 429). "
-                "The client enforces one request per second; retry later or reduce request volume."
-                + suffix
-            )
-        return SemanticScholarApiError(f"Semantic Scholar request failed with HTTP {error.code}.")
-
-    def _sleep_before_retry(self, attempt_index: int, *, retry_after_seconds: float | None = None) -> None:
-        delay = self.retry_policy.backoff_delay(attempt_index, retry_after_seconds=retry_after_seconds)
-        if delay > 0:
-            self.retry_policy.sleep(delay)
-
-    def _should_retry_http(self, error: HTTPError) -> bool:
-        return error.code in self.retry_policy.retry_http_statuses
-
-    def _fallback_payload_or_raise(self, error: SemanticScholarError) -> dict[str, Any]:
-        if self.fallback_mode == "empty":
-            self.last_response_was_fallback = True
-            return {"data": []}
-        raise error
+        return api_error_for_http(error)
 
     def get_json(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        url = self._url(path, params)
-        last_error: SemanticScholarError | None = None
         self.last_response_was_fallback = False
-        for attempt in range(1, self.retry_policy.max_attempts + 1):
-            request = urllib.request.Request(url, headers=self._headers())
-            self.rate_limiter.wait_for_slot()
-            try:
-                with self.opener(request, timeout=self.timeout_seconds) as response:
-                    payload = json.loads(response.read().decode("utf-8"))
-                    self.last_response_was_fallback = False
-                    return payload
-            except HTTPError as exc:
-                last_error = self._api_error_for_http(exc)
-                if attempt >= self.retry_policy.max_attempts or not self._should_retry_http(exc):
-                    return self._fallback_payload_or_raise(last_error)
-                self._sleep_before_retry(attempt, retry_after_seconds=self._retry_after_seconds(exc))
-            except (TimeoutError, socket.timeout):
-                last_error = SemanticScholarApiError("Semantic Scholar request timed out.")
-                if attempt >= self.retry_policy.max_attempts or not self.retry_policy.retry_on_timeout:
-                    return self._fallback_payload_or_raise(last_error)
-                self._sleep_before_retry(attempt)
-            except URLError as exc:
-                last_error = SemanticScholarApiError(f"Semantic Scholar request failed: {exc.reason}")
-                if attempt >= self.retry_policy.max_attempts or not self.retry_policy.retry_on_url_error:
-                    return self._fallback_payload_or_raise(last_error)
-                self._sleep_before_retry(attempt)
-            except json.JSONDecodeError:
-                last_error = SemanticScholarApiError("Semantic Scholar returned invalid JSON.")
-                if attempt >= self.retry_policy.max_attempts or not self.retry_policy.retry_on_invalid_json:
-                    return self._fallback_payload_or_raise(last_error)
-                self._sleep_before_retry(attempt)
-        return self._fallback_payload_or_raise(last_error or SemanticScholarApiError("Semantic Scholar request failed."))
+        payload, was_fallback = request_json_with_retries(
+            url=self._url(path, params),
+            headers=self._headers(),
+            timeout_seconds=self.timeout_seconds,
+            opener=self.opener,
+            rate_limiter=self.rate_limiter,
+            retry_policy=self.retry_policy,
+            fallback_mode=self.fallback_mode,
+        )
+        self.last_response_was_fallback = was_fallback
+        return payload
 
     def search_papers(
         self,
