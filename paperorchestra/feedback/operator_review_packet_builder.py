@@ -13,10 +13,19 @@ from paperorchestra.feedback.operator_packet_artifact_sources import (
     _operator_packet_artifacts,
     _optional_packet_artifact_sources,
 )
-from paperorchestra.feedback.operator_review_scope import _review_scope
 from paperorchestra.feedback.packet_artifacts import _file_sha256, _packet_sha256
 from paperorchestra.feedback.packet_artifact_validation import _validate_operator_packet_artifact_bindings
 from paperorchestra.feedback.packet_discovery import _operator_review_human_needed_artifacts
+
+
+def _review_scope(require_pdf: bool, review_scope: str | None, pdf_path: str | Path | None) -> str:
+    if review_scope:
+        if review_scope not in {"pdf_and_tex", "tex_only"}:
+            raise ContractError("review_scope must be one of: pdf_and_tex, tex_only")
+        if review_scope == "pdf_and_tex" and not _file_sha256(pdf_path):
+            raise ContractError("review_scope=pdf_and_tex requires a current compiled PDF")
+        return review_scope
+    return "pdf_and_tex" if require_pdf or _file_sha256(pdf_path) else "tex_only"
 
 
 def build_operator_review_packet(
