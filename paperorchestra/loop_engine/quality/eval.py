@@ -5,15 +5,9 @@ from typing import Any
 
 from paperorchestra.core.session import load_session
 
-# Legacy compatibility re-exports: tests and downstream callers still import
-# these helpers from quality.eval even though their implementation lives in
-# dedicated quality modules.
-from paperorchestra.loop_engine.quality.artifact_checks import (
-    _figure_grounding_check,
-    _ralph_evidence_check,
-)
 from paperorchestra.loop_engine.quality.citation_support import _citation_support_path
 from paperorchestra.loop_engine.quality.eval_claim_safety import build_claim_safety_tier
+from paperorchestra.loop_engine.quality.artifact_checks import _ralph_evidence_check
 from paperorchestra.loop_engine.quality.eval_leakage_surface import build_leakage_surface
 from paperorchestra.loop_engine.quality.eval_payload import (
     build_human_finalization_tier,
@@ -25,19 +19,10 @@ from paperorchestra.loop_engine.quality.eval_scholarly import build_scholarly_qu
 from paperorchestra.loop_engine.quality.eval_structural import build_structural_tier
 from paperorchestra.loop_engine.quality.eval_tiers import (
     _skipped_tier,
-    _status_from_failures,
-    _strict_issue_codes,
-    _tier,
 )
 from paperorchestra.loop_engine.quality.history import _build_cross_iteration, _failing_codes_from_quality_eval
-from paperorchestra.loop_engine.quality.leakage import (
-    _manuscript_prompt_leakage,
-    _manuscript_prompt_leakage_report,
-)
 from paperorchestra.loop_engine.quality.policy import DEFAULT_MAX_ITERATIONS, QUALITY_MODES
 from paperorchestra.loop_engine.quality.provenance import (
-    _mixed_provenance_acceptance,
-    _mixed_provenance_acceptance_path,
     _provenance_trust,
 )
 from paperorchestra.loop_engine.quality.utils import _file_sha256
@@ -88,11 +73,7 @@ def build_quality_eval(
         )
     )
     tiers: dict[str, Any] = {"tier_0_preconditions": tier0_result.tier}
-    leakage_surface = build_leakage_surface(
-        state,
-        leakage_scanner=_manuscript_prompt_leakage,
-        leakage_report_builder=_manuscript_prompt_leakage_report,
-    )
+    leakage_surface = build_leakage_surface(state)
 
     if tier0_result.tier["status"] == "fail":
         tiers["tier_1_structural"] = _skipped_tier("tier_0_preconditions failed")

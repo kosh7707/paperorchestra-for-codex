@@ -4,15 +4,8 @@ import json
 from pathlib import Path
 
 from paperorchestra.core.session import runtime_root
-from paperorchestra.loop_engine.quality import eval as quality_eval
 from paperorchestra.loop_engine.quality import provenance
 from paperorchestra.loop_engine.quality.utils import _sha256_jsonable
-
-
-def test_quality_eval_facade_exports_provenance_helpers() -> None:
-    assert quality_eval._provenance_trust is provenance._provenance_trust
-    assert quality_eval._mixed_provenance_acceptance_path is provenance._mixed_provenance_acceptance_path
-    assert quality_eval._mixed_provenance_acceptance is provenance._mixed_provenance_acceptance
 
 
 def test_provenance_trust_classifies_mock_mixed_and_live_evidence() -> None:

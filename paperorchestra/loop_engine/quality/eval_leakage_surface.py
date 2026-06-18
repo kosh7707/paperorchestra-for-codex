@@ -24,7 +24,6 @@ def build_leakage_surface(
         leakage = leakage_report["markers"]
         pdf_text_scan_unavailable = leakage_report["pdf_text_scan_unavailable"]
     else:
-        # Preserve the historical patch seam on quality.eval._manuscript_prompt_leakage.
         leakage = leakage_scanner(state)
         pdf_text_scan_unavailable = []
     return LeakageSurface(

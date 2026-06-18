@@ -6,14 +6,9 @@ from pathlib import Path
 
 from paperorchestra.core.session import artifact_path, runtime_root, set_current_session
 from paperorchestra.loop_engine.quality import artifact_checks
-from paperorchestra.loop_engine.quality import eval as quality_eval
+from paperorchestra.loop_engine.quality.utils import _file_sha256
 from paperorchestra.loop_engine.quality.policy import HISTORY_FILENAME
 from paperorchestra.loop_engine.ralph.state import QA_LOOP_HANDOFF_FILENAME
-
-
-def test_quality_eval_facade_exports_artifact_checks() -> None:
-    assert quality_eval._ralph_evidence_check is artifact_checks._ralph_evidence_check
-    assert quality_eval._figure_grounding_check is artifact_checks._figure_grounding_check
 
 
 def test_ralph_evidence_check_is_strict_only_in_claim_safe(tmp_path: Path) -> None:
@@ -71,7 +66,7 @@ def test_figure_grounding_check_reports_missing_unbound_stale_and_issue_figures(
     assert stale["status"] == "fail"
     assert stale["failing_codes"] == ["figure_placement_review_stale"]
 
-    expected_sha = quality_eval._file_sha256(paper)
+    expected_sha = _file_sha256(paper)
     review.write_text(
         json.dumps(
             {

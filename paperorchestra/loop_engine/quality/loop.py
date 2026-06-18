@@ -24,7 +24,8 @@ from .actions import (
     _warning_actions,
 )
 from .citation_support import _citation_support_path
-from .eval import _mixed_provenance_acceptance, build_quality_eval
+from .eval import build_quality_eval
+from .provenance import _mixed_provenance_acceptance
 from .history import _failing_codes_from_quality_eval, _tier_statuses, quality_loop_history_path
 from .plan_payload import QualityLoopPlanPayloadInput, build_quality_loop_plan_payload
 from .plan_logic import (

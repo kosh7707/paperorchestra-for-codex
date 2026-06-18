@@ -1,19 +1,10 @@
 from __future__ import annotations
 
-from paperorchestra.loop_engine.quality import eval as quality_eval
-from paperorchestra.loop_engine.quality import eval_tiers
 from paperorchestra.loop_engine.quality.eval_preconditions import (
     PreconditionContext,
     PreconditionTierBuilder,
     build_precondition_tier,
 )
-
-
-def test_quality_eval_facade_exports_tier_helpers() -> None:
-    assert quality_eval._strict_issue_codes is eval_tiers._strict_issue_codes
-    assert quality_eval._tier is eval_tiers._tier
-    assert quality_eval._skipped_tier is eval_tiers._skipped_tier
-    assert quality_eval._status_from_failures is eval_tiers._status_from_failures
 
 
 def test_precondition_tier_blocks_missing_paper_without_counting_planning_as_root_failure() -> None:
