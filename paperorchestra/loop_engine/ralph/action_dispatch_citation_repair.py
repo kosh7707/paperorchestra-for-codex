@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
+from paperorchestra.loop_engine.ralph.action_dispatch_dependencies import _handler_dependency
 from paperorchestra.loop_engine.ralph.action_dispatch_types import QaLoopActionDispatchContext, _QaLoopActionDispatchState
 from paperorchestra.loop_engine.ralph.citation_candidate_preservation import (
     preserve_citation_candidate_for_approval as _preserve_citation_candidate_for_approval,
@@ -12,13 +12,6 @@ from paperorchestra.loop_engine.ralph.repair import repair_citation_claims as _r
 from paperorchestra.loop_engine.ralph.semantic_recheck import _citation_repair_failure_payload
 from paperorchestra.loop_engine.ralph.state import _artifact_sha as _artifact_sha_real
 from paperorchestra.loop_engine.ralph.state import guarded_replace_manuscript_text as _guarded_replace_manuscript_text
-
-
-def _handler_dependency(name: str, default: Callable[..., Any]) -> Callable[..., Any]:
-    handlers = sys.modules.get("paperorchestra.loop_engine.ralph.action_dispatch_handlers")
-    if handlers is None:
-        return default
-    return getattr(handlers, name, default)
 
 
 def _handle_citation_repair(
