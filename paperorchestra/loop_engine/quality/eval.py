@@ -7,7 +7,6 @@ from paperorchestra.core.session import load_session
 
 from paperorchestra.loop_engine.quality.citation_support import _citation_support_path
 from paperorchestra.loop_engine.quality.eval_claim_safety import build_claim_safety_tier
-from paperorchestra.loop_engine.quality.artifact_checks import _ralph_evidence_check
 from paperorchestra.loop_engine.quality.eval_leakage_surface import build_leakage_surface
 from paperorchestra.loop_engine.quality.eval_payload import (
     build_human_finalization_tier,
@@ -25,6 +24,7 @@ from paperorchestra.loop_engine.quality.policy import DEFAULT_MAX_ITERATIONS, QU
 from paperorchestra.loop_engine.quality.provenance import (
     _provenance_trust,
 )
+from paperorchestra.loop_engine.quality.ralph_evidence_check import _ralph_evidence_check
 from paperorchestra.loop_engine.quality.utils import _file_sha256
 from paperorchestra.manuscript.narrative_artifacts import planning_artifact_status
 from paperorchestra.reviews.fidelity import run_fidelity_audit

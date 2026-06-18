@@ -5,7 +5,8 @@ from types import SimpleNamespace
 from pathlib import Path
 
 from paperorchestra.core.session import artifact_path, runtime_root, set_current_session
-from paperorchestra.loop_engine.quality import artifact_checks
+from paperorchestra.loop_engine.quality.figure_grounding_check import _figure_grounding_check
+from paperorchestra.loop_engine.quality.ralph_evidence_check import _ralph_evidence_check
 from paperorchestra.loop_engine.quality.utils import _file_sha256
 from paperorchestra.loop_engine.quality.policy import HISTORY_FILENAME
 from paperorchestra.loop_engine.ralph.state import QA_LOOP_HANDOFF_FILENAME
@@ -14,9 +15,9 @@ from paperorchestra.loop_engine.ralph.state import QA_LOOP_HANDOFF_FILENAME
 def test_ralph_evidence_check_is_strict_only_in_claim_safe(tmp_path: Path) -> None:
     set_current_session(tmp_path, "po-test")
 
-    assert artifact_checks._ralph_evidence_check(tmp_path, quality_mode="ralph")["status"] == "pass"
+    assert _ralph_evidence_check(tmp_path, quality_mode="ralph")["status"] == "pass"
 
-    claim_safe = artifact_checks._ralph_evidence_check(tmp_path, quality_mode="claim_safe")
+    claim_safe = _ralph_evidence_check(tmp_path, quality_mode="claim_safe")
     assert claim_safe["status"] == "fail"
     assert claim_safe["failing_codes"] == ["qa_loop_history_missing", "ralph_handoff_missing"]
 
@@ -36,7 +37,7 @@ def test_ralph_evidence_check_is_strict_only_in_claim_safe(tmp_path: Path) -> No
     history_path = runtime_root(tmp_path) / HISTORY_FILENAME
     history_path.write_text("[]", encoding="utf-8")
 
-    passed = artifact_checks._ralph_evidence_check(tmp_path, quality_mode="claim_safe")
+    passed = _ralph_evidence_check(tmp_path, quality_mode="claim_safe")
     assert passed["status"] == "pass"
     assert passed["failing_codes"] == []
     assert passed["ralph_handoff_sha256"]
@@ -54,15 +55,15 @@ def test_figure_grounding_check_reports_missing_unbound_stale_and_issue_figures(
         )
     )
 
-    assert artifact_checks._figure_grounding_check(state)["status"] == "skipped"
+    assert _figure_grounding_check(state)["status"] == "skipped"
 
     review.write_text('{"status":"pass"}', encoding="utf-8")
-    unbound = artifact_checks._figure_grounding_check(state)
+    unbound = _figure_grounding_check(state)
     assert unbound["status"] == "fail"
     assert unbound["failing_codes"] == ["figure_placement_review_unbound"]
 
     review.write_text(json.dumps({"status": "pass", "manuscript_sha256": "0" * 64}), encoding="utf-8")
-    stale = artifact_checks._figure_grounding_check(state)
+    stale = _figure_grounding_check(state)
     assert stale["status"] == "fail"
     assert stale["failing_codes"] == ["figure_placement_review_stale"]
 
@@ -88,7 +89,7 @@ def test_figure_grounding_check_reports_missing_unbound_stale_and_issue_figures(
         ),
         encoding="utf-8",
     )
-    warned = artifact_checks._figure_grounding_check(state)
+    warned = _figure_grounding_check(state)
     assert warned["status"] == "warn"
     assert warned["warning_codes"] == ["figure_caption_weak"]
     assert warned["figures"] == [

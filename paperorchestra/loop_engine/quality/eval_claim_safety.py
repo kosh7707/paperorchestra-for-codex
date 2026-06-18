@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.loop_engine.quality.artifact_checks import _figure_grounding_check
 from paperorchestra.loop_engine.quality.citation_support import _citation_support_check
 from paperorchestra.loop_engine.quality.eval_tiers import _status_from_failures, _tier
+from paperorchestra.loop_engine.quality.figure_grounding_check import _figure_grounding_check
 from paperorchestra.loop_engine.quality.policy import TIER2_CLAIM_CODES
 from paperorchestra.loop_engine.quality.reviews import _validation_issue_counts
 from paperorchestra.loop_engine.quality.source_checks import (
