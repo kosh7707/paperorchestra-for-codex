@@ -3,7 +3,7 @@ from __future__ import annotations
 from paperorchestra.feedback.operator_failure_payload import _compact_operator_attempt_failure
 from paperorchestra.feedback.operator_failure_payload import _operator_actionable_failure
 from paperorchestra.feedback.operator_failure_progress import _compact_blocked_candidate_progress
-from paperorchestra.feedback.operator_failure_repetition import _repeats_non_promotable_candidate
+from paperorchestra.feedback.operator_feedback_evaluation import _repeats_non_promotable_candidate
 
 
 def test_compact_operator_attempt_failure_keeps_only_code_count_diagnostics() -> None:

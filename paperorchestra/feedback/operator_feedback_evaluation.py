@@ -10,13 +10,13 @@ from paperorchestra.feedback.operator_contexts.citation_protection_regressions i
     _protected_supported_citation_regressions,
 )
 from paperorchestra.feedback.operator_candidate_hard_gate import _candidate_hard_gate
-from paperorchestra.feedback.operator_failure_repetition import _repeats_non_promotable_candidate
 from paperorchestra.feedback.operator_metric_delta import _active_tier2_metric_delta
 from paperorchestra.feedback.operator_incorporation import _issue_incorporation_detailed
 from paperorchestra.feedback.operator_quality_codes import _quality_failing_codes, _tier_failing_codes
 from paperorchestra.feedback.operator_records import _build_operator_attempt_record
 from paperorchestra.feedback.operator_verification import _verification_block, _verification_snapshot
 from paperorchestra.feedback.packet_artifacts import _file_sha256, _sha256_digest, _sha256_prefixed
+from paperorchestra.feedback.packet_bindings import _normalized_sha
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,23 @@ class OperatorAttemptEvaluation:
     gate_passed: bool
     gate_reasons: list[str]
     attempt_record: dict[str, Any]
+
+
+def _repeats_non_promotable_candidate(
+    prior_attempts: list[dict[str, Any]],
+    candidate_sha256: str | None,
+) -> bool:
+    candidate_sha = _normalized_sha(candidate_sha256)
+    if not candidate_sha:
+        return False
+    for prior in prior_attempts:
+        if not isinstance(prior, dict) or prior.get("gate_passed") is True:
+            continue
+        prior_sha = _normalized_sha(prior.get("candidate_sha256"))
+        prior_reasons = [str(reason) for reason in prior.get("gate_reasons") or [] if str(reason).strip()]
+        if prior_sha and prior_sha == candidate_sha and prior_reasons:
+            return True
+    return False
 
 
 def evaluate_operator_candidate_attempt(
