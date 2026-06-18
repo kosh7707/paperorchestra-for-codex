@@ -7,7 +7,7 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.session import load_session
 from paperorchestra.feedback import packet_artifacts as _packet_artifacts
 from paperorchestra.feedback import packet_bindings as _packet_bindings
-from paperorchestra.feedback.packet_discovery import _execution_payload_opens_operator_review
+from paperorchestra.feedback.packet_execution_openers import _execution_payload_opens_operator_review
 from paperorchestra.feedback.packet_plan_validation import _validate_current_operator_plan
 
 _BOUND_ARTIFACT_ROLES = {

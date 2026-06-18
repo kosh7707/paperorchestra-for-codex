@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 from paperorchestra.feedback.packet_bindings import _execution_payload_sha256
-from paperorchestra.feedback.packet_review_openers import (
-    _current_bound_execution_path,
+from paperorchestra.feedback.packet_bound_paths import _current_bound_execution_path
+from paperorchestra.feedback.packet_execution_openers import (
     _execution_payload_opens_candidate_review,
     _execution_payload_opens_operator_review,
 )

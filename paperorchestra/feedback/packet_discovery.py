@@ -7,17 +7,12 @@ from paperorchestra.core.io import read_json
 from paperorchestra.core.session import artifact_path, load_session
 from paperorchestra.feedback import packet_artifacts as _packet_artifacts
 from paperorchestra.feedback import packet_bindings as _packet_bindings
+from paperorchestra.feedback.packet_bound_paths import _current_bound_execution_path
 from paperorchestra.feedback.packet_execution_discovery import (
-    _first_existing,
     _latest_human_needed_execution,
     _latest_human_needed_operator_feedback_execution,
 )
-from paperorchestra.feedback.packet_review_openers import (
-    _current_bound_execution_path,
-    _execution_payload_opens_candidate_review,
-    _execution_payload_opens_operator_review,
-    _first_current_bound_existing,
-)
+from paperorchestra.feedback.packet_execution_openers import _execution_payload_opens_operator_review
 
 
 def _operator_review_human_needed_artifacts(cwd: str | Path | None) -> tuple[Path | None, Path | None, Path | None]:

@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.session import artifact_path
+from paperorchestra.feedback.packet_bound_paths import _first_current_bound_existing
 from paperorchestra.feedback.packet_artifacts import _artifact_record, _snapshot_operator_packet_artifacts
-from paperorchestra.feedback.packet_discovery import _first_current_bound_existing, _first_existing
+from paperorchestra.feedback.packet_execution_discovery import _first_existing
 from paperorchestra.reviews.citation_integrity_paths import citation_integrity_audit_path, citation_integrity_critic_path
 
 
