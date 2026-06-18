@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from paperorchestra.research.prior_work_seed_normalization import _normalize_seed_entry
+from paperorchestra.research.prior_work_seed_entry import _normalize_seed_entry
 
 _BIBTEX_SEED_FIELDS = ["title", "author", "editor", "organization", "year", "journal", "booktitle", "venue", "url", "doi", "abstract"]
 

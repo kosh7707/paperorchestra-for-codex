@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from paperorchestra.research.prior_work_seed_normalization import _coerce_year, _entry_external_ids, _normalize_doi
+from paperorchestra.research.prior_work_seed_dates import _coerce_year
+from paperorchestra.research.prior_work_seed_external_ids import _entry_external_ids, _normalize_doi
 
 
 def _parse_markdown_seed(text: str, *, default_source: str) -> list[dict[str, Any]]:

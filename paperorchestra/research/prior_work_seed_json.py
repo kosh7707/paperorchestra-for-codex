@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from paperorchestra.research.prior_work_seed_normalization import _normalize_seed_entry
+from paperorchestra.research.prior_work_seed_entry import _normalize_seed_entry
 
 
 def _parse_json_seed(text: str, *, default_source: str) -> list[dict[str, Any]]:
