@@ -3,13 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from paperorchestra.engine import refine_iteration_outcomes as outcomes
 from paperorchestra.engine.refine_iteration_assessment import write_and_assess_refinement_candidate
-from paperorchestra.engine.refine_iteration_outcomes import (
-    accepted_iteration_run,
-    candidate_only_iteration_run,
-    record_refinement_validation_outcome,
-    rejected_iteration_run,
-)
 from paperorchestra.engine.refine_iteration_types import (
     PreparedRefinementDraft,
     RefinementCandidateAssessment,
@@ -84,7 +79,7 @@ def run_refinement_iteration(
         writer_brief=writer_brief,
     )
     validation_name = f"validation.refine.iter-{draft.state.refinement_iteration + 1:02d}.json"
-    validation_outcome = record_refinement_validation_outcome(
+    validation_outcome = outcomes.record_refinement_validation_outcome(
         cwd=cwd,
         state=draft.state,
         iteration=draft.iteration,
@@ -105,7 +100,7 @@ def run_refinement_iteration(
         validation_payload=validation_outcome.validation_payload,
     )
     if candidate_only:
-        return candidate_only_iteration_run(
+        return outcomes.candidate_only_iteration_run(
             cwd=cwd,
             iteration=draft.iteration,
             assessment=assessment,
@@ -120,8 +115,8 @@ def run_refinement_iteration(
         assessment=assessment,
     )
     if decision.accept:
-        return accepted_iteration_run(cwd=cwd, draft=draft, assessment=assessment, decision=decision)
-    return rejected_iteration_run(cwd=cwd, draft=draft, assessment=assessment, decision=decision)
+        return outcomes.accepted_iteration_run(cwd=cwd, draft=draft, assessment=assessment, decision=decision)
+    return outcomes.rejected_iteration_run(cwd=cwd, draft=draft, assessment=assessment, decision=decision)
 
 
 __all__ = [

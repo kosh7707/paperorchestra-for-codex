@@ -30,6 +30,60 @@ def test_refine_current_paper_stops_when_iteration_runner_requests_stop(monkeypa
     assert results == [{"iteration": 1, "status": "stopped"}]
 
 
+def test_run_refinement_iteration_uses_outcomes_facade_monkeypatch(monkeypatch, tmp_path: Path) -> None:
+    from paperorchestra.engine import refine_iteration
+    from paperorchestra.engine import refine_iteration_outcomes as outcomes
+
+    draft = SimpleNamespace(
+        state=SimpleNamespace(refinement_iteration=0),
+        iteration=SimpleNamespace(candidate_iter=1),
+        validation_issues=[],
+        latex="candidate latex",
+        contract_regression_preservation="preserved",
+    )
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    monkeypatch.setattr(refine_iteration, "prepare_refinement_draft", lambda **kwargs: draft)
+    monkeypatch.setattr(
+        outcomes,
+        "record_refinement_validation_outcome",
+        lambda **kwargs: calls.append(("validation", kwargs))
+        or outcomes.RefinementValidationOutcome(
+            validation_path=tmp_path / "validation.json",
+            validation_payload={"ok": True},
+            failure_run=None,
+        ),
+    )
+    monkeypatch.setattr(
+        refine_iteration,
+        "write_and_assess_refinement_candidate",
+        lambda **kwargs: calls.append(("assessment", kwargs)) or SimpleNamespace(candidate=True),
+    )
+    monkeypatch.setattr(
+        outcomes,
+        "candidate_only_iteration_run",
+        lambda **kwargs: refine_iteration.RefinementIterationRun(result={"kind": "patched", **kwargs}, stop_after=True),
+    )
+
+    run = refine_iteration.run_refinement_iteration(
+        cwd=tmp_path,
+        provider=object(),
+        runtime_mode="compatibility",
+        require_compile_for_accept=False,
+        candidate_only=True,
+        claim_safe=False,
+        narrative_plan={},
+        claim_map={},
+        citation_placement_plan={},
+        writer_brief={},
+    )
+
+    assert run.result["kind"] == "patched"
+    assert run.result["contract_regression_preservation"] == "preserved"
+    assert calls[0][0] == "validation"
+    assert calls[1][0] == "assessment"
+
+
 def _state() -> SimpleNamespace:
     return SimpleNamespace(
         artifacts=SimpleNamespace(paper_full_tex="paper.tex", latest_review_json="review.json", latest_validation_json=None),
