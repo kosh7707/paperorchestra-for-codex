@@ -6,7 +6,7 @@ import pytest
 
 from paperorchestra.runtime import providers
 from paperorchestra.runtime.mock_provider import MockProvider
-from paperorchestra.runtime.provider_base import ProviderError
+from paperorchestra.runtime.provider_base import CompletionRequest, ProviderError, TransientProviderError
 
 
 def test_shell_provider_parses_json_and_shlex_commands(monkeypatch) -> None:
@@ -80,3 +80,66 @@ def test_direct_codex_web_search_capability_proof_is_auditable(monkeypatch) -> N
     }
     assert providers.provider_supports_web_search(provider) is True
     assert providers.provider_web_search_capability_proof(MockProvider()) is None
+
+
+def test_shell_provider_complete_forwards_request_env_and_returns_stdout(monkeypatch) -> None:
+    monkeypatch.delenv("PAPERO_MODEL_CMD", raising=False)
+    provider = providers.ShellProvider(command='["codex","--search","exec"]')
+    captured = {}
+
+    def fake_run_once(prompt: bytes, env: dict[str, str]) -> tuple[int, bytes, bytes, bool]:
+        captured["prompt"] = prompt.decode("utf-8")
+        captured["env"] = env
+        return 0, b"model output", b"", False
+
+    monkeypatch.setattr(provider, "_run_once", fake_run_once)
+
+    result = provider.complete(
+        CompletionRequest(
+            system_prompt="system",
+            user_prompt="user",
+            seed=123,
+            temperature=0.2,
+            max_output_tokens=456,
+        )
+    )
+
+    assert result == "model output"
+    assert "[SYSTEM]\nsystem" in captured["prompt"]
+    assert captured["env"]["PAPERO_PROVIDER_SEED"] == "123"
+    assert captured["env"]["PAPERO_PROVIDER_TEMPERATURE"] == "0.2"
+    assert captured["env"]["PAPERO_PROVIDER_MAX_OUTPUT_TOKENS"] == "456"
+
+
+def test_shell_provider_retries_safe_transport_failures_and_records_trace(monkeypatch, tmp_path) -> None:
+    monkeypatch.delenv("PAPERO_MODEL_CMD", raising=False)
+    monkeypatch.setenv("PAPERO_PROVIDER_RETRY_SAFE", "1")
+    monkeypatch.setenv("PAPERO_PROVIDER_RETRY_ATTEMPTS", "1")
+    monkeypatch.setenv("PAPERO_PROVIDER_RETRY_BACKOFF_SECONDS", "0")
+    monkeypatch.setenv("PAPERO_PROVIDER_RETRY_JITTER_SECONDS", "0")
+    monkeypatch.setenv("PAPERO_PROVIDER_RETRY_TRACE_DIR", str(tmp_path))
+    provider = providers.ShellProvider(command='["codex","--search","exec"]')
+    attempts = iter(
+        [
+            (1, b"", b"connection lost", False),
+            (0, b"ok after retry", b"", False),
+        ]
+    )
+    monkeypatch.setattr(provider, "_run_once", lambda prompt, env: next(attempts))
+
+    assert provider.complete(CompletionRequest(system_prompt="s", user_prompt="u")) == "ok after retry"
+
+    trace = (tmp_path / "provider-retry-attempts.jsonl").read_text(encoding="utf-8").splitlines()
+    assert [json.loads(line)["status"] for line in trace] == ["failure", "success"]
+    assert json.loads(trace[0])["will_replay"] is True
+
+
+def test_shell_provider_raises_transient_after_retryable_failure_exhausted(monkeypatch) -> None:
+    monkeypatch.delenv("PAPERO_MODEL_CMD", raising=False)
+    monkeypatch.setenv("PAPERO_PROVIDER_RETRY_SAFE", "1")
+    monkeypatch.setenv("PAPERO_PROVIDER_RETRY_ATTEMPTS", "0")
+    provider = providers.ShellProvider(command='["codex","--search","exec"]')
+    monkeypatch.setattr(provider, "_run_once", lambda prompt, env: (1, b"", b"connection lost", False))
+
+    with pytest.raises(TransientProviderError, match="retryable transport"):
+        provider.complete(CompletionRequest(system_prompt="s", user_prompt="u"))

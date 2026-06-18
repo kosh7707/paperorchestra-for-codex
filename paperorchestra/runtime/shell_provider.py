@@ -105,6 +105,22 @@ class ShellProvider(BaseProvider):
                 raise
         return proc.returncode if proc.returncode is not None else 1, stdout or b"", stderr or b"", timed_out
 
+    def _failure_detail(self, attempt: int, max_attempts: int, rc: int, stderr_text: str, timed_out: bool) -> str:
+        if timed_out:
+            timeout = self.timeout_seconds if self.timeout_seconds is not None else "unset"
+            return f"attempt {attempt}/{max_attempts}: timed out after {timeout}s + grace {self.timeout_grace_seconds:g}s"
+        return f"attempt {attempt}/{max_attempts}: exit {rc}: {stderr_text.strip() or '<empty stderr>'}"
+
+    def _failure_message(self, timed_out: bool, retryable: bool, stderr_text: str) -> str:
+        message = "Provider command timed out" if timed_out else "Provider command failed"
+        if retryable:
+            return message + " after retryable transport handling"
+        if timed_out:
+            return message + " without retryable transport evidence"
+        if is_retryable_provider_stderr(stderr_text) and not self.retry_safe:
+            return message + " with retry disabled because PAPERO_PROVIDER_RETRY_SAFE is not set"
+        return message
+
     def complete(self, request: CompletionRequest) -> str:
         env = os.environ.copy()
         env.pop("PAPERO_PROVIDER_SEED", None)
@@ -124,14 +140,7 @@ class ShellProvider(BaseProvider):
             transport_evidence = is_retryable_provider_stderr(stderr_text)
             retryable = self.retry_safe and transport_evidence
             reason = "transport_reconnect" if transport_evidence else ("plain_timeout" if timed_out else "non_retryable_failure")
-            if timed_out:
-                failures.append(
-                    f"attempt {attempt}/{max_attempts}: timed out after "
-                    f"{self.timeout_seconds if self.timeout_seconds is not None else 'unset'}s"
-                    f" + grace {self.timeout_grace_seconds:g}s"
-                )
-            else:
-                failures.append(f"attempt {attempt}/{max_attempts}: exit {rc}: {stderr_text.strip() or '<empty stderr>'}")
+            failures.append(self._failure_detail(attempt, max_attempts, rc, stderr_text, timed_out))
             self._record_retry_attempt({
                 "attempt": attempt,
                 "status": "failure",
@@ -149,15 +158,6 @@ class ShellProvider(BaseProvider):
                 if sleep_seconds > 0:
                     time.sleep(sleep_seconds)
                 continue
-            message = "Provider command failed"
-            if timed_out:
-                message = "Provider command timed out"
-            if retryable:
-                message += " after retryable transport handling"
-            elif timed_out:
-                message += " without retryable transport evidence"
-            elif is_retryable_provider_stderr(stderr_text) and not self.retry_safe:
-                message += " with retry disabled because PAPERO_PROVIDER_RETRY_SAFE is not set"
             details = "\n".join(failures)
             hint = (
                 " Increase PAPERO_PROVIDER_TIMEOUT_SECONDS for slow runs, "
@@ -166,7 +166,7 @@ class ShellProvider(BaseProvider):
                 "PAPERO_PROVIDER_RETRY_SAFE=1 only for commands that are safe to replay."
             )
             error_cls = TransientProviderError if retryable else ProviderError
-            raise error_cls(f"{message}:\n{details}{hint}")
+            raise error_cls(f"{self._failure_message(timed_out, retryable, stderr_text)}:\n{details}{hint}")
         raise ProviderError("Provider command failed without producing a result.")
 
     def fork(self) -> "ShellProvider":
