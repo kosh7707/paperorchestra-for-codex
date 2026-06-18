@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from paperorchestra.core.io import write_json
 from paperorchestra.core.session import set_current_session
-from paperorchestra.loop_engine.quality import section_quality
+from paperorchestra.loop_engine.quality.section_quality_check import _section_quality_check
 
 
 def _state(paper_path, review_path):
@@ -38,7 +38,7 @@ def test_section_quality_check_flags_low_required_fix_and_process_residue(tmp_pa
         },
     )
 
-    payload = section_quality._section_quality_check(tmp_path, _state(paper, review), quality_mode="claim_safe")
+    payload = _section_quality_check(tmp_path, _state(paper, review), quality_mode="claim_safe")
 
     assert payload["status"] == "fail"
     assert payload["failing_codes"] == [
@@ -59,10 +59,10 @@ def test_section_quality_check_rejects_stale_or_legacy_review(tmp_path) -> None:
     review = tmp_path / "section_review.json"
 
     write_json(review, {"schema_version": "legacy", "overall_section_score": 80})
-    legacy = section_quality._section_quality_check(tmp_path, _state(paper, review), quality_mode="claim_safe")
+    legacy = _section_quality_check(tmp_path, _state(paper, review), quality_mode="claim_safe")
     assert legacy["failing_codes"] == ["section_review_legacy_untrusted"]
 
     write_json(review, {"schema_version": "section-review/1", "manuscript_sha256": "stale", "overall_section_score": 80})
-    stale = section_quality._section_quality_check(tmp_path, _state(paper, review), quality_mode="claim_safe")
+    stale = _section_quality_check(tmp_path, _state(paper, review), quality_mode="claim_safe")
     assert stale["failing_codes"] == ["section_review_stale"]
     assert stale["actual_manuscript_sha256"] == "stale"
