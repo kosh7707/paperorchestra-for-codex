@@ -30,7 +30,7 @@ from paperorchestra.engine.refine_retry import maybe_retry_refinement_review
 from paperorchestra.engine.refine_review import should_accept_refinement_candidate
 from paperorchestra.engine.reports import collect_paper_contract_issues
 from paperorchestra.manuscript.prompts import PROMPTS
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def _prepare_refinement_draft(

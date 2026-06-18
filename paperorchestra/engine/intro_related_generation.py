@@ -20,7 +20,7 @@ from paperorchestra.engine.intro_related_support import (
 )
 from paperorchestra.engine.prompt_context import _data_block, _prompt_compact_text
 from paperorchestra.engine.reports import _blocking_issues
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 DECIMAL_GROUNDING_REPAIR_INSTRUCTION = (
     "- Every decimal or percent value in the LaTeX must appear verbatim in project_experimental_log. "

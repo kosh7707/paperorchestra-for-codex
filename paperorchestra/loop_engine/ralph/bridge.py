@@ -21,7 +21,8 @@ from paperorchestra.loop_engine.ralph.bridge_rollback import (
     restore_candidate_after_exception,
 )
 from paperorchestra.loop_engine.ralph.candidate_outcomes import should_override_no_progress
-from paperorchestra.runtime.providers import BaseProvider, get_citation_support_provider
+from paperorchestra.runtime.provider_base import BaseProvider
+from paperorchestra.runtime.provider_registry import get_citation_support_provider
 from .state import (
     TERMINAL_VERDICTS,
     StepResult,

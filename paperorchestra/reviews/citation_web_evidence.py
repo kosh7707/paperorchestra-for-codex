@@ -8,7 +8,7 @@ from typing import Any
 from paperorchestra.core.io import ExtractionError, extract_json
 from paperorchestra.reviews.citation_evidence import _clean_evidence
 from paperorchestra.reviews.citation_progress import _citation_progress_cite_label, _emit_citation_progress
-from paperorchestra.runtime.providers import BaseProvider, CompletionRequest
+from paperorchestra.runtime.provider_base import BaseProvider, CompletionRequest
 
 
 def _retrieved_web_evidence_for_item_ids(payload: dict[str, Any] | None, item_ids: set[str]) -> dict[str, Any] | None:

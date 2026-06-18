@@ -8,7 +8,7 @@ from paperorchestra.reviews.citation_web_evidence import (
     _retrieved_web_evidence_for_item_ids,
     _retrieved_web_evidence_is_reusable,
 )
-from paperorchestra.runtime.providers import BaseProvider, CompletionRequest
+from paperorchestra.runtime.provider_base import BaseProvider, CompletionRequest
 
 
 class FakeEvidenceProvider(BaseProvider):

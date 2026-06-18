@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 @dataclass(frozen=True)

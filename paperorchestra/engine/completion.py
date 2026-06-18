@@ -14,7 +14,8 @@ from paperorchestra.core.io import read_json, write_json, write_text
 from paperorchestra.core.models import utc_now_iso
 from paperorchestra.core.session import artifact_path, load_session, save_session
 from paperorchestra.runtime.omx_bridge import omx_exec_completion, omx_exec_json_completion
-from paperorchestra.runtime.providers import BaseProvider, CompletionRequest, ShellProvider
+from paperorchestra.runtime.provider_base import BaseProvider, CompletionRequest
+from paperorchestra.runtime.shell_provider import ShellProvider
 
 
 def _env_flag(name: str) -> bool:

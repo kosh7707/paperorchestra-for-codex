@@ -11,7 +11,7 @@ from paperorchestra.engine.completion import _lane_owner, _provider_name
 from paperorchestra.engine.intro_related_generation import IntroRelatedDraft
 from paperorchestra.engine.reports import _blocking_issues, _issue_messages, _record_validation_report
 from paperorchestra.runtime.parity import record_lane_manifest
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def persist_intro_related_outputs(

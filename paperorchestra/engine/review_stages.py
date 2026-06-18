@@ -33,7 +33,7 @@ from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.manuscript.citations import canonical_citation_keys
 from paperorchestra.manuscript.figure_review_builder import build_figure_placement_review
 from paperorchestra.runtime.parity import record_lane_manifest
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def write_figure_placement_review(

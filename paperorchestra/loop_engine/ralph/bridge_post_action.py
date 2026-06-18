@@ -15,7 +15,7 @@ from paperorchestra.loop_engine.ralph.bridge_records import build_verification_r
 from paperorchestra.loop_engine.ralph.state import _citation_summary, compute_progress_delta
 from paperorchestra.reviews.citation_model_writer import write_citation_support_review
 from paperorchestra.reviews.section_review import write_section_review
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 @dataclass(frozen=True)

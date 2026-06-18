@@ -23,7 +23,7 @@ from paperorchestra.research.bibtex import registry_to_bibtex
 from paperorchestra.research.literature import serialize_registry
 from paperorchestra.research.prior_work_seed import load_prior_work_seed, prior_work_entries_to_verified_papers
 from paperorchestra.runtime.parity import record_lane_manifest
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def research_prior_work(

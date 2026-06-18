@@ -17,7 +17,7 @@ from paperorchestra.feedback.packet_bindings import (
     _normalized_sha,
 )
 from paperorchestra.feedback.packets import _artifact_by_role
-from paperorchestra.runtime.providers import BaseProvider, ProviderError, TransientProviderError
+from paperorchestra.runtime.provider_base import BaseProvider, ProviderError, TransientProviderError
 
 
 def _load_packet_from_imported(imported: dict[str, Any]) -> dict[str, Any]:

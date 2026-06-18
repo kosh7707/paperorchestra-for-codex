@@ -13,7 +13,7 @@ from paperorchestra.feedback.operator_feedback_loop import (
 )
 from paperorchestra.feedback.operator_feedback_options import OperatorFeedbackOptions
 from paperorchestra.feedback.operator_snapshots import _session_snapshot
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def apply_operator_feedback(

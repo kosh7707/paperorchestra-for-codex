@@ -18,7 +18,7 @@ from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.manuscript.structure import _insert_block_into_section, _preferred_section_name
 from paperorchestra.manuscript.validation_types import ValidationIssue
 from paperorchestra.runtime.parity import record_lane_manifest
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def _fallback_plot_manifest(outline: dict[str, Any]) -> dict[str, Any]:

@@ -12,7 +12,7 @@ from paperorchestra.engine.completion import (
     _complete_with_runtime_mode,
 )
 from paperorchestra.engine.review_stages import compile_current_paper, record_current_validation_report
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 from paperorchestra.loop_engine.ralph.repair_issue_packet import (
     _claim_safety_repair_issues,
     _non_supported_citation_items,

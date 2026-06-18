@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.runtime.providers import ProviderError, TransientProviderError
+from paperorchestra.runtime.provider_base import ProviderError, TransientProviderError
 from paperorchestra.feedback import operator_candidates, operator_verification
 
 

@@ -7,7 +7,7 @@ from typing import Any
 from paperorchestra.core.io import write_json
 from paperorchestra.core.session import artifact_path
 from paperorchestra.loop_engine.quality.loop import append_quality_loop_history
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 from paperorchestra.feedback.operator_completion import (
     _operator_exception_actionable_failures,
     _operator_exception_execution_update,

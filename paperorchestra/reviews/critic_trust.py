@@ -3,7 +3,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from paperorchestra.runtime.providers import ProviderError, ShellProvider, provider_web_search_capability_proof
+from paperorchestra.runtime.provider_base import ProviderError
+from paperorchestra.runtime.provider_web import provider_web_search_capability_proof
+from paperorchestra.runtime.shell_provider import ShellProvider
 
 
 def _command_has_web_capability(command: str | None) -> bool:

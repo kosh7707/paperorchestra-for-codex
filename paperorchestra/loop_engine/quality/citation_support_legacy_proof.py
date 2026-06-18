@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.loop_engine.quality.utils import _file_sha256
-from paperorchestra.runtime.providers import exec_argv_prefix_proves_web_search
+from paperorchestra.runtime.provider_web import exec_argv_prefix_proves_web_search
 
 
 def _provider_proof_is_trusted(provenance: dict[str, Any], expected_direct_digest: str | None) -> bool:

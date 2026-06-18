@@ -10,7 +10,7 @@ from paperorchestra.engine.section_writing_repair_retry import (
     repair_retry_draft,
 )
 from paperorchestra.engine.section_writing_support import SECTION_REPAIRABLE_CODES, SectionDraftContext, SectionValidationContext
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def repair_section_draft_if_possible(

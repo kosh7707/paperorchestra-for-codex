@@ -17,7 +17,7 @@ from paperorchestra.reviews.citation_web_evidence import (
     _retrieved_evidence_file_sha256,
     _retrieved_web_evidence_is_reusable,
 )
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def reuse_or_prepare_citation_review_cache(

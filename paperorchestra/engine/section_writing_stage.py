@@ -23,7 +23,7 @@ from paperorchestra.engine.section_writing_repair import repair_section_draft_if
 from paperorchestra.engine.section_writing_support import normalize_section_draft, validate_section_draft
 from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.runtime.parity import record_lane_manifest
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def write_sections(

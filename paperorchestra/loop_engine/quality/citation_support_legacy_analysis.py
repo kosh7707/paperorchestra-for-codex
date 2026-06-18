@@ -15,7 +15,8 @@ from paperorchestra.loop_engine.quality.utils import _file_sha256, _read_json_if
 from paperorchestra.manuscript.citations import citation_entry_for_key
 from paperorchestra.reviews.citation_evidence import citation_item_has_valid_supporting_evidence
 from paperorchestra.reviews.citation_sentences import extract_cited_sentences
-from paperorchestra.runtime.providers import ShellProvider, get_citation_support_provider
+from paperorchestra.runtime.provider_registry import get_citation_support_provider
+from paperorchestra.runtime.shell_provider import ShellProvider
 
 
 @dataclass(frozen=True)

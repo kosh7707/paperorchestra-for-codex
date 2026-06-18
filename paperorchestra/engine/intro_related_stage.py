@@ -6,7 +6,7 @@ from paperorchestra.core.session import load_session
 from paperorchestra.engine.intro_related_generation import build_intro_related_draft
 from paperorchestra.engine.intro_related_persistence import persist_intro_related_outputs
 from paperorchestra.engine.intro_related_prompt import build_intro_related_prompt_plan
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def write_intro_related(

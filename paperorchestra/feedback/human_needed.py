@@ -22,7 +22,8 @@ from paperorchestra.feedback import human_needed_records as _records
 from paperorchestra.feedback.packet_artifacts import _file_sha256
 from paperorchestra.feedback.packets import _artifact_by_role, _validate_operator_packet_artifact_bindings
 from paperorchestra.core.errors import ContractError
-from paperorchestra.runtime.providers import BaseProvider, MockProvider
+from paperorchestra.runtime.mock_provider import MockProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 from paperorchestra.core.session import artifact_path, load_session, project_root, run_dir, runtime_root
 
 HUMAN_NEEDED_ANSWER_SCHEMA_VERSION = "human-needed-answer/1"

@@ -7,7 +7,7 @@ from typing import Any
 from paperorchestra.feedback.operator_candidates import _promote_candidate_text
 from paperorchestra.feedback.operator_feedback_options import OperatorFeedbackOptions
 from paperorchestra.feedback.operator_verification import _verification_block, _verification_snapshot
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 @dataclass(frozen=True)

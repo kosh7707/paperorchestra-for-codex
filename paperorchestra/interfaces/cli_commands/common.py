@@ -7,7 +7,8 @@ import os
 from pathlib import Path
 
 from paperorchestra.orchestra.omx_action_executor import OmxActionExecutor
-from paperorchestra.runtime.providers import BaseProvider, get_provider
+from paperorchestra.runtime.provider_base import BaseProvider
+from paperorchestra.runtime.provider_registry import get_provider
 
 
 def provider_from_args(args: argparse.Namespace) -> BaseProvider:

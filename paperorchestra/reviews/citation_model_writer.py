@@ -8,7 +8,7 @@ from paperorchestra.reviews.citation_model_writer_artifacts import finalize_cita
 from paperorchestra.reviews.citation_model_writer_cache import reuse_or_prepare_citation_review_cache
 from paperorchestra.reviews.citation_progress import _citation_progress_path
 from paperorchestra.reviews.citation_support_builder import build_citation_support_review
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def write_citation_support_review(

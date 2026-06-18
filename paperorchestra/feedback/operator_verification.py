@@ -16,7 +16,8 @@ from paperorchestra.reviews.citation_integrity_gate import write_citation_integr
 from paperorchestra.reviews.citation_rendered_references import write_rendered_reference_audit
 from paperorchestra.reviews.citation_model_writer import write_citation_support_review
 from paperorchestra.reviews.section_review import write_section_review
-from paperorchestra.runtime.providers import BaseProvider, get_citation_support_provider
+from paperorchestra.runtime.provider_base import BaseProvider
+from paperorchestra.runtime.provider_registry import get_citation_support_provider
 
 
 def _verification_snapshot(

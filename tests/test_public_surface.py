@@ -92,6 +92,10 @@ class PublicSurfaceTest(unittest.TestCase):
         root_py = {path.name for path in Path(paperorchestra.__file__).resolve().parent.glob("*.py")}
         self.assertLessEqual(root_py, {"__init__.py", "cli.py", "mcp_server.py"})
 
+    def test_runtime_provider_facade_is_not_reintroduced(self) -> None:
+        package_root = Path(paperorchestra.__file__).resolve().parent
+        self.assertFalse((package_root / "runtime" / "providers.py").exists())
+
     def test_runtime_reports_repo_and_package_roots_after_module_split(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         package_root = Path(paperorchestra.__file__).resolve().parent

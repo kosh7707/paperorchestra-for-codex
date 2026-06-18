@@ -20,7 +20,7 @@ from paperorchestra.engine.section_writing_support import (
 )
 from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.manuscript.structure import _canonical_generated_section_title
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 @dataclass(frozen=True)

@@ -9,7 +9,7 @@ from paperorchestra.core.session import artifact_path, create_session, load_sess
 from paperorchestra.engine.intro_related_stage import write_intro_related
 from paperorchestra.manuscript.narrative_artifacts import write_planning_artifacts
 from paperorchestra.runtime.mock_provider import MockProvider
-from paperorchestra.runtime.providers import BaseProvider, CompletionRequest
+from paperorchestra.runtime.provider_base import BaseProvider, CompletionRequest
 
 
 class SequenceProvider(BaseProvider):

@@ -12,7 +12,7 @@ from paperorchestra.feedback.operator_feedback_promotion import promote_operator
 from paperorchestra.feedback.operator_feedback_rollback import rollback_operator_feedback_candidate
 from paperorchestra.feedback.operator_snapshots import _restore_session_snapshot
 from paperorchestra.feedback.operator_verification import _verification_snapshot
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 @dataclass(frozen=True)

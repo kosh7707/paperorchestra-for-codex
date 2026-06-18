@@ -18,7 +18,7 @@ from paperorchestra.engine.schemas import OUTLINE_SCHEMA, normalize_outline_payl
 from paperorchestra.manuscript.narrative_artifacts import require_fresh_planning_artifacts, write_planning_artifacts
 from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.runtime.parity import record_lane_manifest
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def _append_unique_note(state, note: str, *, dedupe_window: int = 5) -> bool:

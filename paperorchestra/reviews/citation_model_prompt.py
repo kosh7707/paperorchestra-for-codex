@@ -5,7 +5,7 @@ import json
 from typing import Any
 
 from paperorchestra.core.io import ExtractionError, extract_json
-from paperorchestra.runtime.providers import BaseProvider, CompletionRequest
+from paperorchestra.runtime.provider_base import BaseProvider, CompletionRequest
 
 
 def _build_model_citation_review(

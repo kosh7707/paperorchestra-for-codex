@@ -14,7 +14,7 @@ from paperorchestra.reviews.citation_progress import (
     _load_citation_progress_checkpoint,
 )
 from paperorchestra.reviews.citation_web_evidence import _retrieved_web_evidence_for_item_ids
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def _build_model_citation_review_with_progress(

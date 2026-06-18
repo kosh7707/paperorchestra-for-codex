@@ -4,17 +4,26 @@ import json
 
 import pytest
 
-from paperorchestra.runtime import providers
 from paperorchestra.runtime.mock_provider import MockProvider
 from paperorchestra.runtime.provider_base import CompletionRequest, ProviderError, TransientProviderError
+from paperorchestra.runtime.provider_registry import get_provider
+from paperorchestra.runtime.provider_web import (
+    default_codex_web_provider_command,
+    exec_argv_prefix_proves_web_search,
+    hashlib_sha256_json,
+    provider_command_digest,
+    provider_supports_web_search,
+    provider_web_search_capability_proof,
+)
+from paperorchestra.runtime.shell_provider import ShellProvider
 
 
 def test_shell_provider_parses_json_and_shlex_commands(monkeypatch) -> None:
     monkeypatch.delenv("PAPERO_MODEL_CMD", raising=False)
     monkeypatch.delenv("PAPERO_PROVIDER_TIMEOUT_SECONDS", raising=False)
 
-    json_provider = providers.ShellProvider(command='["codex","--search","exec"]')
-    shell_provider = providers.ShellProvider(command="codex --search exec")
+    json_provider = ShellProvider(command='["codex","--search","exec"]')
+    shell_provider = ShellProvider(command="codex --search exec")
 
     assert json_provider.command_source == "explicit"
     assert json_provider.argv == ["codex", "--search", "exec"]
@@ -26,34 +35,34 @@ def test_shell_provider_rejects_non_allowlisted_executable(monkeypatch) -> None:
     monkeypatch.delenv("PAPERO_MODEL_CMD", raising=False)
 
     with pytest.raises(ProviderError, match="not allowlisted"):
-        providers.ShellProvider(command='["curl","https://example.invalid"]')
+        ShellProvider(command='["curl","https://example.invalid"]')
 
 
 def test_provider_registry_and_command_digest_keep_public_surface(monkeypatch) -> None:
     monkeypatch.delenv("PAPERO_MODEL_CMD", raising=False)
 
-    mock = providers.get_provider("mock")
-    shell = providers.get_provider("shell", command='["codex","--search","exec"]')
+    mock = get_provider("mock")
+    shell = get_provider("shell", command='["codex","--search","exec"]')
 
     assert isinstance(mock, MockProvider)
-    assert isinstance(shell, providers.ShellProvider)
-    assert providers.provider_command_digest(shell) == providers.hashlib_sha256_json(["codex", "--search", "exec"])
-    assert providers.provider_command_digest(mock) is None
+    assert isinstance(shell, ShellProvider)
+    assert provider_command_digest(shell) == hashlib_sha256_json(["codex", "--search", "exec"])
+    assert provider_command_digest(mock) is None
 
     with pytest.raises(ProviderError, match="Unsupported provider"):
-        providers.get_provider("unknown")
+        get_provider("unknown")
 
 
 def test_default_codex_web_provider_command_uses_optional_env_without_hardcoded_model(monkeypatch) -> None:
     monkeypatch.delenv("PAPERO_OMX_MODEL", raising=False)
     monkeypatch.delenv("PAPERO_OMX_REASONING_EFFORT", raising=False)
 
-    assert json.loads(providers.default_codex_web_provider_command()) == ["codex", "--search", "exec", "--skip-git-repo-check"]
+    assert json.loads(default_codex_web_provider_command()) == ["codex", "--search", "exec", "--skip-git-repo-check"]
 
     monkeypatch.setenv("PAPERO_OMX_MODEL", "frontier-latest")
     monkeypatch.setenv("PAPERO_OMX_REASONING_EFFORT", "high")
 
-    assert json.loads(providers.default_codex_web_provider_command()) == [
+    assert json.loads(default_codex_web_provider_command()) == [
         "codex",
         "--search",
         "exec",
@@ -67,24 +76,24 @@ def test_default_codex_web_provider_command_uses_optional_env_without_hardcoded_
 
 def test_direct_codex_web_search_capability_proof_is_auditable(monkeypatch) -> None:
     monkeypatch.delenv("PAPERO_MODEL_CMD", raising=False)
-    provider = providers.ShellProvider(command='["codex","--search","exec","--skip-git-repo-check"]')
+    provider = ShellProvider(command='["codex","--search","exec","--skip-git-repo-check"]')
 
-    proof = providers.provider_web_search_capability_proof(provider)
+    proof = provider_web_search_capability_proof(provider)
 
-    assert providers.exec_argv_prefix_proves_web_search(["codex", "--search", "exec"])
-    assert not providers.exec_argv_prefix_proves_web_search(["codex", "exec"])
+    assert exec_argv_prefix_proves_web_search(["codex", "--search", "exec"])
+    assert not exec_argv_prefix_proves_web_search(["codex", "exec"])
     assert proof == {
         "provider_capability_proof": "direct-codex-search/1",
-        "provider_command_digest": providers.hashlib_sha256_json(provider.argv),
+        "provider_command_digest": hashlib_sha256_json(provider.argv),
         "web_search_capable": True,
     }
-    assert providers.provider_supports_web_search(provider) is True
-    assert providers.provider_web_search_capability_proof(MockProvider()) is None
+    assert provider_supports_web_search(provider) is True
+    assert provider_web_search_capability_proof(MockProvider()) is None
 
 
 def test_shell_provider_complete_forwards_request_env_and_returns_stdout(monkeypatch) -> None:
     monkeypatch.delenv("PAPERO_MODEL_CMD", raising=False)
-    provider = providers.ShellProvider(command='["codex","--search","exec"]')
+    provider = ShellProvider(command='["codex","--search","exec"]')
     captured = {}
 
     def fake_run_once(prompt: bytes, env: dict[str, str]) -> tuple[int, bytes, bytes, bool]:
@@ -118,7 +127,7 @@ def test_shell_provider_retries_safe_transport_failures_and_records_trace(monkey
     monkeypatch.setenv("PAPERO_PROVIDER_RETRY_BACKOFF_SECONDS", "0")
     monkeypatch.setenv("PAPERO_PROVIDER_RETRY_JITTER_SECONDS", "0")
     monkeypatch.setenv("PAPERO_PROVIDER_RETRY_TRACE_DIR", str(tmp_path))
-    provider = providers.ShellProvider(command='["codex","--search","exec"]')
+    provider = ShellProvider(command='["codex","--search","exec"]')
     attempts = iter(
         [
             (1, b"", b"connection lost", False),
@@ -138,7 +147,7 @@ def test_shell_provider_raises_transient_after_retryable_failure_exhausted(monke
     monkeypatch.delenv("PAPERO_MODEL_CMD", raising=False)
     monkeypatch.setenv("PAPERO_PROVIDER_RETRY_SAFE", "1")
     monkeypatch.setenv("PAPERO_PROVIDER_RETRY_ATTEMPTS", "0")
-    provider = providers.ShellProvider(command='["codex","--search","exec"]')
+    provider = ShellProvider(command='["codex","--search","exec"]')
     monkeypatch.setattr(provider, "_run_once", lambda prompt, env: (1, b"", b"connection lost", False))
 
     with pytest.raises(TransientProviderError, match="retryable transport"):

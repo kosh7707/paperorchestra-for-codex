@@ -15,7 +15,7 @@ from paperorchestra.manuscript.revisions import write_revision_suggestions
 from paperorchestra.reviews.critic_trust import build_critic_trust_card, require_live_critic_trust
 from paperorchestra.reviews.citation_model_writer import write_citation_support_review
 from paperorchestra.reviews.section_review import write_section_review
-from paperorchestra.runtime.providers import get_citation_support_provider
+from paperorchestra.runtime.provider_registry import get_citation_support_provider
 
 
 def handle_research_prior_work(cwd: Path, args: argparse.Namespace) -> int:

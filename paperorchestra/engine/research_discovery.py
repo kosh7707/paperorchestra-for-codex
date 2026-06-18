@@ -14,7 +14,7 @@ from paperorchestra.engine.prompt_context import _data_block, _read_inputs
 from paperorchestra.engine.schemas import CANDIDATE_SCHEMA
 from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.research.literature import build_search_grounded_candidates, search_semantic_scholar
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def _outline_search_queries(outline: dict[str, Any]) -> tuple[list[str], int]:

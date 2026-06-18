@@ -10,7 +10,7 @@ from paperorchestra.core.session import save_session
 from paperorchestra.reviews.citation_model_cache import _citation_support_cache_dir, _citation_support_cache_key
 from paperorchestra.reviews.citation_model_writer_types import CitationWriteCacheState
 from paperorchestra.reviews.source_support import render_citation_support_human_needed_markdown
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def finalize_citation_support_review(

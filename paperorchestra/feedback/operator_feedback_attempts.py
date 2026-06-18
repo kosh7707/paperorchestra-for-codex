@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 from paperorchestra.feedback.operator_candidates import (
     _candidate_approval_source_role,
     _failed_operator_candidate_result,

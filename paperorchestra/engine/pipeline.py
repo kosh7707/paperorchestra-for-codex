@@ -22,7 +22,7 @@ from paperorchestra.engine.review_stages import (
 )
 from paperorchestra.reviews.reproducibility import write_reproducibility_audit
 from paperorchestra.runtime.parity import record_runtime_parity_report
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def _emit_stage_event(stage: str, event: str, **payload: Any) -> None:

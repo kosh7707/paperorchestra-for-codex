@@ -8,7 +8,7 @@ from paperorchestra.core.session import artifact_path, load_session, save_sessio
 from paperorchestra.engine.completion import _lane_owner
 from paperorchestra.engine.research_discovery import _build_candidate_payload
 from paperorchestra.runtime.parity import record_lane_manifest
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 def discover_papers(

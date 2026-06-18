@@ -14,7 +14,7 @@ from paperorchestra.reviews.citation_model_progress_review import _build_model_c
 from paperorchestra.reviews.citation_model_prompt import _build_model_citation_review
 from paperorchestra.reviews.citation_web_evidence import _citation_support_retrieved_evidence_sha256
 from paperorchestra.reviews.source_support import build_source_backed_citation_support_review
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 
 
 @dataclass(frozen=True)

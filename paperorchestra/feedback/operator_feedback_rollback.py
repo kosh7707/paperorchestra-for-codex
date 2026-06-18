@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.runtime.providers import BaseProvider
+from paperorchestra.runtime.provider_base import BaseProvider
 from paperorchestra.feedback.operator_snapshots import _restore_session_snapshot
 from paperorchestra.feedback.operator_verification import _verification_block, _verification_snapshot
 
