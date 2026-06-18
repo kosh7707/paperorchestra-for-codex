@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 import os
 import random
-import shlex
-import subprocess
 import time
 from pathlib import Path
 
@@ -17,6 +15,10 @@ from paperorchestra.runtime.provider_base import (
     _env_int,
     is_retryable_provider_stderr,
 )
+from paperorchestra.runtime.shell_provider_command import parse_shell_provider_command
+from paperorchestra.runtime.shell_provider_failures import provider_failure_detail, provider_failure_message
+from paperorchestra.runtime.shell_provider_process import run_provider_command_once
+from paperorchestra.runtime.shell_provider_trace import record_provider_retry_attempt
 
 
 class ShellProvider(BaseProvider):
@@ -43,83 +45,38 @@ class ShellProvider(BaseProvider):
         self.retry_trace_dir = Path(os.environ["PAPERO_PROVIDER_RETRY_TRACE_DIR"]) if os.environ.get("PAPERO_PROVIDER_RETRY_TRACE_DIR") else None
 
     def _parse_command(self, command: str) -> list[str]:
-        try:
-            parsed = json.loads(command)
-            if isinstance(parsed, list) and parsed and all(isinstance(item, str) for item in parsed):
-                argv = parsed
-            else:
-                raise ProviderError("Provider command JSON must be a non-empty string array.")
-        except json.JSONDecodeError:
-            argv = shlex.split(command)
-
-        if not argv:
-            raise ProviderError("Provider command must not be empty.")
-
-        executable = Path(argv[0]).name
-        allowlist = {
-            item.strip()
-            for item in os.environ.get(
-                "PAPERO_ALLOWED_PROVIDER_BINARIES",
-                "codex,openai,ollama,llm,claude,gemini",
-            ).split(",")
-            if item.strip()
-        }
-        if executable not in allowlist:
-            raise ProviderError(
-                f"Provider executable '{executable}' is not allowlisted. Set PAPERO_ALLOWED_PROVIDER_BINARIES to opt in."
-            )
-        return argv
+        return parse_shell_provider_command(command)
 
     def _record_retry_attempt(self, payload: dict[str, object]) -> None:
-        if self.retry_trace_dir is None:
-            return
-        self.retry_trace_dir.mkdir(parents=True, exist_ok=True)
-        path = self.retry_trace_dir / "provider-retry-attempts.jsonl"
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, sort_keys=True, ensure_ascii=False) + "\n")
+        record_provider_retry_attempt(self.retry_trace_dir, payload)
 
     def _run_once(self, prompt: bytes, env: dict[str, str]) -> tuple[int, bytes, bytes, bool]:
-        timed_out = False
-        with subprocess.Popen(
+        return run_provider_command_once(
             self.argv,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env,
-        ) as proc:
-            try:
-                stdout, stderr = proc.communicate(input=prompt, timeout=self.timeout_seconds)
-            except subprocess.TimeoutExpired:
-                timed_out = True
-                if self.timeout_grace_seconds > 0:
-                    try:
-                        stdout, stderr = proc.communicate(timeout=self.timeout_grace_seconds)
-                        return proc.returncode if proc.returncode is not None else 1, stdout or b"", stderr or b"", True
-                    except subprocess.TimeoutExpired:
-                        pass
-                proc.kill()
-                stdout, stderr = proc.communicate()
-            except BaseException:
-                proc.kill()
-                proc.wait()
-                raise
-        return proc.returncode if proc.returncode is not None else 1, stdout or b"", stderr or b"", timed_out
+            prompt,
+            env,
+            timeout_seconds=self.timeout_seconds,
+            timeout_grace_seconds=self.timeout_grace_seconds,
+        )
 
     def _failure_detail(self, attempt: int, max_attempts: int, rc: int, stderr_text: str, timed_out: bool) -> str:
-        if timed_out:
-            timeout = self.timeout_seconds if self.timeout_seconds is not None else "unset"
-            return f"attempt {attempt}/{max_attempts}: timed out after {timeout}s + grace {self.timeout_grace_seconds:g}s"
-        return f"attempt {attempt}/{max_attempts}: exit {rc}: {stderr_text.strip() or '<empty stderr>'}"
+        return provider_failure_detail(
+            attempt=attempt,
+            max_attempts=max_attempts,
+            rc=rc,
+            stderr_text=stderr_text,
+            timed_out=timed_out,
+            timeout_seconds=self.timeout_seconds,
+            timeout_grace_seconds=self.timeout_grace_seconds,
+        )
 
     def _failure_message(self, timed_out: bool, retryable: bool, stderr_text: str) -> str:
-        message = "Provider command timed out" if timed_out else "Provider command failed"
-        if retryable:
-            return message + " after retryable transport handling"
-        if timed_out:
-            return message + " without retryable transport evidence"
-        if is_retryable_provider_stderr(stderr_text) and not self.retry_safe:
-            return message + " with retry disabled because PAPERO_PROVIDER_RETRY_SAFE is not set"
-        return message
+        return provider_failure_message(
+            timed_out=timed_out,
+            retryable=retryable,
+            stderr_text=stderr_text,
+            retry_safe=self.retry_safe,
+        )
 
     def complete(self, request: CompletionRequest) -> str:
         env = os.environ.copy()
