@@ -5,7 +5,7 @@ from typing import Any
 from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import read_json
 from paperorchestra.feedback.operator_answer_constants import HUMAN_NEEDED_SELECTED_SOURCE_ALLOWED_KEYS
-from paperorchestra.feedback.packets import _artifact_by_role
+from paperorchestra.feedback.packet_records import _artifact_by_role
 
 
 def _validate_selected_handoff_source(

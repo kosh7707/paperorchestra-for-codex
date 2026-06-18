@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from paperorchestra.core.io import read_json
-from paperorchestra.feedback.packets import _artifact_by_role
+from paperorchestra.feedback.packet_records import _artifact_by_role
 
 
 def _load_artifact_payload(packet: dict[str, Any], role: str) -> dict[str, Any] | None:

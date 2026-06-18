@@ -6,7 +6,7 @@ from paperorchestra.feedback.operator_answer_metadata import (
     HUMAN_NEEDED_METADATA_SCHEMA_VERSION,
     HUMAN_NEEDED_PUBLIC_SCHEMA_VERSION,
 )
-from paperorchestra.feedback.packets import _artifact_by_role
+from paperorchestra.feedback.packet_records import _artifact_by_role
 
 
 def _action_id(action: dict[str, Any] | None) -> str:

@@ -26,7 +26,7 @@ from paperorchestra.feedback.operator_contract import (
 )
 from paperorchestra.feedback.candidate_approval import actionable_candidate_approval_role
 from paperorchestra.feedback.packet_artifacts import _file_sha256
-from paperorchestra.feedback.packets import _validate_operator_packet_artifact_bindings
+from paperorchestra.feedback.packet_artifact_validation import _validate_operator_packet_artifact_bindings
 from paperorchestra.runtime.mock_provider import MockProvider
 from paperorchestra.runtime.provider_base import BaseProvider
 def record_human_needed_answer(

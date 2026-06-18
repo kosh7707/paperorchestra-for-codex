@@ -5,7 +5,7 @@ from typing import Any
 from paperorchestra.core.io import read_json
 from paperorchestra.feedback.operator_contract import _read_packet
 from paperorchestra.feedback.packet_bindings import _artifact_bound_manuscript_sha, _normalized_sha
-from paperorchestra.feedback.packets import _artifact_by_role
+from paperorchestra.feedback.packet_records import _artifact_by_role
 
 
 def _load_packet_from_imported(imported: dict[str, Any]) -> dict[str, Any]:

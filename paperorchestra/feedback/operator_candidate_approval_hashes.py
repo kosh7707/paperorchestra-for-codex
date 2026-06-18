@@ -6,7 +6,7 @@ from typing import Any
 from paperorchestra.core.errors import ContractError
 from paperorchestra.feedback.packet_artifacts import _file_sha256, _sha256_digest
 from paperorchestra.feedback.packet_bindings import _execution_payload_sha256
-from paperorchestra.feedback.packets import _artifact_by_role
+from paperorchestra.feedback.packet_records import _artifact_by_role
 
 
 def _verified_candidate_file(approval: dict[str, Any]) -> tuple[Path, str]:

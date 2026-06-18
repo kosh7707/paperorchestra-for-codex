@@ -15,10 +15,8 @@ from paperorchestra.feedback.operator_packet_artifact_sources import (
 )
 from paperorchestra.feedback.operator_review_scope import _review_scope
 from paperorchestra.feedback.packet_artifacts import _file_sha256, _packet_sha256
-from paperorchestra.feedback.packets import (
-    _operator_review_human_needed_artifacts,
-    _validate_operator_packet_artifact_bindings,
-)
+from paperorchestra.feedback.packet_artifact_validation import _validate_operator_packet_artifact_bindings
+from paperorchestra.feedback.packet_discovery import _operator_review_human_needed_artifacts
 
 
 def build_operator_review_packet(

@@ -15,7 +15,8 @@ from paperorchestra.feedback.operator_contract_constants import (
 )
 from paperorchestra.feedback.operator_packet_io import _read_packet
 from paperorchestra.feedback.packet_artifacts import _file_sha256
-from paperorchestra.feedback.packets import _packet_has_human_needed_context, _validate_operator_packet_artifact_bindings
+from paperorchestra.feedback.packet_artifact_validation import _validate_operator_packet_artifact_bindings
+from paperorchestra.feedback.packet_context import _packet_has_human_needed_context
 
 
 def import_operator_feedback(
