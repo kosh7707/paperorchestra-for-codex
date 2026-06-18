@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.manuscript.validator_content import check_comparative_claims, check_numeric_grounding
+from paperorchestra.manuscript.validator_numeric import check_comparative_claims, check_numeric_grounding
 
 
 def test_numeric_grounding_ignores_layout_decimal_values() -> None:

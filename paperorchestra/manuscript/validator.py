@@ -15,17 +15,18 @@ from paperorchestra.manuscript.validator_citations import (
     check_citation_coverage,
     check_unknown_citations,
 )
-from paperorchestra.manuscript.validator_content import (
-    COMPARATIVE_CLAIM_PATTERNS,
-    _sanitize_layout_numbers,
-    check_comparative_claims,
-    check_expected_section_substance,
+from paperorchestra.manuscript.validator_figures import (
     check_figure_file_coverage,
     check_generated_plot_asset_usage,
-    check_numeric_grounding,
     check_plot_plan_coverage,
+)
+from paperorchestra.manuscript.validator_numeric import (
+    COMPARATIVE_CLAIM_PATTERNS,
+    check_comparative_claims,
+    check_numeric_grounding,
     extract_decimal_like_tokens,
 )
+from paperorchestra.manuscript.validator_sections import check_expected_section_substance
 
 
 def validate_manuscript(
