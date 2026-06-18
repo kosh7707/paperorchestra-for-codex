@@ -7,6 +7,11 @@ def _by_name(profiles: list[dict[str, object]]) -> dict[str, dict[str, object]]:
     return {str(profile["name"]): profile for profile in profiles}
 
 
+def test_readiness_profile_facade_keeps_builder_surface() -> None:
+    assert readiness_profiles.ReadinessProfileBuilder.__name__ == "ReadinessProfileBuilder"
+    assert readiness_profiles.TRUTHY_ENV_VALUES == {"1", "true", "yes", "on"}
+
+
 def test_readiness_profiles_report_all_ready_when_inputs_and_strict_gates_pass(monkeypatch) -> None:
     monkeypatch.setenv("PAPERO_STRICT_CONTENT_GATES", "1")
 
