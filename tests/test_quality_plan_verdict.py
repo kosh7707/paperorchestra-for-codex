@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.loop_engine.quality.plan_readiness import _quality_eval_ready
+from paperorchestra.loop_engine.quality.plan_verdict import _quality_eval_ready
 from paperorchestra.loop_engine.quality.plan_verdict import _plan_verdict
 
 
