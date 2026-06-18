@@ -5,6 +5,7 @@ from pathlib import Path
 
 from paperorchestra.feedback import operator_context
 from paperorchestra.feedback.operator_contract import OPERATOR_PACKET_SCHEMA_VERSION
+from paperorchestra.feedback.operator_contexts import citation_issues
 from paperorchestra.feedback.packet_artifacts import _file_sha256, _packet_sha256
 
 
@@ -110,3 +111,58 @@ def test_operator_issue_context_reads_packet_artifacts_without_name_errors(tmp_p
     assert context["figure_placement_issues"][0]["label"] == "fig:pipeline"
     assert context["refinement_constraints"]["forbidden_new_tier2_codes"]
     assert context["protected_supported_citation_items"][0]["id"] == "supported-1"
+
+
+def test_citation_issue_context_projects_problematic_items_and_limits_examples() -> None:
+    problematic = citation_issues._problematic_citation_context(
+        {
+            "items": [
+                {"id": "ok", "support_status": "supported", "sentence": "ok"},
+                {"id": "weak", "support_status": "weakly_supported", "citation_keys": ["A"], "sentence": "weak"},
+                {"id": "manual", "status": "manual_check", "citation_keys": ["B"], "sentence": "manual"},
+            ]
+        },
+        limit=1,
+    )
+
+    assert problematic == [
+        {
+            "id": "weak",
+            "support_status": "weakly_supported",
+            "claim_type": None,
+            "risk": None,
+            "sentence": "weak",
+            "citation_keys": ["A"],
+            "suggested_fix": "",
+            "model_reasoning": "",
+        }
+    ]
+
+
+def test_duplicate_and_density_contexts_preserve_ordering_and_caps() -> None:
+    duplicate = citation_issues._duplicate_support_context(
+        {"checks": {"duplicate_support": {"duplicate_keys": ["A"]}}},
+        {
+            "items": [
+                {"id": "one", "citation_keys": ["A"], "sentence": "one"},
+                {"id": "two", "citation_keys": ["A"], "sentence": "two"},
+            ]
+        },
+        examples_per_key=1,
+    )
+    density = citation_issues._citation_density_context(
+        {
+            "checks": {
+                "citation_density": {
+                    "bomb_sentences": [{"id": "s", "sentence": "sentence", "citation_keys": ["A"]}],
+                    "bomb_paragraph_key_sets": [["B", "C"]],
+                }
+            }
+        }
+    )
+
+    assert duplicate[0]["occurrence_count"] == 2
+    assert duplicate[0]["affected_items"] == [
+        {"id": "one", "support_status": "unknown", "claim_type": None, "risk": None, "sentence": "one"}
+    ]
+    assert [item["issue_type"] for item in density] == ["citation_bomb_sentence", "citation_bomb_paragraph"]
