@@ -15,7 +15,7 @@ from paperorchestra.reviews.evaluation_constants import (
 from paperorchestra.reviews.evaluation_io import _write_json_artifact
 from paperorchestra.reviews.evaluation_session_summary import build_session_eval_summary
 from paperorchestra.reviews.generated_citations import build_generated_citation_titles
-from paperorchestra.reviews.review_gate_comparison import build_review_gate_comparison
+from paperorchestra.reviews.review_gate_io import build_review_gate_comparison
 
 
 def build_reference_comparison(reference_case_path: str | Path, cwd: str | Path | None) -> dict[str, Any]:

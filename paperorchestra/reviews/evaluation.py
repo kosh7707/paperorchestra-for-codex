@@ -21,7 +21,7 @@ from paperorchestra.reviews.evaluation_reference_comparison import (
 )
 from paperorchestra.reviews.evaluation_session_summary import build_session_eval_summary, write_session_eval_summary
 from paperorchestra.reviews.generated_citations import build_generated_citation_titles
-from paperorchestra.reviews.review_gate_comparison import build_review_gate_comparison
+from paperorchestra.reviews.review_gate_io import build_review_gate_comparison
 
 __all__ = [
     "EXPECTED_LITERATURE_REVIEW_AXES",
