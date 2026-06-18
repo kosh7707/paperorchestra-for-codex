@@ -7,11 +7,6 @@ from typing import Any
 from paperorchestra.core.io import write_json
 from paperorchestra.loop_engine.quality.utils import _file_sha256, _read_json_if_exists
 from paperorchestra.manuscript.validator import extract_citation_keys
-from paperorchestra.reviews.citation_integrity_artifacts import (
-    _artifact_check,
-    _critic_review_artifact,
-    _payload_status,
-)
 from paperorchestra.reviews.citation_integrity_gate import (
     build_citation_integrity_critic,
     citation_integrity_check,

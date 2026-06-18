@@ -3,18 +3,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from paperorchestra.reviews import citation_integrity, citation_integrity_artifacts
+from paperorchestra.reviews import citation_integrity_artifacts
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> Path:
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
-
-
-def test_citation_integrity_facade_reexports_artifact_helpers() -> None:
-    assert citation_integrity._payload_status is citation_integrity_artifacts._payload_status
-    assert citation_integrity._artifact_check is citation_integrity_artifacts._artifact_check
-    assert citation_integrity._critic_review_artifact is citation_integrity_artifacts._critic_review_artifact
 
 
 def test_payload_status_accepts_status_verdict_and_overall_status() -> None:
