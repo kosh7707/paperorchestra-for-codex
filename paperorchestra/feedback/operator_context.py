@@ -6,26 +6,12 @@ from typing import Any
 from paperorchestra.core.boundary import sanitize_author_facing_text
 from paperorchestra.core.io import write_json
 from paperorchestra.core.session import artifact_path
-from paperorchestra.feedback.operator_contract import OPERATOR_SOURCE
-from paperorchestra.feedback.operator_contexts.citations import (
-    _citation_density_context,
-    _duplicate_support_context,
-    _problematic_citation_context,
-    _protected_citation_target_context,
-    _protected_item_text,
-    _protected_supported_citation_context,
-    _protected_supported_citation_regressions,
-)
-from paperorchestra.feedback.operator_contexts.figures import _figure_issue_context
-from paperorchestra.feedback.operator_contexts.claims import _high_risk_claim_context
-from paperorchestra.feedback.operator_contexts.metrics import (
-    _compact_metric_delta_records,
-    _compact_prior_rejected_attempts,
-    _operator_refinement_constraints,
-)
-from paperorchestra.feedback.operator_contexts.packet import _packet_payload_by_role
-from paperorchestra.feedback.operator_contexts.text import _normalized_context_text, _truncate_context_text
-from paperorchestra.feedback.operator_contract import _read_packet
+from paperorchestra.feedback.operator_contract import OPERATOR_SOURCE, _read_packet
+from paperorchestra.feedback.operator_contexts import citations as _citations
+from paperorchestra.feedback.operator_contexts import claims as _claims
+from paperorchestra.feedback.operator_contexts import figures as _figures
+from paperorchestra.feedback.operator_contexts import metrics as _metrics
+from paperorchestra.feedback.operator_contexts import packet as _packet
 
 
 def _operator_review_payload(imported: dict[str, Any], *, prior_attempts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -72,19 +58,19 @@ def _operator_issue_context(imported: dict[str, Any], *, prior_attempts: list[di
         packet = _read_packet(packet_path)
     except Exception:
         return {}
-    citation_review = _packet_payload_by_role(packet, "citation_support_review")
-    quality_eval = _packet_payload_by_role(packet, "quality_eval")
-    citation_integrity_audit = _packet_payload_by_role(packet, "citation_integrity_audit")
-    figure_placement_review = _packet_payload_by_role(packet, "figure_placement_review")
-    prior_rejected_attempts = _compact_prior_rejected_attempts(prior_attempts)
-    protected_supported = _protected_supported_citation_context(citation_review, citation_integrity_audit)
+    citation_review = _packet._packet_payload_by_role(packet, "citation_support_review")
+    quality_eval = _packet._packet_payload_by_role(packet, "quality_eval")
+    citation_integrity_audit = _packet._packet_payload_by_role(packet, "citation_integrity_audit")
+    figure_placement_review = _packet._packet_payload_by_role(packet, "figure_placement_review")
+    prior_rejected_attempts = _metrics._compact_prior_rejected_attempts(prior_attempts)
+    protected_supported = _citations._protected_supported_citation_context(citation_review, citation_integrity_audit)
     context = {
-        "problematic_citation_items": _problematic_citation_context(citation_review),
-        "high_risk_uncited_claims": _high_risk_claim_context(quality_eval),
-        "citation_density_issues": _citation_density_context(citation_integrity_audit),
-        "citation_duplicate_support_issues": _duplicate_support_context(citation_integrity_audit, citation_review),
-        "figure_placement_issues": _figure_issue_context(figure_placement_review),
-        "refinement_constraints": _operator_refinement_constraints(quality_eval, citation_integrity_audit),
+        "problematic_citation_items": _citations._problematic_citation_context(citation_review),
+        "high_risk_uncited_claims": _claims._high_risk_claim_context(quality_eval),
+        "citation_density_issues": _citations._citation_density_context(citation_integrity_audit),
+        "citation_duplicate_support_issues": _citations._duplicate_support_context(citation_integrity_audit, citation_review),
+        "figure_placement_issues": _figures._figure_issue_context(figure_placement_review),
+        "refinement_constraints": _metrics._operator_refinement_constraints(quality_eval, citation_integrity_audit),
         "writer_instruction": (
             "Use these concrete sentences as the primary repair targets. Do not add new bibliography keys; "
             "either ground each sentence with existing directly supporting evidence, soften it into scoped author-material prose, or remove it. "

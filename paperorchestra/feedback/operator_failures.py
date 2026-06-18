@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.feedback.operator_context import _compact_metric_delta_records
+from paperorchestra.feedback.operator_contexts.metrics import _compact_metric_delta_records
 from paperorchestra.feedback.packet_bindings import _normalized_sha
 
 

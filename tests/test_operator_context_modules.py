@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 from paperorchestra.feedback import operator_context
-from paperorchestra.feedback.operator_contexts import citations, claims, figures, metrics, packet, text
 from paperorchestra.feedback.operator_contract import OPERATOR_PACKET_SCHEMA_VERSION
 from paperorchestra.feedback.packet_artifacts import _file_sha256, _packet_sha256
 
@@ -97,15 +96,6 @@ def _operator_packet(tmp_path: Path) -> Path:
     }
     packet["packet_sha256"] = _packet_sha256(packet)
     return _write_json(tmp_path / "packet.json", packet)
-
-
-def test_operator_context_facade_reexports_split_helpers() -> None:
-    assert operator_context._truncate_context_text is text._truncate_context_text
-    assert operator_context._packet_payload_by_role is packet._packet_payload_by_role
-    assert operator_context._problematic_citation_context is citations._problematic_citation_context
-    assert operator_context._high_risk_claim_context is claims._high_risk_claim_context
-    assert operator_context._figure_issue_context is figures._figure_issue_context
-    assert operator_context._compact_metric_delta_records is metrics._compact_metric_delta_records
 
 
 def test_operator_issue_context_reads_packet_artifacts_without_name_errors(tmp_path: Path) -> None:
