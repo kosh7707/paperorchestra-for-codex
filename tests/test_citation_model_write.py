@@ -6,7 +6,7 @@ from pathlib import Path
 from paperorchestra.core.models import ArtifactIndex, InputBundle, SessionState, utc_now_iso
 from paperorchestra.core.session import save_session, set_current_session
 from paperorchestra.reviews.citation_model_cache import _citation_support_cache_dir
-from paperorchestra.reviews.citation_model_review import write_citation_support_review
+from paperorchestra.reviews.citation_model_writer import write_citation_support_review
 from paperorchestra.runtime.provider_base import BaseProvider, CompletionRequest
 
 

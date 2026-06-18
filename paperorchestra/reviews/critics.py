@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from paperorchestra.reviews.citation_model_review import (
-    build_citation_support_review,
-    citation_item_has_valid_supporting_evidence,
-    write_citation_support_review,
-)
+from paperorchestra.reviews.citation_evidence import citation_item_has_valid_supporting_evidence
+from paperorchestra.reviews.citation_model_writer import write_citation_support_review
+from paperorchestra.reviews.citation_support_builder import build_citation_support_review
 from paperorchestra.reviews.section_review import build_section_review, write_section_review
 from paperorchestra.reviews.source_support import (
     build_citation_source_retrieval_debug,
