@@ -13,14 +13,9 @@ from paperorchestra.manuscript.revision_actions import (
     _target_for_item,
     _target_for_section_title,
 )
-from paperorchestra.manuscript.revision_sources import (
-    _iter_citation_findings,
-    _iter_review_findings,
-    _iter_section_findings,
-    _load_optional_json,
-    _section_diagnostics,
-    _section_files,
-)
+from paperorchestra.manuscript.revision_issue_findings import _iter_citation_findings, _iter_section_findings
+from paperorchestra.manuscript.revision_review_findings import _iter_review_findings
+from paperorchestra.manuscript.revision_source_files import _load_optional_json, _section_diagnostics, _section_files
 
 
 def build_revision_suggestions(

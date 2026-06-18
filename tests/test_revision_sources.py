@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 
 from paperorchestra.manuscript import revisions
-from paperorchestra.manuscript import revision_sources as sources
+from paperorchestra.manuscript.revision_review_findings import _iter_review_findings
+from paperorchestra.manuscript.revision_source_files import _section_diagnostics, _section_files
 
 
 def test_review_findings_collect_summary_questions_penalties_and_low_axes() -> None:
@@ -15,7 +16,7 @@ def test_review_findings_collect_summary_questions_penalties_and_low_axes() -> N
         "axis_scores": {"clarity": {"score": 55, "justification": "Hard to follow"}, "novelty": {"score": 80}},
     }
 
-    findings = sources._iter_review_findings(review)
+    findings = _iter_review_findings(review)
 
     assert [finding["source"] for finding in findings] == [
         "summary.weaknesses",
@@ -35,8 +36,8 @@ def test_section_files_and_diagnostics_map_included_tex_files(tmp_path: Path) ->
     intro.write_text(r"Intro words \cite{A}. TODO", encoding="utf-8")
     method.write_text("Method words.", encoding="utf-8")
 
-    section_map = sources._section_files(paper)
-    diagnostics = sources._section_diagnostics(section_map)
+    section_map = _section_files(paper)
+    diagnostics = _section_diagnostics(section_map)
 
     assert section_map["introduction_related_work"] == str(intro)
     assert section_map["proposed_method"] == str(method)
