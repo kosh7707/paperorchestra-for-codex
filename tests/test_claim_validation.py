@@ -62,3 +62,29 @@ def test_citation_placement_reports_missing_key_in_target_section() -> None:
 
     assert [issue.code for issue in issues] == ["citation_placement_missing"]
     assert "Needed" in issues[0].message
+
+
+def test_narrative_section_roles_reports_missing_coverage_group_and_story_beat() -> None:
+    plan = {
+        "section_roles": [
+            {
+                "section_title": "Method",
+                "coverage_requirements": [
+                    {"authorial_claim": "Recall-preserving source triage", "coverage_groups": [["recall", "triage"]]},
+                ],
+            }
+        ],
+        "story_beats": [
+            {"target_section": "Results", "beat": "Report precision trend", "coverage_groups": [["precision", "trend"]]},
+        ],
+    }
+    latex = r"\section{Method} The system discusses recall only. \section{Results} The experiment reports precision only."
+
+    issues = claim_validation.check_narrative_section_roles(latex, plan)
+
+    assert [issue.code for issue in issues] == [
+        "narrative_section_role_missing",
+        "narrative_story_beat_missing",
+    ]
+    assert "Recall-preserving source triage" in issues[0].message
+    assert "Report precision trend" in issues[1].message
