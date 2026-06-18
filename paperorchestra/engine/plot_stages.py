@@ -9,14 +9,12 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import extract_json, read_json, write_json
 from paperorchestra.core.session import artifact_path, build_path, load_session, save_session
 from paperorchestra.engine.completion import _build_completion_request, _complete_with_runtime_mode, _lane_owner
-from paperorchestra.engine.latex_postprocess import _escape_latex_text, _is_generated_placeholder_asset
 from paperorchestra.engine.prompt_context import _data_block, _prompt_compact_text, _read_inputs
+from paperorchestra.engine.plot_repairs import _inject_missing_plot_assets
 from paperorchestra.engine.research_discovery import _build_candidate_payload, _write_candidate_artifacts
 from paperorchestra.engine.schemas import PLOT_SCHEMA, validate_plot_manifest
 from paperorchestra.manuscript.plot_assets import render_plot_assets
 from paperorchestra.manuscript.prompts import PROMPTS
-from paperorchestra.manuscript.structure import _insert_block_into_section, _preferred_section_name
-from paperorchestra.manuscript.validation_types import ValidationIssue
 from paperorchestra.runtime.parity import record_lane_manifest
 from paperorchestra.runtime.provider_base import BaseProvider
 
@@ -160,62 +158,6 @@ def run_parallel_plot_and_literature(
         "candidates": str(candidate_path),
     }
 
-
-def _missing_plot_ids(issues: list[ValidationIssue]) -> list[str]:
-    prefix = "Plot-plan figures are not represented in the manuscript:"
-    missing: list[str] = []
-    for issue in issues:
-        if issue.code != "plot_plan_not_reflected":
-            continue
-        if prefix in issue.message:
-            suffix = issue.message.split(prefix, 1)[1]
-            missing.extend(part.strip() for part in suffix.split(",") if part.strip())
-    return sorted(set(missing))
-
-
-def _inject_missing_plot_assets(
-    latex: str,
-    issues: list[ValidationIssue],
-    plot_assets_index: dict[str, Any] | None,
-) -> str:
-    missing_ids = set(_missing_plot_ids(issues))
-    if not missing_ids or not isinstance(plot_assets_index, dict):
-        return latex
-    assets = plot_assets_index.get("assets", [])
-    rendered = latex
-    for asset in assets:
-        if not isinstance(asset, dict):
-            continue
-        if _is_generated_placeholder_asset(asset):
-            continue
-        figure_id = asset.get("figure_id", "")
-        if figure_id not in missing_ids:
-            continue
-        snippet_path = asset.get("latex_snippet_path") or asset.get("latex_path")
-        title = asset.get("title", figure_id)
-        caption = asset.get("caption", title)
-        include = f"\\input{{{snippet_path}}}" if isinstance(snippet_path, str) and snippet_path.endswith(".tex") else f"\\includegraphics[width=0.85\\linewidth]{{{snippet_path}}}"
-        block = (
-            f"\n% PaperOrchestra:auto-repaired figure:{figure_id}\n"
-            "\\begin{figure}[!htbp]\n"
-            f"{include}\n"
-            f"\\caption{{{_escape_latex_text(caption)}}}\n"
-            f"\\label{{{figure_id}}}\n"
-            "\\end{figure}\n"
-        )
-        section_name = _preferred_section_name(
-            rendered,
-            label=figure_id,
-            anchor_tokens=[title, caption, figure_id.replace("_", " ")],
-        )
-        rendered = _insert_block_into_section(
-            rendered,
-            section_name=section_name,
-            block=block,
-            label=figure_id,
-            anchor_tokens=[title, caption, figure_id.replace("_", " ")],
-        )
-    return rendered
 
 
 def generate_plots(cwd: str | Path | None, provider: BaseProvider | None = None, *, runtime_mode: str = "compatibility") -> Path:
