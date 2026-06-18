@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from paperorchestra.engine import prompt_compaction as compact
+from paperorchestra.engine.prompt_citation_compaction import _compact_citation_map_for_prompt
+from paperorchestra.engine.prompt_figure_compaction import (
+    _compact_plot_assets_for_prompt,
+    _compact_plot_manifest_for_prompt,
+)
+from paperorchestra.engine.prompt_outline_compaction import (
+    _compact_intro_related_plan_for_prompt,
+    _compact_outline_for_prompt,
+)
 
 
 def test_prompt_compaction_trims_outline_and_intro_related_plan() -> None:
@@ -25,11 +33,11 @@ def test_prompt_compaction_trims_outline_and_intro_related_plan() -> None:
         "related_work_strategy": {"overview": "Overview", "subsections": [{"subsection_title": "RW"}] * 5},
     }
 
-    assert compact._compact_outline_for_prompt(outline)["section_plan"][0]["subsections"] == [
+    assert _compact_outline_for_prompt(outline)["section_plan"][0]["subsections"] == [
         {"subsection_title": "A", "content_bullets": ["one"], "citation_hints": ["c1"]},
         {"subsection_title": "B", "content_bullets": ["three"], "citation_hints": []},
     ]
-    assert len(compact._compact_intro_related_plan_for_prompt(plan)["related_work_strategy"]["subsections"]) == 4
+    assert len(_compact_intro_related_plan_for_prompt(plan)["related_work_strategy"]["subsections"]) == 4
 
 
 def test_prompt_compaction_trims_plot_payloads_and_citation_map() -> None:
@@ -47,9 +55,9 @@ def test_prompt_compaction_trims_plot_payloads_and_citation_map() -> None:
         },
     }
 
-    plots = compact._compact_plot_manifest_for_prompt({"figures": [{"figure_id": "f", "title": long_title, "caption": long_title}]})
-    assets = compact._compact_plot_assets_for_prompt({"assets": [{"figure_id": "f", "title": long_title, "caption": long_title}]})
-    citations = compact._compact_citation_map_for_prompt(citation_map)
+    plots = _compact_plot_manifest_for_prompt({"figures": [{"figure_id": "f", "title": long_title, "caption": long_title}]})
+    assets = _compact_plot_assets_for_prompt({"assets": [{"figure_id": "f", "title": long_title, "caption": long_title}]})
+    citations = _compact_citation_map_for_prompt(citation_map)
 
     assert "[...truncated for prompt budget...]" in plots["figures"][0]["title"]
     assert "[...truncated for prompt budget...]" in assets["assets"][0]["caption"]
