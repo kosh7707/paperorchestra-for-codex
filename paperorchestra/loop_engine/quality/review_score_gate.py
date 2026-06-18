@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import review_score as _review_score
 from .policy import MODE_THRESHOLDS
+from .review_score_axes import _anti_inflation_violations, _numeric_axis_scores
+from .review_score_provenance import _review_provenance_failures
+from .review_score_shape import _review_shape_failures
 from .utils import _file_sha256, _read_json_if_exists
 
 
@@ -33,8 +35,8 @@ def _review_score_check(state, *, quality_mode: str) -> dict[str, Any]:
             "anti_inflation_triggered": False,
             "anti_inflation_violations": [],
         }
-    shape_failures = _review_score._review_shape_failures(review, quality_mode=quality_mode)
-    provenance_failures, provenance_check = _review_score._review_provenance_failures(
+    shape_failures = _review_shape_failures(review, quality_mode=quality_mode)
+    provenance_failures, provenance_check = _review_provenance_failures(
         review,
         current_sha=current_sha,
         quality_mode=quality_mode,
@@ -45,7 +47,7 @@ def _review_score_check(state, *, quality_mode: str) -> dict[str, Any]:
             "path": path,
             "failing_codes": sorted(dict.fromkeys(["review_score_legacy_untrusted"] + shape_failures + provenance_failures)),
             "overall_score": review.get("overall_score"),
-            "axis_scores": _review_score._numeric_axis_scores(review),
+            "axis_scores": _numeric_axis_scores(review),
             "anti_inflation_triggered": False,
             "anti_inflation_violations": [],
             "provenance": provenance_check,
@@ -58,7 +60,7 @@ def _review_score_check(state, *, quality_mode: str) -> dict[str, Any]:
             "path": path,
             "failing_codes": sorted(dict.fromkeys(["review_score_stale"] + shape_failures + provenance_failures)),
             "overall_score": review.get("overall_score"),
-            "axis_scores": _review_score._numeric_axis_scores(review),
+            "axis_scores": _numeric_axis_scores(review),
             "anti_inflation_triggered": False,
             "anti_inflation_violations": [],
             "provenance": provenance_check,
@@ -68,8 +70,8 @@ def _review_score_check(state, *, quality_mode: str) -> dict[str, Any]:
     thresholds = MODE_THRESHOLDS[quality_mode]
     raw_overall = review.get("overall_score")
     overall_score = float(raw_overall) if isinstance(raw_overall, (int, float)) else None
-    axis_scores = _review_score._numeric_axis_scores(review)
-    anti = _review_score._anti_inflation_violations(overall_score, axis_scores)
+    axis_scores = _numeric_axis_scores(review)
+    anti = _anti_inflation_violations(overall_score, axis_scores)
     failing_codes: list[str] = []
     failing_codes.extend(shape_failures)
     failing_codes.extend(provenance_failures)

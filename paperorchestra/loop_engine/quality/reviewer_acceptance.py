@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from . import review_score as _review_score
+from .review_score_shape import _nonempty_string
 from .utils import _file_sha256, _read_json_if_exists
 from paperorchestra.core.session import runtime_root
 
@@ -40,11 +40,11 @@ def _reviewer_independence_acceptance(
         failures.append("reviewer_independence_acceptance_stale")
 
     if (
-        not _review_score._nonempty_string(payload.get("rationale"), min_len=10)
-        or not _review_score._nonempty_string(payload.get("operator_label"), min_len=2)
+        not _nonempty_string(payload.get("rationale"), min_len=10)
+        or not _nonempty_string(payload.get("operator_label"), min_len=2)
     ):
         failures.append("reviewer_independence_acceptance_incomplete")
-    if not _review_score._nonempty_string(payload.get("accepted_at"), min_len=10):
+    if not _nonempty_string(payload.get("accepted_at"), min_len=10):
         failures.append("reviewer_independence_acceptance_incomplete")
 
     writer_refiner = payload.get("writer_refiner_provenance")

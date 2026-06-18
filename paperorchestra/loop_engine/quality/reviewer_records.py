@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import review_score as _review_score
+from .review_score_provenance import _review_provenance_failures
+from .review_score_shape import _review_shape_failures
 from .utils import _file_sha256, _read_json_if_exists
 
 
@@ -32,9 +33,9 @@ def _current_review_records(state, current_sha: str | None) -> list[dict[str, An
             continue
         if current_sha and payload.get("manuscript_sha256") != current_sha:
             continue
-        if _review_score._review_shape_failures(payload, quality_mode="claim_safe"):
+        if _review_shape_failures(payload, quality_mode="claim_safe"):
             continue
-        provenance_failures, _ = _review_score._review_provenance_failures(payload, current_sha=current_sha, quality_mode="claim_safe")
+        provenance_failures, _ = _review_provenance_failures(payload, current_sha=current_sha, quality_mode="claim_safe")
         if provenance_failures:
             continue
         identity = _reviewer_identity(payload)
