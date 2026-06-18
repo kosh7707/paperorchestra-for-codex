@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.engine.latex_plot_context import _is_generated_placeholder_asset
+from paperorchestra.engine.latex_plot_reviewable import _is_generated_placeholder_asset
 from paperorchestra.engine.latex_plot_text import _normalize_figure_token
 
 

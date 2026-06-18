@@ -8,7 +8,7 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import read_json, read_text, write_json
 from paperorchestra.core.models import utc_now_iso
 from paperorchestra.core.session import artifact_path, build_path, load_session, save_session
-from paperorchestra.engine.latex_postprocess import _reviewable_plot_assets_index, _reviewable_plot_manifest
+from paperorchestra.engine.latex_plot_reviewable import _reviewable_plot_assets_index, _reviewable_plot_manifest
 from paperorchestra.engine.prompt_context import _read_inputs, _source_grounding_text
 from paperorchestra.engine.reports import _record_validation_report, collect_paper_contract_issues
 from paperorchestra.engine.section_scope import _expected_section_titles_from_outline

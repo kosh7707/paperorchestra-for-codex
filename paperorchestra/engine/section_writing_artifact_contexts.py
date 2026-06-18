@@ -5,11 +5,8 @@ from pathlib import Path
 from paperorchestra.core.io import read_json, read_text
 from paperorchestra.core.models import SessionState
 from paperorchestra.engine.citation_coverage import _citation_coverage_target
-from paperorchestra.engine.latex_postprocess import (
-    _filter_plot_context_for_latex,
-    _reviewable_plot_assets_index,
-    _reviewable_plot_manifest,
-)
+from paperorchestra.engine.latex_plot_filter import _filter_plot_context_for_latex
+from paperorchestra.engine.latex_plot_reviewable import _reviewable_plot_assets_index, _reviewable_plot_manifest
 from paperorchestra.engine.prompt_context import (
     _compact_citation_map_for_prompt,
     _compact_outline_for_prompt,

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.engine.latex_postprocess import _escape_latex_text, _is_generated_placeholder_asset
+from paperorchestra.engine.latex_plot_reviewable import _is_generated_placeholder_asset
+from paperorchestra.engine.latex_postprocess import _escape_latex_text
 from paperorchestra.manuscript.structure import _insert_block_into_section, _preferred_section_name
 from paperorchestra.manuscript.validation_types import ValidationIssue
 

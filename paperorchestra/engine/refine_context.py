@@ -6,7 +6,7 @@ from typing import Any
 
 from paperorchestra.core.io import read_json, read_text
 from paperorchestra.core.session import review_path
-from paperorchestra.engine.latex_postprocess import _reviewable_plot_assets_index, _reviewable_plot_manifest
+from paperorchestra.engine.latex_plot_reviewable import _reviewable_plot_assets_index, _reviewable_plot_manifest
 from paperorchestra.engine.prompt_context import (
     _compact_citation_map_for_prompt,
     _prompt_compact_text,
