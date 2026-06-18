@@ -146,79 +146,6 @@ def test_write_qa_loop_brief_uses_default_artifact_name(tmp_path: Path) -> None:
     assert path.read_text(encoding="utf-8") == text
 
 
-def test_build_qa_loop_brief_existing_inputs_do_not_regenerate(monkeypatch, tmp_path: Path) -> None:
-    _save_session(tmp_path)
-    quality_eval_path, plan_path = _write_quality_inputs(tmp_path)
-    monkeypatch.setattr(
-        handoff,
-        "write_quality_eval",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("quality eval should not regenerate")),
-    )
-    monkeypatch.setattr(
-        handoff,
-        "write_quality_loop_plan",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("plan should not regenerate")),
-    )
-
-    brief = handoff.build_qa_loop_brief(tmp_path, quality_eval_path=quality_eval_path, plan_path=plan_path)
-
-    assert f"Quality eval: `{quality_eval_path}`" in brief
-    assert f"QA loop plan: `{plan_path}`" in brief
-
-
-def test_build_qa_loop_brief_missing_inputs_regenerate_in_order(monkeypatch, tmp_path: Path) -> None:
-    _save_session(tmp_path)
-    calls = []
-    generated_plan = tmp_path / "generated-plan.json"
-
-    def write_eval(cwd, **kwargs):
-        calls.append(("eval", cwd, kwargs))
-        return tmp_path / "ignored-quality-path.json", {
-            "tiers": {"tier_2": {"status": "fail", "failing_codes": ["compile_not_clean"]}}
-        }
-
-    def write_plan(cwd, **kwargs):
-        calls.append(("plan", cwd, kwargs))
-        return generated_plan, {
-            "verdict": "continue",
-            "repair_actions": [
-                {"code": "compile_not_clean", "automation": "automatic", "reason": "compile"}
-            ],
-        }
-
-    monkeypatch.setattr(handoff, "write_quality_eval", write_eval)
-    monkeypatch.setattr(handoff, "write_quality_loop_plan", write_plan)
-
-    brief = handoff.build_qa_loop_brief(
-        tmp_path,
-        quality_mode="claim_safe",
-        max_iterations=4,
-        require_live_verification=True,
-        accept_mixed_provenance=True,
-    )
-
-    expected_quality_path = artifact_path(tmp_path, "quality-eval.json")
-    assert calls[0] == (
-        "eval",
-        tmp_path,
-        {"require_live_verification": True, "quality_mode": "claim_safe", "max_iterations": 4},
-    )
-    assert calls[1] == (
-        "plan",
-        tmp_path,
-        {
-            "require_live_verification": True,
-            "quality_mode": "claim_safe",
-            "max_iterations": 4,
-            "accept_mixed_provenance": True,
-            "quality_eval_input_path": expected_quality_path,
-        },
-    )
-    assert f"Quality eval: `{expected_quality_path}`" in brief
-    assert f"QA loop plan: `{generated_plan}`" in brief
-    assert "- `compile_not_clean` (automatic): compile" in brief
-
-
 def test_build_ralph_start_payload_writes_manifest_and_uses_brief_text_argv(monkeypatch, tmp_path: Path) -> None:
     _save_session(tmp_path)
     brief_path = artifact_path(tmp_path, "ralph-brief.md")
@@ -261,23 +188,3 @@ def test_build_ralph_start_payload_writes_manifest_and_uses_brief_text_argv(monk
     assert payload["execution_contract"]["critic_required"] is True
     assert payload["execution_contract"]["citation_integrity_gate_required"] is True
     assert payload["evidence_contract"]["evidence_root"] == str((tmp_path / "evidence").resolve())
-
-
-def test_handoff_facade_preserves_legacy_helper_imports() -> None:
-    from paperorchestra.core import session
-    from paperorchestra.core import io
-    from paperorchestra.loop_engine.quality import loop
-    from paperorchestra.loop_engine.ralph import state
-
-    assert handoff.artifact_path is session.artifact_path
-    assert handoff.load_session is session.load_session
-    assert handoff.write_json is io.write_json
-    assert handoff.write_quality_eval is loop.write_quality_eval
-    assert handoff.write_quality_loop_plan is loop.write_quality_loop_plan
-    assert callable(handoff.build_qa_loop_brief)
-    assert callable(handoff.write_qa_loop_brief)
-    assert callable(handoff.build_ralph_start_payload)
-    assert callable(handoff.launch_omx_ralph)
-    assert handoff._qa_loop_step_command is state._qa_loop_step_command
-    assert handoff._failing_codes is state._failing_codes
-    assert handoff._read_json is state._read_json

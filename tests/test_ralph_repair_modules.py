@@ -4,34 +4,11 @@ import json
 from pathlib import Path
 
 from paperorchestra.core.session import artifact_path, set_current_session
-from paperorchestra.loop_engine.ralph import repair
-from paperorchestra.loop_engine.ralph import repair_issue_packet, repair_prompt, repair_recheck
+from paperorchestra.loop_engine.ralph import repair_issue_packet, repair_recheck
 
 
 def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def test_repair_facade_reexports_issue_and_recheck_helpers() -> None:
-    assert repair._claim_safety_repair_issues is repair_issue_packet._claim_safety_repair_issues
-    assert repair._citation_density_repair_issues is repair_issue_packet._citation_density_repair_issues
-    assert repair._citation_integrity_metrics is repair_recheck._citation_integrity_metrics
-    assert repair._high_risk_issue_metrics_from_packet is repair_recheck._high_risk_issue_metrics_from_packet
-    assert repair._strictly_improves is repair_recheck._strictly_improves
-    assert repair._repair_prompt is repair_prompt._repair_prompt
-
-
-def test_repair_facade_preserves_legacy_module_aliases() -> None:
-    from paperorchestra.loop_engine.quality.source_checks import _high_risk_claim_sweep
-    from paperorchestra.loop_engine.ralph.state import NON_SUPPORTED_CITATION_STATUSES
-    from paperorchestra.manuscript.source_obligations import evaluate_source_obligations, source_obligations_path
-    from paperorchestra.reviews.citation_integrity import build_citation_integrity_audit
-
-    assert repair.NON_SUPPORTED_CITATION_STATUSES is NON_SUPPORTED_CITATION_STATUSES
-    assert repair.evaluate_source_obligations is evaluate_source_obligations
-    assert repair.source_obligations_path is source_obligations_path
-    assert repair.build_citation_integrity_audit is build_citation_integrity_audit
-    assert repair._high_risk_claim_sweep is _high_risk_claim_sweep
 
 
 def test_claim_safety_repair_issues_reads_density_duplicate_and_high_risk_artifacts(tmp_path: Path) -> None:

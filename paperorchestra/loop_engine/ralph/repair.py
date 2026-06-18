@@ -15,31 +15,17 @@ from paperorchestra.engine.pipeline import (
     compile_current_paper,
     record_current_validation_report,
 )
-from paperorchestra.loop_engine.quality.source_checks import _high_risk_claim_sweep
 from paperorchestra.runtime.providers import BaseProvider
-from paperorchestra.reviews.citation_integrity import build_citation_integrity_audit
 from paperorchestra.loop_engine.ralph.repair_issue_packet import (
     _claim_safety_repair_issues,
-    _citation_density_repair_issues,
-    _duplicate_support_repair_issues,
-    _high_risk_repair_issues,
     _non_supported_citation_items,
     _source_obligation_repair_context,
-    _truncate_issue_text,
 )
 from paperorchestra.loop_engine.ralph.repair_prompt import _repair_prompt
 from paperorchestra.loop_engine.ralph.repair_recheck import (
     _candidate_semantic_recheck,
-    _canonical_high_risk_baseline,
-    _citation_integrity_metrics,
-    _citation_issue_metrics_from_packet,
-    _file_sha256,
-    _high_risk_issue_metrics_from_packet,
-    _high_risk_metrics,
-    _strictly_improves,
 )
 from .state import (
-    NON_SUPPORTED_CITATION_STATUSES,
     atomic_write_text,
     clear_pending_manuscript_write,
     guarded_replace_manuscript_text,
@@ -49,7 +35,6 @@ from .state import (
     recover_pending_manuscript_write,
 )
 from paperorchestra.core.session import artifact_path, load_session, save_session
-from paperorchestra.manuscript.source_obligations import evaluate_source_obligations, source_obligations_path
 from paperorchestra.manuscript.validator import allowed_citation_keys, canonical_citation_map, canonicalize_citation_keys, extract_citation_keys
 
 
