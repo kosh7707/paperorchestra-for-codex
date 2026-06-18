@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.core.io import extract_json, write_json, write_text
+from paperorchestra.core.io import extract_json, write_json
 from paperorchestra.core.session import artifact_path, load_session, save_session
 from paperorchestra.engine.completion import _build_completion_request, _complete_with_runtime_mode, _lane_owner
 from paperorchestra.engine.prompt_context import _read_inputs
@@ -13,14 +13,10 @@ from paperorchestra.engine.prior_work_policy import (
     _filter_prior_work_entries_for_complete_metadata,
     _write_prior_work_import_rejection_report,
 )
-from paperorchestra.engine.research_registry import (
-    _citation_map_from_registry,
-    _merge_live_verified_with_prior_registry,
-)
+from paperorchestra.engine.research_prior_work_artifacts import write_prior_work_import_artifacts
+from paperorchestra.engine.research_registry import _merge_live_verified_with_prior_registry
 from paperorchestra.engine.research_registry_io import load_prior_citation_registry
 from paperorchestra.engine.schemas import PRIOR_WORK_SEED_SCHEMA
-from paperorchestra.research.bibtex import registry_to_bibtex
-from paperorchestra.research.literature import serialize_registry
 from paperorchestra.research.prior_work_seed import load_prior_work_seed, prior_work_entries_to_verified_papers
 from paperorchestra.runtime.parity import record_lane_manifest
 from paperorchestra.runtime.provider_base import BaseProvider
@@ -137,28 +133,11 @@ def import_prior_work(
             f"({len(prior_registry)} existing, {imported_count} imported, {len(registry)} total)."
         )
 
-    candidate_payload = {
-        "macro_candidates": [
-            {
-                "title_guess": paper.title,
-                "why_relevant": paper.abstract,
-                "origin_query": paper.matched_query or paper.title,
-                "role_guess": "macro",
-                "discovery_source": paper.origin or source,
-                "discovery_sources": [paper.origin or source],
-            }
-            for paper in registry
-        ],
-        "micro_candidates": [],
-    }
-    candidate_path = artifact_path(cwd, "candidate_papers.json")
-    registry_path = artifact_path(cwd, "citation_registry.json")
-    citation_map_path = artifact_path(cwd, "citation_map.json")
-    references_path = artifact_path(cwd, "references.bib")
-    write_json(candidate_path, candidate_payload)
-    serialize_registry(registry_path, registry)
-    write_json(citation_map_path, _citation_map_from_registry(registry))
-    write_text(references_path, registry_to_bibtex(registry))
+    artifact_paths = write_prior_work_import_artifacts(cwd, registry, source=source)
+    candidate_path = artifact_paths["candidate_papers_json"]
+    registry_path = artifact_paths["citation_registry_json"]
+    citation_map_path = artifact_paths["citation_map_json"]
+    references_path = artifact_paths["references_bib"]
 
     lane_path = record_lane_manifest(
         cwd,
