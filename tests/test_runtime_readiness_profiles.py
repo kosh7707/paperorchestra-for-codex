@@ -68,6 +68,10 @@ def test_readiness_profiles_explain_missing_inputs_and_claim_safe_strictness(mon
         "Install a supported LaTeX engine and sandbox tool, or run the compile bootstrap guidance.",
         "Set PAPERO_ALLOW_TEX_COMPILE=1 before running compile commands.",
     ]
+    assert profiles["compile_ready"]["next_steps"] == [
+        "paperorchestra environment --summary",
+        "export PAPERO_ALLOW_TEX_COMPILE=1",
+    ]
     assert profiles["full_live_run_ready"]["missing"] == [
         "Shell-provider command not configured.",
         "OMX/Codex toolchain not fully installed.",

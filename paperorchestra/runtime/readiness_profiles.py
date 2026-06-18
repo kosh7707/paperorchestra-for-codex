@@ -118,7 +118,7 @@ class ReadinessProfileBuilder:
         steps: list[str] = []
         if not self.compile_environment_ready:
             missing.append("Install a supported LaTeX engine and sandbox tool, or run the compile bootstrap guidance.")
-            steps.extend(["paperorchestra environment --summary", "paperorchestra environment --summary"])
+            steps.append("paperorchestra environment --summary")
         if not self.tex_compile_opt_in:
             missing.append("Set PAPERO_ALLOW_TEX_COMPILE=1 before running compile commands.")
             steps.append("export PAPERO_ALLOW_TEX_COMPILE=1")
