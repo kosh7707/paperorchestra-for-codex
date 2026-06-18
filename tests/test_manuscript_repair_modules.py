@@ -56,3 +56,12 @@ def test_citation_map_for_selected_sections_filters_to_local_citations() -> None
     subset = repair._citation_map_for_selected_sections(latex, citation_map, ["Method"])
 
     assert subset == {"B": {"title": "Method Paper"}}
+
+
+def test_control_prose_sanitizer_normalizes_portable_citations_and_packet_language() -> None:
+    latex = r"The supplied packet follows \citet[see][p. 2]{smith2024}."
+
+    repaired = repair._sanitize_manuscript_control_prose(latex)
+
+    assert "stated evidence" in repaired
+    assert r"\cite{smith2024}" in repaired
