@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import read_json, write_json
-from paperorchestra.core.models import InputBundle
+from paperorchestra.core.models import ArtifactIndex, InputBundle
 from paperorchestra.core.session import artifact_path, create_session, load_session, save_session
 from paperorchestra.engine import research_verification_stage
 
@@ -99,3 +100,47 @@ def test_build_bib_writes_references_and_updates_session_state(tmp_path: Path) -
     assert state.artifacts.references_bib == str(bib_path)
     assert state.artifacts.citation_map_json == str(artifact_path(tmp_path, "citation_map.json"))
     assert state.active_artifact == "references.bib"
+
+
+def test_build_bib_keeps_legacy_facade_patch_surface(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    state = SimpleNamespace(
+        artifacts=ArtifactIndex(citation_registry_json=str(tmp_path / "registry.json")),
+        active_artifact=None,
+        notes=[],
+    )
+    calls: list[tuple[str, object]] = []
+
+    monkeypatch.setattr(research_verification_stage, "load_session", lambda cwd: state)
+    monkeypatch.setattr(
+        research_verification_stage,
+        "read_json",
+        lambda path: [
+            {
+                "paper_id": "p1",
+                "title": "Facade Bib Surface",
+                "year": 2026,
+                "publication_date": None,
+                "venue": "TestConf",
+                "abstract": "abstract",
+                "authors": ["A. Author"],
+                "citation_count": 1,
+                "bibtex_key": "Facade2026",
+            }
+        ],
+    )
+    monkeypatch.setattr(research_verification_stage, "registry_to_bibtex", lambda registry: "@article{Facade2026}")
+    monkeypatch.setattr(research_verification_stage, "artifact_path", lambda cwd, name: tmp_path / name)
+    monkeypatch.setattr(research_verification_stage, "write_text", lambda path, text: calls.append(("text", text)))
+    monkeypatch.setattr(research_verification_stage, "write_json", lambda path, payload: calls.append(("json", payload)))
+    monkeypatch.setattr(research_verification_stage, "_citation_map_from_registry", lambda registry: {"Facade2026": "Facade Bib Surface"})
+    monkeypatch.setattr(research_verification_stage, "save_session", lambda cwd, state: calls.append(("save", state.active_artifact)))
+
+    bib_path = research_verification_stage.build_bib(tmp_path)
+
+    assert bib_path == tmp_path / "references.bib"
+    assert calls == [
+        ("text", "@article{Facade2026}"),
+        ("json", {"Facade2026": "Facade Bib Surface"}),
+        ("save", "references.bib"),
+    ]
+    assert state.artifacts.references_bib == str(tmp_path / "references.bib")

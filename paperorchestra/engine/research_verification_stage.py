@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.core.io import read_json, write_json
+from paperorchestra.core.io import read_json, write_json, write_text
 from paperorchestra.core.models import VerifiedPaper
 from paperorchestra.core.session import artifact_path, load_session, save_session
 from paperorchestra.engine.research_bib_stage import build_bib
@@ -14,7 +14,7 @@ from paperorchestra.engine.research_registry import (
 )
 from paperorchestra.engine.research_registry_io import load_prior_citation_registry
 from paperorchestra.engine.research_verification_errors import _record_verification_errors
-from paperorchestra.research.bibtex import ensure_unique_bibtex_keys
+from paperorchestra.research.bibtex import ensure_unique_bibtex_keys, registry_to_bibtex
 from paperorchestra.research.literature import (
     mock_verified_paper,
     serialize_registry,
