@@ -24,7 +24,7 @@ def _action(
         "target": target,
         "automation": automation,
         "reason": reason,
-        "suggested_commands": suggested_commands or [],
+        "suggested_commands": list(dict.fromkeys(suggested_commands or [])),
         "ralph_instruction": ralph_instruction or reason,
         "preconditions": preconditions or ["tier_1_structural must remain pass"],
     }

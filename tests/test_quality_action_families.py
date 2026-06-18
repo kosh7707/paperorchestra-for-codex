@@ -81,6 +81,5 @@ def test_strict_content_actions_regenerate_stale_validation_reports_automaticall
     assert produced[0]["code"] == "validation_report_stale"
     assert produced[0]["suggested_commands"] == [
         "paperorchestra quality-gate --no-fail-on-block",
-        "paperorchestra quality-gate --no-fail-on-block",
         "paperorchestra qa-loop --quality-mode claim_safe",
     ]
