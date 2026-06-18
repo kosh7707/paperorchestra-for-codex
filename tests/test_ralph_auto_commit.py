@@ -37,6 +37,21 @@ def test_tier2_metric_counts_collects_citation_quality_and_high_risk() -> None:
     }
 
 
+def test_tier2_metric_counts_preserves_auto_commit_metric_scope() -> None:
+    quality_eval = _quality_eval()
+    quality_eval["tiers"]["tier_2_claim_safety"]["checks"]["citation_quality_gate"]["counts"] = {
+        "critical_unsupported_count": 2.0,
+        "critical_weak_identity_count": 9,
+        "critical_need_count": False,
+    }
+
+    assert _qa_loop_tier2_metric_counts(quality_eval) == {
+        "citation_support_unsupported": 0,
+        "critical_unsupported_citation": 2,
+        "high_risk_uncited_claim": 0,
+    }
+
+
 def test_active_metric_regressions_only_reports_active_codes() -> None:
     regressions = _active_metric_regressions(
         _quality_eval(unsupported=1, duplicate=1),
