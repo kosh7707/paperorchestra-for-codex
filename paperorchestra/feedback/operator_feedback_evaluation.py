@@ -6,7 +6,9 @@ from typing import Any
 
 from paperorchestra.core.session import load_session
 from paperorchestra.runtime.provider_base import BaseProvider
-from paperorchestra.feedback.operator_contexts.citations import _protected_supported_citation_regressions
+from paperorchestra.feedback.operator_contexts.citation_protection_regressions import (
+    _protected_supported_citation_regressions,
+)
 from paperorchestra.feedback.operator_failure_repetition import _repeats_non_promotable_candidate
 from paperorchestra.feedback.operator_gates import _candidate_hard_gate, _quality_failing_codes, _tier_failing_codes
 from paperorchestra.feedback.operator_metric_delta import _active_tier2_metric_delta

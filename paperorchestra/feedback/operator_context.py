@@ -8,10 +8,13 @@ from paperorchestra.core.io import write_json
 from paperorchestra.core.session import artifact_path
 from paperorchestra.feedback.operator_contract import _read_packet
 from paperorchestra.feedback.operator_issue_contract import OPERATOR_SOURCE
-from paperorchestra.feedback.operator_contexts import citations as _citations
 from paperorchestra.feedback.operator_contexts import claims as _claims
 from paperorchestra.feedback.operator_contexts import figures as _figures
 from paperorchestra.feedback.operator_contexts import packet as _packet
+from paperorchestra.feedback.operator_contexts.citation_density_issues import _citation_density_context
+from paperorchestra.feedback.operator_contexts.citation_duplicate_issues import _duplicate_support_context
+from paperorchestra.feedback.operator_contexts.citation_problematic import _problematic_citation_context
+from paperorchestra.feedback.operator_contexts.citation_protection_supported import _protected_supported_citation_context
 from paperorchestra.feedback.operator_contexts.prior_attempts import _compact_prior_rejected_attempts
 from paperorchestra.feedback.operator_contexts.refinement_constraints import _operator_refinement_constraints
 
@@ -65,12 +68,12 @@ def _operator_issue_context(imported: dict[str, Any], *, prior_attempts: list[di
     citation_integrity_audit = _packet._packet_payload_by_role(packet, "citation_integrity_audit")
     figure_placement_review = _packet._packet_payload_by_role(packet, "figure_placement_review")
     prior_rejected_attempts = _compact_prior_rejected_attempts(prior_attempts)
-    protected_supported = _citations._protected_supported_citation_context(citation_review, citation_integrity_audit)
+    protected_supported = _protected_supported_citation_context(citation_review, citation_integrity_audit)
     context = {
-        "problematic_citation_items": _citations._problematic_citation_context(citation_review),
+        "problematic_citation_items": _problematic_citation_context(citation_review),
         "high_risk_uncited_claims": _claims._high_risk_claim_context(quality_eval),
-        "citation_density_issues": _citations._citation_density_context(citation_integrity_audit),
-        "citation_duplicate_support_issues": _citations._duplicate_support_context(citation_integrity_audit, citation_review),
+        "citation_density_issues": _citation_density_context(citation_integrity_audit),
+        "citation_duplicate_support_issues": _duplicate_support_context(citation_integrity_audit, citation_review),
         "figure_placement_issues": _figures._figure_issue_context(figure_placement_review),
         "refinement_constraints": _operator_refinement_constraints(quality_eval, citation_integrity_audit),
         "writer_instruction": (
