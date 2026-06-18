@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from paperorchestra.core.errors import ContractError
 from paperorchestra.feedback.operator_answer_metadata import OPERATOR_FEEDBACK_INTENTS
 from paperorchestra.feedback.operator_issue_constants import ACTIONABLE_FAILURE_OWNER_CATEGORIES, OPERATOR_SOURCE
-from paperorchestra.feedback.operator_issue_identity import _normalize_issue_text, derive_operator_issue_id
-from paperorchestra.feedback.operator_issue_owner import _owner_category_for_issue, _validated_owner_category
+from paperorchestra.feedback.packet_artifacts import _canonical_sha256, _sha256_bytes
 
 _REQUIRED_OPERATOR_ISSUE_FIELDS = (
     "id",
@@ -67,6 +67,53 @@ def _validate_operator_issue(issue: dict[str, Any], packet: dict[str, Any]) -> d
     normalized["not_independent_human_review"] = True
     normalized["owner_category"] = _validated_owner_category(issue)
     return normalized
+
+
+def _normalize_issue_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text.strip().lower())
+
+
+def derive_operator_issue_id(
+    packet_sha256: str,
+    *,
+    source_artifact_role: str,
+    source_item_key: str,
+    target_section: str,
+    rationale: str,
+    suggested_action: str,
+) -> str:
+    issue_text = _normalize_issue_text(f"{rationale}\n{suggested_action}")
+    payload = {
+        "packet_sha256": packet_sha256,
+        "source_artifact_role": source_artifact_role,
+        "source_item_key": source_item_key,
+        "target_section": target_section,
+        "issue_text_sha256": _sha256_bytes(issue_text.encode("utf-8")),
+    }
+    return "opfb-" + _canonical_sha256(payload)[:20]
+
+
+def _owner_category_for_issue(issue: dict[str, Any]) -> str:
+    text = " ".join(
+        str(issue.get(key) or "")
+        for key in ("target_section", "rationale", "suggested_action", "authority_class")
+    ).lower()
+    if any(token in text for token in ("experiment", "benchmark", "evaluation", "result")):
+        return "experiment"
+    if any(token in text for token in ("proof", "theorem", "security", "bound")):
+        return "proof"
+    if any(token in text for token in ("citation", "bibliography", "reference", "bibtex")):
+        return "bibliography"
+    if any(token in text for token in ("compile", "validation", "implementation", "execution")):
+        return "implementation"
+    return "author"
+
+
+def _validated_owner_category(issue: dict[str, Any]) -> str:
+    owner_category = str(issue.get("owner_category") or _owner_category_for_issue(issue))
+    if owner_category not in ACTIONABLE_FAILURE_OWNER_CATEGORIES:
+        raise ContractError(f"invalid owner_category for operator issue: {owner_category}")
+    return owner_category
 
 
 def _validate_issue_id(issue: dict[str, Any], packet: dict[str, Any]) -> None:
