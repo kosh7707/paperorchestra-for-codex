@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from paperorchestra.engine.latex_float_placement import _stabilize_figure_float_placement
 from paperorchestra.engine.latex_generated_plot_usage import _ensure_generated_plot_usage
 from paperorchestra.engine.latex_plot_generated_paths import _normalize_generated_plot_paths
-from paperorchestra.engine.latex_plot_source_paths import _normalize_source_figure_paths
+from paperorchestra.engine.latex_postprocess import _normalize_source_figure_paths, _stabilize_figure_float_placement
 
 
 def test_generated_plot_usage_inserts_reviewable_asset_into_preferred_section() -> None:

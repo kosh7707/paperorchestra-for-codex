@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
-from paperorchestra.engine.latex_float_placement import _stabilize_figure_float_placement
 from paperorchestra.engine.latex_generated_plot_usage import _ensure_generated_plot_usage
 from paperorchestra.engine.latex_plot_filter import _filter_plot_context_for_latex
 from paperorchestra.engine.latex_plot_generated_paths import _normalize_generated_plot_paths
@@ -13,12 +13,52 @@ from paperorchestra.engine.latex_plot_reviewable import (
     _reviewable_plot_assets_index,
     _reviewable_plot_manifest,
 )
-from paperorchestra.engine.latex_plot_source_paths import _normalize_source_figure_paths
 from paperorchestra.engine.latex_plot_text import (
     _escape_latex_text,
     _normalize_figure_token,
 )
 from paperorchestra.manuscript.citations import CITE_COMMAND_RE, allowed_citation_keys, extract_citation_keys
+
+
+def _stabilize_figure_float_placement(latex: str) -> str:
+    """Avoid top-only figure floats that LaTeX can defer to the manuscript tail."""
+
+    def replace(match: re.Match[str]) -> str:
+        env = match.group(1)
+        placement = match.group(2)
+        if placement is not None:
+            normalized = placement.replace(" ", "")
+            placement_flags = set(normalized.lower())
+            if placement_flags & {"h", "b", "p"} or "H" in normalized:
+                return match.group(0)
+        stable = "!tbp" if env == "figure*" else "!htbp"
+        return f"\\begin{{{env}}}[{stable}]"
+
+    return re.sub(r"\\begin\{(figure\*?)\}(?:\[([^\]]*)\])?", replace, latex)
+
+
+def _normalize_source_figure_paths(latex: str, figures_dir: str | Path | None) -> str:
+    if not figures_dir:
+        return latex
+    path = Path(figures_dir)
+    if not path.exists():
+        return latex
+    for figure_path in sorted(path.iterdir()):
+        if figure_path.is_file():
+            latex = _normalize_source_figure_path(latex, figure_path.name)
+    return latex.replace("inputs/inputs/figures/", "inputs/figures/")
+
+
+def _normalize_source_figure_path(latex: str, name: str) -> str:
+    normalized = f"inputs/figures/{name}"
+    for prefix in ["figures", "figs"]:
+        latex = re.sub(rf"(?<!inputs/){re.escape(prefix)}/{re.escape(name)}", normalized, latex)
+        latex = re.sub(rf"(?<!inputs\\){re.escape(prefix)}\\{re.escape(name)}", normalized, latex)
+    return re.sub(
+        rf"(\\includegraphics(?:\[[^\]]*\])?\{{)(?![^}}]*inputs/figures/){re.escape(name)}(\}})",
+        lambda match: f"{match.group(1)}{normalized}{match.group(2)}",
+        latex,
+    )
 
 
 def _ensure_bibliography_hook(latex: str, citation_map: dict[str, Any]) -> str:
