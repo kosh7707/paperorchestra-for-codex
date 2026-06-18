@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.manuscript.revision_actions import _target_for_item, _target_for_section_title
+from paperorchestra.manuscript.revision_action_taxonomy import _target_for_item, _target_for_section_title
 
 
 def _iter_section_findings(section_review: dict[str, Any]) -> list[dict[str, str]]:

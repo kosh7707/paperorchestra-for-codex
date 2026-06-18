@@ -4,15 +4,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.manuscript.revision_actions import (
+from paperorchestra.manuscript.revision_action_criteria import _done_criteria
+from paperorchestra.manuscript.revision_action_taxonomy import (
     _action_type_for_item,
-    _done_criteria,
-    _patch_hunk_template,
     _priority_for_action,
-    _section_anchor_for_target,
     _target_for_item,
-    _target_for_section_title,
 )
+from paperorchestra.manuscript.revision_action_templates import _patch_hunk_template
 from paperorchestra.manuscript.revision_issue_findings import _iter_citation_findings, _iter_section_findings
 from paperorchestra.manuscript.revision_review_findings import _iter_review_findings
 from paperorchestra.manuscript.revision_source_files import _load_optional_json, _section_diagnostics, _section_files
