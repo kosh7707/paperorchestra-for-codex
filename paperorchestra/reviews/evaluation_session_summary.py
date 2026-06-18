@@ -3,12 +3,23 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from paperorchestra.core.io import read_json
 from paperorchestra.core.session import load_session
 from paperorchestra.manuscript.citations import canonical_citation_keys
 from paperorchestra.reviews.evaluation_constants import EXPECTED_SEARCH_GROUNDED_SOURCES
-from paperorchestra.reviews.evaluation_artifacts import _read_existing_json, _session_artifact_dir
 from paperorchestra.reviews.evaluation_discovery_summary import _attempted_grounded_sources, _candidate_discovery_summary
 from paperorchestra.reviews.evaluation_io import _write_json_artifact
+
+
+def _session_artifact_dir(state) -> Path | None:
+    for candidate in [state.artifacts.paper_full_tex, state.artifacts.candidate_papers_json]:
+        if candidate and Path(candidate).exists():
+            return Path(candidate).resolve().parent
+    return None
+
+
+def _read_existing_json(path: str | Path | None, default: Any = None) -> Any:
+    return read_json(path) if path and Path(path).exists() else default
 
 
 def build_session_eval_summary(cwd: str | Path | None) -> dict[str, Any]:
