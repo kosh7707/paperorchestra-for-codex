@@ -4,10 +4,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from paperorchestra.core.session import load_session
-from paperorchestra.engine.pipeline import (
+from paperorchestra.engine.planning_stages import plan_narrative_and_claims
+from paperorchestra.engine.refine_stages import refine_current_paper
+from paperorchestra.engine.review_stages import (
     compile_current_paper,
-    plan_narrative_and_claims,
-    refine_current_paper,
     record_current_validation_report,
     review_current_paper,
     write_figure_placement_review,

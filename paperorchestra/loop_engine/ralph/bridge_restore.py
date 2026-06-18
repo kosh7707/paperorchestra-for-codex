@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.engine.pipeline import compile_current_paper, record_current_validation_report, write_figure_placement_review
+from paperorchestra.engine.review_stages import compile_current_paper, record_current_validation_report, write_figure_placement_review
 from paperorchestra.loop_engine.quality.loop import write_quality_eval, write_quality_loop_plan
 from paperorchestra.loop_engine.ralph.artifacts import _refresh_citation_integrity_for_current_manuscript
 from paperorchestra.loop_engine.ralph.state import (

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.engine.pipeline import (
+from paperorchestra.engine.review_stages import (
     compile_current_paper,
     record_current_validation_report,
     write_figure_placement_review,

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from paperorchestra.core.models import InputBundle
 from paperorchestra.core.session import create_session, load_session
-from paperorchestra.engine.pipeline import compile_current_paper
+from paperorchestra.engine.review_stages import compile_current_paper
 from paperorchestra.interfaces.cli_output import environment_summary_lines, status_summary_lines
 from paperorchestra.interfaces.exporting import export_current_artifacts
 from paperorchestra.runtime.doctor import build_doctor_report, build_session_recovery_hint

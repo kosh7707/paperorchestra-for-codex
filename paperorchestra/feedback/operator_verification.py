@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.io import read_json
-from paperorchestra.engine.pipeline import (
+from paperorchestra.engine.review_stages import (
     compile_current_paper,
     record_current_validation_report,
     review_current_paper,

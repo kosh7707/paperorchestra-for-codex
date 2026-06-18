@@ -6,13 +6,10 @@ import sys
 from pathlib import Path
 
 from paperorchestra.core.session import load_session
-from paperorchestra.engine.pipeline import (
-    import_prior_work,
-    research_prior_work as generate_prior_work_seed,
-    review_current_paper,
-    run_pipeline,
-    write_sections,
-)
+from paperorchestra.engine.pipeline import run_pipeline
+from paperorchestra.engine.research_prior_work_stage import import_prior_work, research_prior_work as generate_prior_work_seed
+from paperorchestra.engine.review_stages import review_current_paper
+from paperorchestra.engine.section_writing_stage import write_sections
 from paperorchestra.interfaces.cli_commands.common import provider_from_args, strict_omx_env
 from paperorchestra.manuscript.revisions import write_revision_suggestions
 from paperorchestra.reviews.critic_trust import build_critic_trust_card, require_live_critic_trust

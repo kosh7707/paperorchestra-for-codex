@@ -12,14 +12,11 @@ from paperorchestra.engine.refine_stages import refine_current_paper
 from paperorchestra.engine.section_writing_stage import write_sections
 from paperorchestra.engine.completion import _provider_name
 from paperorchestra.engine.planning_stages import generate_outline, plan_narrative_and_claims
-from paperorchestra.engine.plot_stages import generate_plots, run_parallel_plot_and_literature
-from paperorchestra.engine.research_discovery_stage import discover_papers
-from paperorchestra.engine.research_prior_work_stage import import_prior_work, research_prior_work
+from paperorchestra.engine.plot_stages import run_parallel_plot_and_literature
 from paperorchestra.engine.research_verification_stage import build_bib, verify_papers
 from paperorchestra.engine.reports import record_compile_environment_report, record_fidelity_report
 from paperorchestra.engine.review_stages import (
     compile_current_paper,
-    record_current_validation_report,
     review_current_paper,
     write_figure_placement_review,
 )

@@ -12,14 +12,10 @@ from paperorchestra.orchestra.evidence import write_orchestrator_evidence_bundle
 from paperorchestra.orchestra.executor import LocalActionExecutor
 from paperorchestra.orchestra.omx_action_executor import OmxActionExecutor
 from paperorchestra.orchestra.controller import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state
-from paperorchestra.engine.pipeline import (
-    compile_current_paper,
-    import_prior_work,
-    research_prior_work as generate_prior_work_seed,
-    review_current_paper,
-    run_pipeline,
-    write_sections,
-)
+from paperorchestra.engine.pipeline import run_pipeline
+from paperorchestra.engine.research_prior_work_stage import import_prior_work, research_prior_work as generate_prior_work_seed
+from paperorchestra.engine.review_stages import compile_current_paper, review_current_paper
+from paperorchestra.engine.section_writing_stage import write_sections
 from paperorchestra.runtime.providers import get_citation_support_provider, get_provider
 from paperorchestra.loop_engine.quality.gate import write_quality_gate
 from paperorchestra.loop_engine.quality.loop import write_quality_loop_plan

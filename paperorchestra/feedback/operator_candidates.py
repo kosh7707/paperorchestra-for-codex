@@ -7,7 +7,7 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import read_json, write_json
 from paperorchestra.core.models import utc_now_iso
 from paperorchestra.core.session import artifact_path, load_session, save_session
-from paperorchestra.engine.pipeline import refine_current_paper
+from paperorchestra.engine.refine_stages import refine_current_paper
 from paperorchestra.feedback.operator_context import _write_operator_review_for_refiner
 from paperorchestra.feedback.operator_contract import _read_packet
 from paperorchestra.feedback.packet_artifacts import _file_sha256, _sha256_digest, _sha256_prefixed
