@@ -3,6 +3,7 @@ from __future__ import annotations
 from paperorchestra.core.models import VerifiedPaper
 from paperorchestra.engine.research_registry import (
     _citation_map_from_registry,
+    _merge_authoritative_external_ids,
     _merge_live_verified_with_prior_registry,
 )
 
@@ -66,6 +67,44 @@ def test_merge_live_registry_preserves_authoritative_prior_metadata() -> None:
     assert paper.external_ids["VerifiedURL"] == "https://semanticscholar.org/paper/S2-QUIC"
     assert paper.alias_bibtex_keys == ["quic", "iyengar2021quic"]
     assert paper.origin == "manual_seed+macro_candidates"
+
+
+def test_merge_live_registry_keeps_prior_key_as_alias_authority_for_regular_papers() -> None:
+    prior = _paper(bibtex_key="curatedKey", alias_bibtex_keys=["oldAlias"], origin="manual_seed", matched_query="curated")
+    verified = _paper(
+        paper_id="live-paper",
+        title="A Useful Standard",
+        year=2024,
+        bibtex_key="liveKey",
+        alias_bibtex_keys=["liveAlias", "curatedKey"],
+        origin="macro_candidates",
+        matched_query=None,
+    )
+
+    merged = _merge_live_verified_with_prior_registry([prior], [verified])
+
+    assert len(merged) == 1
+    paper = merged[0]
+    assert paper.paper_id == "live-paper"
+    assert paper.year == 2024
+    assert paper.bibtex_key == "curatedKey"
+    assert paper.alias_bibtex_keys == ["oldAlias", "liveKey", "liveAlias"]
+    assert paper.origin == "manual_seed+macro_candidates"
+    assert paper.matched_query == "curated"
+
+
+def test_merge_authoritative_external_ids_preserves_conflicting_verified_values() -> None:
+    merged = _merge_authoritative_external_ids(
+        {"DOI": "10.prior", "VerifiedDOI": "10.other"},
+        {"DOI": "10.live", "CorpusId": "123"},
+    )
+
+    assert merged == {
+        "DOI": "10.prior",
+        "VerifiedDOI": "10.other",
+        "VerifiedDOI2": "10.live",
+        "CorpusId": "123",
+    }
 
 
 def test_citation_map_contains_canonical_and_alias_entries() -> None:
