@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.io import read_json, write_json
-from paperorchestra.core.models import utc_now_iso
 from paperorchestra.core.session import artifact_path, load_session, save_session
 from paperorchestra.manuscript.source_obligations import source_obligations_path
-from paperorchestra.reviews.fidelity import run_fidelity_audit
-from paperorchestra.reviews.reproducibility import build_reproducibility_audit, write_reproducibility_audit
 
 from .action_core import _action
 from .action_families.figures import _figure_review_actions, _generated_placeholder_figure_actions
@@ -18,17 +14,17 @@ from .action_families.validation import _strict_content_actions, _validation_act
 from .actions import _citation_actions, _dedupe_actions
 from .action_builders import _quality_eval_actions
 from .citation_support import _citation_support_path
+from .audit_snapshots import build_quality_audits, refresh_quality_audit_artifacts
 from .eval import build_quality_eval
+from .eval_input import validate_quality_eval_input as _validate_quality_eval_input
 from .provenance import _mixed_provenance_acceptance
-from .history import _failing_codes_from_quality_eval, _tier_statuses, quality_loop_history_path
+from .history_writer import append_quality_loop_history
 from .plan_payload import QualityLoopPlanPayloadInput, build_quality_loop_plan_payload
 from .plan_logic import _plan_verdict
 from .plan_sources import build_quality_eval_for_plan
 from .policy import (
-    BUDGET_CONSUMING_HISTORY_EVENTS,
     DEFAULT_MAX_ITERATIONS,
 )
-from .utils import _file_sha256, _sha256_jsonable
 
 
 def build_quality_loop_plan(
@@ -42,8 +38,10 @@ def build_quality_loop_plan(
     quality_eval_path: str | Path | None = None,
 ) -> dict[str, Any]:
     state = load_session(cwd)
-    reproducibility = build_reproducibility_audit(cwd, require_live_verification=require_live_verification)
-    fidelity = run_fidelity_audit(cwd)
+    reproducibility, fidelity = build_quality_audits(
+        cwd,
+        require_live_verification=require_live_verification,
+    )
     quality_eval = quality_eval or build_quality_eval(
         cwd,
         quality_mode=quality_mode,
@@ -127,46 +125,6 @@ def build_quality_loop_plan(
     )
 
 
-def append_quality_loop_history(
-    cwd: str | Path | None,
-    quality_eval: dict[str, Any],
-    *,
-    verdict: str | None = None,
-    plan_path: str | Path | None = None,
-    quality_eval_path: str | Path | None = None,
-    event_type: str = "quality_eval",
-    consumes_budget: bool | None = None,
-    execution_path: str | Path | None = None,
-    extra: dict[str, Any] | None = None,
-) -> Path:
-    path = quality_loop_history_path(cwd)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if consumes_budget is None:
-        consumes_budget = event_type in BUDGET_CONSUMING_HISTORY_EVENTS
-    entry = {
-        "recorded_at": utc_now_iso(),
-        "event_type": event_type,
-        "consumes_budget": bool(consumes_budget),
-        "session_id": quality_eval.get("session_id"),
-        "mode": quality_eval.get("mode"),
-        "manuscript_hash": quality_eval.get("manuscript_hash"),
-        "quality_eval_path": str(quality_eval_path) if quality_eval_path else None,
-        "plan_path": str(plan_path) if plan_path else None,
-        "execution_path": str(execution_path) if execution_path else None,
-        "quality_eval_sha256": f"sha256:{_file_sha256(quality_eval_path)}" if quality_eval_path else f"sha256:{_sha256_jsonable(quality_eval)}",
-        "plan_sha256": f"sha256:{_file_sha256(plan_path)}" if plan_path else None,
-        "verdict": verdict,
-        "failing_codes": _failing_codes_from_quality_eval(quality_eval),
-        "tier_statuses": _tier_statuses(quality_eval),
-        "tier_3_overall_score": ((quality_eval.get("tiers") or {}).get("tier_3_scholarly_quality") or {}).get("overall_score") if isinstance(quality_eval.get("tiers"), dict) else None,
-        "tier_3_axis_scores": ((quality_eval.get("tiers") or {}).get("tier_3_scholarly_quality") or {}).get("axis_scores") if isinstance(quality_eval.get("tiers"), dict) else {},
-    }
-    if extra:
-        entry.update(extra)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
-    return path
-
 
 def write_quality_eval(
     cwd: str | Path | None,
@@ -178,14 +136,10 @@ def write_quality_eval(
     append_history: bool = False,
     current_attempt_consumes_budget: bool = False,
 ) -> tuple[Path, dict[str, Any]]:
-    fidelity_payload = run_fidelity_audit(cwd)
-    fidelity_path = artifact_path(cwd, "fidelity.audit.json")
-    write_json(fidelity_path, fidelity_payload)
-    state = load_session(cwd)
-    state.artifacts.latest_fidelity_json = str(fidelity_path)
-    save_session(cwd, state)
-    write_reproducibility_audit(cwd, require_live_verification=require_live_verification)
-    reproducibility_payload = build_reproducibility_audit(cwd, require_live_verification=require_live_verification)
+    state, reproducibility_payload, fidelity_payload = refresh_quality_audit_artifacts(
+        cwd,
+        require_live_verification=require_live_verification,
+    )
     payload = build_quality_eval(
         cwd,
         quality_mode=quality_mode,
@@ -197,37 +151,12 @@ def write_quality_eval(
     )
     path = Path(output_path).resolve() if output_path else artifact_path(cwd, "quality-eval.json")
     write_json(path, payload)
-    state = load_session(cwd)
     state.notes.append(f"Quality eval recorded: {path.name}")
     save_session(cwd, state)
     if append_history:
         append_quality_loop_history(cwd, payload, quality_eval_path=path, event_type="quality_eval", consumes_budget=False)
     return path, payload
 
-
-def _validate_quality_eval_input(
-    quality_eval: dict[str, Any],
-    *,
-    state,
-    reproducibility: dict[str, Any],
-    fidelity: dict[str, Any],
-    quality_eval_path: Path,
-) -> None:
-    current_hash = _file_sha256(state.artifacts.paper_full_tex)
-    expected_manuscript_hash = f"sha256:{current_hash}" if current_hash else None
-    if quality_eval.get("manuscript_hash") != expected_manuscript_hash:
-        raise ValueError(
-            "quality-eval input is stale for the current manuscript: "
-            f"{quality_eval_path} has {quality_eval.get('manuscript_hash')!r}, expected {expected_manuscript_hash!r}"
-        )
-    snapshot_hashes = quality_eval.get("audit_snapshot_hashes")
-    if isinstance(snapshot_hashes, dict):
-        expected_repro = f"sha256:{_sha256_jsonable(reproducibility)}"
-        expected_fidelity = f"sha256:{_sha256_jsonable(fidelity)}"
-        if snapshot_hashes.get("reproducibility") != expected_repro:
-            raise ValueError(f"quality-eval input is stale for the current reproducibility audit: {quality_eval_path}")
-        if snapshot_hashes.get("fidelity") != expected_fidelity:
-            raise ValueError(f"quality-eval input is stale for the current fidelity audit: {quality_eval_path}")
 
 
 def write_quality_loop_plan(
@@ -241,23 +170,18 @@ def write_quality_loop_plan(
     quality_eval_input_path: str | Path | None = None,
     append_history: bool = True,
 ) -> tuple[Path, dict[str, Any]]:
-    fidelity_payload = run_fidelity_audit(cwd)
-    fidelity_path = artifact_path(cwd, "fidelity.audit.json")
-    write_json(fidelity_path, fidelity_payload)
-    state = load_session(cwd)
-    state.artifacts.latest_fidelity_json = str(fidelity_path)
-    save_session(cwd, state)
-    write_reproducibility_audit(cwd, require_live_verification=require_live_verification)
-    reproducibility_payload = build_reproducibility_audit(cwd, require_live_verification=require_live_verification)
+    state, reproducibility_payload, fidelity_payload = refresh_quality_audit_artifacts(
+        cwd,
+        require_live_verification=require_live_verification,
+    )
     if quality_eval_input_path:
         quality_eval_path = Path(quality_eval_input_path).resolve()
         loaded_quality_eval = read_json(quality_eval_path)
         if not isinstance(loaded_quality_eval, dict):
             raise ValueError(f"quality-eval input is not a JSON object: {quality_eval_path}")
-        state_for_eval = load_session(cwd)
         _validate_quality_eval_input(
             loaded_quality_eval,
-            state=state_for_eval,
+            state=state,
             reproducibility=reproducibility_payload,
             fidelity=fidelity_payload,
             quality_eval_path=quality_eval_path,
@@ -295,7 +219,6 @@ def write_quality_loop_plan(
             event_type="qa_loop_plan",
             consumes_budget=False,
         )
-    state = load_session(cwd)
     state.notes.append(f"QA loop plan recorded: {path.name}")
     save_session(cwd, state)
     return path, payload
