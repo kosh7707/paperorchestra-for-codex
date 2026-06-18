@@ -26,11 +26,7 @@ from .plan_logic import _plan_verdict
 from .plan_sources import build_quality_eval_for_plan
 from .policy import (
     BUDGET_CONSUMING_HISTORY_EVENTS,
-    CITATION_SUPPORT_REVIEW_REFRESH_CODES,
     DEFAULT_MAX_ITERATIONS,
-    QA_LOOP_PLAN_SCHEMA_VERSION,
-    QA_LOOP_SUPPORTED_HANDLER_CODES,
-    REVIEW_REFRESH_CODES,
 )
 from .utils import _file_sha256, _sha256_jsonable
 

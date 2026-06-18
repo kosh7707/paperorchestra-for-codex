@@ -15,7 +15,7 @@ from paperorchestra.engine.review_stages import (
 from paperorchestra.manuscript.source_obligations import write_source_obligations
 from paperorchestra.reviews.citation_model_writer import write_citation_support_review
 from paperorchestra.reviews.section_review import write_section_review
-from paperorchestra.loop_engine.quality.loop import CITATION_SUPPORT_REVIEW_REFRESH_CODES, REVIEW_REFRESH_CODES
+from paperorchestra.loop_engine.quality.policy import CITATION_SUPPORT_REVIEW_REFRESH_CODES, REVIEW_REFRESH_CODES
 from paperorchestra.loop_engine.ralph.citation_candidate_preservation import preserve_citation_candidate_for_approval
 from paperorchestra.loop_engine.ralph.action_dispatch_types import (
     QaLoopActionDispatchContext,
