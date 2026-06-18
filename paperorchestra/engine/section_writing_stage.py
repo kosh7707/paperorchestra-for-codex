@@ -18,7 +18,7 @@ from paperorchestra.engine.reports import (
     _record_validation_report,
 )
 from paperorchestra.engine.section_scope import _normalize_section_selection
-from paperorchestra.engine.section_writing_prompt import build_section_writing_plan
+from paperorchestra.engine.section_writing_plan_builder import build_section_writing_plan
 from paperorchestra.engine.section_writing_repair import repair_section_draft_if_possible
 from paperorchestra.engine.section_writing_support import normalize_section_draft, validate_section_draft
 from paperorchestra.manuscript.prompts import PROMPTS

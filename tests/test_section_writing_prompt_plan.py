@@ -8,7 +8,7 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import write_json
 from paperorchestra.core.models import InputBundle
 from paperorchestra.core.session import artifact_path, create_session, load_session, save_session
-from paperorchestra.engine.section_writing_prompt import build_section_writing_plan
+from paperorchestra.engine.section_writing_plan_builder import build_section_writing_plan
 from paperorchestra.manuscript.narrative import write_planning_artifacts
 
 

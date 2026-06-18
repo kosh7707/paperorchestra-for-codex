@@ -5,7 +5,8 @@ import inspect
 
 def test_section_writing_public_stage_uses_prompt_and_repair_modules() -> None:
     from paperorchestra.engine import section_writing_stage
-    from paperorchestra.engine.section_writing_prompt import SectionWritingPlan, build_section_writing_plan
+    from paperorchestra.engine.section_writing_plan_builder import build_section_writing_plan
+    from paperorchestra.engine.section_writing_types import SectionWritingPlan
     from paperorchestra.engine.section_writing_repair import SectionRepairResult, repair_section_draft_if_possible
 
     stage_source = inspect.getsource(section_writing_stage.write_sections)
