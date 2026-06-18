@@ -83,3 +83,19 @@ def test_verify_papers_live_fail_records_errors_and_blocks_session(tmp_path: Pat
     assert errors["error_count"] == 1
     assert errors["errors"][0]["action"] == "failed"
     assert errors["errors"][0]["title_guess"] == "Evidence Grounded Agents for SAST Alert Triage"
+
+
+def test_build_bib_writes_references_and_updates_session_state(tmp_path: Path) -> None:
+    _session_with_candidates(tmp_path)
+    research_verification_stage.verify_papers(tmp_path, mode="mock")
+
+    bib_path = research_verification_stage.build_bib(tmp_path)
+
+    state = load_session(tmp_path)
+    citation_map = read_json(artifact_path(tmp_path, "citation_map.json"))
+    assert bib_path == artifact_path(tmp_path, "references.bib")
+    assert "Evidence Grounded Agents" in bib_path.read_text(encoding="utf-8")
+    assert citation_map
+    assert state.artifacts.references_bib == str(bib_path)
+    assert state.artifacts.citation_map_json == str(artifact_path(tmp_path, "citation_map.json"))
+    assert state.active_artifact == "references.bib"
