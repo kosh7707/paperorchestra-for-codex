@@ -7,6 +7,7 @@ from paperorchestra.core.models import InputBundle
 from paperorchestra.core.session import create_session
 from paperorchestra.loop_engine.ralph import action_dispatch_citation_refresh as citation_refresh
 from paperorchestra.loop_engine.ralph import action_dispatch_citation_repair as citation_repair
+from paperorchestra.loop_engine.ralph import action_dispatch_general as general_actions
 from paperorchestra.loop_engine.ralph import action_dispatch_handlers as handlers
 from paperorchestra.loop_engine.ralph.action_dispatch import dispatch_qa_loop_actions
 from paperorchestra.loop_engine.ralph.action_dispatch_types import QaLoopActionDispatchContext
@@ -56,12 +57,12 @@ def test_supported_handler_codes_are_covered_by_registry() -> None:
 
 def test_dispatch_routes_refresh_action_families_and_skips_unknown(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
-        handlers,
+        general_actions,
         "plan_narrative_and_claims",
         lambda cwd, provider, runtime_mode: {"narrative_plan": tmp_path / "narrative.json"},
     )
     monkeypatch.setattr(
-        handlers,
+        general_actions,
         "record_current_validation_report",
         lambda cwd, name: (tmp_path / name, {"ok": True}),
     )
@@ -106,8 +107,8 @@ def test_dispatch_compile_failure_stops_later_actions(tmp_path: Path, monkeypatc
     def unexpected_review(*args, **kwargs):
         raise AssertionError("review should not run after compile failure")
 
-    monkeypatch.setattr(handlers, "compile_current_paper", fail_compile)
-    monkeypatch.setattr(handlers, "review_current_paper", unexpected_review)
+    monkeypatch.setattr(general_actions, "compile_current_paper", fail_compile)
+    monkeypatch.setattr(general_actions, "review_current_paper", unexpected_review)
     execution = _execution()
 
     result = dispatch_qa_loop_actions(
@@ -146,14 +147,14 @@ def test_dispatch_records_actionable_failure_when_citation_repair_is_rejected(tm
 
 def test_dispatch_refine_rejection_stops_later_actions(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
-        handlers,
+        general_actions,
         "load_session",
         lambda cwd: SimpleNamespace(artifacts=SimpleNamespace(latest_review_json="review.json")),
     )
-    monkeypatch.setattr(handlers, "refine_current_paper", lambda *args, **kwargs: [{"accepted": False}])
-    monkeypatch.setattr(handlers, "write_section_review", lambda cwd: tmp_path / "section-review.json")
+    monkeypatch.setattr(general_actions, "refine_current_paper", lambda *args, **kwargs: [{"accepted": False}])
+    monkeypatch.setattr(general_actions, "write_section_review", lambda cwd: tmp_path / "section-review.json")
     monkeypatch.setattr(
-        handlers,
+        general_actions,
         "write_source_obligations",
         lambda cwd: (_ for _ in ()).throw(AssertionError("source obligations should not run after refine rejection")),
     )
