@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Callable
 
 from paperorchestra.core.session import load_session
@@ -29,6 +28,7 @@ from paperorchestra.loop_engine.ralph.action_dispatch_codes import (
     SOURCE_OBLIGATION_CODES,
     VALIDATION_REFRESH_CODES,
 )
+from paperorchestra.loop_engine.ralph.action_dispatch_citation_repair import _handle_citation_repair
 from paperorchestra.loop_engine.ralph.citation_candidate_preservation import preserve_citation_candidate_for_approval
 from paperorchestra.loop_engine.ralph.action_dispatch_types import (
     QaLoopActionDispatchContext,
@@ -39,7 +39,6 @@ from paperorchestra.loop_engine.ralph.artifacts import (
     _try_rebuild_bib_for_citation_quality,
 )
 from paperorchestra.loop_engine.ralph.repair import repair_citation_claims
-from paperorchestra.loop_engine.ralph.semantic_recheck import _citation_repair_failure_payload
 from paperorchestra.loop_engine.ralph.state import _artifact_sha, guarded_replace_manuscript_text
 
 ActionHandler = Callable[[str, dict[str, Any], QaLoopActionDispatchContext, _QaLoopActionDispatchState], bool]
@@ -222,52 +221,6 @@ def _handle_refine(
         {"code": code, "handler": "refine", "result": refine_result, "section_review": str(section_path)}
     )
     return not any(not item.get("accepted", False) for item in refine_result)
-
-
-def _handle_citation_repair(
-    code: str,
-    execution: dict[str, Any],
-    context: QaLoopActionDispatchContext,
-    state: _QaLoopActionDispatchState,
-) -> bool:
-    repair = repair_citation_claims(
-        context.cwd,
-        context.provider,
-        runtime_mode=context.runtime_mode,
-        require_compile=context.require_compile,
-        commit=False,
-    )
-    if not repair.get("accepted"):
-        failure = _citation_repair_failure_payload(code, repair)
-        execution.setdefault("repair_failures", []).append(failure)
-        execution["actionable_failure"] = {
-            "category": "citation_repair_failed",
-            "code": code,
-            "reason": failure["reason"],
-            "validation_failing_codes": failure["validation"]["failing_codes"],
-            "semantic_recheck_blockers": failure.get("semantic_recheck_blockers") or [],
-            "next_steps": failure["next_steps"],
-        }
-        execution["actions_attempted"].append({"code": code, "handler": "repair_citation_claims", "result": repair})
-        return False
-    if context.paper_path and repair.get("candidate_path"):
-        preserved_candidate_path = preserve_citation_candidate_for_approval(context.cwd, repair.get("candidate_path"))
-        if preserved_candidate_path:
-            repair = dict(repair)
-            repair.setdefault("raw_candidate_path", str(repair.get("candidate_path")))
-            repair["candidate_path"] = preserved_candidate_path
-            repair["candidate_sha256"] = _artifact_sha(preserved_candidate_path)
-        state.citation_candidate_path = str(repair["candidate_path"])
-        guarded_replace_manuscript_text(
-            context.cwd,
-            context.paper_path,
-            Path(state.citation_candidate_path).read_text(encoding="utf-8"),
-            reason="qa_loop_citation_candidate_for_validation",
-            original_text=context.original_paper,
-        )
-        state.citation_candidate_applied = True
-    execution["actions_attempted"].append({"code": code, "handler": "repair_citation_claims", "result": repair})
-    return True
 
 
 ACTION_HANDLER_REGISTRY: tuple[tuple[frozenset[str], ActionHandler], ...] = (
