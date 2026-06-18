@@ -7,7 +7,6 @@ from paperorchestra.reviews import citation_quality_classification as quality_cl
 from paperorchestra.reviews import citation_quality_report as quality_report
 from paperorchestra.reviews import citation_quality_support as quality_support
 from paperorchestra.reviews.citation_quality_report import (
-    CITATION_QUALITY_GATE_SCHEMA_VERSION,
     CitationQualityGateReport,
     CitationQualityItem,
 )

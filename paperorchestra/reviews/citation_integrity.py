@@ -8,8 +8,6 @@ from paperorchestra.core.io import write_json
 from paperorchestra.loop_engine.quality.utils import _file_sha256, _read_json_if_exists
 from paperorchestra.manuscript.validator import extract_citation_keys
 from paperorchestra.reviews.citation_integrity_paths import (
-    CITATION_INTENT_PLAN_FILENAME,
-    CITATION_SOURCE_MATCH_FILENAME,
     citation_integrity_audit_path,
     citation_intent_plan_path,
     citation_source_match_path,
@@ -27,9 +25,6 @@ from paperorchestra.reviews.citation_integrity_support import (
     _support_items,
     _support_items_by_key,
     _support_items_by_sentence,
-    _support_items_from_v3_cases,
-    _v3_evidence_text_readable,
-    _v3_support_status,
 )
 from paperorchestra.reviews.citation_rendered_references import _read_text, rendered_reference_audit_path
 

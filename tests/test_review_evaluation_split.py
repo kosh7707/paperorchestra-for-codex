@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from paperorchestra.reviews import evaluation
 from paperorchestra.reviews import generated_citations, review_gate_comparison
 
 

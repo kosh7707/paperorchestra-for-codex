@@ -12,18 +12,13 @@ from paperorchestra.reviews.citation_partition import (
     compute_partitioned_citation_coverage,
 )
 from paperorchestra.reviews.evaluation_constants import (
-    EXPECTED_CITATION_STATISTICS_KEYS,
     EXPECTED_LITERATURE_REVIEW_AXES,
-    EXPECTED_REVIEW_SUMMARY_KEYS,
     EXPECTED_SEARCH_GROUNDED_SOURCES,
     IGNORED_DISCOVERY_SOURCES,
 )
 from paperorchestra.reviews.evaluation_io import _write_json_artifact
-from paperorchestra.reviews.generated_citations import build_generated_citation_titles, write_generated_citation_titles
-from paperorchestra.reviews.review_gate_comparison import (
-    build_review_gate_comparison,
-    write_review_gate_comparison,
-)
+from paperorchestra.reviews.generated_citations import build_generated_citation_titles
+from paperorchestra.reviews.review_gate_comparison import build_review_gate_comparison
 from paperorchestra.reviews.eval_text import parse_reported_margin_ranges
 
 

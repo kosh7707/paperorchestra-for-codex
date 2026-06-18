@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-from paperorchestra.reviews import citation_quality
 from paperorchestra.reviews import citation_quality_report
 
 
@@ -35,7 +34,7 @@ def test_public_report_summarizes_items_without_internal_fields() -> None:
     public = report.to_public_dict()
     internal = report.to_internal_dict()
 
-    assert public["schema"] == citation_quality.CITATION_QUALITY_GATE_SCHEMA_VERSION
+    assert public["schema"] == citation_quality_report.CITATION_QUALITY_GATE_SCHEMA_VERSION
     assert public["summary"] == {"pass": 0, "weak": 0, "fail": 1, "human_needed": 0}
     assert public["failures"] == [
         {"case": "case-1", "key": "KeyA", "code": "human_needed", "message": "Manual evidence is required."}
