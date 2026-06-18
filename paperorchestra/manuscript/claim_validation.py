@@ -7,7 +7,7 @@ from paperorchestra.core.boundary import control_prose_markers
 from paperorchestra.manuscript.citations import extract_citation_keys
 from paperorchestra.manuscript.claim_coverage import check_claim_map_coverage
 from paperorchestra.manuscript.claim_text import _section_visible_latex, _visible_latex_text
-from paperorchestra.manuscript.narrative_validation import check_narrative_section_roles
+from paperorchestra.manuscript.narrative_role_checks import _narrative_role_issues, _story_beat_issue
 from paperorchestra.manuscript.validation_types import ValidationIssue
 
 
@@ -54,6 +54,21 @@ PROMPT_META_LEAKAGE_PATTERNS = [
         r"\bauthor\s+notes(?:\s+for\s+.+)?\b",
     ]
 ]
+
+
+def check_narrative_section_roles(latex: str, narrative_plan: dict[str, Any] | None) -> list[ValidationIssue]:
+    if not isinstance(narrative_plan, dict):
+        return []
+    issues: list[ValidationIssue] = []
+    for role in narrative_plan.get("section_roles") or []:
+        if isinstance(role, dict):
+            issues.extend(_narrative_role_issues(latex, role))
+    for beat in narrative_plan.get("story_beats") or []:
+        if isinstance(beat, dict):
+            issue = _story_beat_issue(latex, beat)
+            if issue is not None:
+                issues.append(issue)
+    return issues
 
 
 def check_prompt_meta_leakage(latex: str) -> list[ValidationIssue]:
