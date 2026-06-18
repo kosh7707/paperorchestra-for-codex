@@ -169,7 +169,9 @@ def test_duplicate_and_density_contexts_preserve_ordering_and_caps() -> None:
 
 
 def test_protected_citation_target_context_collects_problematic_review_and_integrity_targets() -> None:
-    from paperorchestra.feedback.operator_contexts.citation_protection_targets import _protected_citation_target_context
+    from paperorchestra.feedback.operator_contexts.citation_protection_target_context import (
+        _protected_citation_target_context,
+    )
 
     targets = _protected_citation_target_context(
         {
