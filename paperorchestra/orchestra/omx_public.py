@@ -13,7 +13,21 @@ from paperorchestra.orchestra.omx_public_hashing import _sha256_json, _sha256_te
 from paperorchestra.orchestra.omx_public_redaction import _jsonable_without_private_values, _public_input_payload, _public_payload
 from paperorchestra.orchestra.omx_public_sanitize import VALID_PUBLIC_REASON_RE as _VALID_PUBLIC_REASON
 from paperorchestra.orchestra.omx_public_sanitize import _public_reason, _public_unsupported_action_type
-from paperorchestra.orchestra.omx_public_surfaces import ALLOWED_SKILL_SURFACES, _validate_skill_surface
+
+ALLOWED_SKILL_SURFACES = {
+    "$autoresearch",
+    "$autoresearch-goal",
+    "$deep-interview",
+    "$ralplan",
+    "$ralph",
+    "$ultraqa",
+    "$trace",
+}
+
+
+def _validate_skill_surface(surface: str) -> None:
+    if surface not in ALLOWED_SKILL_SURFACES:
+        raise ValueError(f"Unsupported planned OMX skill surface: {surface!r}")
 
 __all__ = [
     "ALLOWED_SKILL_SURFACES",
