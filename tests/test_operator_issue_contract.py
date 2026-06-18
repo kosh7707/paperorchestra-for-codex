@@ -69,6 +69,12 @@ def test_validate_operator_issue_rejects_stale_id_or_invalid_owner() -> None:
     with pytest.raises(ContractError, match="invalid owner_category"):
         issues._validate_operator_issue(_issue(owner_category="nonsense"), _packet())
 
+    with pytest.raises(ContractError, match="source must be codex_operator"):
+        issues._validate_operator_issue(_issue(source="independent_human_review"), _packet())
+
+    with pytest.raises(ContractError, match="must not claim independent human review"):
+        issues._validate_operator_issue(_issue(not_independent_human_review=False), _packet())
+
 
 def test_action_for_issue_preserves_operator_provenance() -> None:
     normalized = issues._validate_operator_issue(_issue(), _packet())
@@ -91,6 +97,14 @@ def test_action_for_issue_preserves_operator_provenance() -> None:
 
 def test_normalize_operator_intent_requires_single_valid_intent_or_matching_primary() -> None:
     assert issues._normalize_operator_intent({"intent": "generate_new_operator_candidate"}) == "generate_new_operator_candidate"
+    assert (
+        issues._normalize_operator_intent({"issues": [{"action_kind": "approve_existing_candidate"}]})
+        == "approve_existing_candidate"
+    )
+    assert (
+        issues._normalize_operator_intent({"actions": [{"action_kind": "reject_candidate_with_reason"}]})
+        == "reject_candidate_with_reason"
+    )
     assert issues._normalize_operator_intent(
         {
             "intents": ["reject_candidate_with_reason", "reject_candidate_with_reason"],
