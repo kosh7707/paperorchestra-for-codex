@@ -6,13 +6,16 @@ import inspect
 def test_section_writing_public_stage_uses_prompt_and_repair_modules() -> None:
     from paperorchestra.engine import section_writing_stage
     from paperorchestra.engine.section_writing_plan_builder import build_section_writing_plan
+    from paperorchestra.engine.section_writing_runner import SectionWritingRun
     from paperorchestra.engine.section_writing_types import SectionWritingPlan
     from paperorchestra.engine.section_writing_repair import SectionRepairResult, repair_section_draft_if_possible
 
     stage_source = inspect.getsource(section_writing_stage.write_sections)
+    runner_source = inspect.getsource(SectionWritingRun)
 
-    assert "build_section_writing_plan(" in stage_source
-    assert "repair_section_draft_if_possible(" in stage_source
+    assert "SectionWritingRun(" in stage_source
+    assert "build_section_writing_plan(" in runner_source
+    assert "repair_section_draft_if_possible(" in runner_source
     assert SectionWritingPlan.__name__ == "SectionWritingPlan"
     assert SectionRepairResult.__name__ == "SectionRepairResult"
     assert callable(build_section_writing_plan)
