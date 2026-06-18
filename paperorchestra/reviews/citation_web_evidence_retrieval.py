@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import Any
 
-from paperorchestra.core.io import ExtractionError, extract_json
-from paperorchestra.reviews.citation_evidence import _clean_evidence
 from paperorchestra.reviews.citation_progress import _citation_progress_cite_label, _emit_citation_progress
+from paperorchestra.reviews.citation_web_evidence_payload import (
+    _normalized_retrieval_payload,
+    _parse_retrieval_response,
+)
+from paperorchestra.reviews.citation_web_evidence_prompts import _trace_base, _web_evidence_prompts
 from paperorchestra.runtime.provider_base import BaseProvider, CompletionRequest
 
 _CHUNK_SIZE = 8
@@ -84,97 +85,13 @@ def _build_single_web_evidence_retrieval(
     return _normalized_retrieval_payload(items, payload, trace_base)
 
 
-def _web_evidence_prompts(items: list[dict[str, Any]]) -> tuple[str, str]:
-    review_items = [
-        {
-            "id": item["id"],
-            "sentence": item["sentence"],
-            "citation_keys": item["citation_keys"],
-            "citation_entries": item["citation_entries"],
-            "claim_type": item["claim_type"],
-        }
-        for item in items
-    ]
-    system_prompt = """
-You are PaperOrchestra's citation-support evidence retriever.
-Your job is to collect source evidence only, before any verdict is assigned.
-
-Rules:
-- Use web/source lookup if available.
-- Do not decide final support_status.
-- Do not rewrite manuscript prose.
-- Do not invent bibliographic metadata, URLs, source titles, or evidence.
-- Return JSON only.
-""".strip()
-    user_prompt = f"""
-Collect cited-source evidence for these manuscript sentences.
-
-Return JSON with exactly these top-level keys:
-- items: array, one object per input id
-- research_notes: array of strings
-
-Each item must contain:
-- id
-- evidence: array of objects with citation_key, source_title, url, evidence_quote_or_summary, supports_claim
-
-Input:
-{json.dumps({"items": review_items}, indent=2, ensure_ascii=False)}
-""".strip()
-    return system_prompt, user_prompt
-
-
-def _trace_base(system_prompt: str, user_prompt: str, response: str) -> dict[str, Any]:
-    return {
-        "schema_version": "citation-support-retrieval-trace/1",
-        "system_prompt_sha256": hashlib.sha256(system_prompt.encode("utf-8")).hexdigest(),
-        "user_prompt_sha256": hashlib.sha256(user_prompt.encode("utf-8")).hexdigest(),
-        "response_sha256": hashlib.sha256(response.encode("utf-8")).hexdigest(),
-        "web_search_required": True,
-    }
-
-
-def _parse_retrieval_response(response: str, trace_base: dict[str, Any]) -> dict[str, Any]:
-    try:
-        payload = extract_json(response)
-    except (ExtractionError, json.JSONDecodeError, ValueError) as exc:
-        return {
-            "items": [],
-            "research_notes": [f"Citation-support evidence retrieval returned malformed JSON: {type(exc).__name__}."],
-            "_trace": {
-                **trace_base,
-                "parse_error": type(exc).__name__,
-                "parse_error_message": str(exc),
-            },
-        }
-    if not isinstance(payload, dict):
-        payload = {"items": [], "research_notes": ["Citation-support evidence retrieval returned non-object JSON."]}
-    payload["_trace"] = trace_base
-    return payload
-
-
-def _normalized_retrieval_payload(
-    items: list[dict[str, Any]],
-    payload: dict[str, Any],
-    trace_base: dict[str, Any],
-) -> dict[str, Any]:
-    raw_by_id = {str(item.get("id")): item for item in payload.get("items", []) if isinstance(item, dict)}
-    normalized_items: list[dict[str, Any]] = []
-    for item in items:
-        raw = raw_by_id.get(item["id"], {})
-        normalized_items.append(
-            {
-                "id": item["id"],
-                "sentence": item["sentence"],
-                "citation_keys": item["citation_keys"],
-                "citation_entries": item["citation_entries"],
-                "claim_type": item["claim_type"],
-                "evidence": _clean_evidence(raw.get("evidence") if isinstance(raw, dict) else []),
-            }
-        )
-    research_notes = payload.get("research_notes") if isinstance(payload.get("research_notes"), list) else []
-    return {
-        "schema_version": "citation-support-retrieved-evidence/1",
-        "items": normalized_items,
-        "research_notes": research_notes,
-        "trace": payload.get("_trace") if isinstance(payload.get("_trace"), dict) else trace_base,
-    }
+__all__ = [
+    "_CHUNK_SIZE",
+    "_build_chunked_web_evidence_retrieval",
+    "_build_single_web_evidence_retrieval",
+    "_build_web_evidence_retrieval",
+    "_normalized_retrieval_payload",
+    "_parse_retrieval_response",
+    "_trace_base",
+    "_web_evidence_prompts",
+]
