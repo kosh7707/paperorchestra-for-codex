@@ -3,7 +3,8 @@ from __future__ import annotations
 import urllib.parse
 from typing import Any
 
-from paperorchestra.reviews.citation_source_payload import _clean_optional_string, _lean_source_payload
+from paperorchestra.reviews.citation_source_fields import _clean_optional_string
+from paperorchestra.reviews.citation_source_lean import _lean_source_payload
 from paperorchestra.reviews.source_support_resolution_invalid import _mark_invalid_human_resolution
 
 

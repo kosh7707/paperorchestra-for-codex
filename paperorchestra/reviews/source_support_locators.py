@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from paperorchestra.reviews.citation_source_payload import _clean_optional_string
+from paperorchestra.reviews.citation_source_fields import _clean_optional_string
 
 
 def _source_locators(source: dict[str, Any]) -> list[str]:
