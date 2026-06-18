@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from paperorchestra.feedback.operator_candidate_hard_gate import _candidate_hard_gate
-from paperorchestra.feedback.operator_candidate_progress import (
+from paperorchestra.feedback.operator_candidate_hard_gate import (
+    _candidate_hard_gate,
     _candidate_reduces_citation_issue_count,
     _catastrophic_review_regression,
 )
