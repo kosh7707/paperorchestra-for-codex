@@ -33,6 +33,40 @@ def test_match_plot_manifest_prefers_asset_and_marks_placeholder_unreviewable() 
     assert match["asset"]["review_status"] == "human_final_artwork_required"
 
 
+def test_match_plot_manifest_uses_label_when_assets_do_not_match() -> None:
+    match = figure_matching._match_plot_manifest(
+        label="fig:cost-model",
+        caption="Unrelated caption",
+        included_assets=[],
+        plot_manifest={"figures": [{"figure_id": "cost-model", "title": "Cost model"}]},
+        plot_assets_index={"assets": []},
+    )
+
+    assert match is not None
+    assert match["match_precedence"] == "label"
+    assert match["figure_id"] == "cost-model"
+
+
+def test_match_plot_manifest_marks_caption_token_matches_ambiguous() -> None:
+    match = figure_matching._match_plot_manifest(
+        label=None,
+        caption="Precision recall latency triage.",
+        included_assets=[],
+        plot_manifest={
+            "figures": [
+                {"figure_id": "a", "title": "Precision recall"},
+                {"figure_id": "b", "purpose": "Precision recall"},
+            ]
+        },
+        plot_assets_index=None,
+    )
+
+    assert match is not None
+    assert match["match_precedence"] == "caption_tokens"
+    assert match["status"] == "ambiguous"
+    assert match["candidate_count"] == 2
+
+
 def test_caption_manifest_relation_detects_process_caption_mismatch() -> None:
     relation = figure_matching._caption_manifest_relation(
         "Placeholder figure prompt showing author workflow.",
