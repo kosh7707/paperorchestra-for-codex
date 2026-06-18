@@ -68,6 +68,35 @@ def test_claim_safety_repair_issues_reads_density_duplicate_and_high_risk_artifa
     assert issues[3]["line"] == 12
 
 
+def test_claim_safety_repair_issues_tolerates_missing_or_malformed_artifacts(tmp_path: Path) -> None:
+    set_current_session(tmp_path, "po-test")
+    artifact_path(tmp_path, "citation_integrity.audit.json").write_text("{not-json", encoding="utf-8")
+
+    assert repair_issue_packet._claim_safety_repair_issues(tmp_path) == []
+
+
+def test_citation_density_repair_issues_respects_limit_before_paragraphs(tmp_path: Path) -> None:
+    set_current_session(tmp_path, "po-test")
+    _write_json(
+        artifact_path(tmp_path, "citation_integrity.audit.json"),
+        {
+            "checks": {
+                "citation_density": {
+                    "bomb_sentences": [
+                        {"id": "dense-1", "sentence": "Dense one.", "citation_keys": ["A"]},
+                        {"id": "dense-2", "sentence": "Dense two.", "citation_keys": ["B"]},
+                    ],
+                    "bomb_paragraph_key_sets": [["C", "D"]],
+                }
+            }
+        },
+    )
+
+    issues = repair_issue_packet._citation_density_repair_issues(tmp_path, limit=1)
+
+    assert [item["id"] for item in issues] == ["dense-1"]
+
+
 def test_repair_recheck_metrics_summarize_packet_and_audit_payloads() -> None:
     audit_metrics = repair_recheck._citation_integrity_metrics(
         {
