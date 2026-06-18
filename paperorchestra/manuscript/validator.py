@@ -34,15 +34,15 @@ from paperorchestra.manuscript.citations import (
     extract_citation_keys,
     noncanonical_citation_aliases,
 )
-from paperorchestra.manuscript.figure_validation import (
+from paperorchestra.manuscript.figure_patterns import (
     CAPTION_RE,
     FIGURE_ENV_RE,
     INCLUDE_GRAPHICS_RE,
     LABEL_RE,
     REF_RE,
-    FigurePlacementWarning,
-    build_figure_placement_review,
 )
+from paperorchestra.manuscript.figure_review_builder import build_figure_placement_review
+from paperorchestra.manuscript.figure_review_types import FigurePlacementWarning
 from paperorchestra.manuscript.sections import (
     SECTION_RE,
     _normalize_section_title,

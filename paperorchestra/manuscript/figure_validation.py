@@ -1,60 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.manuscript.figure_matching import (
-    _body_figure_has_nontechnical_asset,
-    _caption_has_process_or_placeholder_text,
-    _caption_manifest_relation,
-    _high_signal_tokens,
-    _included_asset_names,
-    _match_plot_manifest,
-    _normalize_figure_key,
-    _plot_asset_candidates,
-    _plot_manifest_candidates,
-    _asset_is_reviewable,
-    _figure_keys,
-    _NONTECHNICAL_VISUAL_STRONG_RE,
-    _NONTECHNICAL_VISUAL_CONTEXT_RE,
-    _DECORATIVE_VISUAL_RE,
-    _PROCESS_CAPTION_RE,
-    _UNRELATED_CAPTION_CUE_RE,
-)
-from paperorchestra.manuscript.figure_patterns import (
-    CAPTION_RE,
-    DECORATIVE_VISUAL_RE,
-    FIGURE_ENV_RE,
-    INCLUDE_GRAPHICS_RE,
-    LABEL_RE,
-    NONTECHNICAL_VISUAL_CONTEXT_RE,
-    NONTECHNICAL_VISUAL_STRONG_RE,
-    PROCESS_CAPTION_RE,
-    REF_RE,
-    UNRELATED_CAPTION_CUE_RE,
-)
 from paperorchestra.manuscript.figure_review_builder import build_figure_placement_review
 from paperorchestra.manuscript.figure_review_types import FigurePlacementWarning
 
-__all__ = [
-    "CAPTION_RE",
-    "FIGURE_ENV_RE",
-    "INCLUDE_GRAPHICS_RE",
-    "LABEL_RE",
-    "REF_RE",
-    "NONTECHNICAL_VISUAL_STRONG_RE",
-    "NONTECHNICAL_VISUAL_CONTEXT_RE",
-    "DECORATIVE_VISUAL_RE",
-    "PROCESS_CAPTION_RE",
-    "UNRELATED_CAPTION_CUE_RE",
-    "FigurePlacementWarning",
-    "build_figure_placement_review",
-    "_normalize_figure_key",
-    "_high_signal_tokens",
-    "_plot_asset_candidates",
-    "_plot_manifest_candidates",
-    "_asset_is_reviewable",
-    "_figure_keys",
-    "_match_plot_manifest",
-    "_caption_manifest_relation",
-    "_included_asset_names",
-    "_body_figure_has_nontechnical_asset",
-    "_caption_has_process_or_placeholder_text",
-]
+__all__ = ["FigurePlacementWarning", "build_figure_placement_review"]

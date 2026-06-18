@@ -1,40 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.manuscript import figure_matching, figure_patterns, figure_validation
-
-
-def test_figure_validation_facade_reexports_patterns_and_matching_helpers() -> None:
-    assert "build_figure_placement_review" in figure_validation.__all__
-    assert "_match_plot_manifest" in figure_validation.__all__
-    assert figure_validation.FIGURE_ENV_RE is figure_patterns.FIGURE_ENV_RE
-    assert figure_validation.CAPTION_RE is figure_patterns.CAPTION_RE
-    assert figure_validation.REF_RE is figure_patterns.REF_RE
-    assert figure_validation.LABEL_RE is figure_patterns.LABEL_RE
-    assert figure_validation.INCLUDE_GRAPHICS_RE is figure_patterns.INCLUDE_GRAPHICS_RE
-    assert figure_validation.NONTECHNICAL_VISUAL_STRONG_RE is figure_patterns.NONTECHNICAL_VISUAL_STRONG_RE
-    assert figure_validation.NONTECHNICAL_VISUAL_CONTEXT_RE is figure_patterns.NONTECHNICAL_VISUAL_CONTEXT_RE
-    assert figure_validation.DECORATIVE_VISUAL_RE is figure_patterns.DECORATIVE_VISUAL_RE
-    assert figure_validation.PROCESS_CAPTION_RE is figure_patterns.PROCESS_CAPTION_RE
-    assert figure_validation.UNRELATED_CAPTION_CUE_RE is figure_patterns.UNRELATED_CAPTION_CUE_RE
-    assert figure_matching._NONTECHNICAL_VISUAL_STRONG_RE is figure_patterns.NONTECHNICAL_VISUAL_STRONG_RE
-    assert figure_matching._NONTECHNICAL_VISUAL_CONTEXT_RE is figure_patterns.NONTECHNICAL_VISUAL_CONTEXT_RE
-    assert figure_matching._DECORATIVE_VISUAL_RE is figure_patterns.DECORATIVE_VISUAL_RE
-    assert figure_matching._PROCESS_CAPTION_RE is figure_patterns.PROCESS_CAPTION_RE
-    assert figure_matching._UNRELATED_CAPTION_CUE_RE is figure_patterns.UNRELATED_CAPTION_CUE_RE
-    assert figure_validation._normalize_figure_key is figure_matching._normalize_figure_key
-    assert figure_validation._high_signal_tokens is figure_matching._high_signal_tokens
-    assert figure_validation._plot_asset_candidates is figure_matching._plot_asset_candidates
-    assert figure_validation._plot_manifest_candidates is figure_matching._plot_manifest_candidates
-    assert figure_validation._asset_is_reviewable is figure_matching._asset_is_reviewable
-    assert figure_validation._figure_keys is figure_matching._figure_keys
-    assert figure_validation._match_plot_manifest is figure_matching._match_plot_manifest
-    assert figure_validation._caption_manifest_relation is figure_matching._caption_manifest_relation
-    assert figure_validation._included_asset_names is figure_matching._included_asset_names
-    assert figure_validation._body_figure_has_nontechnical_asset is figure_matching._body_figure_has_nontechnical_asset
-    assert (
-        figure_validation._caption_has_process_or_placeholder_text
-        is figure_matching._caption_has_process_or_placeholder_text
-    )
+from paperorchestra.manuscript import figure_matching, figure_validation
 
 
 def test_match_plot_manifest_prefers_asset_and_marks_placeholder_unreviewable() -> None:
