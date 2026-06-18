@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.reviews.citation_quality_report import _default_public_failure_message
+from paperorchestra.reviews.citation_quality_public import _default_public_failure_message
 
 
 def _support_items(payload: Any, *, run_root: Path | None = None) -> list[dict[str, Any]]:
