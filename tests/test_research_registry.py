@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from paperorchestra.core.models import VerifiedPaper
-from paperorchestra.engine.research_registry import (
-    _citation_map_from_registry,
-    _merge_authoritative_external_ids,
-    _merge_live_verified_with_prior_registry,
-)
+from paperorchestra.engine.research_registry_authority import merge_authoritative_external_ids
+from paperorchestra.engine.research_registry_merge import merge_live_verified_with_prior_registry
+from paperorchestra.engine.research_registry_payloads import citation_map_from_registry
 
 
 def _paper(**overrides) -> VerifiedPaper:
@@ -52,7 +50,7 @@ def test_merge_live_registry_preserves_authoritative_prior_metadata() -> None:
         citation_count=42,
     )
 
-    merged = _merge_live_verified_with_prior_registry([prior], [verified])
+    merged = merge_live_verified_with_prior_registry([prior], [verified])
 
     assert len(merged) == 1
     paper = merged[0]
@@ -81,7 +79,7 @@ def test_merge_live_registry_keeps_prior_key_as_alias_authority_for_regular_pape
         matched_query=None,
     )
 
-    merged = _merge_live_verified_with_prior_registry([prior], [verified])
+    merged = merge_live_verified_with_prior_registry([prior], [verified])
 
     assert len(merged) == 1
     paper = merged[0]
@@ -94,7 +92,7 @@ def test_merge_live_registry_keeps_prior_key_as_alias_authority_for_regular_pape
 
 
 def test_merge_authoritative_external_ids_preserves_conflicting_verified_values() -> None:
-    merged = _merge_authoritative_external_ids(
+    merged = merge_authoritative_external_ids(
         {"DOI": "10.prior", "VerifiedDOI": "10.other"},
         {"DOI": "10.live", "CorpusId": "123"},
     )
@@ -110,7 +108,7 @@ def test_merge_authoritative_external_ids_preserves_conflicting_verified_values(
 def test_citation_map_contains_canonical_and_alias_entries() -> None:
     paper = _paper(bibtex_key="canonical2024", alias_bibtex_keys=["aliasA", "aliasB"])
 
-    citation_map = _citation_map_from_registry([paper])
+    citation_map = citation_map_from_registry([paper])
 
     assert set(citation_map) == {"canonical2024", "aliasA", "aliasB"}
     assert citation_map["canonical2024"]["citation_key_role"] == "canonical"

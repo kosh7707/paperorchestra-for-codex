@@ -8,7 +8,7 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import read_json as _read_json, write_json as _write_json, write_text as _write_text
 from paperorchestra.core.models import VerifiedPaper
 from paperorchestra.core.session import artifact_path as _artifact_path, load_session as _load_session, save_session as _save_session
-from paperorchestra.engine.research_registry import _citation_map_from_registry as _citation_map_from_registry_real
+from paperorchestra.engine.research_registry_payloads import citation_map_from_registry as _citation_map_from_registry_real
 from paperorchestra.research.bibtex import registry_to_bibtex as _registry_to_bibtex
 
 

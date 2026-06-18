@@ -5,7 +5,7 @@ from typing import Any
 
 from paperorchestra.core.io import write_json, write_text
 from paperorchestra.core.session import artifact_path
-from paperorchestra.engine.research_registry import _citation_map_from_registry
+from paperorchestra.engine.research_registry_payloads import citation_map_from_registry
 from paperorchestra.research.bibtex import registry_to_bibtex
 from paperorchestra.research.literature import serialize_registry
 
@@ -31,7 +31,7 @@ def write_prior_work_import_artifacts(cwd: str | Path | None, registry: list[Any
     references_path = artifact_path(cwd, "references.bib")
     write_json(candidate_path, candidate_payload)
     serialize_registry(registry_path, registry)
-    write_json(citation_map_path, _citation_map_from_registry(registry))
+    write_json(citation_map_path, citation_map_from_registry(registry))
     write_text(references_path, registry_to_bibtex(registry))
     return {
         "candidate_papers_json": candidate_path,

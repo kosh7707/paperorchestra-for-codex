@@ -10,11 +10,11 @@ from paperorchestra.engine.research_candidate_verification import (
     CandidateVerificationFailure,
     verify_candidate_registry,
 )
-from paperorchestra.engine.research_registry import (
-    _citation_map_from_registry,
-    _merge_live_verified_with_prior_registry,
-)
 from paperorchestra.engine.research_registry_io import load_prior_citation_registry
+from paperorchestra.engine.research_registry_merge import (
+    merge_live_verified_with_prior_registry as _merge_live_verified_with_prior_registry,
+)
+from paperorchestra.engine.research_registry_payloads import citation_map_from_registry as _citation_map_from_registry
 from paperorchestra.engine.research_verification_errors import _record_verification_errors
 from paperorchestra.research.bibtex import ensure_unique_bibtex_keys, registry_to_bibtex
 from paperorchestra.research.literature import serialize_registry, verify_candidate_title

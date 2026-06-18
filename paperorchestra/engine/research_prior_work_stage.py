@@ -14,7 +14,6 @@ from paperorchestra.engine.prior_work_policy import (
 )
 from paperorchestra.engine.research_prior_work_artifacts import write_prior_work_import_artifacts
 from paperorchestra.engine.research_prior_work_import_stage import import_prior_work
-from paperorchestra.engine.research_registry import _merge_live_verified_with_prior_registry
 from paperorchestra.engine.research_registry_io import load_prior_citation_registry
 from paperorchestra.engine.schemas import PRIOR_WORK_SEED_SCHEMA
 from paperorchestra.research.prior_work_seed import load_prior_work_seed, prior_work_entries_to_verified_papers
