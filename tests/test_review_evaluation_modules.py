@@ -3,14 +3,6 @@ from __future__ import annotations
 from paperorchestra.reviews import citation_partition, eval_text, evaluation
 
 
-def test_evaluation_facade_reexports_text_and_partition_helpers() -> None:
-    assert evaluation.normalize_eval_title is eval_text.normalize_eval_title
-    assert evaluation.parse_reported_margin_ranges is eval_text.parse_reported_margin_ranges
-    assert evaluation._title_matches_reference is eval_text._title_matches_reference
-    assert evaluation.build_citation_partition_request is citation_partition.build_citation_partition_request
-    assert evaluation.compute_partitioned_citation_coverage is citation_partition.compute_partitioned_citation_coverage
-
-
 def test_eval_text_parses_reported_margin_ranges_and_title_matches() -> None:
     assert eval_text.normalize_eval_title("IRIS: A Grounded Review-System!") == "iris a grounded review system"
 

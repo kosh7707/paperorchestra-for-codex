@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from paperorchestra.runtime.readiness_profiles import _profile, build_readiness_profiles
+from paperorchestra.runtime.readiness_profiles import build_readiness_profiles
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]

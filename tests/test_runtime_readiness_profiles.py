@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-from paperorchestra.runtime import environment, readiness_profiles
+from paperorchestra.runtime import readiness_profiles
 
 
 def _by_name(profiles: list[dict[str, object]]) -> dict[str, dict[str, object]]:
     return {str(profile["name"]): profile for profile in profiles}
-
-
-def test_environment_facade_reexports_readiness_profile_builder() -> None:
-    assert environment._profile is readiness_profiles._profile
-    assert environment.build_readiness_profiles is readiness_profiles.build_readiness_profiles
 
 
 def test_readiness_profiles_report_all_ready_when_inputs_and_strict_gates_pass(monkeypatch) -> None:

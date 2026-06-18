@@ -4,14 +4,6 @@ from paperorchestra.reviews import evaluation
 from paperorchestra.reviews import generated_citations, review_gate_comparison
 
 
-def test_evaluation_facade_reexports_split_review_modules() -> None:
-    assert evaluation.build_review_gate_comparison is review_gate_comparison.build_review_gate_comparison
-    assert evaluation.write_review_gate_comparison is review_gate_comparison.write_review_gate_comparison
-    assert evaluation.build_generated_citation_titles is generated_citations.build_generated_citation_titles
-    assert evaluation.write_generated_citation_titles is generated_citations.write_generated_citation_titles
-    assert evaluation._CITE_RE is generated_citations._CITE_RE
-
-
 def test_review_gate_comparison_payload_detects_missing_shape_and_anti_inflation() -> None:
     latest_review = {
         "overall_score": 91,

@@ -19,22 +19,12 @@ from paperorchestra.reviews.evaluation_constants import (
     IGNORED_DISCOVERY_SOURCES,
 )
 from paperorchestra.reviews.evaluation_io import _write_json_artifact
-from paperorchestra.reviews.generated_citations import (
-    _CITE_RE,
-    build_generated_citation_titles,
-    write_generated_citation_titles,
-)
+from paperorchestra.reviews.generated_citations import build_generated_citation_titles, write_generated_citation_titles
 from paperorchestra.reviews.review_gate_comparison import (
     build_review_gate_comparison,
     write_review_gate_comparison,
 )
-from paperorchestra.reviews.eval_text import (
-    _compact_eval_title,
-    _extract_metric_range,
-    _title_matches_reference,
-    normalize_eval_title,
-    parse_reported_margin_ranges,
-)
+from paperorchestra.reviews.eval_text import normalize_eval_title, parse_reported_margin_ranges
 
 
 def _session_artifact_dir(state) -> Path | None:
