@@ -14,13 +14,6 @@ def _valid_axis_scores(score: float = 80.0) -> dict[str, dict[str, object]]:
     return {axis: {"score": score, "justification": f"{axis} has enough evidence."} for axis in REQUIRED_REVIEW_AXES}
 
 
-def test_quality_reviews_facade_reexports_review_score_helpers() -> None:
-    assert quality_reviews._numeric_axis_scores is review_score._numeric_axis_scores
-    assert quality_reviews._review_shape_failures is review_score._review_shape_failures
-    assert quality_reviews._review_provenance_failures is review_score._review_provenance_failures
-    assert quality_reviews._anti_inflation_violations is review_score._anti_inflation_violations
-
-
 def test_review_shape_failures_are_claim_safe_only_and_deduped() -> None:
     malformed = {"schema_version": "legacy", "axis_scores": {"coverage_and_completeness": {"score": 101}}, "summary": {}, "penalties": "none"}
 

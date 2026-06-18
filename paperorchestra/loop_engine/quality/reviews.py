@@ -4,13 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .policy import MODE_THRESHOLDS, SECTION_REVIEW_THRESHOLDS, TIER2_CLAIM_CODES
-from .review_score import (
-    _anti_inflation_violations,
-    _nonempty_string,
-    _numeric_axis_scores,
-    _review_provenance_failures,
-    _review_shape_failures,
-)
+from . import review_score as _review_score
 from .utils import _file_sha256, _read_json_if_exists
 from paperorchestra.core.session import artifact_path, runtime_root
 
@@ -60,15 +54,15 @@ def _review_score_check(state, *, quality_mode: str) -> dict[str, Any]:
             "anti_inflation_triggered": False,
             "anti_inflation_violations": [],
         }
-    shape_failures = _review_shape_failures(review, quality_mode=quality_mode)
-    provenance_failures, provenance_check = _review_provenance_failures(review, current_sha=current_sha, quality_mode=quality_mode)
+    shape_failures = _review_score._review_shape_failures(review, quality_mode=quality_mode)
+    provenance_failures, provenance_check = _review_score._review_provenance_failures(review, current_sha=current_sha, quality_mode=quality_mode)
     if not review.get("manuscript_sha256"):
         return {
             "status": "fail",
             "path": path,
             "failing_codes": sorted(dict.fromkeys(["review_score_legacy_untrusted"] + shape_failures + provenance_failures)),
             "overall_score": review.get("overall_score"),
-            "axis_scores": _numeric_axis_scores(review),
+            "axis_scores": _review_score._numeric_axis_scores(review),
             "anti_inflation_triggered": False,
             "anti_inflation_violations": [],
             "provenance": provenance_check,
@@ -81,7 +75,7 @@ def _review_score_check(state, *, quality_mode: str) -> dict[str, Any]:
             "path": path,
             "failing_codes": sorted(dict.fromkeys(["review_score_stale"] + shape_failures + provenance_failures)),
             "overall_score": review.get("overall_score"),
-            "axis_scores": _numeric_axis_scores(review),
+            "axis_scores": _review_score._numeric_axis_scores(review),
             "anti_inflation_triggered": False,
             "anti_inflation_violations": [],
             "provenance": provenance_check,
@@ -91,8 +85,8 @@ def _review_score_check(state, *, quality_mode: str) -> dict[str, Any]:
     thresholds = MODE_THRESHOLDS[quality_mode]
     raw_overall = review.get("overall_score")
     overall_score = float(raw_overall) if isinstance(raw_overall, (int, float)) else None
-    axis_scores = _numeric_axis_scores(review)
-    anti = _anti_inflation_violations(overall_score, axis_scores)
+    axis_scores = _review_score._numeric_axis_scores(review)
+    anti = _review_score._anti_inflation_violations(overall_score, axis_scores)
     failing_codes: list[str] = []
     failing_codes.extend(shape_failures)
     failing_codes.extend(provenance_failures)
@@ -141,9 +135,9 @@ def _current_review_records(state, current_sha: str | None) -> list[dict[str, An
             continue
         if current_sha and payload.get("manuscript_sha256") != current_sha:
             continue
-        if _review_shape_failures(payload, quality_mode="claim_safe"):
+        if _review_score._review_shape_failures(payload, quality_mode="claim_safe"):
             continue
-        provenance_failures, _ = _review_provenance_failures(payload, current_sha=current_sha, quality_mode="claim_safe")
+        provenance_failures, _ = _review_score._review_provenance_failures(payload, current_sha=current_sha, quality_mode="claim_safe")
         if provenance_failures:
             continue
         identity = _reviewer_identity(payload)
@@ -175,9 +169,9 @@ def _reviewer_independence_acceptance(cwd: str | Path | None, current_sha: str |
     current_hashes = {str(record.get("sha256")) for record in records if record.get("sha256")}
     if not current_hashes or not current_hashes.issubset(accepted_hashes):
         failures.append("reviewer_independence_acceptance_stale")
-    if not _nonempty_string(payload.get("rationale"), min_len=10) or not _nonempty_string(payload.get("operator_label"), min_len=2):
+    if not _review_score._nonempty_string(payload.get("rationale"), min_len=10) or not _review_score._nonempty_string(payload.get("operator_label"), min_len=2):
         failures.append("reviewer_independence_acceptance_incomplete")
-    if not _nonempty_string(payload.get("accepted_at"), min_len=10):
+    if not _review_score._nonempty_string(payload.get("accepted_at"), min_len=10):
         failures.append("reviewer_independence_acceptance_incomplete")
     writer_refiner = payload.get("writer_refiner_provenance")
     if not isinstance(writer_refiner, list) or not writer_refiner:
