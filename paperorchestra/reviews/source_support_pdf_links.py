@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+import html
+import re
+import urllib.parse
+from pathlib import Path
+from typing import Any
+
+from paperorchestra.reviews.source_support_html import _collapse_ws, _html_attrs, _html_to_text
+
+
+def _candidate_pdf_links(final_landing_url: str, html_value: str) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add_candidate(raw_url: str, *, label: str = "", kind: str = "link") -> None:
+        raw_url = str(raw_url or "").strip()
+        if not raw_url:
+            return
+        absolute = urllib.parse.urljoin(final_landing_url, html.unescape(raw_url))
+        parsed = urllib.parse.urlparse(absolute)
+        label_text = _collapse_ws(label)
+        if not (parsed.path.lower().endswith(".pdf") or "pdf" in label_text.lower()):
+            return
+        if absolute in seen:
+            return
+        seen.add(absolute)
+        candidates.append(
+            {
+                "url": absolute,
+                "label": label_text,
+                "kind": kind,
+                "priority": _pdf_candidate_priority(final_landing_url, absolute, label_text, kind),
+            }
+        )
+
+    _add_meta_pdf_candidates(final_landing_url, html_value, add_candidate)
+    _add_link_pdf_candidates(html_value, add_candidate)
+    _add_anchor_pdf_candidates(html_value, add_candidate)
+    return sorted(candidates, key=lambda item: (int(item.get("priority") or 0), str(item.get("url") or "")))
+
+
+def _add_meta_pdf_candidates(final_landing_url: str, html_value: str, add_candidate) -> None:
+    for tag_match in re.finditer(r"(?is)<meta\b[^>]*>", html_value):
+        attrs = _html_attrs(tag_match.group(0))
+        name = (attrs.get("name") or attrs.get("property") or "").strip().lower()
+        content = attrs.get("content") or ""
+        if name in {"citation_pdf_url", "dc.identifier", "eprints.document_url"} or content.lower().endswith(".pdf"):
+            add_candidate(content, label=name, kind="meta")
+
+
+def _add_link_pdf_candidates(html_value: str, add_candidate) -> None:
+    for tag_match in re.finditer(r"(?is)<link\b[^>]*>", html_value):
+        attrs = _html_attrs(tag_match.group(0))
+        href = attrs.get("href") or ""
+        rel = attrs.get("rel") or attrs.get("type") or ""
+        if href and (href.lower().endswith(".pdf") or "pdf" in rel.lower()):
+            add_candidate(href, label=rel, kind="link")
+
+
+def _add_anchor_pdf_candidates(html_value: str, add_candidate) -> None:
+    for match in re.finditer(r"(?is)<a\b([^>]*)>(.*?)</a>", html_value):
+        attrs = _html_attrs(match.group(1))
+        add_candidate(attrs.get("href") or "", label=_html_to_text(match.group(2)), kind="anchor")
+
+
+def _pdf_candidate_priority(final_landing_url: str, candidate_url: str, label: str, kind: str) -> int:
+    landing_stem = Path(urllib.parse.urlparse(final_landing_url).path.rstrip("/")).name.lower()
+    candidate_name = Path(urllib.parse.urlparse(candidate_url).path).name.lower()
+    candidate_stem = candidate_name[:-4] if candidate_name.endswith(".pdf") else candidate_name
+    label_lower = label.lower()
+    if kind == "meta":
+        return 0
+    if landing_stem and candidate_stem == landing_stem:
+        return 1
+    if label_lower in {"pdf", "download pdf", "article pdf", "full text pdf"}:
+        return 2
+    if "supplement" in candidate_name or "appendix" in candidate_name:
+        return 20
+    return 10

@@ -40,3 +40,29 @@ def test_candidate_redirect_rejection_allows_arxiv_pdf_special_case() -> None:
     assert _candidate_redirect_rejection("https://arxiv.org/abs/1234.5678", "https://arxiv.org/pdf/1234.5678") is None
     assert _candidate_redirect_rejection("https://example.org/paper", "https://downloads.example.org/paper.pdf") is None
     assert _candidate_redirect_rejection("https://example.org/paper", "https://elsewhere.test/paper.pdf") == "redirect_off_domain"
+
+
+def test_public_pdf_candidate_decisions_strips_internal_fields() -> None:
+    from paperorchestra.reviews.source_support_retrieval import _public_pdf_candidate_decisions
+
+    public = _public_pdf_candidate_decisions(
+        [
+            {
+                "url": "https://example.org/paper.pdf",
+                "decision": "accepted",
+                "reason": "ok",
+                "final_url": "https://example.org/final.pdf",
+                "priority": 0,
+                "label": "PDF",
+            }
+        ]
+    )
+
+    assert public == [
+        {
+            "url": "https://example.org/paper.pdf",
+            "decision": "accepted",
+            "reason": "ok",
+            "final_url": "https://example.org/final.pdf",
+        }
+    ]
