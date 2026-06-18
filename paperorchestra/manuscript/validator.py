@@ -5,24 +5,12 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.manuscript.claim_validation import (
-    PROMPT_META_LEAKAGE_PATTERNS,
-    _boundary_negates_phrase,
-    _claim_guard_text,
-    _contains_unnegated_phrase,
-    _coverage_term_positions,
-    _coverage_term_variants,
-    _narrative_item_covered,
-    _narrative_terms_from_item,
-    _section_visible_latex,
-    _section_visible_text,
-    _terms_nearby,
-    _visible_latex_text,
-    check_citation_placement,
-    check_claim_map_coverage,
-    check_narrative_section_roles,
-    check_prompt_meta_leakage,
+    check_citation_placement as _check_citation_placement,
+    check_claim_map_coverage as _check_claim_map_coverage,
+    check_narrative_section_roles as _check_narrative_section_roles,
+    check_prompt_meta_leakage as _check_prompt_meta_leakage,
 )
-from paperorchestra.manuscript.validation_types import ValidationIssue
+from paperorchestra.manuscript.validation_types import ValidationIssue as _ValidationIssue
 from paperorchestra.manuscript.citations import (
     CITE_COMMAND_RE,
     allowed_citation_keys,
@@ -41,8 +29,6 @@ from paperorchestra.manuscript.figure_patterns import (
     LABEL_RE,
     REF_RE,
 )
-from paperorchestra.manuscript.figure_review_builder import build_figure_placement_review
-from paperorchestra.manuscript.figure_review_types import FigurePlacementWarning
 from paperorchestra.manuscript.sections import (
     SECTION_RE,
     _normalize_section_title,
@@ -88,7 +74,7 @@ def check_unknown_citations(latex: str, citation_map: dict[str, Any]) -> list[Va
     if not unknown_keys:
         return []
     return [
-        ValidationIssue(
+        _ValidationIssue(
             code="unknown_citation_keys",
             severity="error",
             message=f"Unknown citation keys referenced in LaTeX: {', '.join(unknown_keys)}",
@@ -119,7 +105,7 @@ def check_citation_coverage(latex: str, citation_map: dict[str, Any]) -> list[Va
     if len(cited_canonical) >= required_citation_count:
         return []
     return [
-        ValidationIssue(
+        _ValidationIssue(
             code="citation_coverage_insufficient",
             severity="error",
             message=(
@@ -143,7 +129,7 @@ def check_figure_file_coverage(latex: str, figures_dir: str | None) -> list[Vali
     if not missing_figures:
         return []
     return [
-        ValidationIssue(
+        _ValidationIssue(
             code="figure_file_not_referenced",
             severity="warning",
             message=f"Provided figures not referenced in LaTeX: {', '.join(missing_figures)}",
@@ -171,7 +157,7 @@ def check_plot_plan_coverage(latex: str, plot_manifest: dict[str, Any] | None) -
     if not missing_plot_coverage:
         return []
     return [
-        ValidationIssue(
+        _ValidationIssue(
             code="plot_plan_not_reflected",
             severity="error",
             message="Plot-plan figures are not represented in the manuscript: " + ", ".join(sorted(missing_plot_coverage)),
@@ -203,7 +189,7 @@ def check_generated_plot_asset_usage(latex: str, plot_assets_index: dict[str, An
     if not missing_assets:
         return []
     return [
-        ValidationIssue(
+        _ValidationIssue(
             code="generated_plot_asset_not_used",
             severity="warning",
             message="Generated plot assets are not referenced in the manuscript: " + ", ".join(sorted(missing_assets)),
@@ -236,7 +222,7 @@ def check_expected_section_substance(
     issues = []
     if missing:
         issues.append(
-            ValidationIssue(
+            _ValidationIssue(
                 code="expected_section_missing",
                 severity="error",
                 message="Expected sections are missing from the manuscript: " + ", ".join(missing),
@@ -244,7 +230,7 @@ def check_expected_section_substance(
         )
     if shallow:
         issues.append(
-            ValidationIssue(
+            _ValidationIssue(
                 code="expected_section_too_shallow",
                 severity="error",
                 message=f"Expected sections have too little substantive body text (<{min_body_chars} chars): " + ", ".join(shallow),
@@ -262,7 +248,7 @@ def check_numeric_grounding(latex: str, experimental_log_text: str | None) -> li
     if not unsupported_numeric_tokens:
         return []
     return [
-        ValidationIssue(
+        _ValidationIssue(
             code="numeric_grounding_mismatch",
             severity="error",
             message=(
@@ -284,7 +270,7 @@ def check_comparative_claims(latex: str, experimental_log_text: str | None) -> l
     if not unsupported_claim_patterns:
         return []
     return [
-        ValidationIssue(
+        _ValidationIssue(
             code="unsupported_comparative_claim",
             severity="warning",
             message=(
@@ -341,13 +327,13 @@ def validate_manuscript(
     citation_placement_plan: dict[str, Any] | None = None,
 ) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
-    issues.extend(check_prompt_meta_leakage(latex))
+    issues.extend(_check_prompt_meta_leakage(latex))
     issues.extend(check_unknown_citations(latex, citation_map))
     aliases = noncanonical_citation_aliases(latex, citation_map)
     if aliases:
         detail = ", ".join(f"{src}->{dst}" for src, dst in sorted(aliases.items()))
         issues.append(
-            ValidationIssue(
+            _ValidationIssue(
                 code="noncanonical_citation_aliases",
                 severity="error",
                 message=f"Noncanonical citation aliases must be rewritten before validation/compile: {detail}.",
@@ -360,7 +346,7 @@ def validate_manuscript(
     issues.extend(check_expected_section_substance(latex, expected_section_titles))
     issues.extend(check_numeric_grounding(latex, experimental_log_text))
     issues.extend(check_comparative_claims(latex, experimental_log_text))
-    issues.extend(check_claim_map_coverage(latex, claim_map))
-    issues.extend(check_citation_placement(latex, citation_placement_plan))
-    issues.extend(check_narrative_section_roles(latex, narrative_plan))
+    issues.extend(_check_claim_map_coverage(latex, claim_map))
+    issues.extend(_check_citation_placement(latex, citation_placement_plan))
+    issues.extend(_check_narrative_section_roles(latex, narrative_plan))
     return issues

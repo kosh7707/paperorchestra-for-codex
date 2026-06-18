@@ -7,7 +7,8 @@ from typing import Any
 from paperorchestra.core.io import write_json
 from paperorchestra.core.models import utc_now_iso
 from paperorchestra.core.session import artifact_path, load_session, runtime_root, save_session
-from paperorchestra.manuscript.validator import ValidationIssue, validate_manuscript
+from paperorchestra.manuscript.validation_types import ValidationIssue
+from paperorchestra.manuscript.validator import validate_manuscript
 from paperorchestra.reviews.fidelity import run_fidelity_audit
 from paperorchestra.runtime.compile_env import inspect_compile_environment
 

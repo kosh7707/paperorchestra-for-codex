@@ -6,7 +6,7 @@ from typing import Any
 from paperorchestra.core.errors import ContractError
 from paperorchestra.core.boundary import is_material_packet_control_section_title, is_material_packet_section_title
 from paperorchestra.manuscript.structure import SECTION_COMMAND_RE, _canonical_generated_section_title, _section_range_map
-from paperorchestra.manuscript.validator import ValidationIssue
+from paperorchestra.manuscript.validation_types import ValidationIssue
 
 
 def _preserve_existing_sections(generated_latex: str, source_latex: str, *, section_names: list[str]) -> str:

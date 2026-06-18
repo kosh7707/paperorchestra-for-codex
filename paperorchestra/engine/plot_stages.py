@@ -16,7 +16,7 @@ from paperorchestra.engine.schemas import PLOT_SCHEMA, validate_plot_manifest
 from paperorchestra.manuscript.plot_assets import render_plot_assets
 from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.manuscript.structure import _insert_block_into_section, _preferred_section_name
-from paperorchestra.manuscript.validator import ValidationIssue
+from paperorchestra.manuscript.validation_types import ValidationIssue
 from paperorchestra.runtime.parity import record_lane_manifest
 from paperorchestra.runtime.providers import BaseProvider
 
