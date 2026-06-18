@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.orchestra.references import build_reference_metadata_audit
+from paperorchestra.orchestra.reference_audit_builder import build_reference_metadata_audit
 
 
 def test_reference_metadata_audit_redacts_seed_labels_and_flags_unknown_fields(tmp_path) -> None:

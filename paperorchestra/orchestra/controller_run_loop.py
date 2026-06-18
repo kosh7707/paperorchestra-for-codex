@@ -7,7 +7,7 @@ from paperorchestra.orchestra.controller_inspection import _inspect_state
 from paperorchestra.orchestra.materials import build_material_inventory, build_source_digest
 from paperorchestra.orchestra.omx_evidence import build_research_mission_invocation_evidence
 from paperorchestra.orchestra.planner import ActionPlanner
-from paperorchestra.orchestra.references import build_reference_metadata_audit
+from paperorchestra.orchestra.reference_audit_builder import build_reference_metadata_audit
 from paperorchestra.orchestra.research import build_evidence_research_mission
 from paperorchestra.orchestra.state import OrchestraState
 
