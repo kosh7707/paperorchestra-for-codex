@@ -18,7 +18,6 @@ from paperorchestra.runtime.provider_base import (
 from paperorchestra.runtime.shell_provider_command import parse_shell_provider_command
 from paperorchestra.runtime.shell_provider_failures import provider_failure_detail, provider_failure_message
 from paperorchestra.runtime.shell_provider_process import run_provider_command_once
-from paperorchestra.runtime.shell_provider_trace import record_provider_retry_attempt
 
 
 class ShellProvider(BaseProvider):
@@ -48,7 +47,12 @@ class ShellProvider(BaseProvider):
         return parse_shell_provider_command(command)
 
     def _record_retry_attempt(self, payload: dict[str, object]) -> None:
-        record_provider_retry_attempt(self.retry_trace_dir, payload)
+        if self.retry_trace_dir is None:
+            return
+        self.retry_trace_dir.mkdir(parents=True, exist_ok=True)
+        path = self.retry_trace_dir / "provider-retry-attempts.jsonl"
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True, ensure_ascii=False) + "\n")
 
     def _run_once(self, prompt: bytes, env: dict[str, str]) -> tuple[int, bytes, bytes, bool]:
         return run_provider_command_once(
