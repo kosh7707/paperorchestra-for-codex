@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.feedback.operator_contexts.citation_protection_targets import _protected_citation_target_context
+from paperorchestra.feedback.operator_contexts.citation_protection_target_context import _protected_citation_target_context
 from paperorchestra.feedback.operator_contexts.text import _normalized_context_text
 
 

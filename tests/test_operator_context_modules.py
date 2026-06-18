@@ -166,3 +166,33 @@ def test_duplicate_and_density_contexts_preserve_ordering_and_caps() -> None:
         {"id": "one", "support_status": "unknown", "claim_type": None, "risk": None, "sentence": "one"}
     ]
     assert [item["issue_type"] for item in density] == ["citation_bomb_sentence", "citation_bomb_paragraph"]
+
+
+def test_protected_citation_target_context_collects_problematic_review_and_integrity_targets() -> None:
+    from paperorchestra.feedback.operator_contexts.citation_protection_targets import _protected_citation_target_context
+
+    targets = _protected_citation_target_context(
+        {
+            "items": [
+                {"id": "weak-item", "support_status": "weak", "sentence": "Weak sentence."},
+                {"id": "supported-item", "support_status": "supported", "sentence": "Supported sentence."},
+            ],
+            "cases": [
+                {"id": "bad-case", "verdict": "fail", "anchor": "Failed anchor."},
+                {"id": "good-case", "verdict": "pass", "anchor": "Good anchor."},
+            ],
+        },
+        {
+            "checks": {
+                "duplicate_support": {"duplicate_keys": ["DupKey"]},
+                "citation_density": {
+                    "bomb_sentences": [{"sentence": "Dense sentence.", "citation_keys": ["DenseA", "DenseB"]}],
+                    "bomb_paragraph_key_sets": [["ParaA", "ParaB"]],
+                },
+            }
+        },
+    )
+
+    assert targets["ids"] == {"weak-item", "bad-case"}
+    assert targets["texts"] == {"Weak sentence.", "Failed anchor.", "Dense sentence."}
+    assert targets["key_exclusions"] == {"DupKey", "DenseA", "DenseB", "ParaA", "ParaB"}
