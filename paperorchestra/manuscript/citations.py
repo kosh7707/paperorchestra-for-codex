@@ -6,14 +6,13 @@ from paperorchestra.manuscript.citation_key_parsing import (
     _citation_key_tokens,
     extract_citation_keys,
 )
-from paperorchestra.manuscript.citation_maps import (
+from paperorchestra.manuscript.citation_alias_rewrite import canonicalize_citation_keys, noncanonical_citation_aliases
+from paperorchestra.manuscript.citation_map_model import (
     allowed_citation_keys,
     canonical_citation_key,
     canonical_citation_keys,
     canonical_citation_map,
-    canonicalize_citation_keys,
     citation_entry_for_key,
-    noncanonical_citation_aliases,
 )
 
 __all__ = [
