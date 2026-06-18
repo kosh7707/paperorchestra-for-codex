@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from paperorchestra.orchestra import omx_evidence
-from paperorchestra.orchestra.research import EvidenceResearchMission, ResearchTask
+from paperorchestra.orchestra.research_models import EvidenceResearchMission, ResearchTask
 
 
 def _mission(*, desired_surface: str | None = "$autoresearch", task_count: int = 1) -> EvidenceResearchMission:

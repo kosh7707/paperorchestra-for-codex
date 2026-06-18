@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from paperorchestra.orchestra.claim_records import CitationObligation, ClaimCandidate, ClaimGraphReport, EvidenceObligation
-from paperorchestra.orchestra.research import build_evidence_research_mission
+from paperorchestra.orchestra.research_mission import build_evidence_research_mission
 
 
 def _claim(**overrides: object) -> ClaimCandidate:

@@ -18,7 +18,7 @@ from paperorchestra.orchestra.omx_public import (
     _valid_public_slug,
     _validate_skill_surface,
 )
-from paperorchestra.orchestra.research import EvidenceResearchMission
+from paperorchestra.orchestra.research_models import EvidenceResearchMission
 
 
 @dataclass(frozen=True)

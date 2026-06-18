@@ -8,7 +8,7 @@ from paperorchestra.orchestra.materials import build_material_inventory, build_s
 from paperorchestra.orchestra.omx_evidence import build_research_mission_invocation_evidence
 from paperorchestra.orchestra.planner import ActionPlanner
 from paperorchestra.orchestra.reference_audit_builder import build_reference_metadata_audit
-from paperorchestra.orchestra.research import build_evidence_research_mission
+from paperorchestra.orchestra.research_mission import build_evidence_research_mission
 from paperorchestra.orchestra.state import OrchestraState
 
 
