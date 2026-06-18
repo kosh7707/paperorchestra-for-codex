@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.reviews.citation_quality_public import _default_public_failure_message
+from paperorchestra.reviews.citation_support_v3 import _v3_evidence_text_readable as _v3_evidence_is_readable
 
 
 def _support_items(payload: Any, *, run_root: Path | None = None) -> list[dict[str, Any]]:
@@ -82,25 +83,6 @@ def _public_failure_code(support_items: list[dict[str, Any]], key_failures: list
 def _public_failure_message(support_items: list[dict[str, Any]], key_failures: list[str]) -> str | None:
     code = _public_failure_code(support_items, key_failures)
     return _default_public_failure_message(code) if code else None
-
-
-def _v3_evidence_is_readable(evidence: dict[str, Any], *, run_root: Path | None) -> bool:
-    status = str(evidence.get("status") or "missing").strip().lower() or "missing"
-    text_value = evidence.get("text")
-    path_value = evidence.get("path")
-    candidates: list[Path] = []
-    for value in [text_value, path_value if status == "text" else None]:
-        if not isinstance(value, str) or not value.strip():
-            continue
-        raw = Path(value)
-        candidates.append(raw if raw.is_absolute() or run_root is None else run_root / raw)
-    for candidate in candidates:
-        try:
-            if candidate.exists() and candidate.is_file() and candidate.stat().st_size > 0:
-                return True
-        except OSError:
-            continue
-    return False
 
 
 def _v3_support_status(verdict: Any, evidence_status: Any, *, evidence_readable: bool = False) -> str:
