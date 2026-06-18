@@ -7,7 +7,9 @@ from typing import Any
 
 from paperorchestra.core.errors import ContractError
 from paperorchestra.core.session import load_session, save_session
-from paperorchestra.engine.authoring_stages import refine_current_paper, write_intro_related, write_sections
+from paperorchestra.engine.intro_related_stage import write_intro_related
+from paperorchestra.engine.refine_stages import refine_current_paper
+from paperorchestra.engine.section_writing_stage import write_sections
 from paperorchestra.engine.completion import _provider_name
 from paperorchestra.engine.planning_stages import generate_outline, plan_narrative_and_claims
 from paperorchestra.engine.plot_stages import generate_plots, run_parallel_plot_and_literature
