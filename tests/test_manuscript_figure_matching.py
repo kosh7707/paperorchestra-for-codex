@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from paperorchestra.manuscript import figure_matching, figure_validation
+from paperorchestra.manuscript import figure_matching
+from paperorchestra.manuscript.figure_review_builder import build_figure_placement_review
 
 
 def test_match_plot_manifest_prefers_asset_and_marks_placeholder_unreviewable() -> None:
@@ -67,7 +68,7 @@ Figure~\ref{fig:bench} summarizes benchmark results.
 \end{figure}
 """
 
-    review = figure_validation.build_figure_placement_review(
+    review = build_figure_placement_review(
         latex,
         plot_assets_index={"assets": [{"figure_id": "bench", "filename": "bench.pdf"}]},
         plot_manifest={"figures": [{"figure_id": "bench", "purpose": "Precision recall benchmark results"}]},
@@ -97,7 +98,7 @@ Figure~\ref{fig:pipeline} explains the preserved source figure.
 \end{figure}
 """
 
-    review = figure_validation.build_figure_placement_review(
+    review = build_figure_placement_review(
         latex,
         source_latex=source_latex,
     )
@@ -135,7 +136,7 @@ Discussion filler.
 \end{figure}
 """
 
-    review = figure_validation.build_figure_placement_review(
+    review = build_figure_placement_review(
         latex,
         tail_ratio_threshold=0.5,
     )
@@ -160,6 +161,6 @@ def test_build_figure_placement_review_marks_auto_repaired_origin() -> None:
 \end{figure}
 """
 
-    review = figure_validation.build_figure_placement_review(latex)
+    review = build_figure_placement_review(latex)
 
     assert review["figures"][0]["source_origin"] == "auto_repaired"
