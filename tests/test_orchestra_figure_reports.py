@@ -185,3 +185,17 @@ def test_build_figure_gate_report_uses_session_paths(tmp_path: Path) -> None:
 
     assert report["status"] == "pass"
     assert report["summary"]["matched"] == 1
+
+
+def test_derive_figure_slots_reads_caption_mapping_and_skips_invalid_items(tmp_path: Path) -> None:
+    captions = tmp_path / "captions-map.json"
+    captions.write_text(json.dumps({"pipeline": "Pipeline caption", "bad": 3}), encoding="utf-8")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({"figures": [{"id": 7, "caption": "invalid"}, {"caption": "No id"}]}), encoding="utf-8")
+
+    slots = figure_reports.derive_figure_slots(plot_manifest_path=manifest, plot_captions_path=captions)
+
+    assert [(slot.slot_id, slot.purpose, slot.placeholder) for slot in slots] == [
+        ("figure_slot_2", "No id", False),
+        ("pipeline", "Pipeline caption", True),
+    ]
