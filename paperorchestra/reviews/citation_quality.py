@@ -3,45 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.reviews.citation_quality_classification import (
-    _HIGH_CRITICAL_TOKENS,
-    _UNSUPPORTED_STATUSES,
-    _WARNING_INTEGRITY_CODES,
-    _claims_by_key,
-    _counts,
-    _empty_counts,
-    _first_claim_id,
-    _integrity_warning_codes,
-    _is_critical_key,
-    _is_explicitly_noncritical,
-    _roles_by_key,
-    _sha256_text,
-    _string_set,
-    _tokens,
-    _tokens_for_fields,
-)
+from paperorchestra.reviews import citation_quality_classification as quality_classification
+from paperorchestra.reviews import citation_quality_report as quality_report
+from paperorchestra.reviews import citation_quality_support as quality_support
 from paperorchestra.reviews.citation_quality_report import (
     CITATION_QUALITY_GATE_SCHEMA_VERSION,
     CitationQualityGateReport,
     CitationQualityItem,
-    _assert_public_safe,
-    _citation_summary_from_items,
-    _default_public_failure_message,
-    _public_failures,
-    _public_values,
-)
-from paperorchestra.reviews.citation_quality_support import (
-    _public_case_id,
-    _public_failure_code,
-    _public_failure_message,
-    _quality_item_id,
-    _support_by_key,
-    _support_groups_for_quality_items,
-    _support_items,
-    _support_items_from_v3_cases,
-    _v3_evidence_is_readable,
-    _v3_support_status,
-    _worst_support_status,
 )
 from paperorchestra.reviews.citation_integrity import (
     citation_integrity_audit_path,
@@ -54,6 +22,7 @@ from paperorchestra.core.session import artifact_path, load_session
 
 CITATION_QUALITY_GATE_FILENAME = "citation_quality_gate.json"
 CITATION_QUALITY_GATE_INTERNAL_FILENAME = "citation_quality_gate.internal.json"
+
 
 def citation_quality_gate_path(cwd: str | Path | None) -> Path:
     return artifact_path(cwd, CITATION_QUALITY_GATE_FILENAME)
@@ -78,11 +47,11 @@ def build_citation_quality_gate_internal(cwd: str | Path | None, *, quality_mode
             manuscript_sha256=None,
             hard_gate_failures=["citation_quality_manuscript_missing"],
             warning_codes=[],
-            counts=_empty_counts(),
+            counts=quality_classification._empty_counts(),
             source_artifact_hashes={},
         )
         payload = report.to_internal_dict()
-        _assert_public_safe(payload["public_report"])
+        quality_report._assert_public_safe(payload["public_report"])
         return payload
 
     manuscript_sha = _file_sha256(paper)
@@ -111,19 +80,19 @@ def build_citation_quality_gate_internal(cwd: str | Path | None, *, quality_mode
     hard.extend(stale_codes)
 
     rendered_missing = not isinstance(rendered, dict)
-    unknown_keys = _string_set(rendered.get("unknown_metadata_keys") if isinstance(rendered, dict) else [])
-    missing_keys = _string_set(rendered.get("missing_bib_keys_for_cites") if isinstance(rendered, dict) else [])
-    weak_identity_keys = _string_set(rendered.get("weak_identity_keys") if isinstance(rendered, dict) else [])
-    visible_keys = _string_set(rendered.get("visible_reference_keys") if isinstance(rendered, dict) else [])
-    support_items = _support_items(support, run_root=support_path.parent.parent)
-    support_by_key = _support_by_key(support_items)
-    claims_by_key = _claims_by_key(claim_map)
-    roles_by_key = _roles_by_key(placement)
+    unknown_keys = quality_classification._string_set(rendered.get("unknown_metadata_keys") if isinstance(rendered, dict) else [])
+    missing_keys = quality_classification._string_set(rendered.get("missing_bib_keys_for_cites") if isinstance(rendered, dict) else [])
+    weak_identity_keys = quality_classification._string_set(rendered.get("weak_identity_keys") if isinstance(rendered, dict) else [])
+    visible_keys = quality_classification._string_set(rendered.get("visible_reference_keys") if isinstance(rendered, dict) else [])
+    support_items = quality_support._support_items(support, run_root=support_path.parent.parent)
+    support_by_key = quality_support._support_by_key(support_items)
+    claims_by_key = quality_classification._claims_by_key(claim_map)
+    roles_by_key = quality_classification._roles_by_key(placement)
     all_keys = sorted(visible_keys | set(support_by_key) | set(claims_by_key) | unknown_keys | missing_keys | weak_identity_keys)
 
     items: list[CitationQualityItem] = []
     for key in all_keys:
-        critical = _is_critical_key(
+        critical = quality_classification._is_critical_key(
             key,
             support_by_key.get(key, []),
             claims_by_key.get(key, []),
@@ -131,11 +100,11 @@ def build_citation_quality_gate_internal(cwd: str | Path | None, *, quality_mode
             mode=mode,
             metadata_problem=rendered_missing or key in unknown_keys or key in missing_keys,
         )
-        explicit_noncritical = _is_explicitly_noncritical(claims_by_key.get(key, []), roles_by_key.get(key, set()))
+        explicit_noncritical = quality_classification._is_explicitly_noncritical(claims_by_key.get(key, []), roles_by_key.get(key, set()))
         metadata_status = "missing" if key in missing_keys else "unknown" if rendered_missing or key in unknown_keys else "known"
         weak_identity = key in weak_identity_keys
-        for group_index, key_support_items in enumerate(_support_groups_for_quality_items(support_by_key.get(key, []))):
-            support_status = _worst_support_status(key_support_items)
+        for group_index, key_support_items in enumerate(quality_support._support_groups_for_quality_items(support_by_key.get(key, []))):
+            support_status = quality_support._worst_support_status(key_support_items)
             support_missing = not key_support_items
             key_failures: list[str] = []
             key_warnings: list[str] = []
@@ -150,7 +119,7 @@ def build_citation_quality_gate_internal(cwd: str | Path | None, *, quality_mode
                     key_failures.append("critical_weak_reference_identity")
                 if support_missing and mode == "claim_safe":
                     key_failures.append("critical_citation_support_missing")
-                elif support_status in _UNSUPPORTED_STATUSES:
+                elif support_status in quality_classification._UNSUPPORTED_STATUSES:
                     key_failures.append("critical_unsupported_citation")
             elif metadata_status == "missing":
                 key_warnings.append("noncritical_missing_bib_entry")
@@ -164,10 +133,10 @@ def build_citation_quality_gate_internal(cwd: str | Path | None, *, quality_mode
             warnings.extend(key_warnings)
             items.append(
                 CitationQualityItem(
-                    item_id=_quality_item_id(key, key_support_items, group_index=group_index),
+                    item_id=quality_support._quality_item_id(key, key_support_items, group_index=group_index),
                     citation_key=key,
-                    claim_id=_first_claim_id(claims_by_key.get(key, [])),
-                    citation_key_sha256=_sha256_text(key),
+                    claim_id=quality_classification._first_claim_id(claims_by_key.get(key, [])),
+                    citation_key_sha256=quality_classification._sha256_text(key),
                     critical=critical,
                     need_status="required" if critical else "optional" if explicit_noncritical else "unknown",
                     support_status=support_status,
@@ -175,15 +144,15 @@ def build_citation_quality_gate_internal(cwd: str | Path | None, *, quality_mode
                     severity=severity,
                     failing_codes=sorted(dict.fromkeys(key_failures)),
                     warning_codes=sorted(dict.fromkeys(key_warnings)),
-                    public_case=_public_case_id(key_support_items, claims_by_key.get(key, [])),
-                    public_failure_code=_public_failure_code(key_support_items, key_failures),
-                    public_failure_message=_public_failure_message(key_support_items, key_failures),
+                    public_case=quality_support._public_case_id(key_support_items, claims_by_key.get(key, [])),
+                    public_failure_code=quality_support._public_failure_code(key_support_items, key_failures),
+                    public_failure_message=quality_support._public_failure_message(key_support_items, key_failures),
                 )
             )
 
-    integrity_warnings = _integrity_warning_codes(integrity)
+    integrity_warnings = quality_classification._integrity_warning_codes(integrity)
     warnings.extend(integrity_warnings)
-    counts = _counts(items, integrity)
+    counts = quality_classification._counts(items, integrity)
     hard_unique = sorted(dict.fromkeys(hard))
     warn_unique = sorted(dict.fromkeys(warnings))
     status = "fail" if hard_unique else "warn" if warn_unique else "pass"
@@ -203,7 +172,7 @@ def build_citation_quality_gate_internal(cwd: str | Path | None, *, quality_mode
         },
     )
     payload = report.to_internal_dict()
-    _assert_public_safe(payload["public_report"])
+    quality_report._assert_public_safe(payload["public_report"])
     return payload
 
 

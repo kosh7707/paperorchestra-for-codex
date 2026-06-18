@@ -1,17 +1,7 @@
 from __future__ import annotations
 
-from paperorchestra.reviews import citation_quality
 from paperorchestra.reviews import citation_quality_classification as classify
 from paperorchestra.reviews.citation_quality_report import CitationQualityItem
-
-
-def test_citation_quality_classification_facade_exports_policy_helpers() -> None:
-    assert citation_quality._claims_by_key is classify._claims_by_key
-    assert citation_quality._roles_by_key is classify._roles_by_key
-    assert citation_quality._is_critical_key is classify._is_critical_key
-    assert citation_quality._is_explicitly_noncritical is classify._is_explicitly_noncritical
-    assert citation_quality._integrity_warning_codes is classify._integrity_warning_codes
-    assert citation_quality._counts is classify._counts
 
 
 def test_claims_and_roles_are_indexed_by_citation_key() -> None:

@@ -2,15 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from paperorchestra.reviews import citation_quality
 from paperorchestra.reviews import citation_quality_support as support
-
-
-def test_citation_quality_support_facade_exports_adapter_helpers() -> None:
-    assert citation_quality._support_items is support._support_items
-    assert citation_quality._support_groups_for_quality_items is support._support_groups_for_quality_items
-    assert citation_quality._worst_support_status is support._worst_support_status
-    assert citation_quality._public_failure_code is support._public_failure_code
 
 
 def test_v3_support_review_cases_become_quality_items(tmp_path: Path) -> None:

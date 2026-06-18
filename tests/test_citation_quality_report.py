@@ -3,17 +3,11 @@ from __future__ import annotations
 import pytest
 
 from paperorchestra.reviews import citation_quality
-
-
-def test_citation_quality_report_facade_exports_report_types() -> None:
-    import paperorchestra.reviews.citation_quality_report as report
-
-    assert citation_quality.CitationQualityItem is report.CitationQualityItem
-    assert citation_quality.CitationQualityGateReport is report.CitationQualityGateReport
+from paperorchestra.reviews import citation_quality_report
 
 
 def test_public_report_summarizes_items_without_internal_fields() -> None:
-    item = citation_quality.CitationQualityItem(
+    item = citation_quality_report.CitationQualityItem(
         item_id="internal-1",
         citation_key="KeyA",
         claim_id="Claim1",
@@ -28,7 +22,7 @@ def test_public_report_summarizes_items_without_internal_fields() -> None:
         public_failure_code="human_needed",
         public_failure_message="Manual evidence is required.",
     )
-    report = citation_quality.CitationQualityGateReport(
+    report = citation_quality_report.CitationQualityGateReport(
         status="fail",
         quality_mode="claim_safe",
         manuscript_sha256="sha",
@@ -52,4 +46,4 @@ def test_public_report_summarizes_items_without_internal_fields() -> None:
 
 def test_public_safe_rejects_private_marker_values() -> None:
     with pytest.raises(ValueError, match="private marker"):
-        citation_quality._assert_public_safe({"failures": [{"message": "contains PRIVATE token"}]})
+        citation_quality_report._assert_public_safe({"failures": [{"message": "contains PRIVATE token"}]})
