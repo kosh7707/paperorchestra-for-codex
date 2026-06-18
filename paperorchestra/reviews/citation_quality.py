@@ -4,18 +4,24 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.io import write_json
+from paperorchestra.core.session import artifact_path
 from paperorchestra.reviews.citation_quality_builder import (
     _normalize_quality_mode,
     _stale_codes,
     build_citation_quality_gate,
     build_citation_quality_gate_internal,
 )
-from paperorchestra.reviews.citation_quality_paths import (
-    CITATION_QUALITY_GATE_FILENAME,
-    CITATION_QUALITY_GATE_INTERNAL_FILENAME,
-    citation_quality_gate_internal_path,
-    citation_quality_gate_path,
-)
+
+CITATION_QUALITY_GATE_FILENAME = "citation_quality_gate.json"
+CITATION_QUALITY_GATE_INTERNAL_FILENAME = "citation_quality_gate.internal.json"
+
+
+def citation_quality_gate_path(cwd: str | Path | None) -> Path:
+    return artifact_path(cwd, CITATION_QUALITY_GATE_FILENAME)
+
+
+def citation_quality_gate_internal_path(cwd: str | Path | None) -> Path:
+    return artifact_path(cwd, CITATION_QUALITY_GATE_INTERNAL_FILENAME)
 
 
 def write_citation_quality_gate(
