@@ -1,21 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from paperorchestra.loop_engine.orchestra import FullLoopPlanner, LoopFacts
 from paperorchestra.orchestra.consensus import CriticConsensus
+from paperorchestra.orchestra.controller_execution import append_execution_evidence, execute_action_protected
 from paperorchestra.orchestra.controller_inspection import _inspect_state
+from paperorchestra.orchestra.controller_result import OrchestratorRunResult
 from paperorchestra.orchestra.controller_run_loop import _run_until_blocked
 from paperorchestra.orchestra.controller_transitions import (
-    _apply_claim_graph_transition,
     _apply_local_execution_record,
-    _apply_source_digest_transition,
     _execution_label,
-    _first_evidence_payload,
-    _valid_claim_graph_payload,
-    _valid_source_digest_payload,
 )
 from paperorchestra.orchestra.executor import ActionExecutor, ExecutionRecord
 from paperorchestra.orchestra.omx_action_executor import OmxActionExecutor
@@ -23,28 +18,6 @@ from paperorchestra.orchestra.omx_runners import OmxCommandRunner
 from paperorchestra.orchestra.planner import ActionPlanner
 from paperorchestra.orchestra.scoring import ScholarlyScore, ScoringInputBundle
 from paperorchestra.orchestra.state import OrchestraState
-
-
-@dataclass
-class OrchestratorRunResult:
-    state: OrchestraState
-    execution: str = "bounded_plan_only"
-    action_taken: str = "none"
-    execution_record: ExecutionRecord | None = None
-
-    def to_public_dict(self) -> dict[str, Any]:
-        payload = {
-            "execution": self.execution,
-            "action_taken": self.action_taken,
-            "state": self.state.to_public_dict(),
-            "next_actions": [action.to_dict() for action in self.state.next_actions],
-            "blocking_reasons": list(self.state.blocking_reasons),
-            "private_safe": True,
-        }
-        if self.execution_record is not None:
-            payload["execution_record"] = self.execution_record.to_public_dict()
-            payload["evidence_refs"] = list(payload["execution_record"]["evidence_refs"])
-        return payload
 
 
 class OrchestraOrchestrator:
@@ -118,17 +91,8 @@ class OrchestraOrchestrator:
                 timeout_seconds=timeout_seconds,
                 slug=slug,
             )
-            protected_snapshot = state.to_dict(include_private=True)
-            record = executor.execute(action, state)
-            if state.to_dict(include_private=True) != protected_snapshot:
-                raise ValueError("ActionExecutor must not mutate OrchestraState during bounded execution.")
-            if record.evidence_refs:
-                state.evidence_refs.append(
-                    {
-                        "kind": "orchestrator_execution_record",
-                        "payload": record.to_public_dict(),
-                    }
-                )
+            record = execute_action_protected(executor, action, state)
+            append_execution_evidence(state, record)
         return OrchestratorRunResult(
             state=state,
             execution="bounded_omx_execution",
@@ -158,17 +122,8 @@ class OrchestraOrchestrator:
                 execution_record=None,
             )
         action = state.next_actions[0]
-        protected_snapshot = state.to_dict(include_private=True)
-        record = executor.execute(action, state)
-        if state.to_dict(include_private=True) != protected_snapshot:
-            raise ValueError("ActionExecutor must not mutate OrchestraState during bounded execution.")
-        if record.evidence_refs:
-            state.evidence_refs.append(
-                {
-                    "kind": "orchestrator_execution_record",
-                    "payload": record.to_public_dict(),
-                }
-            )
+        record = execute_action_protected(executor, action, state)
+        append_execution_evidence(state, record)
         _apply_local_execution_record(state, record.to_public_dict())
         return OrchestratorRunResult(
             state=state,
