@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.loop_engine.quality.loop import write_quality_eval, write_quality_loop_plan
-from paperorchestra.loop_engine.ralph.bridge_actions import _executable_actions, _unsupported_executable_actions
 from paperorchestra.loop_engine.ralph.bridge_records import build_initial_execution_record
 from paperorchestra.loop_engine.ralph.inputs import (
     _load_explicit_qa_loop_plan,
@@ -14,7 +13,7 @@ from paperorchestra.loop_engine.ralph.inputs import (
     _stage_explicit_citation_support_review,
     _validate_plan_quality_eval_identity,
 )
-from paperorchestra.loop_engine.ralph.state import _citation_summary
+from paperorchestra.loop_engine.ralph.state import SUPPORTED_HANDLER_CODES, _citation_summary
 
 
 @dataclass(frozen=True)
@@ -27,6 +26,28 @@ class QaLoopPreflight:
     execution: dict[str, Any]
     actions: list[dict[str, Any]]
     unsupported_actions: list[dict[str, Any]]
+
+
+def _executable_actions(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    actions = plan.get("repair_actions") if isinstance(plan, dict) else []
+    return [
+        action
+        for action in actions
+        if isinstance(action, dict)
+        and action.get("automation") in {"automatic", "semi_auto"}
+        and str(action.get("code")) in SUPPORTED_HANDLER_CODES
+    ]
+
+
+def _unsupported_executable_actions(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    actions = plan.get("repair_actions") if isinstance(plan, dict) else []
+    return [
+        action
+        for action in actions
+        if isinstance(action, dict)
+        and action.get("automation") in {"automatic", "semi_auto"}
+        and str(action.get("code")) not in SUPPORTED_HANDLER_CODES
+    ]
 
 
 def prepare_qa_loop_preflight(
