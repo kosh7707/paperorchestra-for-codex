@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from paperorchestra.core.models import InputBundle
 from paperorchestra.core.session import create_session
+from paperorchestra.loop_engine.ralph import action_dispatch_citation_repair as citation_repair
 from paperorchestra.loop_engine.ralph import action_dispatch_handlers as handlers
 from paperorchestra.loop_engine.ralph.action_dispatch import dispatch_qa_loop_actions
 from paperorchestra.loop_engine.ralph.action_dispatch_types import QaLoopActionDispatchContext
@@ -123,7 +124,7 @@ def test_dispatch_compile_failure_stops_later_actions(tmp_path: Path, monkeypatc
 
 def test_dispatch_records_actionable_failure_when_citation_repair_is_rejected(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
-        handlers,
+        citation_repair,
         "repair_citation_claims",
         lambda *args, **kwargs: {"accepted": False, "reason": "semantic_recheck_failed", "validation": {"ok": False}},
     )
@@ -176,12 +177,12 @@ def test_dispatch_preserves_accepted_citation_candidate_for_validation(tmp_path:
     candidate_path.write_text("candidate paper", encoding="utf-8")
     replacements = []
     monkeypatch.setattr(
-        handlers,
+        citation_repair,
         "repair_citation_claims",
         lambda *args, **kwargs: {"accepted": True, "candidate_path": str(candidate_path)},
     )
     monkeypatch.setattr(
-        handlers,
+        citation_repair,
         "guarded_replace_manuscript_text",
         lambda cwd, path, text, reason, original_text: replacements.append((path, text, reason, original_text)),
     )

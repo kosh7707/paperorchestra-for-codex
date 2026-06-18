@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from paperorchestra.loop_engine.ralph.action_dispatch_handlers import _citation_repair_failure_payload
+from paperorchestra.loop_engine.ralph.action_dispatch_citation_repair import citation_repair_failure_payload
 from paperorchestra.loop_engine.ralph.semantic_gate_summary import _semantic_recheck_gate_summary
 from paperorchestra.loop_engine.ralph.semantic_validation import _validation_failing_codes_from_repair
 
@@ -58,7 +58,7 @@ class RalphSemanticRecheckTest(unittest.TestCase):
             },
         }
 
-        payload = _citation_repair_failure_payload("citation_repair_failed", repair)
+        payload = citation_repair_failure_payload("citation_repair_failed", repair)
 
         self.assertEqual(payload["reason"], "semantic_recheck_failed")
         self.assertEqual(payload["validation"]["failing_codes"], ["validation_failed"])
