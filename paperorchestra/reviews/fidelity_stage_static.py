@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from paperorchestra.core.io import read_json
 from paperorchestra.core.models import SessionState
 from paperorchestra.manuscript import prompts as prompt_module
-from paperorchestra.reviews.fidelity_sources import paper_source_candidates
 from paperorchestra.reviews.fidelity_types import FidelityCheck
 from paperorchestra.reviews.reproducibility_citations import _citation_surface_health
 
+PAPER_SOURCE_NAME = "PaperOrchestra A Multi-Agent Framework for Automated AI Research Paper Writing.pdf"
+PAPER_SOURCE_ENV_VAR = "PAPERO_REFERENCE_PDF"
 EXPECTED_OUTLINE_KEYS = {"plotting_plan", "intro_related_work_plan", "section_plan"}
 EXPECTED_PROMPT_ASSETS = {
     "outline_agent.md",
@@ -17,6 +19,18 @@ EXPECTED_PROMPT_ASSETS = {
     "content_refinement_agent.md",
     "prompt_fidelity_matrix.md",
 }
+
+
+def paper_source_candidates(cwd: str | Path | None) -> list[Path]:
+    candidates: list[Path] = []
+    explicit = os.environ.get(PAPER_SOURCE_ENV_VAR)
+    if explicit:
+        candidates.append(Path(explicit).expanduser().resolve())
+    if cwd is not None:
+        candidates.append(Path(cwd).resolve() / PAPER_SOURCE_NAME)
+    repo_root = Path(prompt_module.__file__).resolve().parent.parent
+    candidates.append(repo_root / PAPER_SOURCE_NAME)
+    return candidates
 
 
 def _session_artifact_dir(state: SessionState) -> Path | None:
