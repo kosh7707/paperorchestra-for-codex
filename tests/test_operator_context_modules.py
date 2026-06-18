@@ -5,7 +5,9 @@ from pathlib import Path
 
 from paperorchestra.feedback import operator_context
 from paperorchestra.feedback.operator_contract import OPERATOR_PACKET_SCHEMA_VERSION
-from paperorchestra.feedback.operator_contexts import citation_issues
+from paperorchestra.feedback.operator_contexts.citation_density_issues import _citation_density_context
+from paperorchestra.feedback.operator_contexts.citation_duplicate_issues import _duplicate_support_context
+from paperorchestra.feedback.operator_contexts.citation_problematic import _problematic_citation_context
 from paperorchestra.feedback.packet_artifacts import _file_sha256, _packet_sha256
 
 
@@ -114,7 +116,7 @@ def test_operator_issue_context_reads_packet_artifacts_without_name_errors(tmp_p
 
 
 def test_citation_issue_context_projects_problematic_items_and_limits_examples() -> None:
-    problematic = citation_issues._problematic_citation_context(
+    problematic = _problematic_citation_context(
         {
             "items": [
                 {"id": "ok", "support_status": "supported", "sentence": "ok"},
@@ -140,7 +142,7 @@ def test_citation_issue_context_projects_problematic_items_and_limits_examples()
 
 
 def test_duplicate_and_density_contexts_preserve_ordering_and_caps() -> None:
-    duplicate = citation_issues._duplicate_support_context(
+    duplicate = _duplicate_support_context(
         {"checks": {"duplicate_support": {"duplicate_keys": ["A"]}}},
         {
             "items": [
@@ -150,7 +152,7 @@ def test_duplicate_and_density_contexts_preserve_ordering_and_caps() -> None:
         },
         examples_per_key=1,
     )
-    density = citation_issues._citation_density_context(
+    density = _citation_density_context(
         {
             "checks": {
                 "citation_density": {
