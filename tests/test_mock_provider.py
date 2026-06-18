@@ -63,8 +63,103 @@ Precision: 12.5%
 
     assert "\\cite{alpha2024,beta2025}" in latex
     assert "\\label{fig_custom}" in latex
-    assert "\\input{figures/custom.tex}" in latex
+    assert "\n\\input{figures/custom.tex}\n\n\\caption{Overview of the staged pipeline.}" in latex
     assert "12.5" in latex
+
+
+def test_mock_provider_latex_preserves_default_figure_block_spacing() -> None:
+    provider = MockProvider()
+
+    latex = provider.complete(CompletionRequest(system_prompt="Write a paper.", user_prompt="No assets."))
+
+    assert "\n\\begin{figure}\n\n\\caption{Overview of the staged pipeline.}" in latex
+
+
+def test_mock_provider_latex_uses_non_tex_plot_asset_with_original_spacing() -> None:
+    provider = MockProvider()
+
+    latex = provider.complete(
+        CompletionRequest(
+            system_prompt="Write a paper.",
+            user_prompt="""
+<DATA_BLOCK name="plot_assets.json">
+{"assets":[{"filename":"figures/custom.png"}]}
+</DATA_BLOCK>
+""",
+        )
+    )
+
+    assert "\n\\includegraphics[width=0.85\\linewidth]{figures/custom.png}\n\n\\caption" in latex
+
+
+def test_mock_provider_generates_outline_json() -> None:
+    provider = MockProvider()
+
+    response = provider.complete(
+        CompletionRequest(
+            system_prompt="Return a single, valid JSON object containing plotting_plan and outline.",
+            user_prompt="Plan the paper.",
+        )
+    )
+
+    payload = json.loads(response)
+    assert payload["plotting_plan"][0]["figure_id"] == "fig_framework_overview"
+    assert "intro_related_work_plan" in payload
+    assert payload["section_plan"][0]["section_title"] == "Method"
+
+
+def test_mock_provider_generates_figure_json() -> None:
+    provider = MockProvider()
+
+    response = provider.complete(
+        CompletionRequest(
+            system_prompt="Return a single, valid JSON object with a top-level key named figures.",
+            user_prompt="Plan figures.",
+        )
+    )
+
+    payload = json.loads(response)
+    assert payload["figures"][0]["figure_id"] == "fig_framework_overview"
+    assert payload["figures"][0]["plot_type"] == "diagram"
+
+
+def test_mock_provider_reviewer_score_tracks_refined_and_regressed_markers() -> None:
+    provider = MockProvider()
+
+    refined = json.loads(
+        provider.complete(
+            CompletionRequest(
+                system_prompt="Return a JSON object with reviewer overall_score.",
+                user_prompt="Refined mock paper",
+            )
+        )
+    )
+    regressed = json.loads(
+        provider.complete(
+            CompletionRequest(
+                system_prompt="Return a JSON object with reviewer overall_score.",
+                user_prompt="Regressed mock paper",
+            )
+        )
+    )
+
+    assert refined["overall_score"] == 78
+    assert regressed["overall_score"] == 61
+
+
+def test_mock_provider_refinement_response_contains_worklog_and_refined_latex() -> None:
+    provider = MockProvider()
+
+    response = provider.complete(
+        CompletionRequest(
+            system_prompt="You are a content refinement agent that returns two fenced code blocks.",
+            user_prompt="Improve draft.",
+        )
+    )
+
+    assert '"addressed_weaknesses"' in response
+    assert "Refined mock paper." in response
+    assert "\\section{Introduction}" in response
 
 
 def test_mock_provider_fork_returns_independent_mock_provider() -> None:
