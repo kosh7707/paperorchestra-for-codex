@@ -6,11 +6,7 @@ from typing import Any
 from paperorchestra.reviews.source_support import build_source_backed_citation_cases
 from .utils import _file_sha256, _read_json_if_exists
 from paperorchestra.core.session import artifact_path
-from paperorchestra.loop_engine.quality.citation_support_legacy import (
-    _legacy_citation_support_check,
-    _provider_proof_is_trusted,
-    _trace_matches_provider_proof,
-)
+from paperorchestra.loop_engine.quality.citation_support_legacy import _legacy_citation_support_check
 
 
 def _citation_support_path(cwd: str | Path | None, state) -> Path:

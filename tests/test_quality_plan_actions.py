@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.loop_engine.quality.plan_logic import _quality_eval_actions
+from paperorchestra.loop_engine.quality.action_builders import _quality_eval_actions
 
 
 def _actions_by_code(quality_eval: dict) -> dict[str, dict]:

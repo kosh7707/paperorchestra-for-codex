@@ -4,10 +4,6 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.loop_engine.quality.citation_support_legacy_analysis import analyze_legacy_citation_support
-from paperorchestra.loop_engine.quality.citation_support_legacy_proof import (
-    _provider_proof_is_trusted,
-    _trace_matches_provider_proof,
-)
 from paperorchestra.loop_engine.quality.citation_support_legacy_result import (
     build_legacy_citation_support_result,
     legacy_stale_result,
@@ -29,10 +25,3 @@ def _legacy_citation_support_check(
         return legacy_stale_result(path, payload, current_sha=current_sha)
     analysis = analyze_legacy_citation_support(state, payload, quality_mode=quality_mode)
     return build_legacy_citation_support_result(path, payload, analysis)
-
-
-__all__ = [
-    "_legacy_citation_support_check",
-    "_provider_proof_is_trusted",
-    "_trace_matches_provider_proof",
-]
