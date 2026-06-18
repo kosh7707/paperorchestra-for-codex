@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from paperorchestra.loop_engine.quality.citation_gap import _citation_support_gap_classification
+from paperorchestra.loop_engine.quality.citation_gap_items import citation_support_gap_items
 
 
 class QualityCitationGapTest(unittest.TestCase):
@@ -85,6 +86,33 @@ class QualityCitationGapTest(unittest.TestCase):
 
         self.assertEqual(result["manual_author_judgment_count"], 0)
         self.assertEqual(result["payload_unavailable"], False)
+
+    def test_v3_gap_items_project_case_metadata_and_evidence(self) -> None:
+        items, v3_payload = citation_support_gap_items(
+            {
+                "schema": "citation-support-review/3",
+                "cases": [
+                    {
+                        "id": "C1",
+                        "key": "smith2024",
+                        "verdict": "human_needed",
+                        "source": {"title": "Smith Paper", "url": "https://example.test"},
+                        "requires_author_judgment": True,
+                        "support_evidence": [{"title": "Smith Paper", "summary": "Evidence summary.", "supports": True}],
+                    },
+                    {"id": "C2", "key": "ignored", "verdict": "pass"},
+                    {"id": "C3", "verdict": "weak"},
+                ],
+            }
+        )
+
+        self.assertTrue(v3_payload)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["case_id"], "C1")
+        self.assertEqual(items[0]["citation_keys"], ["smith2024"])
+        self.assertEqual(items[0]["support_status"], "needs_manual_check")
+        self.assertTrue(items[0]["requires_author_judgment"])
+        self.assertEqual(items[0]["evidence"][0]["supports_claim"], True)
 
 
 if __name__ == "__main__":
