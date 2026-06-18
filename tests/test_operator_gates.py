@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from paperorchestra.feedback.operator_gates import _operator_actionable_failure
+from paperorchestra.feedback.operator_failures import _operator_actionable_failure
 
 
 class OperatorGateTest(unittest.TestCase):

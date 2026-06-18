@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.feedback import operator_gates, operator_metrics
-
-
-def test_operator_gates_facade_reexports_metric_helpers() -> None:
-    assert operator_gates._int_metric is operator_metrics._int_metric
-    assert operator_gates._claim_safe_tier2_metric_counts is operator_metrics._claim_safe_tier2_metric_counts
-    assert operator_gates._active_tier2_metric_delta is operator_metrics._active_tier2_metric_delta
+from paperorchestra.feedback import operator_metrics
 
 
 def test_claim_safe_tier2_metric_counts_reads_nested_quality_eval_counts() -> None:

@@ -1,16 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.feedback import operator_failures, operator_gates
-
-
-def test_operator_gates_facade_reexports_failure_helpers() -> None:
-    assert operator_gates._compact_metric_delta_records is operator_failures._compact_metric_delta_records
-    assert operator_gates._normalized_sha is operator_failures._normalized_sha
-    assert operator_gates._actionable_failure is operator_failures._actionable_failure
-    assert operator_gates._compact_operator_attempt_failure is operator_failures._compact_operator_attempt_failure
-    assert operator_gates._compact_blocked_candidate_progress is operator_failures._compact_blocked_candidate_progress
-    assert operator_gates._repeats_non_promotable_candidate is operator_failures._repeats_non_promotable_candidate
-    assert operator_gates._operator_actionable_failure is operator_failures._operator_actionable_failure
+from paperorchestra.feedback import operator_failures
 
 
 def test_compact_operator_attempt_failure_keeps_only_code_count_diagnostics() -> None:

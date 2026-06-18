@@ -4,26 +4,14 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.models import utc_now_iso
-from paperorchestra.feedback.operator_context import _compact_metric_delta_records
-from paperorchestra.feedback.operator_failures import (
-    _actionable_failure,
-    _compact_blocked_candidate_progress,
-    _compact_operator_attempt_failure,
-    _operator_actionable_failure,
-    _repeats_non_promotable_candidate,
-)
-from paperorchestra.feedback.operator_metrics import (
-    _active_tier2_metric_delta,
-    _claim_safe_tier2_metric_counts,
-    _int_metric,
-)
+from paperorchestra.feedback import operator_metrics as _metrics
 from paperorchestra.feedback.operator_contract import (
     AXIS_CATASTROPHIC_DROP,
     HUMAN_REVIEWABLE_NEW_TIER2_CODES,
     OVERALL_CATASTROPHIC_DROP,
 )
-from paperorchestra.feedback.packet_artifacts import _file_sha256, _sha256_digest, _sha256_prefixed
-from paperorchestra.feedback.packet_bindings import _execution_payload_sha256, _normalized_sha
+from paperorchestra.feedback import packet_artifacts as _packet_artifacts
+from paperorchestra.feedback import packet_bindings as _packet_bindings
 
 
 def _quality_failing_codes(quality_eval: dict[str, Any]) -> list[str]:
@@ -91,7 +79,7 @@ def _candidate_hard_gate(
     ]
     if quality_mode == "claim_safe" and hard_new_tier2_failures:
         reasons.append("tier2_claim_safety_new_failures")
-    metric_delta = _active_tier2_metric_delta(
+    metric_delta = _metrics._active_tier2_metric_delta(
         base_quality_eval,
         quality_eval,
         base_active_failures=base_active_failures,
@@ -197,8 +185,10 @@ def _attach_candidate_approval_from_attempt(
 ) -> None:
     before_codes = [str(code) for code in attempt.get("base_active_failures") or []]
     after_codes = [str(code) for code in attempt.get("candidate_active_failures") or []]
-    before_hash = _sha256_prefixed(execution.get("manuscript_sha256_before"))
-    after_hash = _sha256_prefixed(_file_sha256(attempt.get("candidate_path")))
+    before_hash = _packet_artifacts._sha256_prefixed(execution.get("manuscript_sha256_before"))
+    after_hash = _packet_artifacts._sha256_prefixed(
+        _packet_artifacts._file_sha256(attempt.get("candidate_path"))
+    )
     verification = attempt.get("verification") if isinstance(attempt.get("verification"), dict) else {}
     citation_summary = None
     citation_block = verification.get("citation_support_review") if isinstance(verification, dict) else None
@@ -228,7 +218,10 @@ def _attach_candidate_approval_from_attempt(
     approval = {
         "status": "human_needed_candidate_ready",
         "candidate_path": attempt.get("candidate_path"),
-        "candidate_sha256": _sha256_prefixed(_sha256_digest(str(attempt.get("candidate_sha256") or "")) or _file_sha256(attempt.get("candidate_path"))),
+        "candidate_sha256": _packet_artifacts._sha256_prefixed(
+            _packet_artifacts._sha256_digest(str(attempt.get("candidate_sha256") or ""))
+            or _packet_artifacts._file_sha256(attempt.get("candidate_path"))
+        ),
         "base_manuscript_sha256": before_hash,
         "source_execution_path": str(execution_path),
         "source_execution_sha256": "",
@@ -249,7 +242,7 @@ def _attach_candidate_approval_from_attempt(
         "qa_loop_plan_verdict": (verification.get("qa_loop_plan") or {}).get("verdict") if isinstance(verification.get("qa_loop_plan"), dict) else None,
         "progress": progress,
     }
-    approval["source_execution_sha256"] = _execution_payload_sha256(execution)
+    approval["source_execution_sha256"] = _packet_bindings._execution_payload_sha256(execution)
 
 
 def _catastrophic_review_regression(candidate_result: dict[str, Any] | None) -> bool:
