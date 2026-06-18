@@ -76,6 +76,25 @@ def test_draft_control_routes_critical_citation_blockers_to_research(tmp_path: P
     assert decision.actions[0].requires_omx is True
 
 
+def test_draft_control_routes_critical_unsupported_reference_to_research(tmp_path: Path) -> None:
+    decision = _decide(
+        tmp_path,
+        claims=[_claim(claim_id="security", claim_type="security")],
+        citation_obligations=[
+            CitationObligationSignal(
+                obligation_id="cite1",
+                claim_id="security",
+                status="unsupported",
+                critical=True,
+            )
+        ],
+    )
+
+    assert decision.status == "research_needed"
+    assert decision.reasons == ["critical_unsupported_reference"]
+    assert decision.state.facets.citations == "unsupported_critical"
+
+
 def test_draft_control_distinguishes_durable_and_machine_solvable_research_gaps(tmp_path: Path) -> None:
     durable = _decide(
         tmp_path,
@@ -111,6 +130,18 @@ def test_draft_control_auto_weakens_low_criticality_unsupported_claims(tmp_path:
     decision = _decide(
         tmp_path,
         claims=[_claim(claim_type="background", graph_role="leaf", evidence_status="unknown")],
+    )
+
+    assert decision.status == "blocked"
+    assert decision.reasons == ["low_criticality_unsupported_claim"]
+    assert decision.actions[0].action_type == "auto_weaken_or_delete_claim"
+
+
+def test_draft_control_auto_weakens_low_criticality_human_obligation_gap(tmp_path: Path) -> None:
+    decision = _decide(
+        tmp_path,
+        claims=[_claim(claim_type="background", graph_role="leaf", evidence_status="supported")],
+        evidence_obligations=[EvidenceObligationSignal("e1", "c1", "unsupported", machine_solvable=False)],
     )
 
     assert decision.status == "blocked"
