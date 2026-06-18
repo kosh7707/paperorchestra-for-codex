@@ -143,3 +143,50 @@ def test_citation_registry_live_provenance_scopes_to_cited_keys(tmp_path: Path) 
     assert provenance["unused_registry_count"] == 1
     assert provenance["cited_live_verified_count"] == 1
     assert provenance["cited_curated_seed_count"] == 0
+
+
+def test_citation_registry_live_provenance_reports_boundary_statuses(tmp_path: Path) -> None:
+    missing = _citation_registry_live_provenance(tmp_path / "missing.json")
+    assert missing["status"] == "missing"
+    assert missing["registry_count"] == 0
+
+    unreadable = tmp_path / "unreadable.json"
+    unreadable.write_text("{not json", encoding="utf-8")
+    assert _citation_registry_live_provenance(unreadable)["status"] == "unreadable"
+
+    malformed = tmp_path / "malformed.json"
+    malformed.write_text(json.dumps({"not": "a list"}), encoding="utf-8")
+    assert _citation_registry_live_provenance(malformed)["status"] == "malformed"
+
+
+def test_citation_registry_live_provenance_counts_cited_status_buckets(tmp_path: Path) -> None:
+    registry_path = tmp_path / "citation_registry.json"
+    paper = tmp_path / "paper.tex"
+    registry_path.write_text(
+        json.dumps(
+            [
+                {"paper_id": "live", "bibtex_key": "live2024", "origin": "macro_candidates"},
+                {"paper_id": "manual", "bibtex_key": "manual2024", "origin": "manual_seed", "url": "https://example.test"},
+                {"paper_id": "seed", "bibtex_key": "seed2024", "origin": "metadata_seed_for_live_verification"},
+                {"paper_id": "mock-demo", "bibtex_key": "mock2024", "authors": ["Mock Author"], "venue": "Mock Venue"},
+                {"paper_id": "unused", "bibtex_key": "unused2024", "origin": "manual_seed"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    paper.write_text(r"Cites \cite{live2024,manual2024,seed2024,mock2024}.", encoding="utf-8")
+
+    provenance = _citation_registry_live_provenance(registry_path, paper)
+
+    assert provenance["status"] == "mock"
+    assert provenance["registry_count"] == 5
+    assert provenance["live_verified_count"] == 1
+    assert provenance["seed_only_count"] == 3
+    assert provenance["mock_entry_count"] == 1
+    assert provenance["live_coverage_ratio"] == 0.2
+    assert provenance["cited_entry_count"] == 4
+    assert provenance["unused_registry_count"] == 1
+    assert provenance["cited_live_verified_count"] == 1
+    assert provenance["cited_mixed_count"] == 1
+    assert provenance["cited_curated_seed_count"] == 1
+    assert provenance["cited_mock_count"] == 1
