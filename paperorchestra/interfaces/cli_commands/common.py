@@ -6,7 +6,7 @@ from contextlib import contextmanager
 import os
 from pathlib import Path
 
-from paperorchestra.orchestra.omx_executor import OmxActionExecutor
+from paperorchestra.orchestra.omx_action_executor import OmxActionExecutor
 from paperorchestra.runtime.providers import BaseProvider, get_provider
 
 

@@ -10,7 +10,7 @@ from paperorchestra.feedback.human_needed import record_human_needed_answer
 from paperorchestra.core.models import InputBundle
 from paperorchestra.orchestra.evidence import write_orchestrator_evidence_bundle
 from paperorchestra.orchestra.executor import LocalActionExecutor
-from paperorchestra.orchestra.omx_executor import OmxActionExecutor
+from paperorchestra.orchestra.omx_action_executor import OmxActionExecutor
 from paperorchestra.orchestra.controller import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state
 from paperorchestra.engine.pipeline import (
     compile_current_paper,

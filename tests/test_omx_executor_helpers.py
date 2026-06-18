@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from paperorchestra.orchestra import omx_evidence, omx_executor, omx_runners
+from paperorchestra.orchestra import omx_evidence, omx_execution_records, omx_runners
+from paperorchestra.orchestra.omx_action_executor import OmxActionExecutor
 from paperorchestra.orchestra.state import NextAction, OrchestraState
 
 
@@ -85,8 +86,8 @@ def _goal_stdout(slug: str) -> str:
 
 
 def test_omx_executor_runs_trace_summary_with_public_evidence(tmp_path) -> None:
-    runner = omx_executor.FakeOmxRunner([omx_executor.OmxCommandResult(return_code=0, stdout='{"ok": true}')])
-    executor = omx_executor.OmxActionExecutor(cwd=tmp_path, runner=runner, timeout_seconds=7.0)
+    runner = omx_runners.FakeOmxRunner([omx_runners.OmxCommandResult(return_code=0, stdout='{"ok": true}')])
+    executor = OmxActionExecutor(cwd=tmp_path, runner=runner, timeout_seconds=7.0)
     action = NextAction(action_type="record_trace_summary", reason="trace_needed")
 
     record = executor.execute(action, _state(tmp_path))
@@ -97,7 +98,7 @@ def test_omx_executor_runs_trace_summary_with_public_evidence(tmp_path) -> None:
     assert record.status == "executed_omx"
     assert record.state_rebuild_required is True
     evidence = record.evidence_refs[0]["payload"]
-    assert evidence["schema_version"] == omx_executor.OMX_ACTION_EXECUTION_SCHEMA_VERSION
+    assert evidence["schema_version"] == omx_execution_records.OMX_ACTION_EXECUTION_SCHEMA_VERSION
     assert evidence["surface"] == "trace_summary"
     assert evidence["action_type"] == "record_trace_summary"
     assert evidence["artifact_refs"] == []
@@ -108,8 +109,8 @@ def test_omx_executor_runs_trace_summary_with_public_evidence(tmp_path) -> None:
 
 def test_omx_executor_runs_autoresearch_goal_and_validates_artifact_refs(tmp_path) -> None:
     slug = "po-" + "a" * 12
-    runner = omx_executor.FakeOmxRunner([omx_executor.OmxCommandResult(return_code=0, stdout=_goal_stdout(slug))])
-    executor = omx_executor.OmxActionExecutor(cwd=tmp_path, runner=runner, slug=slug)
+    runner = omx_runners.FakeOmxRunner([omx_runners.OmxCommandResult(return_code=0, stdout=_goal_stdout(slug))])
+    executor = OmxActionExecutor(cwd=tmp_path, runner=runner, slug=slug)
     action = NextAction(action_type="start_autoresearch_goal", reason="collect_related_work")
 
     record = executor.execute(action, _state(tmp_path))
@@ -138,24 +139,24 @@ def test_omx_executor_blocks_autoresearch_goal_with_missing_or_external_refs(tmp
     slug = "po-" + "a" * 12
     action = NextAction(action_type="start_autoresearch_goal", reason="collect_related_work")
 
-    missing = omx_executor.FakeOmxRunner(
+    missing = omx_runners.FakeOmxRunner(
         [
-            omx_executor.OmxCommandResult(
+            omx_runners.OmxCommandResult(
                 return_code=0,
                 stdout=json.dumps({"mission": {"mission_path": f".omx/goals/autoresearch/{slug}/mission.json"}}),
             )
         ]
     )
-    missing_record = omx_executor.OmxActionExecutor(cwd=tmp_path, runner=missing, slug=slug).execute(
+    missing_record = OmxActionExecutor(cwd=tmp_path, runner=missing, slug=slug).execute(
         action, _state(tmp_path)
     )
     assert missing_record.status == "blocked"
     assert missing_record.reason == "omx_artifact_refs_missing"
 
-    external = omx_executor.FakeOmxRunner(
-        [omx_executor.OmxCommandResult(return_code=0, stdout=_goal_stdout("po-" + "b" * 12))]
+    external = omx_runners.FakeOmxRunner(
+        [omx_runners.OmxCommandResult(return_code=0, stdout=_goal_stdout("po-" + "b" * 12))]
     )
-    external_record = omx_executor.OmxActionExecutor(cwd=tmp_path, runner=external, slug=slug).execute(
+    external_record = OmxActionExecutor(cwd=tmp_path, runner=external, slug=slug).execute(
         action, _state(tmp_path)
     )
     assert external_record.status == "blocked"
@@ -163,15 +164,15 @@ def test_omx_executor_blocks_autoresearch_goal_with_missing_or_external_refs(tmp
 
 
 def test_omx_executor_reports_handoff_and_command_failures_without_state_rebuild(tmp_path) -> None:
-    handoff = omx_executor.OmxActionExecutor(cwd=tmp_path).execute(
+    handoff = OmxActionExecutor(cwd=tmp_path).execute(
         NextAction(action_type="start_ralph", reason="needs_loop"), _state(tmp_path)
     )
     assert handoff.status == "handoff_required"
     assert handoff.state_rebuild_required is False
     assert handoff.evidence_refs[0]["payload"]["surface"] == "$ralph"
 
-    failed_runner = omx_executor.FakeOmxRunner([omx_executor.OmxCommandResult(return_code=2, stderr="boom")])
-    failed = omx_executor.OmxActionExecutor(cwd=tmp_path, runner=failed_runner).execute(
+    failed_runner = omx_runners.FakeOmxRunner([omx_runners.OmxCommandResult(return_code=2, stderr="boom")])
+    failed = OmxActionExecutor(cwd=tmp_path, runner=failed_runner).execute(
         NextAction(action_type="record_trace_summary", reason="trace_needed"), _state(tmp_path)
     )
     assert failed.status == "failed"
@@ -181,8 +182,8 @@ def test_omx_executor_reports_handoff_and_command_failures_without_state_rebuild
 
 
 def test_omx_executor_blocks_invalid_goal_slug_before_runner(tmp_path) -> None:
-    runner = omx_executor.FakeOmxRunner()
-    record = omx_executor.OmxActionExecutor(cwd=tmp_path, runner=runner, slug="bad slug").execute(
+    runner = omx_runners.FakeOmxRunner()
+    record = OmxActionExecutor(cwd=tmp_path, runner=runner, slug="bad slug").execute(
         NextAction(action_type="start_autoresearch_goal", reason="collect_related_work"),
         _state(tmp_path),
     )
@@ -195,24 +196,24 @@ def test_omx_executor_blocks_invalid_goal_slug_before_runner(tmp_path) -> None:
 def test_omx_executor_blocks_runner_boundary_exceptions(tmp_path) -> None:
     action = NextAction(action_type="record_trace_summary", reason="trace_needed")
 
-    missing = omx_executor.OmxActionExecutor(
+    missing = OmxActionExecutor(
         cwd=tmp_path,
-        runner=omx_executor.FakeOmxRunner(exception=FileNotFoundError()),
+        runner=omx_runners.FakeOmxRunner(exception=FileNotFoundError()),
     ).execute(action, _state(tmp_path))
     assert missing.status == "blocked"
     assert missing.reason == "omx_binary_missing"
 
-    timeout = omx_executor.OmxActionExecutor(
+    timeout = OmxActionExecutor(
         cwd=tmp_path,
-        runner=omx_executor.FakeOmxRunner(exception=TimeoutError()),
+        runner=omx_runners.FakeOmxRunner(exception=TimeoutError()),
     ).execute(action, _state(tmp_path))
     assert timeout.status == "blocked"
     assert timeout.reason == "omx_command_timeout"
 
 
 def test_omx_executor_sanitizes_unsupported_action_without_runner_call(tmp_path) -> None:
-    runner = omx_executor.FakeOmxRunner()
-    record = omx_executor.OmxActionExecutor(cwd=tmp_path, runner=runner).execute(
+    runner = omx_runners.FakeOmxRunner()
+    record = OmxActionExecutor(cwd=tmp_path, runner=runner).execute(
         NextAction(action_type="$ralph", reason="omx trace summary"),
         _state(tmp_path),
     )
@@ -225,7 +226,7 @@ def test_omx_executor_sanitizes_unsupported_action_without_runner_call(tmp_path)
 
 
 def test_omx_executor_handoff_evidence_payload_is_public_safe(tmp_path) -> None:
-    record = omx_executor.OmxActionExecutor(cwd=tmp_path).execute(
+    record = OmxActionExecutor(cwd=tmp_path).execute(
         NextAction(action_type="start_ralph", reason="omx trace summary"),
         _state(tmp_path),
     )
@@ -234,7 +235,7 @@ def test_omx_executor_handoff_evidence_payload_is_public_safe(tmp_path) -> None:
     payload = evidence["payload"]
     reason = "runtime_only_interactive_surface"
     assert evidence["kind"] == "omx_action_handoff"
-    assert payload["schema_version"] == omx_executor.OMX_ACTION_HANDOFF_SCHEMA_VERSION
+    assert payload["schema_version"] == omx_execution_records.OMX_ACTION_HANDOFF_SCHEMA_VERSION
     assert payload["action_type"] == "start_ralph"
     assert payload["surface"] == "$ralph"
     assert payload["capability"] == "handoff_required"
@@ -254,9 +255,9 @@ def test_omx_executor_uses_default_autoresearch_slug_when_no_override(tmp_path) 
     action = NextAction(action_type="start_autoresearch_goal", reason="collect_related_work")
     state = _state(tmp_path)
     slug = omx_evidence._default_slug(action, state)
-    runner = omx_executor.FakeOmxRunner([omx_executor.OmxCommandResult(return_code=0, stdout=_goal_stdout(slug))])
+    runner = omx_runners.FakeOmxRunner([omx_runners.OmxCommandResult(return_code=0, stdout=_goal_stdout(slug))])
 
-    record = omx_executor.OmxActionExecutor(cwd=tmp_path, runner=runner).execute(action, state)
+    record = OmxActionExecutor(cwd=tmp_path, runner=runner).execute(action, state)
 
     argv = runner.calls[0]["argv"]
     assert record.status == "executed_omx"
@@ -273,7 +274,7 @@ def test_subprocess_omx_runner_substitutes_configured_binary(monkeypatch, tmp_pa
 
     monkeypatch.setattr(omx_runners.subprocess, "run", fake_run)
 
-    result = omx_executor.SubprocessOmxRunner(binary="custom-omx").run(
+    result = omx_runners.SubprocessOmxRunner(binary="custom-omx").run(
         ["omx", "trace", "summary", "--json"],
         cwd=tmp_path,
         timeout_seconds=2.5,
@@ -283,4 +284,4 @@ def test_subprocess_omx_runner_substitutes_configured_binary(monkeypatch, tmp_pa
     assert captured["kwargs"]["cwd"] == tmp_path
     assert captured["kwargs"]["timeout"] == 2.5
     assert captured["kwargs"]["capture_output"] is True
-    assert result == omx_executor.OmxCommandResult(return_code=0, stdout="out", stderr="err")
+    assert result == omx_runners.OmxCommandResult(return_code=0, stdout="out", stderr="err")
