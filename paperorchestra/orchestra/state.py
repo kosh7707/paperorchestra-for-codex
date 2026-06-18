@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.orchestra.scorecard import build_scorecard_summary
-from paperorchestra.orchestra.state_derivation import derive_five_axis_status, derive_readiness
+from paperorchestra.orchestra.state_axis_status import derive_five_axis_status
 from paperorchestra.orchestra.state_files import file_sha256
 from paperorchestra.orchestra.state_models import (
     SCHEMA_VERSION,
@@ -15,6 +15,7 @@ from paperorchestra.orchestra.state_models import (
     ReadinessSummary,
     ScoreSummary,
 )
+from paperorchestra.orchestra.state_readiness_rules import derive_readiness
 
 
 @dataclass
