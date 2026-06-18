@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from paperorchestra.loop_engine.quality import actions
+from paperorchestra.loop_engine.quality.utils import _file_sha256
 from paperorchestra.loop_engine.quality.action_families import figures
 
 
@@ -18,11 +18,6 @@ def _state(*, review_path: Path | None = None, paper_path: Path | None = None, a
     )
 
 
-def test_quality_actions_facade_reexports_figure_family_helpers() -> None:
-    assert actions._figure_review_actions is figures._figure_review_actions
-    assert actions._generated_placeholder_figure_actions is figures._generated_placeholder_figure_actions
-
-
 def test_figure_review_actions_emit_human_needed_context_for_failures(tmp_path: Path) -> None:
     paper = tmp_path / "paper.tex"
     paper.write_text("body", encoding="utf-8")
@@ -30,7 +25,7 @@ def test_figure_review_actions_emit_human_needed_context_for_failures(tmp_path: 
     review.write_text(
         json.dumps(
             {
-                "manuscript_sha256": actions._file_sha256(paper),
+                "manuscript_sha256": _file_sha256(paper),
                 "figures": [
                     {
                         "label": "fig:flow",

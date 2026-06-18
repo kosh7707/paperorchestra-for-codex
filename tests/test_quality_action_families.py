@@ -3,20 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from paperorchestra.loop_engine.quality import actions
-from paperorchestra.loop_engine.quality import action_core
 from paperorchestra.loop_engine.quality.action_families import validation as validation_family
-from paperorchestra.loop_engine.quality.policy import AUTO_REPAIR_CODES, SEMI_AUTO_REPAIR_CODES
-
-
-def test_quality_actions_facade_reexports_validation_family_helpers() -> None:
-    assert actions._action is action_core._action
-    assert actions.AUTO_REPAIR_CODES is AUTO_REPAIR_CODES
-    assert actions.SEMI_AUTO_REPAIR_CODES is SEMI_AUTO_REPAIR_CODES
-    assert actions._commands_for_validation_issue is validation_family._commands_for_validation_issue
-    assert actions._claim_safety_approval is validation_family._claim_safety_approval
-    assert actions._validation_actions is validation_family._validation_actions
-    assert actions._strict_content_actions is validation_family._strict_content_actions
 
 
 def test_validation_actions_build_section_scoped_commands_and_approval(tmp_path: Path) -> None:

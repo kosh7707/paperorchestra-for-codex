@@ -1,13 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.loop_engine.quality import actions
 from paperorchestra.loop_engine.quality.action_families import reproducibility
-
-
-def test_quality_actions_facade_reexports_reproducibility_family_helpers() -> None:
-    assert actions._mode_actions is reproducibility._mode_actions
-    assert actions._warning_actions is reproducibility._warning_actions
-    assert actions._fidelity_actions is reproducibility._fidelity_actions
 
 
 def test_mode_actions_classify_mock_provider_and_mixed_provenance() -> None:

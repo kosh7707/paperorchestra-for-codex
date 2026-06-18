@@ -11,18 +11,11 @@ from paperorchestra.manuscript.source_obligations import source_obligations_path
 from paperorchestra.reviews.fidelity import run_fidelity_audit
 from paperorchestra.reviews.reproducibility import build_reproducibility_audit, write_reproducibility_audit
 
-from .actions import (
-    _action,
-    _citation_actions,
-    _dedupe_actions,
-    _fidelity_actions,
-    _figure_review_actions,
-    _generated_placeholder_figure_actions,
-    _mode_actions,
-    _strict_content_actions,
-    _validation_actions,
-    _warning_actions,
-)
+from .action_core import _action
+from .action_families.figures import _figure_review_actions, _generated_placeholder_figure_actions
+from .action_families.reproducibility import _fidelity_actions, _mode_actions, _warning_actions
+from .action_families.validation import _strict_content_actions, _validation_actions
+from .actions import _citation_actions, _dedupe_actions
 from .citation_support import _citation_support_path
 from .eval import build_quality_eval
 from .provenance import _mixed_provenance_acceptance

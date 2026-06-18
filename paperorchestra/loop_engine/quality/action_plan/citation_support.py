@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.loop_engine.quality.actions import _action
+from paperorchestra.loop_engine.quality.action_core import _action
 from paperorchestra.loop_engine.quality.citation_gap import _citation_support_gap_classification
 from paperorchestra.loop_engine.quality.policy import CITATION_SUPPORT_REVIEW_REFRESH_CODES
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.loop_engine.quality.actions import _action
+from paperorchestra.loop_engine.quality.action_core import _action
 
 
 def _append_tier0_precondition_actions(actions: list[dict[str, Any]], tiers: dict[str, Any]) -> None:
