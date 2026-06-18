@@ -6,8 +6,8 @@ from paperorchestra.feedback import operator_records
 from paperorchestra.feedback.operator_contract import (
     OPERATOR_FEEDBACK_EXECUTION_SCHEMA_VERSION,
     OPERATOR_FEEDBACK_INCORPORATION_SCHEMA_VERSION,
-    OPERATOR_SOURCE,
 )
+from paperorchestra.feedback.operator_issue_contract import OPERATOR_SOURCE
 
 
 def test_build_operator_execution_record_preserves_imported_metadata(tmp_path: Path) -> None:

@@ -4,14 +4,16 @@ import json
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.feedback.operator_contract import (
-    ACTIONABLE_FAILURE_OWNER_CATEGORIES,
+from paperorchestra.feedback.operator_answer_metadata import (
     HUMAN_NEEDED_ANSWER_SCHEMA_VERSIONS,
     OPERATOR_FEEDBACK_INTENTS,
-    OPERATOR_FEEDBACK_SCHEMA_VERSION,
+    validate_operator_review_notes,
+)
+from paperorchestra.feedback.operator_contract import OPERATOR_FEEDBACK_SCHEMA_VERSION
+from paperorchestra.feedback.operator_issue_contract import (
+    ACTIONABLE_FAILURE_OWNER_CATEGORIES,
     OPERATOR_SOURCE,
     derive_operator_issue_id,
-    validate_operator_review_notes,
 )
 from paperorchestra.core.errors import ContractError
 

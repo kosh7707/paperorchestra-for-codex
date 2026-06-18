@@ -54,12 +54,6 @@ def _valid_metadata(packet_path: Path, packet: dict[str, object]) -> dict[str, o
     }
 
 
-def test_operator_contract_facade_exports_answer_metadata_helpers() -> None:
-    assert operator_contract._contains_forbidden_human_needed_metadata is answer._contains_forbidden_human_needed_metadata
-    assert operator_contract.validate_operator_review_notes is answer.validate_operator_review_notes
-    assert operator_contract._validate_human_needed_answer_metadata is answer._validate_human_needed_answer_metadata
-
-
 def test_review_notes_reject_raw_or_private_answer_fields() -> None:
     assert answer.validate_operator_review_notes({"decision": "ok", "nested": [{"answer": "redacted"}]}) == {
         "decision": "ok",

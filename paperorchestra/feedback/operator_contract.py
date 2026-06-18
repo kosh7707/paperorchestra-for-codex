@@ -7,31 +7,8 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import read_json, write_json
 from paperorchestra.core.models import utc_now_iso
 from paperorchestra.core.session import artifact_path, load_session
-# Compatibility facade: downstream operator modules import these answer
-# metadata and issue-contract helpers from operator_contract.py.
-from paperorchestra.feedback.operator_answer_metadata import (
-    HUMAN_NEEDED_ANSWER_SCHEMA_VERSIONS,
-    HUMAN_NEEDED_HANDOFF_TYPES,
-    HUMAN_NEEDED_METADATA_ALLOWED_KEYS,
-    HUMAN_NEEDED_METADATA_FORBIDDEN_KEYS,
-    HUMAN_NEEDED_METADATA_SCHEMA_VERSION,
-    HUMAN_NEEDED_PUBLIC_SCHEMA_VERSION,
-    HUMAN_NEEDED_SELECTED_SOURCE_ALLOWED_KEYS,
-    OPERATOR_FEEDBACK_INTENTS,
-    _contains_forbidden_human_needed_metadata,
-    _validate_human_needed_answer_metadata,
-    validate_operator_review_notes,
-)
-from paperorchestra.feedback.operator_issue_contract import (
-    ACTIONABLE_FAILURE_OWNER_CATEGORIES,
-    OPERATOR_SOURCE,
-    _action_for_issue,
-    _normalize_issue_text,
-    _normalize_operator_intent,
-    _owner_category_for_issue,
-    _validate_operator_issue,
-    derive_operator_issue_id,
-)
+from paperorchestra.feedback import operator_answer_metadata as _answer_metadata
+from paperorchestra.feedback import operator_issue_contract as _issues
 from paperorchestra.feedback.packet_artifacts import (
     _artifact_record,
     _file_sha256,
@@ -214,7 +191,7 @@ def build_operator_review_packet(
         "artifacts": artifacts,
         "operator_instructions": {
             "feedback_authoring": "external_omx_side",
-            "source": OPERATOR_SOURCE,
+            "source": _issues.OPERATOR_SOURCE,
             "not_independent_human_review": True,
             "must_not_claim_independent_review": True,
         },
@@ -273,20 +250,20 @@ def import_operator_feedback(
         raise ContractError("operator feedback must be a JSON object")
     if feedback.get("schema_version") != OPERATOR_FEEDBACK_SCHEMA_VERSION:
         raise ContractError("operator feedback has an unsupported schema_version")
-    if feedback.get("source") != OPERATOR_SOURCE or feedback.get("not_independent_human_review") is not True:
+    if feedback.get("source") != _issues.OPERATOR_SOURCE or feedback.get("not_independent_human_review") is not True:
         raise ContractError("operator feedback must be labeled source=codex_operator and not_independent_human_review=true")
     if feedback.get("packet_sha256") != packet.get("packet_sha256"):
         raise ContractError("operator feedback packet_sha256 does not match packet")
     if feedback.get("manuscript_sha256") != packet.get("manuscript_sha256"):
         raise ContractError("operator feedback manuscript_sha256 does not match packet")
-    intent = _normalize_operator_intent(feedback)
+    intent = _issues._normalize_operator_intent(feedback)
     issues = feedback.get("issues")
     if not isinstance(issues, list) or not issues:
         raise ContractError("operator feedback must include one or more issues")
-    imported_issues = [_validate_operator_issue(issue, packet) for issue in issues if isinstance(issue, dict)]
+    imported_issues = [_issues._validate_operator_issue(issue, packet) for issue in issues if isinstance(issue, dict)]
     if len(imported_issues) != len(issues):
         raise ContractError("operator feedback issues must all be JSON objects")
-    human_needed_answer = _validate_human_needed_answer_metadata(
+    human_needed_answer = _answer_metadata._validate_human_needed_answer_metadata(
         feedback.get("human_needed_answer"),
         packet,
         {str(issue.get("id") or "") for issue in imported_issues},
@@ -296,12 +273,12 @@ def import_operator_feedback(
     )
     operator_review_notes = None
     if "operator_review_notes" in feedback:
-        operator_review_notes = validate_operator_review_notes(feedback.get("operator_review_notes"))
+        operator_review_notes = _answer_metadata.validate_operator_review_notes(feedback.get("operator_review_notes"))
     imported = {
         "schema_version": OPERATOR_FEEDBACK_IMPORT_SCHEMA_VERSION,
         "imported_at": utc_now_iso(),
         "session_id": packet.get("session_id"),
-        "source": OPERATOR_SOURCE,
+        "source": _issues.OPERATOR_SOURCE,
         "not_independent_human_review": True,
         "packet_path": str(packet_path),
         "packet_sha256": packet.get("packet_sha256"),
@@ -311,7 +288,7 @@ def import_operator_feedback(
         "review_scope": packet.get("review_scope"),
         "intent": intent,
         "issues": imported_issues,
-        "translated_actions": [_action_for_issue(issue) for issue in imported_issues],
+        "translated_actions": [_issues._action_for_issue(issue) for issue in imported_issues],
     }
     if isinstance(feedback.get("rendered_pdf_no_issues"), dict):
         imported["rendered_pdf_no_issues"] = dict(feedback["rendered_pdf_no_issues"])
@@ -328,13 +305,13 @@ def _load_imported_feedback(imported_feedback_path: str | Path) -> dict[str, Any
     payload = read_json(imported_feedback_path)
     if not isinstance(payload, dict) or payload.get("schema_version") != OPERATOR_FEEDBACK_IMPORT_SCHEMA_VERSION:
         raise ContractError("imported operator feedback has an unsupported schema_version")
-    if payload.get("source") != OPERATOR_SOURCE or payload.get("not_independent_human_review") is not True:
+    if payload.get("source") != _issues.OPERATOR_SOURCE or payload.get("not_independent_human_review") is not True:
         raise ContractError("imported operator feedback lost non-independent provenance")
     packet = _read_packet(payload.get("packet_path"))
     if payload.get("packet_sha256") != packet.get("packet_sha256"):
         raise ContractError("imported operator feedback packet hash is stale")
     if "human_needed_answer" in payload:
-        _validate_human_needed_answer_metadata(
+        _answer_metadata._validate_human_needed_answer_metadata(
             payload.get("human_needed_answer"),
             packet,
             {str(issue.get("id") or "") for issue in payload.get("issues") or [] if isinstance(issue, dict)},
@@ -347,5 +324,5 @@ def _load_imported_feedback(imported_feedback_path: str | Path) -> dict[str, Any
             },
         )
     if "operator_review_notes" in payload:
-        validate_operator_review_notes(payload.get("operator_review_notes"))
+        _answer_metadata.validate_operator_review_notes(payload.get("operator_review_notes"))
     return payload

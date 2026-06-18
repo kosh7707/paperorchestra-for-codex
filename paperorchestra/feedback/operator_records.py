@@ -7,8 +7,8 @@ from paperorchestra.core.models import utc_now_iso
 from paperorchestra.feedback.operator_contract import (
     OPERATOR_FEEDBACK_EXECUTION_SCHEMA_VERSION,
     OPERATOR_FEEDBACK_INCORPORATION_SCHEMA_VERSION,
-    OPERATOR_SOURCE,
 )
+from paperorchestra.feedback.operator_issue_contract import OPERATOR_SOURCE
 from paperorchestra.feedback.packet_artifacts import _file_sha256
 
 

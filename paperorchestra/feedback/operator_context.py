@@ -6,7 +6,8 @@ from typing import Any
 from paperorchestra.core.boundary import sanitize_author_facing_text
 from paperorchestra.core.io import write_json
 from paperorchestra.core.session import artifact_path
-from paperorchestra.feedback.operator_contract import OPERATOR_SOURCE, _read_packet
+from paperorchestra.feedback.operator_contract import _read_packet
+from paperorchestra.feedback.operator_issue_contract import OPERATOR_SOURCE
 from paperorchestra.feedback.operator_contexts import citations as _citations
 from paperorchestra.feedback.operator_contexts import claims as _claims
 from paperorchestra.feedback.operator_contexts import figures as _figures

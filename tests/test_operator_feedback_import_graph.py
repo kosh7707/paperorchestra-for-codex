@@ -15,16 +15,22 @@ def _imports_from(path: str, module: str) -> list[str]:
 
 def test_normalization_imports_operator_contract_directly() -> None:
     assert _imports_from("paperorchestra/feedback/normalization.py", "paperorchestra.feedback.operator_feedback") == []
+    assert _imports_from("paperorchestra/feedback/normalization.py", "paperorchestra.feedback.operator_contract") == [
+        "OPERATOR_FEEDBACK_SCHEMA_VERSION"
+    ]
     assert set(
-        _imports_from("paperorchestra/feedback/normalization.py", "paperorchestra.feedback.operator_contract")
+        _imports_from("paperorchestra/feedback/normalization.py", "paperorchestra.feedback.operator_answer_metadata")
     ) >= {
-        "ACTIONABLE_FAILURE_OWNER_CATEGORIES",
         "HUMAN_NEEDED_ANSWER_SCHEMA_VERSIONS",
         "OPERATOR_FEEDBACK_INTENTS",
-        "OPERATOR_FEEDBACK_SCHEMA_VERSION",
+        "validate_operator_review_notes",
+    }
+    assert set(
+        _imports_from("paperorchestra/feedback/normalization.py", "paperorchestra.feedback.operator_issue_contract")
+    ) >= {
+        "ACTIONABLE_FAILURE_OWNER_CATEGORIES",
         "OPERATOR_SOURCE",
         "derive_operator_issue_id",
-        "validate_operator_review_notes",
     }
 
 

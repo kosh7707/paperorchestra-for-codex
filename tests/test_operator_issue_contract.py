@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.feedback import operator_contract
 from paperorchestra.feedback import operator_issue_contract as issues
 
 
@@ -31,14 +30,6 @@ def _issue(**overrides: object) -> dict[str, object]:
     )
     base.update(overrides)
     return base
-
-
-def test_operator_contract_facade_exports_issue_contract_helpers() -> None:
-    assert operator_contract.derive_operator_issue_id is issues.derive_operator_issue_id
-    assert operator_contract._validate_operator_issue is issues._validate_operator_issue
-    assert operator_contract._owner_category_for_issue is issues._owner_category_for_issue
-    assert operator_contract._action_for_issue is issues._action_for_issue
-    assert operator_contract._normalize_operator_intent is issues._normalize_operator_intent
 
 
 def test_derive_operator_issue_id_normalizes_whitespace_case_in_text_fields() -> None:
