@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.research import dates as _dates
 from paperorchestra.research.literature_sources import (
     _openalex_abstract,
     _title_from_openalex,
@@ -10,11 +9,11 @@ from paperorchestra.research.literature_sources import (
     search_openalex,
     search_semantic_scholar,
 )
+from paperorchestra.research.literature_candidate_accumulator import CandidateAccumulator
 from paperorchestra.research.matching import (
     _is_exact_seed_query,
     _seed_query_matches_result,
     grounded_result_is_relevant,
-    normalize_title,
 )
 
 
@@ -26,35 +25,8 @@ def build_search_grounded_candidates(
     per_source_limit: int = 3,
     mode: str = "live",
 ) -> tuple[dict[str, list[dict[str, Any]]], list[str]]:
-    payload: dict[str, list[dict[str, Any]]] = {"macro_candidates": [], "micro_candidates": []}
-    seen_titles: set[str] = set()
-    candidate_index: dict[str, dict[str, Any]] = {}
+    accumulator = CandidateAccumulator(cutoff_date=cutoff_date)
     notes: list[str] = []
-
-    def _append_candidate(*, bucket: str, title: str, why_relevant: str, origin_query: str, discovery_source: str, year: int | None, publication_date: str | None = None) -> None:
-        normalized = normalize_title(title)
-        if not normalized or normalized in seen_titles:
-            existing = candidate_index.get(normalized)
-            if existing is not None:
-                sources = existing.setdefault("discovery_sources", [])
-                if discovery_source not in sources:
-                    sources.append(discovery_source)
-            if not normalized:
-                return
-            return
-        if not _dates.year_month_passes_cutoff(year, cutoff_date, publication_date):
-            return
-        seen_titles.add(normalized)
-        candidate = {
-            "title_guess": title,
-            "why_relevant": why_relevant,
-            "origin_query": origin_query,
-            "role_guess": "macro" if bucket == "macro_candidates" else "micro",
-            "discovery_source": discovery_source,
-            "discovery_sources": [discovery_source],
-        }
-        payload[bucket].append(candidate)
-        candidate_index[normalized] = candidate
 
     for idx, query in enumerate(queries):
         bucket = "macro_candidates" if idx < macro_query_count else "micro_candidates"
@@ -62,7 +34,7 @@ def build_search_grounded_candidates(
         matched_any = False
         if mode == "mock":
             for source in ("semantic_scholar", "openalex"):
-                _append_candidate(
+                accumulator.append_candidate(
                     bucket=bucket,
                     title=query.strip(),
                     why_relevant=f"Recovered via {source} mock grounded search for query: {query}",
@@ -89,7 +61,7 @@ def build_search_grounded_candidates(
                 continue
             if not grounded_result_is_relevant(query, title, abstract):
                 continue
-            _append_candidate(
+            accumulator.append_candidate(
                 bucket=bucket,
                 title=title,
                 why_relevant=abstract or f"Recovered via Semantic Scholar grounded search for query: {query}",
@@ -115,7 +87,7 @@ def build_search_grounded_candidates(
                 continue
             if not grounded_result_is_relevant(query, title, abstract):
                 continue
-            _append_candidate(
+            accumulator.append_candidate(
                 bucket=bucket,
                 title=title,
                 why_relevant=abstract or f"Recovered via OpenAlex grounded search for query: {query}",
@@ -127,7 +99,7 @@ def build_search_grounded_candidates(
             matched_any = True
 
         if exact_seed_query and not matched_any:
-            _append_candidate(
+            accumulator.append_candidate(
                 bucket=bucket,
                 title=query.strip(),
                 why_relevant=f"Preserved exact grounded seed from the session materials: {query}",
@@ -138,4 +110,4 @@ def build_search_grounded_candidates(
             )
             notes.append(f"Exact grounded seed preserved without matching live result: {query}")
 
-    return payload, notes
+    return accumulator.payload, notes
