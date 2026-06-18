@@ -1,17 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.reviews import reproducibility_citations, reproducibility_payloads
-
-
-def test_reproducibility_citations_facade_reexports_payload_validators() -> None:
-    assert (
-        reproducibility_citations._is_valid_verified_paper_payload
-        is reproducibility_payloads._is_valid_verified_paper_payload
-    )
-    assert (
-        reproducibility_citations._is_valid_citation_map_entry
-        is reproducibility_payloads._is_valid_citation_map_entry
-    )
+from paperorchestra.reviews import reproducibility_payloads
 
 
 def test_verified_paper_payload_validator_accepts_realistic_registry_entry() -> None:

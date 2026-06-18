@@ -11,14 +11,7 @@ from paperorchestra.reviews.reproducibility_artifacts import (
     _read_json_if_exists,
     _read_json_payload_if_exists,
 )
-from paperorchestra.reviews.reproducibility_payloads import (
-    _is_external_id_value,
-    _is_optional_int,
-    _is_optional_real,
-    _is_string_list,
-    _is_valid_citation_map_entry,
-    _is_valid_verified_paper_payload,
-)
+from paperorchestra.reviews import reproducibility_payloads as _payloads
 
 
 def _bibtex_keys_from_text(text: str) -> set[str]:
@@ -75,7 +68,7 @@ def _registry_surface_health(registry_exists: bool, registry_payload: Any) -> tu
     registry_keys: set[str] = set()
     registry_alias_keys: set[str] = set()
     for item in registry_payload:
-        if not _is_valid_verified_paper_payload(item):
+        if not _payloads._is_valid_verified_paper_payload(item):
             invalid += 1
             continue
         key = item.get("bibtex_key")
@@ -101,7 +94,7 @@ def _citation_map_surface_health(citation_map_exists: bool, citation_map_payload
     citation_map_keys: set[str] = set()
     citation_map_canonical_keys: set[str] = set()
     for key, entry in citation_map_payload.items():
-        if not _is_valid_citation_map_entry(key, entry):
+        if not _payloads._is_valid_citation_map_entry(key, entry):
             invalid += 1
             continue
         citation_map_keys.add(key.strip())
