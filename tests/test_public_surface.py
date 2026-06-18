@@ -44,7 +44,29 @@ class PublicSurfaceTest(unittest.TestCase):
         )
 
     def test_mcp_surface_is_small_and_handler_backed(self) -> None:
-        names = {tool["name"] for tool in TOOLS}
+        ordered_names = [tool["name"] for tool in TOOLS]
+        names = set(ordered_names)
+        self.assertEqual(
+            ordered_names,
+            [
+                "status",
+                "init_session",
+                "inspect_state",
+                "orchestrate",
+                "research_prior_work",
+                "import_prior_work",
+                "write_sections",
+                "critique",
+                "quality_gate",
+                "qa_loop",
+                "qa_loop_step",
+                "ralph_start",
+                "compile_current_paper",
+                "answer_human_needed",
+                "export_current",
+                "run_pipeline",
+            ],
+        )
         self.assertEqual(
             names,
             {
