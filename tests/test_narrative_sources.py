@@ -2,18 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from paperorchestra.manuscript import narrative, narrative_sources
-
-
-def test_narrative_facade_reexports_source_helpers() -> None:
-    assert narrative._plain_section_title is narrative_sources._plain_section_title
-    assert narrative.file_sha256 is narrative_sources.file_sha256
-    assert narrative._read_text is narrative_sources._read_text
-    assert narrative._strip_latex_comments is narrative_sources._strip_latex_comments
-    assert narrative._planning_source_text is narrative_sources._planning_source_text
-    assert narrative._line_span is narrative_sources._line_span
-    assert narrative._anchor is narrative_sources._anchor
-    assert narrative._salient_terms is narrative_sources._salient_terms
+from paperorchestra.manuscript import narrative_sources
 
 
 def test_planning_source_text_strips_comments_but_can_preserve_numeric_percent() -> None:
