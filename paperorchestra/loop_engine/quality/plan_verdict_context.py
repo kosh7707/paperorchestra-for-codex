@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .history import _failing_codes_from_quality_eval
+from .history_eval import _failing_codes_from_quality_eval
 
 
 @dataclass(frozen=True)

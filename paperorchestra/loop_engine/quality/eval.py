@@ -19,7 +19,8 @@ from paperorchestra.loop_engine.quality.eval_structural import build_structural_
 from paperorchestra.loop_engine.quality.eval_tiers import (
     _skipped_tier,
 )
-from paperorchestra.loop_engine.quality.history import _build_cross_iteration, _failing_codes_from_quality_eval
+from paperorchestra.loop_engine.quality.history_cross_iteration import _build_cross_iteration
+from paperorchestra.loop_engine.quality.history_eval import _failing_codes_from_quality_eval
 from paperorchestra.loop_engine.quality.policy import DEFAULT_MAX_ITERATIONS, QUALITY_MODES
 from paperorchestra.loop_engine.quality.provenance_trust import _provenance_trust
 from paperorchestra.loop_engine.quality.ralph_evidence_check import _ralph_evidence_check

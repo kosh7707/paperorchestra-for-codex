@@ -8,7 +8,7 @@ from paperorchestra.core.models import utc_now_iso
 from paperorchestra.core.session import artifact_path, load_session, save_session
 from paperorchestra.engine.refine_stages import refine_current_paper
 from paperorchestra.loop_engine.quality.gate_dimensions import build_quality_gate_dimension_bundle
-from paperorchestra.loop_engine.quality.history import _failing_codes_from_quality_eval
+from paperorchestra.loop_engine.quality.history_eval import _failing_codes_from_quality_eval
 from paperorchestra.loop_engine.quality.loop import write_quality_eval, write_quality_loop_plan
 
 QUALITY_GATE_SCHEMA_VERSION = "quality-gate/1"

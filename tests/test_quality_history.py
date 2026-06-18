@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 
 from paperorchestra.core.session import runtime_root
-from paperorchestra.loop_engine.quality.history import _build_cross_iteration, _failing_codes_from_quality_eval
+from paperorchestra.loop_engine.quality.history_cross_iteration import _build_cross_iteration
+from paperorchestra.loop_engine.quality.history_eval import _failing_codes_from_quality_eval
 from paperorchestra.loop_engine.quality.policy import HISTORY_FILENAME
 
 

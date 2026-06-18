@@ -6,7 +6,8 @@ from typing import Any
 
 from paperorchestra.core.models import utc_now_iso
 
-from .history import _failing_codes_from_quality_eval, _tier_statuses, quality_loop_history_path
+from .history_eval import _failing_codes_from_quality_eval, _tier_statuses
+from .history_io import quality_loop_history_path
 from .policy import BUDGET_CONSUMING_HISTORY_EVENTS
 from .utils import _file_sha256, _sha256_jsonable
 

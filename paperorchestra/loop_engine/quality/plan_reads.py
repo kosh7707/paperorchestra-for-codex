@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .history import _failing_codes_from_quality_eval, _tier_statuses
+from .history_eval import _failing_codes_from_quality_eval, _tier_statuses
 from .utils import _path_ref
 
 
