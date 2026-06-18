@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from paperorchestra.core.session import set_current_session
-from paperorchestra.engine import research_stages, research_verification_errors
+from paperorchestra.engine import research_verification_errors
 
 
 def test_record_verification_errors_noops_without_errors(tmp_path) -> None:
