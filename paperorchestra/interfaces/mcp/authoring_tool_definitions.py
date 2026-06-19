@@ -69,6 +69,9 @@ AUTHORING_TOOLS: list[JSON] = [
                 "citation_evidence_mode": {"type": "string", "enum": ["heuristic", "model", "web", "source"]},
                 "citation_provider": {"type": "string"},
                 "citation_provider_command": {"type": "string"},
+                "background": {"type": "boolean"},
+                "background_dir": {"type": "string"},
+                "strict_omx_native": {"type": "boolean"},
             }
         ),
     },

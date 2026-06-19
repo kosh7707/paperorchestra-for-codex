@@ -242,6 +242,15 @@
         },
         "citation_provider_command": {
           "type": "string"
+        },
+        "background": {
+          "type": "boolean"
+        },
+        "background_dir": {
+          "type": "string"
+        },
+        "strict_omx_native": {
+          "type": "boolean"
         }
       }
     }

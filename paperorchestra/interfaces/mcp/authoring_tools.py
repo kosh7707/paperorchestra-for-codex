@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+import time
+import uuid
 from pathlib import Path
 
+from paperorchestra.core.io import write_json
 from paperorchestra.core.session import load_session
 from paperorchestra.engine.authoring_round import run_authoring_round
 from paperorchestra.engine.pipeline import run_pipeline
@@ -50,6 +56,8 @@ def tool_authoring_round(arguments: JSON) -> JSON:
     provider_name = arguments.get("provider", "mock")
     evidence_mode = arguments.get("citation_evidence_mode") or ("heuristic" if provider_name == "mock" else "web")
     provider_command = arguments.get("provider_command")
+    if _should_background_authoring_round(arguments):
+        return ok(_start_background_authoring_round(cwd, arguments, evidence_mode=evidence_mode))
     return ok(
         run_authoring_round(
             cwd,
@@ -74,6 +82,95 @@ def tool_authoring_round(arguments: JSON) -> JSON:
             provider_command=provider_command,
         )
     )
+
+
+def _should_background_authoring_round(arguments: JSON) -> bool:
+    if "background" in arguments:
+        return bool(arguments.get("background"))
+    return bool(arguments.get("require_web_research") or arguments.get("require_live_critic"))
+
+
+def _start_background_authoring_round(cwd: Path, arguments: JSON, *, evidence_mode: str) -> JSON:
+    job_dir = Path(arguments.get("background_dir") or cwd / ".paper-orchestra" / "mcp-jobs").resolve()
+    job_dir.mkdir(parents=True, exist_ok=True)
+    job_id = f"authoring-round-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
+    stdout_path = job_dir / f"{job_id}.stdout.json"
+    stderr_path = job_dir / f"{job_id}.stderr.log"
+    meta_path = job_dir / f"{job_id}.json"
+    argv = _authoring_round_cli_argv(arguments, evidence_mode=evidence_mode)
+    env = os.environ.copy()
+    env.setdefault("PYTHONUNBUFFERED", "1")
+    with stdout_path.open("w", encoding="utf-8") as stdout, stderr_path.open("w", encoding="utf-8") as stderr:
+        proc = subprocess.Popen(
+            argv,
+            cwd=cwd,
+            stdout=stdout,
+            stderr=stderr,
+            text=True,
+            start_new_session=True,
+            env=env,
+        )
+    payload = {
+        "status": "started",
+        "mode": "background",
+        "job_id": job_id,
+        "pid": proc.pid,
+        "cwd": str(cwd),
+        "command": argv,
+        "stdout": str(stdout_path),
+        "stderr": str(stderr_path),
+        "metadata": str(meta_path),
+        "poll": {
+            "status": f"paperorchestra status --json  # cwd={cwd}",
+            "tail_stderr": f"tail -f {stderr_path}",
+            "read_stdout_when_done": str(stdout_path),
+        },
+        "reason": "Live/web authoring rounds can exceed the MCP client tools/call timeout, so the MCP tool started a detached job and returned immediately.",
+    }
+    write_json(meta_path, payload)
+    return payload
+
+
+def _authoring_round_cli_argv(arguments: JSON, *, evidence_mode: str) -> list[str]:
+    argv = [sys.executable, "-m", "paperorchestra.cli", "authoring-round"]
+    _append_option(argv, "--round-dir", arguments.get("round_dir"))
+    _append_option(argv, "--only-sections", _string_or_joined(arguments.get("only_sections")))
+    _append_option(argv, "--output-tex", arguments.get("output_path"))
+    _append_flag(argv, "--claim-safe", arguments.get("claim_safe"))
+    _append_flag(argv, "--bypass-plan-gate", arguments.get("bypass_plan_gate"))
+    _append_flag(argv, "--skip-literature", arguments.get("skip_literature"))
+    _append_flag(argv, "--no-import-literature", arguments.get("no_import_literature"))
+    _append_flag(argv, "--require-complete-metadata", arguments.get("require_complete_metadata"))
+    _append_flag(argv, "--require-web-research", arguments.get("require_web_research"))
+    _append_flag(argv, "--skip-critic", arguments.get("skip_critic"))
+    _append_flag(argv, "--require-live-critic", arguments.get("require_live_critic"))
+    _append_flag(argv, "--compile", arguments.get("compile_paper"))
+    _append_option(argv, "--citation-evidence-mode", evidence_mode)
+    _append_option(argv, "--runtime-mode", arguments.get("runtime_mode"))
+    _append_flag(argv, "--strict-omx-native", arguments.get("strict_omx_native"))
+    _append_option(argv, "--provider", arguments.get("provider"))
+    _append_option(argv, "--provider-command", arguments.get("provider_command"))
+    _append_option(argv, "--citation-provider", arguments.get("citation_provider"))
+    _append_option(argv, "--citation-provider-command", arguments.get("citation_provider_command"))
+    return argv
+
+
+def _append_option(argv: list[str], flag: str, value: object | None) -> None:
+    if value not in {None, ""}:
+        argv.extend([flag, str(value)])
+
+
+def _append_flag(argv: list[str], flag: str, enabled: object | None) -> None:
+    if bool(enabled):
+        argv.append(flag)
+
+
+def _string_or_joined(value: object | None) -> str | None:
+    if isinstance(value, list):
+        return ",".join(str(item) for item in value)
+    if value in {None, ""}:
+        return None
+    return str(value)
 
 
 def tool_write_sections(arguments: JSON) -> JSON:

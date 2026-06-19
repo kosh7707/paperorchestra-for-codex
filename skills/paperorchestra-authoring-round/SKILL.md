@@ -19,11 +19,19 @@ For revision rounds, keep the same artifact chain but scope writing with `only_s
 
 ## Preferred execution
 
-Prefer the MCP tool when attached:
+Prefer the MCP tool when attached. For live/web first-draft rounds, run it as a background job so Codex MCP clients do not hit their `tools/call` timeout while the provider is still working:
 
 ```text
-authoring_round(cwd=..., citation_evidence_mode="web", require_web_research=true when the user expects live search)
+authoring_round(
+  cwd=...,
+  citation_evidence_mode="web",
+  require_web_research=true,
+  require_live_critic=true,
+  background=true
+)
 ```
+
+If `background` is omitted, the MCP tool automatically backgrounds rounds that request `require_web_research` or `require_live_critic`. Poll `paperorchestra status --json`, tail the returned stderr log, and read the returned stdout JSON when the job exits.
 
 CLI fallback:
 
@@ -42,7 +50,7 @@ Use `--skip-literature`, `--skip-critic`, or `--citation-evidence-mode heuristic
 2. Check for `paper-plan.md` with an author-approval marker such as `<!-- paperorchestra:plan-approved -->`. If missing, route to `$paperorchestra-plan` unless the user explicitly bypassed planning.
 3. Run one `authoring_round` so pre-draft literature/positioning happens before manuscript writing.
 4. If TeX is configured, compile in the round; otherwise record compile as skipped.
-5. Inspect `authoring-round.manifest.json`, `positioning_brief.md`, `paper.full.tex`, `citation_support_review.json`, and `revision_suggestions.json`.
+5. If the MCP call returns `mode=background`, poll/tail the returned job paths until the underlying CLI finishes; then inspect `authoring-round.manifest.json`, `positioning_brief.md`, `paper.full.tex`, `citation_support_review.json`, and `revision_suggestions.json`.
 6. Route to `$paperorchestra-quality-gate` only after the round has real review artifacts or the user asks for a gate.
 
 ## Edit boundaries
