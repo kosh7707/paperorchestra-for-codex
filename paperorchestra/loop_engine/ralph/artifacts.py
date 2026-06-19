@@ -7,7 +7,7 @@ from typing import Any
 
 from paperorchestra.core.io import write_json
 from paperorchestra.engine.research_verification_stage import build_bib
-from paperorchestra.reviews.citation_integrity import write_citation_integrity_audit
+from paperorchestra.reviews.citation_integrity_audit import write_citation_integrity_audit
 from paperorchestra.reviews.citation_integrity_gate import write_citation_integrity_critic
 from paperorchestra.reviews.citation_rendered_references import write_rendered_reference_audit
 from .state import _next_execution_path
@@ -81,5 +81,4 @@ def _write_execution_artifact(cwd: str | Path | None, payload: dict[str, Any]) -
         ).hexdigest()
     write_json(path, payload)
     return path
-
 

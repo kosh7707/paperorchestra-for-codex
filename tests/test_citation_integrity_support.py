@@ -6,10 +6,11 @@ from types import SimpleNamespace
 from paperorchestra.core.models import ArtifactIndex, InputBundle, SessionState, utc_now_iso
 from paperorchestra.core.session import save_session, set_current_session
 from paperorchestra.reviews import citation_claim_context as claim_context
-from paperorchestra.reviews import citation_integrity as integrity
 from paperorchestra.reviews import citation_placement_roles as placement_roles
 from paperorchestra.reviews.citation_claim_context import _claim_map_by_key, _claim_map_context_violations
-from paperorchestra.reviews.citation_integrity_helpers import _duplicate_support_failures
+from paperorchestra.reviews.citation_integrity_audit import write_citation_integrity_audit
+from paperorchestra.reviews.citation_integrity_helpers import _duplicate_support_failures, _role_tokens
+from paperorchestra.reviews.citation_intent import build_citation_intent_plan
 from paperorchestra.reviews.citation_placement_roles import _placement_roles
 from paperorchestra.reviews.citation_support_v3 import _support_items_from_v3_cases
 
@@ -113,12 +114,12 @@ def test_claim_map_context_violations_flag_own_contribution_citations_and_missin
     assert _claim_map_context_violations(state) == ["own", "required"]
 
 
-def test_build_citation_intent_plan_uses_reexported_role_tokens(tmp_path: Path) -> None:
+def test_build_citation_intent_plan_uses_role_tokens(tmp_path: Path) -> None:
     _write_citation_session(tmp_path, session_id="intent-test")
 
-    payload = integrity.build_citation_intent_plan(tmp_path)
+    payload = build_citation_intent_plan(tmp_path)
 
-    assert integrity._role_tokens("compat") == {"compat"}
+    assert _role_tokens("compat") == {"compat"}
     assert payload["status"] == "pass"
     assert payload["items"][0]["claim_ids"] == ["C1"]
     assert payload["items"][0]["citation_roles"] == ["motivation", "prior_work"]
@@ -128,7 +129,7 @@ def test_build_citation_intent_plan_uses_reexported_role_tokens(tmp_path: Path) 
 def test_write_citation_integrity_audit_keeps_audit_builder_imports_live(tmp_path: Path) -> None:
     _write_citation_session(tmp_path, session_id="audit-test")
 
-    path, payload = integrity.write_citation_integrity_audit(tmp_path)
+    path, payload = write_citation_integrity_audit(tmp_path)
 
     assert path.exists()
     assert payload["schema_version"] == "citation-integrity-audit/1"

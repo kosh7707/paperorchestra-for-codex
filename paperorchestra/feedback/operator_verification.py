@@ -11,7 +11,7 @@ from paperorchestra.engine.review_stages import (
     write_figure_placement_review,
 )
 from paperorchestra.loop_engine.quality.loop import write_quality_eval, write_quality_loop_plan
-from paperorchestra.reviews.citation_integrity import write_citation_integrity_audit
+from paperorchestra.reviews.citation_integrity_audit import write_citation_integrity_audit
 from paperorchestra.reviews.citation_integrity_gate import write_citation_integrity_critic
 from paperorchestra.reviews.citation_rendered_references import write_rendered_reference_audit
 from paperorchestra.reviews.citation_model_writer import write_citation_support_review

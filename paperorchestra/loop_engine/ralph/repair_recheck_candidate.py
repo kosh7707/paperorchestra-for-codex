@@ -17,7 +17,7 @@ from paperorchestra.loop_engine.ralph.repair_recheck_metrics import (
 )
 from paperorchestra.loop_engine.ralph.state import _read_json
 from paperorchestra.manuscript.source_obligations import evaluate_source_obligations
-from paperorchestra.reviews.citation_integrity import build_citation_integrity_audit
+from paperorchestra.reviews.citation_integrity_audit import build_citation_integrity_audit
 
 
 def _candidate_semantic_recheck(
