@@ -24,6 +24,7 @@ def test_all_paperorchestra_skills_have_omx_guidance() -> None:
         "paperorchestra",
         "paperorchestra-authoring-round",
         "paperorchestra-intake",
+        "paperorchestra-figure",
         "paperorchestra-live-review",
         "paperorchestra-plan",
         "paperorchestra-quality-gate",

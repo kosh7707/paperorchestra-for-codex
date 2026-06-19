@@ -29,8 +29,12 @@ Use `../paperorchestra/references/academic-writing.md` for manuscript-quality ch
 - section rhetorical alignment;
 - sentence-intent alignment;
 - claim-evidence-boundary alignment;
+- figure-caption alignment and figure placement;
+- figure artifacts: `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, `figure-placement-review.json`, `figure_gate.report.json`;
 - Related Work positioning quality;
 - whether paper-likeness failures are machine-actionable or require the author.
+
+For a figure-bearing manuscript, treat figure artifact availability as `present / missing / stale / not applicable`. Missing or stale expected figure artifacts are quality-gate blockers: route to `$paperorchestra-figure` instead of marking the figure/caption/placement accepted.
 
 ## OMX companion routing
 
@@ -41,6 +45,7 @@ Quality gate decides the next state; it does not silently perform an unbounded r
 - `$autoresearch`: gate failures are citation/source-evidence gaps that can be solved by research.
 - `$best-practice-research`: failures concern venue norms, conventional phrasing, section shape, or reviewer expectations.
 - `$ultraqa`: fresh live review and quality artifacts exist and the next need is adversarial final QA.
+- `$paperorchestra-figure`: failures concern figure-caption alignment, figure placement, unsupported visuals, or one-column/two-column readability.
 
 ## Stop states
 

@@ -27,6 +27,7 @@ Use `../paperorchestra/references/academic-writing.md` as the critic rubric when
 - Does each paragraph and sentence intent move the reader?
 - Does Related Work position the manuscript rather than summarize papers?
 - Are strong claims tied to evidence, citations, or caveats?
+- Is every figure necessary, or is the figure decorative? If a figure is decorative, unsupported, unreadable, weak-caption, or mispositioned, route the finding to `$paperorchestra-figure`.
 
 ## OMX companion routing
 
@@ -36,6 +37,7 @@ Live review should stop after reporting evidence, but it must name the right fol
 - `$best-practice-research`: the critic flags venue conventions, section structure, terminology, or related-work positioning as nonstandard.
 - `$ralph`: review findings are machine-actionable and the user wants a persistent repair loop over PaperOrchestra artifacts.
 - `$ultraqa`: live review is already fresh and the user wants hostile final-readiness checks rather than another normal review.
+- `$paperorchestra-figure`: figure is decorative, unsupported, unreadable, weak-caption, mispositioned, or needs `figure`/`figure*` placement repair.
 
 ## Run live review
 

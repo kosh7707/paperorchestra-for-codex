@@ -72,10 +72,11 @@ Use mock providers or `--citation-evidence-mode heuristic` only for explicit loc
 
 1. Start with `$paperorchestra-status` and identify the current session/materials.
 2. Check for `paper-plan.md` with an author-approval marker such as `<!-- paperorchestra:plan-approved -->`. If missing, route to `$paperorchestra-plan` unless the user explicitly bypassed planning.
-3. Run one `authoring_round` so pre-draft literature/positioning happens before manuscript writing.
-4. If TeX is configured, compile in the round; otherwise record compile as skipped.
-5. If the MCP/source authoring-round returns `mode=background`, poll/tail the returned job paths until the underlying CLI finishes; then inspect `authoring-round.manifest.json`, `positioning_brief.md`, `paper.full.tex`, `citation_support_review.json`, and `revision_suggestions.json`. In installed staged fallback mode, `authoring-round.manifest.json` may not exist; inspect the stage artifacts actually produced by each command.
-6. Route to `$paperorchestra-quality-gate` only after the round has real review artifacts or the user asks for a gate.
+3. If a figure-dependent section needs a pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figure before prose can be coherent, route to `$paperorchestra-figure` before finalizing that section.
+4. Run one `authoring_round` so pre-draft literature/positioning happens before manuscript writing.
+5. If TeX is configured, compile in the round; otherwise record compile as skipped.
+6. If the MCP/source authoring-round returns `mode=background`, poll/tail the returned job paths until the underlying CLI finishes; then inspect `authoring-round.manifest.json`, `positioning_brief.md`, `paper.full.tex`, `citation_support_review.json`, and `revision_suggestions.json`. In installed staged fallback mode, `authoring-round.manifest.json` may not exist; inspect the stage artifacts actually produced by each command.
+7. Route to `$paperorchestra-quality-gate` only after the round has real review artifacts or the user asks for a gate.
 
 ## Edit boundaries
 

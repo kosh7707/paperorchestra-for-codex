@@ -1,0 +1,4 @@
+name: paperorchestra-figure
+display_name: PaperOrchestra Figure
+short_description: Design and validate evidence-bearing paper figures.
+default_prompt: Use $paperorchestra-figure to design or review a paper figure with claim, caption, and LaTeX placement alignment.

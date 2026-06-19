@@ -33,6 +33,7 @@ For sibling workflow skills, the same guide is available at `../paperorchestra/r
 - `$paperorchestra-setup`: verify install/session/provider/compile readiness before a real paper loop.
 - `$paperorchestra-intake`: interview the author and inventory materials when thesis, paper type, venue, experiment basis, or claim boundaries are not locked.
 - `$paperorchestra-plan`: create or revise `paper-plan.md` for author approval before manuscript drafting.
+- `$paperorchestra-figure`: design, generate, or review pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures with claim/caption/placement alignment.
 - `$paperorchestra-live-review`: run a real live/model/web critic lane and report trust tiers without silently using mock/heuristic paths.
 - `$paperorchestra-quality-gate`: run bounded validation/quality/QA state transitions and stop on `human_needed`, `failed`, or `ready_for_human_finalization`.
 - `$paperorchestra-authoring-round`: perform one evidence-bearing first-draft or revision round after plan approval.
@@ -54,6 +55,7 @@ PaperOrchestra owns paper state and artifacts; OMX companion skills supply orche
 - `$ultraqa`: final adversarial QA or hostile readiness checks are requested after live review and quality-gate artifacts exist.
 
 Keep the explicit PaperOrchestra skill as the paper workflow owner. For example, use `$paperorchestra-authoring-round + $ultrawork` for parallel first-draft preparation, not raw parallel agents that bypass the paper session.
+Use `$paperorchestra-figure` when a manuscript needs pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures; figure work must stay tied to supported claims, source evidence, captions, and one-column/two-column placement.
 
 ## High-level orchestrator surface
 

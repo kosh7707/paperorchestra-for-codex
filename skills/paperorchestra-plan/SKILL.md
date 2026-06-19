@@ -47,9 +47,10 @@ failure mode if omitted:
 4. Propose a concise section structure. Avoid placeholder section names like “Problem”, “Approach”, or “Findings” unless the target venue commonly uses them.
 5. Map every section to why it exists and what evidence it uses.
 6. Propose tables/figures with TODO cells where final numbers are not available.
-7. Propose related-work search clusters and known seed papers, but do not fabricate citations.
-8. Write `paper-plan.md` in the output workspace.
-9. Stop for author approval or revision. Recommend `$paperorchestra-authoring-round` only after approval.
+7. For each planned figure, include figure rhetorical job, supported claim, source evidence, caption contract, placement contract (`figure` vs `figure*` when known), output form, and TODO/final-artwork status. Route complex pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures to `$paperorchestra-figure`.
+8. Propose related-work search clusters and known seed papers, but do not fabricate citations.
+9. Write `paper-plan.md` in the output workspace.
+10. Stop for author approval or revision. Recommend `$paperorchestra-authoring-round` only after approval.
 
 ## paper-plan.md shape
 
@@ -81,7 +82,13 @@ For each section:
 ## Tables and figures
 - table/figure:
 - purpose:
+- figure rhetorical job:
+- supported claim:
 - source evidence:
+- caption contract:
+- placement contract:
+- output form:
+- TODO/final-artwork status:
 - TODO fields:
 
 ## Related-work plan
