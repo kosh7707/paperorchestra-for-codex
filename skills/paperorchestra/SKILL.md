@@ -13,6 +13,16 @@ PaperOrchestra v1 produces auditable paper-writing artifacts; it does **not** ce
 
 If there is insufficient material, that blocks drafting. Do not fabricate claims, citations, figures, or results. Ask for a material upload/path or route to `$paperorchestra-status` instead. For “바로 써줘”, reject unsafe drafting when factual materials are missing.
 
+## Academic writing doctrine
+
+When a task involves paper planning, drafting, review, or repair, use `references/academic-writing.md`. Treat every manuscript as a paper-typed claim structure, not an information dump:
+
+```text
+Phenomenon → Gap → Contribution → Evidence → Boundary → Implication
+```
+
+For sibling workflow skills, the same guide is available at `../paperorchestra/references/academic-writing.md` after installation.
+
 ## Route by intent
 
 - `$paperorchestra-status`: answer “what is ready?”, “what changed?”, “which round next?”, stale artifact, trust-tier, and human-needed questions.

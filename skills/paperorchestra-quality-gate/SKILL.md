@@ -20,6 +20,17 @@ paperorchestra qa-loop-step --quality-mode claim_safe --max-iterations 1
 
 `run` alone is draft generation, not full quality approval. A full quality gate must include validation, compile where allowed, critic/citation evidence, `quality-gate`, `qa-loop`, and at most a bounded `qa-loop-step`.
 
+## Academic writing doctrine
+
+Use `../paperorchestra/references/academic-writing.md` for manuscript-quality checks beyond syntax and compile status. The gate should report:
+
+- narrative coherence against `Phenomenon → Gap → Contribution → Evidence → Boundary → Implication`;
+- section rhetorical alignment;
+- sentence-intent alignment;
+- claim-evidence-boundary alignment;
+- Related Work positioning quality;
+- whether paper-likeness failures are machine-actionable or require the author.
+
 ## OMX companion routing
 
 Quality gate decides the next state; it does not silently perform an unbounded repair loop. Route follow-up work explicitly:

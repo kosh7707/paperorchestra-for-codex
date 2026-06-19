@@ -17,6 +17,16 @@ approved plan -> outline -> prior-work/search seed -> narrative/claim/citation p
 
 For revision rounds, keep the same artifact chain but scope writing with `only_sections` when possible.
 
+## Academic writing doctrine
+
+Read `../paperorchestra/references/academic-writing.md` before first-draft writing or substantial rewrites. A draft must advance the paper arc:
+
+```text
+Phenomenon → Gap → Contribution → Evidence → Boundary → Implication
+```
+
+Before writing prose, establish each target section's paragraph-level rhetorical job. While drafting, enforce the Sentence Intent Principle: every sentence must do local work at its exact position. Strong claims need claim-evidence-boundary discipline: evidence, citation support, or caveat.
+
 ## OMX companion routing
 
 Use one PaperOrchestra authoring round as the bounded paper-writing action, then compose OMX skills around it when useful:

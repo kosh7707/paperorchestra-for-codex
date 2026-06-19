@@ -22,6 +22,16 @@ Do not jump from “I want to write a paper” to `paper.full.tex`. First establ
 
 Wrap OMX interview behavior: ask only decision-shaping questions, keep them short, and stop once the next artifact can be written. Prefer `$deep-interview` when available and the ambiguity is broad; otherwise perform the same Socratic gating directly.
 
+## Academic writing doctrine
+
+Use `../paperorchestra/references/academic-writing.md` to classify the paper archetype and fill the generic paper arc before planning:
+
+```text
+Phenomenon → Gap → Contribution → Evidence → Boundary → Implication
+```
+
+Do not assume every paper is a systems paper. Intake should distinguish systems, methodology/benchmark, empirical, survey/review, and position-paper intents.
+
 ## OMX companion routing
 
 - Use `$deep-interview` for broad ambiguity; intake is the PaperOrchestra artifact wrapper around that clarification.
@@ -55,9 +65,14 @@ Wrap OMX interview behavior: ask only decision-shaping questions, keep them shor
 
 ## Author intent
 - paper type:
+- primary archetype:
 - venue/format:
 - central thesis:
 - audience:
+- phenomenon:
+- gap:
+- contribution type:
+- intended implication:
 
 ## Evidence basis
 - completed/frozen evidence:
@@ -68,6 +83,7 @@ Wrap OMX interview behavior: ask only decision-shaping questions, keep them shor
 - allowed claims:
 - disallowed claims:
 - required caveats:
+- boundary of generalization:
 
 ## Open decisions
 - human-needed:

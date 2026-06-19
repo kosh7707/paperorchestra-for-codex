@@ -17,6 +17,17 @@ paperorchestra critique --provider shell --provider-command "$PAPERO_MODEL_CMD" 
 
 If preflight reports `mock_smoke`, `local_diagnostic`, or `heuristic_citation`, never claim live validation. Say what is missing and route to `$paperorchestra-setup`.
 
+## Academic writing doctrine
+
+Use `../paperorchestra/references/academic-writing.md` as the critic rubric when reviewing narrative quality. In addition to technical correctness, review paper-likeness:
+
+- Is the paper archetype clear?
+- Is `Phenomenon → Gap → Contribution → Evidence → Boundary → Implication` visible?
+- Does each major section have a rhetorical job?
+- Does each paragraph and sentence intent move the reader?
+- Does Related Work position the manuscript rather than summarize papers?
+- Are strong claims tied to evidence, citations, or caveats?
+
 ## OMX companion routing
 
 Live review should stop after reporting evidence, but it must name the right follow-up workflow:

@@ -13,6 +13,25 @@ Planning is a human-visible gate. Do not start authoring rounds until the plan i
 
 Wrap OMX planning behavior: use `$plan`/`$ralplan` style tradeoff review for section structure, claims, evaluation shape, and risk boundaries. If OMX runtime is unavailable, perform the same planning directly and preserve the approval gate.
 
+## Academic writing doctrine
+
+Read `../paperorchestra/references/academic-writing.md` before proposing or revising the section plan. The plan must instantiate:
+
+```text
+Phenomenon → Gap → Contribution → Evidence → Boundary → Implication
+```
+
+For every proposed section, write its rhetorical job and the reader belief transition:
+
+```text
+section title:
+rhetorical job:
+reader belief before:
+reader belief after:
+evidence used:
+failure mode if omitted:
+```
+
 ## OMX companion routing
 
 - Prefer `$ralplan` when thesis, section order, RQs, evaluation design, or claim boundaries have multiple plausible choices.
@@ -51,6 +70,9 @@ Wrap OMX planning behavior: use `$plan`/`$ralplan` style tradeoff review for sec
 ## Proposed section structure
 For each section:
 - title:
+- rhetorical job:
+- reader belief before:
+- reader belief after:
 - why this section exists:
 - key content:
 - evidence/materials:
