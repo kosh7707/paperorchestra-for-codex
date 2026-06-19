@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.boundary import normalized_claim_projection
+from paperorchestra.manuscript.narrative_claim_coverage import _first_key
 from paperorchestra.manuscript.narrative_claim_map import build_citation_plan, build_claim_map, citation_placements
-from paperorchestra.manuscript.narrative_claims import _first_key, build_claims
+from paperorchestra.manuscript.narrative_claims import build_claims
 from paperorchestra.manuscript.narrative_context import PlanningContext, load_planning_context
 from paperorchestra.manuscript.narrative_plan_builders import (
     CONTRIBUTION_BOUNDARY,

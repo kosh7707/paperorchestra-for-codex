@@ -3,18 +3,12 @@ from __future__ import annotations
 from typing import Any
 
 from paperorchestra.domains import detect_domain_for_text
-from paperorchestra.manuscript.narrative_claim_builders import (
-    LATEX_COMMAND_RE,
+from paperorchestra.manuscript.narrative_claim_appenders import (
     _append_benchmark_claim,
     _append_limitation_claim,
     _append_method_claim,
     _append_positioning_claim,
     _append_proof_claim,
-    _claim,
-    _coverage_groups_for_benchmark,
-    _coverage_groups_for_method,
-    _first_key,
-    _log_contains_result_claim,
 )
 from paperorchestra.manuscript.narrative_sections import NarrativeSectionTargets
 
