@@ -240,3 +240,13 @@ def test_build_reproducibility_audit_composes_context_reasons_and_report(monkeyp
         ("reasons", True, True),
         ("report", True, "BLOCK", True),
     ]
+
+
+def test_reproducibility_reasons_preserves_rule_facade_aliases() -> None:
+    from paperorchestra.reviews import reproducibility_blockers, reproducibility_reasons, reproducibility_warnings
+
+    assert reproducibility_reasons.append_artifact_blockers is reproducibility_blockers.append_artifact_blockers
+    assert reproducibility_reasons._append_artifact_blockers is reproducibility_blockers.append_artifact_blockers
+    assert reproducibility_reasons._append_live_seed_blocker is reproducibility_blockers.append_live_seed_blocker
+    assert reproducibility_reasons._append_warnings is reproducibility_warnings.append_warnings
+    assert reproducibility_reasons._append_mock_watermark_warning is reproducibility_warnings.append_mock_watermark_warning
