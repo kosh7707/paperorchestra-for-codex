@@ -10,7 +10,7 @@ Use this for one manuscript round, not for indefinite autonomous writing. For ne
 ## Round recipe
 
 1. Start with `$paperorchestra-status` and create a round directory such as `.paper-orchestra/round-N/`.
-2. Check for `paper-plan.md` or equivalent approved plan artifact. If missing, stop and route to `$paperorchestra-plan` unless the user explicitly bypassed planning.
+2. Check for `paper-plan.md` with an author-approval marker such as `<!-- paperorchestra:plan-approved -->`, or equivalent approved plan artifact. If missing, stop and route to `$paperorchestra-plan` unless the user explicitly bypassed planning.
 3. If live evidence is missing or stale, run `$paperorchestra-live-review` first.
 4. Run `$paperorchestra-quality-gate` to get the current bounded gate state.
 5. If the state is `human_needed`, do not edit on human_needed; present the required author decisions.

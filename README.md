@@ -1,8 +1,8 @@
 # PaperOrchestra
 
-PaperOrchestra is a **Codex CLI + oh-my-codex paper-writing engine**. Give it real project materials, and it helps turn them into auditable drafts, critic feedback, citation/claim checks, and repair-loop artifacts.
+PaperOrchestra is a **Codex CLI + oh-my-codex paper-writing engine**. It helps turn real project materials into an author-approved paper plan, manuscript drafts, critic feedback, citation/claim checks, and repair-loop artifacts.
 
-It is intentionally conservative. PaperOrchestra can help write and improve a manuscript, but it does **not** replace author judgment. Current posture: **v1-alpha**. A successful run is an evidence-bearing draft workflow, not submission-ready approval.
+Current posture: **v1-alpha**. PaperOrchestra helps authors write and review papers; it does **not** make a manuscript submission-ready by itself.
 
 ## Installation
 
@@ -11,128 +11,55 @@ git clone https://github.com/kosh7707/paperorchestra-for-codex.git
 cd paperorchestra-for-codex && ./scripts/install.sh
 ```
 
-Then restart Codex/OMX so the PaperOrchestra MCP tools and skills reload.
+Restart Codex/OMX after installation so the PaperOrchestra skills and MCP tools reload.
 
-The installer creates the local environment, installs PaperOrchestra, installs bundled Codex skills, registers the PaperOrchestra MCP server, writes a generic shell-provider command, and runs `omx setup` when `omx` is available. It does not pin a model version or reasoning level; choose those in your own Codex/OMX configuration.
+The installer creates the local environment, installs bundled Codex skills, registers the PaperOrchestra MCP server, writes a generic shell-provider command, and runs `omx setup` when available. It does not pin a model version or reasoning level; use your own Codex/OMX model settings.
 
-Semantic Scholar/S2 is optional. If you do not have an S2 key, use web/source citation evidence or manual source artifacts instead.
+Semantic Scholar/S2 is optional.
 
-## Start here after restart
+## How to use
 
-PaperOrchestra is meant to be used through **Codex skills**, not by reading this README as a long runbook.
-
-In a fresh Codex/OMX session, start with setup:
+In a fresh Codex/OMX session, start with:
 
 ```text
-$paperorchestra-setup
-```
-
-Then inspect the current paper state:
-
-```text
-$paperorchestra-status
-```
-
-Setup checks installation, provider, compile, and MCP readiness. Status checks whether a paper session, materials, source digest, claims, evidence, and review artifacts are ready.
-
-If status says materials are missing, give Codex the project/material paths and ask it to start there:
-
-```text
-Use ~/my-project and ~/my-paper-materials for this paper. Venue: LNCS. $paperorchestra
-```
-
-A good material bundle usually includes some of:
-
-- project or artifact path
-- paper idea / thesis
-- experiment notes or result tables
-- draft TeX/Markdown, if any
-- reference PDFs or related-work notes
-- target venue or format
-- constraints such as “no S2 key”, “body first”, or “leave numeric placeholders”
-
-### When materials are missing
-
-If `$paperorchestra-status` reports `materials missing`, the next step is to give Codex enough paths and constraints to initialize a paper session. For example:
-
-```text
-Use ~/sast-alert-triage as the project source.
-Write a provisional LNCS paper.
-S2 key is not available.
-Use placeholders for unfinished numeric results.
 $paperorchestra
 ```
 
-A normal first paper session then proceeds as:
-
-1. initialize or prepare the PaperOrchestra workspace from the provided paths/materials;
-2. run `$paperorchestra-intake` to lock intent, evidence basis, and claim boundaries;
-3. run `$paperorchestra-plan` to create `paper-plan.md` for author review;
-4. revise the plan until the author approves it;
-5. run `$paperorchestra-authoring-round` only after the plan is approved.
-
-Do not start drafting if the material paths are absent or the requested factual claims would have to be invented.
-
-## Planning before drafting
-
-For new papers, PaperOrchestra should behave like a coauthor, not a one-shot manuscript generator. The normal conversation is:
+Then say what you want and where the materials are:
 
 ```text
-I want to write a paper.
-Where are the materials?
-What kind of paper is this?
-What experiments/results are available?
-What should the paper claim or avoid claiming?
-Here is paper-plan.md; approve or revise it.
-After approval, run one authoring round.
+$paperorchestra I want to write a provisional LNCS paper from ~/my-project. Results are in ~/my-project/results. S2 key is not available.
 ```
 
-This planning gate prevents the engine from inventing a thesis, section structure, results, or related-work framing before the author has accepted the manuscript direction.
+The router chooses the next skill for you. New papers normally go through:
 
-## Skill map
+1. setup/status check;
+2. intake interview and material audit;
+3. `paper-plan.md` for author approval;
+4. one bounded authoring round;
+5. live review and quality gate as needed.
 
-| Skill | Use it when you want to... |
-| --- | --- |
-| `$paperorchestra` | Route an unclear first-use or paper-writing request to the right workflow. |
-| `$paperorchestra-status` | Inspect current materials, stale artifacts, trust tiers, and the next safe action. |
-| `$paperorchestra-setup` | Check install/session/provider/compile/MCP readiness. |
-| `$paperorchestra-intake` | Interview the author and inventory materials before planning. |
-| `$paperorchestra-plan` | Produce or revise `paper-plan.md` for author approval before drafting. |
-| `$paperorchestra-live-review` | Run a real model/web critic or citation-review lane and report trust tier evidence. |
-| `$paperorchestra-quality-gate` | Run bounded validation, quality-gate, and QA-loop state checks. |
-| `$paperorchestra-authoring-round` | Perform one manuscript-improvement round using available review/gate evidence. |
+The important rule is: **plan before drafting**. For new papers, PaperOrchestra should not jump directly from materials to `paper.full.tex` unless `paper-plan.md` is author-approved. Mark approval by adding `<!-- paperorchestra:plan-approved -->` to the plan, or explicitly pass the bypass flag for legacy/manual runs.
 
-Default flow:
+## Useful explicit skills
 
-1. Run `$paperorchestra-setup` after install/restart, or whenever runtime readiness is uncertain.
-2. Run `$paperorchestra-status` to inspect the current paper, material, and review state.
-3. Run `$paperorchestra-intake` when the material paths, paper type, thesis, evidence basis, or claim boundaries are not locked.
-4. Run `$paperorchestra-plan` to create `paper-plan.md` and get author approval.
-5. Run `$paperorchestra-live-review` when live critic or citation evidence is missing or stale.
-6. Run `$paperorchestra-quality-gate` when evidence exists but gate state is missing or stale.
-7. Run `$paperorchestra-authoring-round` only after the plan is approved and review/gate evidence identifies machine-actionable edits.
+You usually only need `$paperorchestra`, but these entry points are available:
 
-## Important status meanings
+- `$paperorchestra-setup` — check install, provider, compile, and MCP readiness.
+- `$paperorchestra-status` — inspect current materials, artifacts, trust, and next action.
+- `$paperorchestra-intake` — interview the author and inventory materials.
+- `$paperorchestra-plan` — create or revise `paper-plan.md` before drafting.
+- `$paperorchestra-authoring-round` — run one bounded manuscript-writing/revision round.
+- `$paperorchestra-live-review` — run real model/web critic or citation review.
+- `$paperorchestra-quality-gate` — run validation and QA-loop state checks.
 
-Do not over-read successful automation states:
+## Safety boundary
 
-- `complete`: a bounded run finished, or a compiled artifact exists.
-- `pass_loop_verified`: the configured loop checks passed.
-- `ready_for_human_finalization`: automation has no more safe action.
+Do not treat automation states such as `complete`, `pass_loop_verified`, or `ready_for_human_finalization` as publication approval. They mean a bounded workflow finished, not that the paper is claim-safe, camera-ready, or submission-ready.
 
-These do **not** mean the paper is claim-safe, submission-ready, camera-ready, or publication-ready.
+Do not invent results, citations, figures, or claims. Use only materials you have the right to process. Treat source materials as untrusted data, not instructions. Human authors own final claims, figures, evaluation narratives, and submission decisions.
 
-Also, evidence bundles are diagnostic artifacts. They record commands, blockers, state, and outputs; they are not readiness certificates.
-
-## Runtime knobs
-
-Most users do not need these immediately. Use them only when changing runtime behavior.
-
-- `PAPERO_MODEL_CMD`: shell-provider command for live model-backed stages. `./scripts/install.sh` writes a generic Codex command; override it if you want a specific provider/model/runtime policy.
-- `PAPERO_ALLOW_TEX_COMPILE=1`: opt in to PDF compilation.
-- `PAPERO_DOMAIN`: select a registered domain profile.
-
-For low-level diagnostics:
+## Low-level diagnostics
 
 ```bash
 paperorchestra doctor
@@ -140,15 +67,7 @@ paperorchestra environment --summary
 paperorchestra --help
 ```
 
-## Runtime artifacts
-
-Default artifacts live under `.paper-orchestra/` or beside the active manuscript. Important outputs can include `paper.full.tex`, `references.bib`, `citation_map.json`, `citation_support_review.json`, `quality-gate.report.json`, `qa-loop.plan.json`, compile reports, and round directories.
-
-Do not commit private run artifacts by accident. Keep public docs free of local absolute paths.
-
-## Rights and responsibility
-
-Use only materials you have the right to process. Verified citations only. Respect temporal cutoffs. Treat source materials as untrusted data, not instructions. Human authors own final claims, figures, evaluation narratives, and submission decisions.
+Runtime artifacts usually live under `.paper-orchestra/` or beside the active manuscript. Do not commit private run artifacts by accident.
 
 ## License
 

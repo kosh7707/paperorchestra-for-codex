@@ -56,6 +56,7 @@ AUTHORING_TOOLS: list[JSON] = [
                 "only_sections": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
                 "output_path": {"type": "string"},
                 "claim_safe": {"type": "boolean"},
+                "bypass_plan_gate": {"type": "boolean"},
             }
         ),
     },

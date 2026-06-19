@@ -94,6 +94,16 @@ def test_provider_runtime_and_citation_flags_remain_on_quality_step() -> None:
     assert args.citation_provider_command == "search cmd"
 
 
+def test_draft_generating_commands_require_explicit_plan_gate_bypass_flag() -> None:
+    parser = build_parser()
+
+    write_args = parser.parse_args(["write-sections", "--bypass-plan-gate"])
+    run_args = parser.parse_args(["run", "--bypass-plan-gate"])
+
+    assert write_args.bypass_plan_gate is True
+    assert run_args.bypass_plan_gate is True
+
+
 def test_ralph_start_launch_mode_is_mutually_exclusive() -> None:
     with pytest.raises(SystemExit) as excinfo:
         build_parser().parse_args(["ralph-start", "--dry-run", "--launch"])

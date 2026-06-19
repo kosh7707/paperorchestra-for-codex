@@ -76,6 +76,7 @@ UTILITY_TOOLS: list[JSON] = [
                 "refine_iterations": {"type": "integer"},
                 "compile_paper": {"type": "boolean"},
                 "runtime_mode": {"type": "string"},
+                "bypass_plan_gate": {"type": "boolean"},
             }
         ),
     },

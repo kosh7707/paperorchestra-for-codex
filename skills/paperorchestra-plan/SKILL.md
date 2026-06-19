@@ -70,6 +70,6 @@ For each section:
 
 Stop when `paper-plan.md` exists and the next action is clear:
 
-- author approves -> `$paperorchestra-authoring-round`;
+- author approves -> add `<!-- paperorchestra:plan-approved -->` to `paper-plan.md`, then `$paperorchestra-authoring-round`;
 - author requests changes -> revise `$paperorchestra-plan`;
 - material is insufficient -> return to `$paperorchestra-intake` or `$paperorchestra-status`.

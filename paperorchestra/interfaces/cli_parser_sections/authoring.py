@@ -25,6 +25,11 @@ def register_authoring_commands(subparsers: Any) -> None:
     sections_parser.add_argument("--only-sections")
     sections_parser.add_argument("--output-tex")
     sections_parser.add_argument("--claim-safe", action="store_true")
+    sections_parser.add_argument(
+        "--bypass-plan-gate",
+        action="store_true",
+        help="Explicitly bypass the paper-plan approval gate for legacy/manual runs",
+    )
     add_runtime_mode_args(sections_parser, strict_flag=True)
     add_common_provider_args(sections_parser)
 
@@ -45,5 +50,10 @@ def register_authoring_commands(subparsers: Any) -> None:
     run_parser.add_argument("--require-live-verification", action="store_true")
     run_parser.add_argument("--refine-iterations", type=int, default=1)
     run_parser.add_argument("--compile", action="store_true")
+    run_parser.add_argument(
+        "--bypass-plan-gate",
+        action="store_true",
+        help="Explicitly bypass the paper-plan approval gate for legacy/manual runs",
+    )
     add_runtime_mode_args(run_parser, strict_flag=True)
     add_common_provider_args(run_parser)

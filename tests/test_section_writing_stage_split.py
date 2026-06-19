@@ -66,6 +66,7 @@ def _write_text(path: Path, text: str) -> str:
 
 
 def test_write_sections_still_runs_through_public_stage_after_split(tmp_path: Path) -> None:
+    (tmp_path / "paper-plan.md").write_text("<!-- paperorchestra:plan-approved -->\n", encoding="utf-8")
     state = create_session(
         tmp_path,
         InputBundle(

@@ -28,6 +28,7 @@ def _state() -> SimpleNamespace:
 
 
 def test_run_pipeline_preserves_stage_order_and_module_patch_surface(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "paper-plan.md").write_text("<!-- paperorchestra:plan-approved -->\n", encoding="utf-8")
     state = _state()
     calls: list[str] = []
 
@@ -69,7 +70,7 @@ def test_run_pipeline_preserves_stage_order_and_module_patch_surface(tmp_path: P
         state.artifacts.latest_validation_json = "intro-validation.json"
         return tmp_path / "intro.tex"
 
-    def sections(cwd, provider, runtime_mode):
+    def sections(cwd, provider, runtime_mode, **kwargs):
         calls.append("sections")
         state.artifacts.latest_validation_json = "section-validation.json"
         return tmp_path / "paper.tex"
@@ -130,6 +131,7 @@ def test_run_pipeline_preserves_stage_order_and_module_patch_surface(tmp_path: P
 
 
 def test_run_pipeline_uses_mock_verify_fallback_when_enabled(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "paper-plan.md").write_text("<!-- paperorchestra:plan-approved -->\n", encoding="utf-8")
     state = _state()
     verify_modes: list[str] = []
 

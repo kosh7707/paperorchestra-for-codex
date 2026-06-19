@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.engine.pipeline_final_reports import write_pipeline_final_reports
+from paperorchestra.engine.plan_gate import PlanGateResult, check_plan_gate
 from paperorchestra.engine.pipeline_verification import validate_verify_fallback_mode, verify_papers_with_optional_fallback
 from paperorchestra.runtime.provider_base import BaseProvider
 
@@ -22,10 +23,18 @@ class PipelineRun:
     refine_iterations: int = 1
     compile_paper: bool = False
     runtime_mode: str = "compatibility"
+    bypass_plan_gate: bool = False
     outputs: dict[str, Any] = field(default_factory=lambda: {"validation_reports": {}})
 
     def run(self) -> dict[str, Any]:
         self._validate()
+        gate = self._check_plan_gate()
+        if not gate.allowed:
+            self.outputs.update(gate.to_blocked_payload())
+            self._emit("plan_gate", "blocked", reason=gate.reason, plan_path=gate.plan_path)
+            return self.outputs
+        self.outputs["plan_gate"] = gate.to_dict()
+        self._emit("plan_gate", "passed", reason=gate.reason, plan_path=gate.plan_path, bypassed=gate.bypassed)
         self._initialize_session_metadata()
         self._record_compile_environment()
         self._generate_outline()
@@ -41,6 +50,9 @@ class PipelineRun:
 
     def _validate(self) -> None:
         validate_verify_fallback_mode(self.verify_fallback_mode)
+
+    def _check_plan_gate(self) -> PlanGateResult:
+        return check_plan_gate(self.cwd, bypass=self.bypass_plan_gate)
 
     def _initialize_session_metadata(self) -> None:
         state = self.stage.load_session(self.cwd)
@@ -124,7 +136,14 @@ class PipelineRun:
         ).artifacts.latest_validation_json
 
         self._emit("write_sections", "started")
-        self.outputs["paper"] = str(self.stage.write_sections(self.cwd, self.provider, runtime_mode=self.runtime_mode))
+        self.outputs["paper"] = str(
+            self.stage.write_sections(
+                self.cwd,
+                self.provider,
+                runtime_mode=self.runtime_mode,
+                bypass_plan_gate=self.bypass_plan_gate,
+            )
+        )
         self._emit("write_sections", "completed", path=self.outputs["paper"])
         self.outputs["validation_reports"]["section_writing"] = self.stage.load_session(
             self.cwd

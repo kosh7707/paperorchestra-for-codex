@@ -44,6 +44,7 @@ def run_pipeline(
     refine_iterations: int = 1,
     compile_paper: bool = False,
     runtime_mode: str = "compatibility",
+    bypass_plan_gate: bool = False,
 ) -> dict[str, Any]:
     return PipelineRun(
         cwd=cwd,
@@ -57,6 +58,7 @@ def run_pipeline(
         refine_iterations=refine_iterations,
         compile_paper=compile_paper,
         runtime_mode=runtime_mode,
+        bypass_plan_gate=bypass_plan_gate,
     ).run()
 
 

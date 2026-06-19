@@ -56,6 +56,7 @@ def tool_write_sections(arguments: JSON) -> JSON:
                     only_sections=arguments.get("only_sections"),
                     output_path=arguments.get("output_path"),
                     claim_safe=bool(arguments.get("claim_safe", False)),
+                    bypass_plan_gate=bool(arguments.get("bypass_plan_gate", False)),
                 )
             )
         }
@@ -134,5 +135,6 @@ def tool_run_pipeline(arguments: JSON) -> JSON:
             refine_iterations=int(arguments.get("refine_iterations", 1)),
             compile_paper=bool(arguments.get("compile_paper", False)),
             runtime_mode=arguments.get("runtime_mode", "compatibility"),
+            bypass_plan_gate=bool(arguments.get("bypass_plan_gate", False)),
         )
     )

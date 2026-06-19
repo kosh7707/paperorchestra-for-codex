@@ -52,6 +52,7 @@ def handle_write_sections(cwd: Path, args: argparse.Namespace) -> int:
             only_sections=args.only_sections,
             output_path=args.output_tex,
             claim_safe=args.claim_safe,
+            bypass_plan_gate=args.bypass_plan_gate,
         )
     print(path)
     return 0
@@ -119,6 +120,7 @@ def handle_run(cwd: Path, args: argparse.Namespace) -> int:
             refine_iterations=args.refine_iterations,
             compile_paper=args.compile,
             runtime_mode=args.runtime_mode,
+            bypass_plan_gate=args.bypass_plan_gate,
         )
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 1 if result.get("status") == "blocked" else 0

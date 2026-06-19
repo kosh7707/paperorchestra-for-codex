@@ -13,6 +13,7 @@ from paperorchestra.engine.completion_identity import (
     _provider_name,
 )
 from paperorchestra.engine.completion_runtime import _complete_with_runtime_mode
+from paperorchestra.engine.plan_gate import ensure_approved_plan
 from paperorchestra.engine.reports import (
     _blocking_issues,
     _issue_messages,
@@ -36,7 +37,9 @@ def write_sections(
     only_sections: list[str] | str | None = None,
     output_path: str | Path | None = None,
     claim_safe: bool = False,
+    bypass_plan_gate: bool = False,
 ) -> Path:
+    ensure_approved_plan(cwd, bypass=bypass_plan_gate)
     return SectionWritingRun(
         cwd=cwd,
         provider=provider,

@@ -16,7 +16,7 @@ paperorchestra status --json
 paperorchestra environment --summary
 ```
 
-Also inspect nearby artifacts when present: `.paper-orchestra/`, `paper.full.tex`, `citation_map.json`, `references.bib`, `citation_support_review.json`, `quality-eval.json`, `qa-loop.plan.json`, compile reports, and named round directories.
+Also inspect nearby artifacts when present: `.paper-orchestra/`, `paper-plan.md` approval state, `paper.full.tex`, `citation_map.json`, `references.bib`, `citation_support_review.json`, `quality-eval.json`, `qa-loop.plan.json`, compile reports, and named round directories.
 
 ## Status card
 
