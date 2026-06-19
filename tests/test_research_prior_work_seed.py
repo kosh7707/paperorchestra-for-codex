@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from paperorchestra.research import prior_work_seed
+from paperorchestra.research.prior_work_seed_parsers import load_prior_work_seed
+from paperorchestra.research.prior_work_seed_verified import prior_work_entries_to_verified_papers
 
 
 def test_load_prior_work_seed_parses_json_bibtex_and_markdown(tmp_path: Path) -> None:
@@ -24,7 +25,7 @@ def test_load_prior_work_seed_parses_json_bibtex_and_markdown(tmp_path: Path) ->
         ),
         encoding="utf-8",
     )
-    parsed_json = prior_work_seed.load_prior_work_seed(json_seed, source="keynote")
+    parsed_json = load_prior_work_seed(json_seed, source="keynote")
     assert parsed_json[0]["title"] == "Sifting the Noise"
     assert parsed_json[0]["authors"] == ["A. Author"]
     assert parsed_json[0]["year"] == 2024
@@ -43,7 +44,7 @@ def test_load_prior_work_seed_parses_json_bibtex_and_markdown(tmp_path: Path) ->
 """,
         encoding="utf-8",
     )
-    parsed_bib = prior_work_seed.load_prior_work_seed(bib_seed, source="bib")
+    parsed_bib = load_prior_work_seed(bib_seed, source="bib")
     assert parsed_bib[0]["title"] == "IRIS: A Grounded Review System"
     assert parsed_bib[0]["bibtex_key"] == "iris2023"
     assert parsed_bib[0]["authors"] == ["Ada Lovelace", "Grace Hopper"]
@@ -51,14 +52,14 @@ def test_load_prior_work_seed_parses_json_bibtex_and_markdown(tmp_path: Path) ->
 
     md_seed = tmp_path / "seed.md"
     md_seed.write_text("- [LLift: LLMs for Alerts](https://example.test/llift) — 2022\n", encoding="utf-8")
-    parsed_md = prior_work_seed.load_prior_work_seed(md_seed, source="notes")
+    parsed_md = load_prior_work_seed(md_seed, source="notes")
     assert parsed_md[0]["title"] == "LLift: LLMs for Alerts"
     assert parsed_md[0]["year"] == 2022
     assert parsed_md[0]["url"] == "https://example.test/llift"
 
 
 def test_prior_work_entries_to_verified_papers_dedupes_aliases_and_applies_cutoff() -> None:
-    papers = prior_work_seed.prior_work_entries_to_verified_papers(
+    papers = prior_work_entries_to_verified_papers(
         [
             {
                 "title": "BugLens: Reviewing Static Analyzer Alerts",
