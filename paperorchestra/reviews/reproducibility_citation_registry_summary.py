@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.manuscript.citations import extract_citation_keys
+from paperorchestra.manuscript.citation_key_parsing import extract_citation_keys
 from paperorchestra.reviews.reproducibility_citation_entries import (
     _registry_entry_has_live_verification,
     _registry_entry_has_mixed_non_live_provenance,

@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-from paperorchestra.manuscript.citations import canonical_citation_map
+from paperorchestra.manuscript.citation_map_model import canonical_citation_map
 from paperorchestra.manuscript.narrative_claim_coverage import (
     _coverage_groups_for_benchmark,
     _coverage_groups_for_method,

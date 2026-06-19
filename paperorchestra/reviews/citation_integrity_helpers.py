@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from paperorchestra.manuscript.citations import extract_citation_keys
+from paperorchestra.manuscript.citation_key_parsing import extract_citation_keys
 
 
 def _sentences_with_cites(text: str) -> list[str]:

@@ -7,7 +7,7 @@ from typing import Any
 from paperorchestra.core.io import write_json
 from paperorchestra.core.session import load_session
 from paperorchestra.loop_engine.quality.utils import _file_sha256
-from paperorchestra.manuscript.citations import extract_citation_keys
+from paperorchestra.manuscript.citation_key_parsing import extract_citation_keys
 from paperorchestra.reviews.citation_integrity_paths import (
     citation_integrity_audit_path,
     citation_intent_plan_path,

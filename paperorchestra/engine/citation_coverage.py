@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from paperorchestra.manuscript.structure import _section_range_map
-from paperorchestra.manuscript.citations import (
+from paperorchestra.manuscript.citation_key_parsing import extract_citation_keys
+from paperorchestra.manuscript.citation_map_model import (
     allowed_citation_keys,
     canonical_citation_key,
     canonical_citation_keys,
-    extract_citation_keys,
 )
 
 

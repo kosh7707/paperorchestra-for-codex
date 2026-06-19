@@ -3,7 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from paperorchestra.manuscript import structure as _structure
-from paperorchestra.manuscript.citations import canonical_citation_key, canonical_citation_map, extract_citation_keys
+from paperorchestra.manuscript.citation_key_parsing import extract_citation_keys
+from paperorchestra.manuscript.citation_map_model import (
+    canonical_citation_key,
+    canonical_citation_map,
+)
 from paperorchestra.manuscript.repair_claim_scope import _ensure_required_claim_scope_notes, _required_claim_scope_note
 from paperorchestra.manuscript.repair_discussion_boundaries import _ensure_discussion_section_for_claim_boundaries
 from paperorchestra.manuscript.repair_text import (

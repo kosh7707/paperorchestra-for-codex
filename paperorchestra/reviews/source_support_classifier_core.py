@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from paperorchestra.manuscript.citations import CITE_COMMAND_RE
+from paperorchestra.manuscript.citation_key_parsing import CITE_COMMAND_RE
 from paperorchestra.reviews.source_support_terms import (
     _meaningful_term_sequence,
     _meaningful_terms,

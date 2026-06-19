@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from paperorchestra.core.boundary import control_prose_markers
-from paperorchestra.manuscript.citations import extract_citation_keys
+from paperorchestra.manuscript.citation_key_parsing import extract_citation_keys
 from paperorchestra.manuscript.claim_coverage import check_claim_map_coverage
 from paperorchestra.manuscript.claim_text import _section_visible_latex, _visible_latex_text
 from paperorchestra.manuscript.narrative_role_checks import _narrative_role_issues, _story_beat_issue

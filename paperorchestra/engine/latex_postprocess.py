@@ -17,7 +17,11 @@ from paperorchestra.engine.latex_plot_text import (
     _escape_latex_text,
     _normalize_figure_token,
 )
-from paperorchestra.manuscript.citations import CITE_COMMAND_RE, allowed_citation_keys, extract_citation_keys
+from paperorchestra.manuscript.citation_key_parsing import (
+    CITE_COMMAND_RE,
+    extract_citation_keys,
+)
+from paperorchestra.manuscript.citation_map_model import allowed_citation_keys
 
 
 def _stabilize_figure_float_placement(latex: str) -> str:

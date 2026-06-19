@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.loop_engine.quality.utils import _read_json_if_exists
-from paperorchestra.manuscript.citations import extract_citation_keys
+from paperorchestra.manuscript.citation_key_parsing import extract_citation_keys
 
 
 def _read_text(path: str | Path | None) -> str:

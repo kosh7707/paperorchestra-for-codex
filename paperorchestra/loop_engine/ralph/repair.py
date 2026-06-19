@@ -29,11 +29,11 @@ from .state import (
     guarded_replace_manuscript_text,
     recover_pending_manuscript_write,
 )
-from paperorchestra.manuscript.citations import (
+from paperorchestra.manuscript.citation_alias_rewrite import canonicalize_citation_keys
+from paperorchestra.manuscript.citation_key_parsing import extract_citation_keys
+from paperorchestra.manuscript.citation_map_model import (
     allowed_citation_keys,
     canonical_citation_map,
-    canonicalize_citation_keys,
-    extract_citation_keys,
 )
 
 

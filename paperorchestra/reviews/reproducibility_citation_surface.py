@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from paperorchestra.manuscript.citations import extract_citation_keys
+from paperorchestra.manuscript.citation_key_parsing import extract_citation_keys
 from paperorchestra.reviews.reproducibility_artifacts import _read_json_payload_if_exists
 from paperorchestra.reviews.reproducibility_citation_artifact_health import (
     _bibtex_keys_from_text,

@@ -5,7 +5,7 @@ import json
 from paperorchestra.engine.planning_payloads import _author_facing_writer_brief_block
 from paperorchestra.engine.prompt_context import _data_block, _prompt_compact_text
 from paperorchestra.engine.section_writing_types import SectionPromptContext
-from paperorchestra.manuscript.citations import canonical_citation_keys
+from paperorchestra.manuscript.citation_map_model import canonical_citation_keys
 
 
 def render_section_writing_user_prompt(context: SectionPromptContext) -> str:

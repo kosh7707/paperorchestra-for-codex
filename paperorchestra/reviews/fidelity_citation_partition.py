@@ -4,7 +4,7 @@ from pathlib import Path
 
 from paperorchestra.core.io import read_json
 from paperorchestra.core.models import SessionState
-from paperorchestra.manuscript.citations import canonical_citation_map
+from paperorchestra.manuscript.citation_map_model import canonical_citation_map
 from paperorchestra.reviews.evaluation import write_citation_partition_request
 from paperorchestra.reviews.fidelity_types import FidelityCheck
 from paperorchestra.reviews.reproducibility_artifacts import _read_json_if_exists

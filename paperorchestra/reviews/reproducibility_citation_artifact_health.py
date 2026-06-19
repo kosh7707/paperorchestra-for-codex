@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.manuscript.citations import canonical_citation_key
+from paperorchestra.manuscript.citation_map_model import canonical_citation_key
 from paperorchestra.reviews.reproducibility_citation_map_payload import _is_valid_citation_map_entry
 from paperorchestra.reviews.reproducibility_verified_paper_payload import _is_valid_verified_paper_payload
 

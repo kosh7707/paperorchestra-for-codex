@@ -5,7 +5,7 @@ from typing import Any
 
 from paperorchestra.core.io import read_json
 from paperorchestra.core.session import load_session
-from paperorchestra.manuscript.citations import canonical_citation_keys
+from paperorchestra.manuscript.citation_map_model import canonical_citation_keys
 from paperorchestra.reviews.evaluation_constants import EXPECTED_SEARCH_GROUNDED_SOURCES
 from paperorchestra.reviews.evaluation_discovery_summary import _attempted_grounded_sources, _candidate_discovery_summary
 from paperorchestra.reviews.evaluation_io import _write_json_artifact

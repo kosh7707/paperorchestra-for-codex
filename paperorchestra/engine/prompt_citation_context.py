@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.manuscript.citations import CITE_COMMAND_RE, allowed_citation_keys
+from paperorchestra.manuscript.citation_key_parsing import CITE_COMMAND_RE
+from paperorchestra.manuscript.citation_map_model import allowed_citation_keys
 
 from .prompt_source_context import _source_grounding_text
 

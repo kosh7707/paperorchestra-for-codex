@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.manuscript.citations import citation_entry_for_key
+from paperorchestra.manuscript.citation_map_model import citation_entry_for_key
 from paperorchestra.reviews.citation_source_fields import _clean_optional_string
 from paperorchestra.reviews.citation_source_type import _source_type_for_entry
 

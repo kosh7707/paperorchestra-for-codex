@@ -8,7 +8,7 @@ from paperorchestra.manuscript.claim_validation import (
     check_narrative_section_roles as _check_narrative_section_roles,
     check_prompt_meta_leakage as _check_prompt_meta_leakage,
 )
-from paperorchestra.manuscript.citations import noncanonical_citation_aliases
+from paperorchestra.manuscript.citation_alias_rewrite import noncanonical_citation_aliases
 from paperorchestra.manuscript.validation_types import ValidationIssue
 from paperorchestra.manuscript.validator_citations import (
     _citation_coverage_requirement,

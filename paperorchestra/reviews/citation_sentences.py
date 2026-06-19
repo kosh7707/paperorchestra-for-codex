@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from paperorchestra.manuscript.citations import CITE_COMMAND_RE, citation_entry_for_key
+from paperorchestra.manuscript.citation_key_parsing import CITE_COMMAND_RE
+from paperorchestra.manuscript.citation_map_model import citation_entry_for_key
 
 
 def _title_terms(title: str) -> set[str]:

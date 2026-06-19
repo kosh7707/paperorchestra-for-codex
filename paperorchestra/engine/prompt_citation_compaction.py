@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.manuscript.citations import canonical_citation_map
+from paperorchestra.manuscript.citation_map_model import canonical_citation_map
 
 from paperorchestra.engine.prompt_markup import _prompt_compact_text
 

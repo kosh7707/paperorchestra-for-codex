@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from paperorchestra.manuscript.citations import canonical_citation_map
+from paperorchestra.manuscript.citation_map_model import canonical_citation_map
 from paperorchestra.manuscript.narrative_sources import _planning_source_text, _salient_terms
 
 

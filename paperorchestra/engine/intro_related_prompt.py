@@ -26,7 +26,7 @@ from paperorchestra.engine.prompt_context import (
     _strict_content_gates_enabled,
 )
 from paperorchestra.manuscript.prompts import PROMPTS
-from paperorchestra.manuscript.citations import canonical_citation_keys
+from paperorchestra.manuscript.citation_map_model import canonical_citation_keys
 
 INTRO_RELATED_SECTIONS = ["Introduction", "Related Work"]
 
