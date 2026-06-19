@@ -5,8 +5,8 @@ from typing import Any
 
 from paperorchestra.core.session import load_session
 from paperorchestra.loop_engine.quality.utils import _file_sha256
-from paperorchestra.reviews import citation_quality_classification as quality_classification
 from paperorchestra.reviews import citation_quality_report as quality_report
+from paperorchestra.reviews.citation_quality_counts import _counts, _empty_counts, _integrity_warning_codes
 from paperorchestra.reviews.citation_quality_items_builder import _citation_quality_items, _quality_items_for_key
 from paperorchestra.reviews.citation_quality_report import CitationQualityGateReport
 from paperorchestra.reviews.citation_quality_sources import _citation_quality_source_paths, _citation_quality_sources, _stale_codes
@@ -41,14 +41,14 @@ def build_citation_quality_gate_internal(cwd: str | Path | None, *, quality_mode
         support_run_root=paths["citation_support_review"].parent.parent,
     )
     hard.extend(item_hard)
-    warnings = item_warnings + quality_classification._integrity_warning_codes(sources["integrity"])
+    warnings = item_warnings + _integrity_warning_codes(sources["integrity"])
     report = CitationQualityGateReport(
         status="fail" if sorted(dict.fromkeys(hard)) else "warn" if sorted(dict.fromkeys(warnings)) else "pass",
         quality_mode=mode,
         manuscript_sha256=manuscript_sha,
         hard_gate_failures=sorted(dict.fromkeys(hard)),
         warning_codes=sorted(dict.fromkeys(warnings)),
-        counts=quality_classification._counts(items, sources["integrity"]),
+        counts=_counts(items, sources["integrity"]),
         items=items,
         source_artifact_hashes={name: _file_sha256(path) for name, path in paths.items()},
     )
@@ -64,7 +64,7 @@ def _missing_manuscript_payload(mode: str) -> dict[str, Any]:
         manuscript_sha256=None,
         hard_gate_failures=["citation_quality_manuscript_missing"],
         warning_codes=[],
-        counts=quality_classification._empty_counts(),
+        counts=_empty_counts(),
         source_artifact_hashes={},
     )
     payload = report.to_internal_dict()

@@ -3,23 +3,25 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.reviews import citation_quality_classification as quality_classification
 from paperorchestra.reviews import citation_quality_support as quality_support
 from paperorchestra.reviews.citation_quality_codes import _quality_codes_for_key
+from paperorchestra.reviews.citation_quality_indices import _claims_by_key, _roles_by_key
+from paperorchestra.reviews.citation_quality_policy import _is_critical_key, _is_explicitly_noncritical
 from paperorchestra.reviews.citation_quality_report import CitationQualityItem
+from paperorchestra.reviews.citation_quality_tokens import _first_claim_id, _sha256_text, _string_set
 
 
 def _citation_quality_items(*, mode: str, sources: dict[str, Any], support_run_root: Path) -> tuple[list[CitationQualityItem], list[str], list[str]]:
     rendered = sources["rendered"]
     rendered_missing = not isinstance(rendered, dict)
-    unknown_keys = quality_classification._string_set(rendered.get("unknown_metadata_keys") if isinstance(rendered, dict) else [])
-    missing_keys = quality_classification._string_set(rendered.get("missing_bib_keys_for_cites") if isinstance(rendered, dict) else [])
-    weak_identity_keys = quality_classification._string_set(rendered.get("weak_identity_keys") if isinstance(rendered, dict) else [])
-    visible_keys = quality_classification._string_set(rendered.get("visible_reference_keys") if isinstance(rendered, dict) else [])
+    unknown_keys = _string_set(rendered.get("unknown_metadata_keys") if isinstance(rendered, dict) else [])
+    missing_keys = _string_set(rendered.get("missing_bib_keys_for_cites") if isinstance(rendered, dict) else [])
+    weak_identity_keys = _string_set(rendered.get("weak_identity_keys") if isinstance(rendered, dict) else [])
+    visible_keys = _string_set(rendered.get("visible_reference_keys") if isinstance(rendered, dict) else [])
     support_items = quality_support._support_items(sources["support"], run_root=support_run_root)
     support_by_key = quality_support._support_by_key(support_items)
-    claims_by_key = quality_classification._claims_by_key(sources["claim_map"])
-    roles_by_key = quality_classification._roles_by_key(sources["placement"])
+    claims_by_key = _claims_by_key(sources["claim_map"])
+    roles_by_key = _roles_by_key(sources["placement"])
     all_keys = sorted(visible_keys | set(support_by_key) | set(claims_by_key) | unknown_keys | missing_keys | weak_identity_keys)
 
     items: list[CitationQualityItem] = []
@@ -55,7 +57,7 @@ def _quality_items_for_key(
     claims_by_key: dict[str, list[dict[str, Any]]],
     roles_by_key: dict[str, set[str]],
 ) -> list[tuple[CitationQualityItem, list[str], list[str]]]:
-    critical = quality_classification._is_critical_key(
+    critical = _is_critical_key(
         key,
         support_by_key.get(key, []),
         claims_by_key.get(key, []),
@@ -63,7 +65,7 @@ def _quality_items_for_key(
         mode=mode,
         metadata_problem=rendered_missing or key in unknown_keys or key in missing_keys,
     )
-    explicit_noncritical = quality_classification._is_explicitly_noncritical(claims_by_key.get(key, []), roles_by_key.get(key, set()))
+    explicit_noncritical = _is_explicitly_noncritical(claims_by_key.get(key, []), roles_by_key.get(key, set()))
     metadata_status = "missing" if key in missing_keys else "unknown" if rendered_missing or key in unknown_keys else "known"
     weak_identity = key in weak_identity_keys
     result: list[tuple[CitationQualityItem, list[str], list[str]]] = []
@@ -85,8 +87,8 @@ def _quality_items_for_key(
                 CitationQualityItem(
                     item_id=quality_support._quality_item_id(key, key_support_items, group_index=group_index),
                     citation_key=key,
-                    claim_id=quality_classification._first_claim_id(claims_by_key.get(key, [])),
-                    citation_key_sha256=quality_classification._sha256_text(key),
+                    claim_id=_first_claim_id(claims_by_key.get(key, [])),
+                    citation_key_sha256=_sha256_text(key),
                     critical=critical,
                     need_status="required" if critical else "optional" if explicit_noncritical else "unknown",
                     support_status=support_status,

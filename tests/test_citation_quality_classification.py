@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from paperorchestra.reviews import citation_quality_classification as classify
+from paperorchestra.reviews.citation_quality_counts import _counts, _integrity_warning_codes
+from paperorchestra.reviews.citation_quality_indices import _claims_by_key, _roles_by_key
+from paperorchestra.reviews.citation_quality_policy import _is_critical_key, _is_explicitly_noncritical
 from paperorchestra.reviews.citation_quality_report import CitationQualityItem
 
 
 def test_claims_and_roles_are_indexed_by_citation_key() -> None:
-    claims = classify._claims_by_key(
+    claims = _claims_by_key(
         {
             "claims": [
                 {"id": "C1", "citation_keys": [" KeyA ", "KeyB"]},
@@ -14,7 +16,7 @@ def test_claims_and_roles_are_indexed_by_citation_key() -> None:
             ]
         }
     )
-    roles = classify._roles_by_key(
+    roles = _roles_by_key(
         {
             "placements": [
                 {"citation_key": "KeyA", "citation_role": "Motivation", "claim_ids": ["C1"]},
@@ -30,7 +32,7 @@ def test_claims_and_roles_are_indexed_by_citation_key() -> None:
 
 
 def test_criticality_policy_covers_support_claim_role_and_claim_safe_metadata() -> None:
-    assert classify._is_critical_key(
+    assert _is_critical_key(
         "A",
         [{"critical": True}],
         [],
@@ -38,7 +40,7 @@ def test_criticality_policy_covers_support_claim_role_and_claim_safe_metadata() 
         mode="draft",
         metadata_problem=False,
     )
-    assert classify._is_critical_key(
+    assert _is_critical_key(
         "A",
         [{"claim_type": "numeric"}],
         [],
@@ -46,7 +48,7 @@ def test_criticality_policy_covers_support_claim_role_and_claim_safe_metadata() 
         mode="draft",
         metadata_problem=False,
     )
-    assert classify._is_critical_key(
+    assert _is_critical_key(
         "A",
         [],
         [{"required_source_type": "prior_work"}],
@@ -54,17 +56,17 @@ def test_criticality_policy_covers_support_claim_role_and_claim_safe_metadata() 
         mode="draft",
         metadata_problem=False,
     )
-    assert classify._is_critical_key("A", [], [], {"result"}, mode="draft", metadata_problem=False)
-    assert classify._is_critical_key("A", [], [], set(), mode="claim_safe", metadata_problem=True)
-    assert not classify._is_critical_key("A", [], [], set(), mode="draft", metadata_problem=True)
+    assert _is_critical_key("A", [], [], {"result"}, mode="draft", metadata_problem=False)
+    assert _is_critical_key("A", [], [], set(), mode="claim_safe", metadata_problem=True)
+    assert not _is_critical_key("A", [], [], set(), mode="draft", metadata_problem=True)
 
 
 def test_noncritical_policy_yields_to_required_or_high_criticality() -> None:
-    assert classify._is_explicitly_noncritical([], {"background"})
-    assert not classify._is_explicitly_noncritical([], {"background", "critical"})
-    assert not classify._is_explicitly_noncritical([{"citation_required": True, "claim_type": "background"}], set())
-    assert not classify._is_explicitly_noncritical([{"required_source_type": "standard", "claim_type": "optional"}], set())
-    assert classify._is_explicitly_noncritical([{"claim_type": "optional"}], set())
+    assert _is_explicitly_noncritical([], {"background"})
+    assert not _is_explicitly_noncritical([], {"background", "critical"})
+    assert not _is_explicitly_noncritical([{"citation_required": True, "claim_type": "background"}], set())
+    assert not _is_explicitly_noncritical([{"required_source_type": "standard", "claim_type": "optional"}], set())
+    assert _is_explicitly_noncritical([{"claim_type": "optional"}], set())
 
 
 def test_integrity_warning_codes_and_counts_extract_gate_relevant_numbers() -> None:
@@ -104,11 +106,11 @@ def test_integrity_warning_codes_and_counts_extract_gate_relevant_numbers() -> N
         },
     }
 
-    assert classify._integrity_warning_codes(integrity) == [
+    assert _integrity_warning_codes(integrity) == [
         "citation_bomb_detected",
         "dense_citation_bundle_requires_role_check",
     ]
-    assert classify._counts([item_fail, item_warn], integrity) == {
+    assert _counts([item_fail, item_warn], integrity) == {
         "critical_need_count": 1,
         "critical_unknown_reference_count": 0,
         "critical_unsupported_count": 1,

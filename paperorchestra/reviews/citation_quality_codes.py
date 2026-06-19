@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from paperorchestra.reviews import citation_quality_classification as quality_classification
+from paperorchestra.reviews.citation_quality_policy import _UNSUPPORTED_STATUSES
 
 
 def _quality_codes_for_key(
@@ -27,7 +27,7 @@ def _quality_codes_for_key(
             key_failures.append("critical_weak_reference_identity")
         if support_missing and mode == "claim_safe":
             key_failures.append("critical_citation_support_missing")
-        elif support_status in quality_classification._UNSUPPORTED_STATUSES:
+        elif support_status in _UNSUPPORTED_STATUSES:
             key_failures.append("critical_unsupported_citation")
     elif metadata_status == "missing":
         key_warnings.append("noncritical_missing_bib_entry")
