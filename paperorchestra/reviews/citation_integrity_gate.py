@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.io import write_json
-from paperorchestra.loop_engine.quality.utils import _file_sha256, _read_json_if_exists
+from paperorchestra.loop_engine.quality.utils import _file_sha256
 from paperorchestra.reviews.citation_integrity_paths import (
     citation_integrity_audit_path,
     citation_integrity_critic_path,
@@ -12,101 +12,25 @@ from paperorchestra.reviews.citation_integrity_paths import (
     citation_source_match_path,
 )
 from paperorchestra.reviews.citation_rendered_references import rendered_reference_audit_path
+from paperorchestra.reviews.citation_artifact_checks import (
+    _artifact_check,
+    _critic_review_artifact,
+    _payload_status,
+)
 
 
-def _payload_status(payload: Any) -> str | None:
-    if not isinstance(payload, dict):
-        return None
-    raw = payload.get("status") or payload.get("verdict") or payload.get("overall_status")
-    return str(raw).strip().lower() if raw is not None else None
+_CRITIC_ARTIFACTS = (
+    ("rendered_reference_audit", rendered_reference_audit_path),
+    ("citation_intent_plan", citation_intent_plan_path),
+    ("citation_source_match", citation_source_match_path),
+    ("citation_integrity_audit", citation_integrity_audit_path),
+)
 
-
-def _artifact_check(
-    path: Path,
-    *,
-    expected_manuscript_sha256: str | None,
-    missing_code: str,
-    stale_code: str,
-    failed_code: str,
-    unbound_code: str | None = None,
-    require_binding: bool = False,
-) -> dict[str, Any]:
-    payload = _read_json_if_exists(path)
-    if not isinstance(payload, dict):
-        return {
-            "status": "fail",
-            "path": str(path),
-            "sha256": None,
-            "failing_codes": [missing_code],
-            "reason": "missing_or_unreadable",
-        }
-    failing: list[str] = []
-    manuscript_sha = payload.get("manuscript_sha256") or payload.get("paper_full_tex_sha256")
-    if require_binding and expected_manuscript_sha256 and not manuscript_sha:
-        failing.append(unbound_code or stale_code)
-    if expected_manuscript_sha256 and manuscript_sha and manuscript_sha != expected_manuscript_sha256:
-        failing.append(stale_code)
-    status = _payload_status(payload)
-    if status in {"fail", "failed", "reject", "rejected", "block", "blocked"}:
-        failing.append(failed_code)
-    for code in payload.get("failing_codes") or []:
-        if isinstance(code, str) and code:
-            failing.append(code)
-    return {
-        "status": "fail" if failing else "pass",
-        "path": str(path),
-        "sha256": _file_sha256(path),
-        "artifact_status": status,
-        "manuscript_sha256": manuscript_sha,
-        "expected_manuscript_sha256": expected_manuscript_sha256,
-        "failing_codes": sorted(dict.fromkeys(failing)),
-    }
-
-
-def _critic_review_artifact(
-    name: str,
-    path: Path,
-    *,
-    expected_manuscript_sha256: str | None,
-    require_binding: bool,
-) -> dict[str, Any]:
-    payload = _read_json_if_exists(path)
-    if not isinstance(payload, dict):
-        return {
-            "name": name,
-            "path": str(path),
-            "sha256": None,
-            "artifact_status": None,
-            "manuscript_sha256": None,
-            "status": "fail",
-            "failing_codes": [f"{name}_missing"],
-            "reason": "missing_or_unreadable",
-        }
-
-    failing: list[str] = []
-    manuscript_sha = payload.get("manuscript_sha256") or payload.get("paper_full_tex_sha256")
-    if require_binding and expected_manuscript_sha256 and not manuscript_sha:
-        failing.append(f"{name}_unbound")
-    if expected_manuscript_sha256 and manuscript_sha and manuscript_sha != expected_manuscript_sha256:
-        failing.append(f"{name}_stale")
-
-    artifact_status = _payload_status(payload)
-    if artifact_status not in {"pass", "ok", "warn", "warning"}:
-        failing.append(f"{name}_{artifact_status or 'unknown'}")
-    for code in payload.get("failing_codes") or []:
-        if isinstance(code, str) and code:
-            failing.append(code)
-
-    return {
-        "name": name,
-        "path": str(path),
-        "sha256": _file_sha256(path),
-        "artifact_status": artifact_status,
-        "manuscript_sha256": manuscript_sha,
-        "expected_manuscript_sha256": expected_manuscript_sha256,
-        "status": "fail" if failing else "pass",
-        "failing_codes": sorted(dict.fromkeys(failing)),
-    }
+_GATE_ARTIFACTS = (
+    ("citation_integrity_audit", citation_integrity_audit_path, "citation_integrity"),
+    ("citation_integrity_critic", citation_integrity_critic_path, "citation_critic"),
+    ("rendered_reference_audit", rendered_reference_audit_path, "rendered_reference_audit"),
+)
 
 
 def build_citation_integrity_critic(cwd: str | Path | None, *, quality_mode: str = "ralph") -> dict[str, Any]:
@@ -125,29 +49,12 @@ def build_citation_integrity_critic(cwd: str | Path | None, *, quality_mode: str
     require_binding = quality_mode == "claim_safe"
     reviewed = [
         _critic_review_artifact(
-            "rendered_reference_audit",
-            rendered_reference_audit_path(cwd),
+            name,
+            path_fn(cwd),
             expected_manuscript_sha256=manuscript_sha,
             require_binding=require_binding,
-        ),
-        _critic_review_artifact(
-            "citation_intent_plan",
-            citation_intent_plan_path(cwd),
-            expected_manuscript_sha256=manuscript_sha,
-            require_binding=require_binding,
-        ),
-        _critic_review_artifact(
-            "citation_source_match",
-            citation_source_match_path(cwd),
-            expected_manuscript_sha256=manuscript_sha,
-            require_binding=require_binding,
-        ),
-        _critic_review_artifact(
-            "citation_integrity_audit",
-            citation_integrity_audit_path(cwd),
-            expected_manuscript_sha256=manuscript_sha,
-            require_binding=require_binding,
-        ),
+        )
+        for name, path_fn in _CRITIC_ARTIFACTS
     ]
     failing: list[str] = []
     for item in reviewed:
@@ -194,48 +101,33 @@ def citation_integrity_check(cwd: str | Path | None, state: Any, *, quality_mode
     """Return the claim-safe Citation Integrity/Critic gate status."""
 
     expected_manuscript_sha256 = _file_sha256(state.artifacts.paper_full_tex)
-    integrity = _artifact_check(
-        citation_integrity_audit_path(cwd),
-        expected_manuscript_sha256=expected_manuscript_sha256,
-        missing_code="citation_integrity_missing",
-        stale_code="citation_integrity_stale",
-        failed_code="citation_integrity_failed",
-        unbound_code="citation_integrity_unbound",
-        require_binding=quality_mode == "claim_safe",
-    )
-    critic = _artifact_check(
-        citation_integrity_critic_path(cwd),
-        expected_manuscript_sha256=expected_manuscript_sha256,
-        missing_code="citation_critic_missing",
-        stale_code="citation_critic_stale",
-        failed_code="citation_critic_failed",
-        unbound_code="citation_critic_unbound",
-        require_binding=quality_mode == "claim_safe",
-    )
-    rendered = _artifact_check(
-        rendered_reference_audit_path(cwd),
-        expected_manuscript_sha256=expected_manuscript_sha256,
-        missing_code="rendered_reference_audit_missing",
-        stale_code="rendered_reference_audit_stale",
-        failed_code="rendered_reference_audit_failed",
-        unbound_code="rendered_reference_audit_unbound",
-        require_binding=quality_mode == "claim_safe",
-    )
+    require_binding = quality_mode == "claim_safe"
+    checks = {
+        key: _artifact_check(
+            path_fn(cwd),
+            expected_manuscript_sha256=expected_manuscript_sha256,
+            missing_code=f"{prefix}_missing",
+            stale_code=f"{prefix}_stale",
+            failed_code=f"{prefix}_failed",
+            unbound_code=f"{prefix}_unbound",
+            require_binding=require_binding,
+        )
+        for key, path_fn, prefix in _GATE_ARTIFACTS
+    }
     failing_codes: list[str] = []
-    if quality_mode == "claim_safe":
-        failing_codes.extend(integrity["failing_codes"])
-        failing_codes.extend(critic["failing_codes"])
-        failing_codes.extend(rendered["failing_codes"])
-    else:
-        for check in (integrity, critic, rendered):
-            failing_codes.extend(code for code in check["failing_codes"] if not code.endswith("_missing"))
+    for check in checks.values():
+        failing_codes.extend(
+            check["failing_codes"]
+            if require_binding
+            else [code for code in check["failing_codes"] if not code.endswith("_missing")]
+        )
     return {
         "status": "fail" if failing_codes else "pass",
         "failing_codes": sorted(dict.fromkeys(failing_codes)),
         "manuscript_sha256": expected_manuscript_sha256,
-        "citation_integrity_audit": integrity,
-        "citation_integrity_critic": critic,
-        "rendered_reference_audit": rendered,
+        "citation_integrity_audit": checks["citation_integrity_audit"],
+        "citation_integrity_critic": checks["citation_integrity_critic"],
+        "rendered_reference_audit": checks["rendered_reference_audit"],
         "mode_effect": (
             "hard_fail_in_claim_safe"
             if quality_mode == "claim_safe"
