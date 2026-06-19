@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 import os
 import random
-import shlex
-import subprocess
 import time
 from pathlib import Path
 
@@ -16,6 +14,12 @@ from paperorchestra.runtime.provider_base import (
     _env_float,
     _env_int,
     is_retryable_provider_stderr,
+)
+from paperorchestra.runtime.shell_provider_command import (
+    parse_shell_provider_command,
+    provider_failure_detail,
+    provider_failure_message,
+    run_provider_command_once,
 )
 
 
@@ -32,7 +36,7 @@ class ShellProvider(BaseProvider):
         self.command = command or os.environ.get("PAPERO_MODEL_CMD")
         if not self.command:
             raise ProviderError("Shell provider requires PAPERO_MODEL_CMD or an explicit command.")
-        self.argv = self._parse_command(self.command)
+        self.argv = parse_shell_provider_command(self.command)
         timeout_value = timeout_seconds if timeout_seconds is not None else os.environ.get("PAPERO_PROVIDER_TIMEOUT_SECONDS")
         self.timeout_seconds = float(timeout_value) if timeout_value not in {None, ""} else None
         self.timeout_grace_seconds = _env_float("PAPERO_PROVIDER_TIMEOUT_GRACE_SECONDS", 0.0, minimum=0.0, maximum=3600.0)
@@ -41,9 +45,6 @@ class ShellProvider(BaseProvider):
         self.retry_jitter_seconds = _env_float("PAPERO_PROVIDER_RETRY_JITTER_SECONDS", 0.0, minimum=0.0, maximum=300.0)
         self.retry_safe = os.environ.get("PAPERO_PROVIDER_RETRY_SAFE", "0").strip().lower() in {"1", "true", "yes", "on"}
         self.retry_trace_dir = Path(os.environ["PAPERO_PROVIDER_RETRY_TRACE_DIR"]) if os.environ.get("PAPERO_PROVIDER_RETRY_TRACE_DIR") else None
-
-    def _parse_command(self, command: str) -> list[str]:
-        return parse_shell_provider_command(command)
 
     def _record_retry_attempt(self, payload: dict[str, object]) -> None:
         if self.retry_trace_dir is None:
@@ -60,25 +61,6 @@ class ShellProvider(BaseProvider):
             env,
             timeout_seconds=self.timeout_seconds,
             timeout_grace_seconds=self.timeout_grace_seconds,
-        )
-
-    def _failure_detail(self, attempt: int, max_attempts: int, rc: int, stderr_text: str, timed_out: bool) -> str:
-        return provider_failure_detail(
-            attempt=attempt,
-            max_attempts=max_attempts,
-            rc=rc,
-            stderr_text=stderr_text,
-            timed_out=timed_out,
-            timeout_seconds=self.timeout_seconds,
-            timeout_grace_seconds=self.timeout_grace_seconds,
-        )
-
-    def _failure_message(self, timed_out: bool, retryable: bool, stderr_text: str) -> str:
-        return provider_failure_message(
-            timed_out=timed_out,
-            retryable=retryable,
-            stderr_text=stderr_text,
-            retry_safe=self.retry_safe,
         )
 
     def complete(self, request: CompletionRequest) -> str:
@@ -100,7 +82,17 @@ class ShellProvider(BaseProvider):
             transport_evidence = is_retryable_provider_stderr(stderr_text)
             retryable = self.retry_safe and transport_evidence
             reason = "transport_reconnect" if transport_evidence else ("plain_timeout" if timed_out else "non_retryable_failure")
-            failures.append(self._failure_detail(attempt, max_attempts, rc, stderr_text, timed_out))
+            failures.append(
+                provider_failure_detail(
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    rc=rc,
+                    stderr_text=stderr_text,
+                    timed_out=timed_out,
+                    timeout_seconds=self.timeout_seconds,
+                    timeout_grace_seconds=self.timeout_grace_seconds,
+                )
+            )
             self._record_retry_attempt({
                 "attempt": attempt,
                 "status": "failure",
@@ -126,99 +118,19 @@ class ShellProvider(BaseProvider):
                 "PAPERO_PROVIDER_RETRY_SAFE=1 only for commands that are safe to replay."
             )
             error_cls = TransientProviderError if retryable else ProviderError
-            raise error_cls(f"{self._failure_message(timed_out, retryable, stderr_text)}:\n{details}{hint}")
+            raise error_cls(
+                f"{provider_failure_message(timed_out=timed_out, retryable=retryable, stderr_text=stderr_text, retry_safe=self.retry_safe)}:\n{details}{hint}"
+            )
         raise ProviderError("Provider command failed without producing a result.")
 
     def fork(self) -> "ShellProvider":
         return ShellProvider(command=json.dumps(self.argv), timeout_seconds=self.timeout_seconds)
 
 
-def parse_shell_provider_command(command: str) -> list[str]:
-    try:
-        parsed = json.loads(command)
-        if isinstance(parsed, list) and parsed and all(isinstance(item, str) for item in parsed):
-            argv = parsed
-        else:
-            raise ProviderError("Provider command JSON must be a non-empty string array.")
-    except json.JSONDecodeError:
-        argv = shlex.split(command)
-
-    if not argv:
-        raise ProviderError("Provider command must not be empty.")
-
-    executable = Path(argv[0]).name
-    allowlist = {
-        item.strip()
-        for item in os.environ.get(
-            "PAPERO_ALLOWED_PROVIDER_BINARIES",
-            "codex,openai,ollama,llm,claude,gemini",
-        ).split(",")
-        if item.strip()
-    }
-    if executable not in allowlist:
-        raise ProviderError(
-            f"Provider executable '{executable}' is not allowlisted. Set PAPERO_ALLOWED_PROVIDER_BINARIES to opt in."
-        )
-    return argv
-
-
-def run_provider_command_once(
-    argv: list[str],
-    prompt: bytes,
-    env: dict[str, str],
-    *,
-    timeout_seconds: float | None,
-    timeout_grace_seconds: float,
-) -> tuple[int, bytes, bytes, bool]:
-    timed_out = False
-    with subprocess.Popen(
-        argv,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-    ) as proc:
-        try:
-            stdout, stderr = proc.communicate(input=prompt, timeout=timeout_seconds)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            if timeout_grace_seconds > 0:
-                try:
-                    stdout, stderr = proc.communicate(timeout=timeout_grace_seconds)
-                    return proc.returncode if proc.returncode is not None else 1, stdout or b"", stderr or b"", True
-                except subprocess.TimeoutExpired:
-                    pass
-            proc.kill()
-            stdout, stderr = proc.communicate()
-        except BaseException:
-            proc.kill()
-            proc.wait()
-            raise
-    return proc.returncode if proc.returncode is not None else 1, stdout or b"", stderr or b"", timed_out
-
-
-def provider_failure_detail(
-    *,
-    attempt: int,
-    max_attempts: int,
-    rc: int,
-    stderr_text: str,
-    timed_out: bool,
-    timeout_seconds: float | None,
-    timeout_grace_seconds: float,
-) -> str:
-    if timed_out:
-        timeout = timeout_seconds if timeout_seconds is not None else "unset"
-        return f"attempt {attempt}/{max_attempts}: timed out after {timeout}s + grace {timeout_grace_seconds:g}s"
-    return f"attempt {attempt}/{max_attempts}: exit {rc}: {stderr_text.strip() or '<empty stderr>'}"
-
-
-def provider_failure_message(*, timed_out: bool, retryable: bool, stderr_text: str, retry_safe: bool) -> str:
-    message = "Provider command timed out" if timed_out else "Provider command failed"
-    if retryable:
-        return message + " after retryable transport handling"
-    if timed_out:
-        return message + " without retryable transport evidence"
-    if is_retryable_provider_stderr(stderr_text) and not retry_safe:
-        return message + " with retry disabled because PAPERO_PROVIDER_RETRY_SAFE is not set"
-    return message
+__all__ = [
+    "ShellProvider",
+    "parse_shell_provider_command",
+    "provider_failure_detail",
+    "provider_failure_message",
+    "run_provider_command_once",
+]
