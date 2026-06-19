@@ -15,7 +15,7 @@ If there is insufficient material, that blocks drafting. Do not fabricate claims
 
 ## Fresh-start boundary
 
-If the user says this is a fresh start, new session, 처음부터, 처음 보는 사이, or similar, do not reuse prior project paths, paper claims, venue assumptions, experiment facts, or stale `/tmp` artifacts from earlier conversation context. Treat only the current fresh-flow user messages and inspected current session state as authoritative; ask for the material path again before intake or planning.
+If the user explicitly requests a fresh start, context reset, or new paper session, do not reuse prior project paths, paper claims, venue assumptions, experiment facts, or stale `/tmp` artifacts from earlier conversation context. Treat only the current reset-scope user messages and inspected current session state as authoritative; ask for the material path again before intake or planning.
 
 ## Academic writing doctrine
 

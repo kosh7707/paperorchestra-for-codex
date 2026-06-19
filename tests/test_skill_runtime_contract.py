@@ -68,9 +68,13 @@ def test_fresh_start_boundary_blocks_prior_context_reuse() -> None:
         assert_mentions(
             skill,
             "Fresh-start boundary",
+            "explicitly requests a fresh start",
+            "context reset",
             "do not reuse prior project paths",
             "ask for the material path again",
         )
+        assert "처음 보는 사이" not in skill_text(skill)
+        assert "처음부터" not in skill_text(skill)
 
 
 def test_setup_and_status_use_current_environment_command() -> None:

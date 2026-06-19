@@ -20,7 +20,7 @@ Also inspect nearby artifacts when present: `.paper-orchestra/`, `paper-plan.md`
 
 ## Fresh-start boundary
 
-If the user says this is a fresh start, new session, 처음부터, 처음 보는 사이, or similar, do not reuse prior project paths, old `/tmp` workspaces, old manuscript assumptions, or earlier experiment facts as current truth. Report only current session/material state; if no current material is present, say so and ask for the material path again instead of inferring it.
+If the user explicitly requests a fresh start, context reset, or new paper session, do not reuse prior project paths, old `/tmp` workspaces, old manuscript assumptions, or earlier experiment facts as current truth. Report only current session/material state; if no current material is present, say so and ask for the material path again instead of inferring it.
 
 ## Status card
 
