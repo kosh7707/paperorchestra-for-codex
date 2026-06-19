@@ -9,16 +9,17 @@ Use this for state-machine verification. It may call critics, but its job is to 
 
 ## Bounded order
 
-Run only the needed suffix if fresh artifacts already exist; otherwise follow this order. The citation-support stage is `critique --citation-evidence-mode web`:
+Run only the needed suffix if fresh artifacts already exist; otherwise follow this order. Preferred MCP/source gate: `quality_gate(...)` or, when verified available, `paperorchestra quality-gate --no-fail-on-block`. Installed CLI fallback: `validate-current` → `critique` → `quality-eval` → `qa-loop-plan` → bounded `qa-loop-step`. The citation-support stage is `critique --citation-evidence-mode web`:
 
 ```bash
-paperorchestra quality-gate --no-fail-on-block
+paperorchestra validate-current
 paperorchestra critique --provider shell --provider-command "$PAPERO_MODEL_CMD" --citation-evidence-mode web
-paperorchestra qa-loop --quality-mode claim_safe --require-live-verification
+paperorchestra quality-eval --quality-mode claim_safe --require-live-verification
+paperorchestra qa-loop-plan --quality-mode claim_safe --require-live-verification
 paperorchestra qa-loop-step --quality-mode claim_safe --max-iterations 1
 ```
 
-`run` alone is draft generation, not full quality approval. A full quality gate must include validation, compile where allowed, critic/citation evidence, `quality-gate`, `qa-loop`, and at most a bounded `qa-loop-step`.
+`run` alone is draft generation, not full quality approval. A full quality gate must include validation, compile where allowed, critic/citation evidence, `quality-eval`, `qa-loop-plan`, and at most a bounded `qa-loop-step`.
 
 ## Academic writing doctrine
 

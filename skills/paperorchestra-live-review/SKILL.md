@@ -9,10 +9,10 @@ Use this when the goal is to review the current manuscript with real provider ev
 
 ## Preflight first
 
-Fail closed unless the live critique command is actually run with a shell provider and web citation evidence:
+Fail closed unless the critique command is actually run with a shell provider and web citation evidence:
 
 ```bash
-paperorchestra critique --provider shell --provider-command "$PAPERO_MODEL_CMD" --citation-evidence-mode web --live
+paperorchestra critique --provider shell --provider-command "$PAPERO_MODEL_CMD" --citation-evidence-mode web
 ```
 
 If preflight reports `mock_smoke`, `local_diagnostic`, or `heuristic_citation`, never claim live validation. Say what is missing and route to `$paperorchestra-setup`.
@@ -39,11 +39,10 @@ Live review should stop after reporting evidence, but it must name the right fol
 
 ## Run live review
 
-Use an explicit output directory for review artifacts. The required live command shape is `critique --live --citation-evidence-mode web`:
+Use an explicit output directory for review artifacts. Installed CLI fallback may not expose `--live`; in that surface, live review means `--provider shell` plus `--citation-evidence-mode web`. If `paperorchestra critique --help` shows `--live`, include it to fail closed on trust preflight:
 
 ```bash
 paperorchestra critique \
-  --live \
   --provider shell \
   --provider-command "$PAPERO_MODEL_CMD" \
   --citation-evidence-mode web \

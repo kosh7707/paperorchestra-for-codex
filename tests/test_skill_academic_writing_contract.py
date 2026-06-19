@@ -102,3 +102,8 @@ def test_install_skill_copies_reference_resources(tmp_path: Path) -> None:
     assert installed.exists()
     assert text(installed) == text(ACADEMIC_REF)
     assert not stale.exists()
+    for skill in CORE_WRITING_SKILLS:
+        if skill == "paperorchestra":
+            continue
+        sibling_ref = (target / skill / ".." / "paperorchestra" / "references" / "academic-writing.md").resolve()
+        assert sibling_ref.exists(), f"{skill} cannot resolve academic-writing.md through sibling path"

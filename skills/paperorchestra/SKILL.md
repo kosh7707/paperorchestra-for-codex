@@ -13,6 +13,10 @@ PaperOrchestra v1 produces auditable paper-writing artifacts; it does **not** ce
 
 If there is insufficient material, that blocks drafting. Do not fabricate claims, citations, figures, or results. Ask for a material upload/path or route to `$paperorchestra-status` instead. For “바로 써줘”, reject unsafe drafting when factual materials are missing.
 
+## Fresh-start boundary
+
+If the user says this is a fresh start, new session, 처음부터, 처음 보는 사이, or similar, do not reuse prior project paths, paper claims, venue assumptions, experiment facts, or stale `/tmp` artifacts from earlier conversation context. Treat only the current fresh-flow user messages and inspected current session state as authoritative; ask for the material path again before intake or planning.
+
 ## Academic writing doctrine
 
 When a task involves paper planning, drafting, review, or repair, use `references/academic-writing.md`. Treat every manuscript as a paper-typed claim structure, not an information dump:
@@ -55,6 +59,8 @@ Keep the explicit PaperOrchestra skill as the paper workflow owner. For example,
 
 Prefer high-level MCP tools when attached; otherwise use CLI fallback and say MCP active attachment is unavailable.
 
+CLI fallback assumes the installed `paperorchestra` console script. If running from a source checkout, first verify the surface with `paperorchestra <cmd> --help`; do not substitute `python -m paperorchestra.cli` unless explicitly working on the checkout implementation.
+
 - `inspect_state`: inspect current session/material state and next valid actions.
 - `orchestrate`: bounded v1 orchestrator. With `execute_local=true`, it performs **one deterministic local step** only; this is **not a full pipeline** and not a full paper run.
 - Before any `run_pipeline` or `write_sections`, prefer intake/plan artifacts (`paper-intake.md`, `paper-plan.md`) for new projects. For actual first-draft work, prefer `authoring_round` over raw `write_sections` so related-work positioning and critic artifacts are produced in the same round.
@@ -73,10 +79,11 @@ If the next action is `start_autoresearch` / `$autoresearch`, explain that remai
 
 ```bash
 paperorchestra status --json
-paperorchestra authoring-round --provider mock --citation-evidence-mode heuristic
+paperorchestra run --provider mock --verify-mode mock --runtime-mode compatibility
 paperorchestra critique --provider mock --source-paper ./main.tex
-paperorchestra quality-gate --no-fail-on-block
-paperorchestra qa-loop --quality-mode claim_safe
+paperorchestra quality-eval --quality-mode claim_safe
+paperorchestra qa-loop-plan --quality-mode claim_safe
+paperorchestra qa-loop-step --quality-mode claim_safe --max-iterations 1
 paperorchestra environment
 ```
 

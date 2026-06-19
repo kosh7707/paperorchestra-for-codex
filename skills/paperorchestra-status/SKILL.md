@@ -13,10 +13,14 @@ Prefer MCP `inspect_state` when attached. CLI fallback:
 
 ```bash
 paperorchestra status --json
-paperorchestra environment --summary
+paperorchestra environment
 ```
 
-Also inspect nearby artifacts when present: `.paper-orchestra/`, `paper-plan.md` approval state, `paper.full.tex`, `citation_map.json`, `references.bib`, `citation_support_review.json`, `quality-eval.json`, `qa-loop.plan.json`, compile reports, and named round directories.
+Also inspect nearby artifacts when present: `.paper-orchestra/`, `paper-plan.md` approval state, `paper.full.tex`, `citation_map.json`, `references.bib`, `citation_support_review.json`, `quality-eval.json`, `quality-gate.report.json`, `qa-loop.plan.json`, compile reports, and named round directories.
+
+## Fresh-start boundary
+
+If the user says this is a fresh start, new session, 처음부터, 처음 보는 사이, or similar, do not reuse prior project paths, old `/tmp` workspaces, old manuscript assumptions, or earlier experiment facts as current truth. Report only current session/material state; if no current material is present, say so and ask for the material path again instead of inferring it.
 
 ## Status card
 

@@ -32,6 +32,10 @@ Phenomenon → Gap → Contribution → Evidence → Boundary → Implication
 
 Do not assume every paper is a systems paper. Intake should distinguish systems, methodology/benchmark, empirical, survey/review, and position-paper intents.
 
+## Fresh-start boundary
+
+If the user says this is a fresh start, new session, 처음부터, 처음 보는 사이, or similar, do not reuse prior project paths, claims, venue choices, experiment assumptions, or old intake artifacts. Inspect current PaperOrchestra state, then ask for the material path again if the current fresh-flow user message has not supplied it.
+
 ## OMX companion routing
 
 - Use `$deep-interview` for broad ambiguity; intake is the PaperOrchestra artifact wrapper around that clarification.
@@ -49,7 +53,7 @@ Do not assume every paper is a systems paper. Intake should distinguish systems,
    - experiment status and whether numbers may be placeholders;
    - citation strategy and known related-work seeds;
    - claim boundaries and non-goals.
-5. Write `paper-intake.md` under the active `/tmp` or user-approved output workspace.
+5. Write `paper-intake.md` only in a user-supplied output workspace or a newly created, clearly named workspace for this run; do not reuse an old `/tmp` directory unless the user explicitly identifies it as current.
 6. Recommend `$paperorchestra-plan` next when enough information exists to propose a manuscript plan.
 
 ## paper-intake.md shape

@@ -12,11 +12,14 @@ Run this before live review, quality gates, or authoring rounds when environment
 Use the narrowest available surface:
 
 ```bash
+command -v paperorchestra
+paperorchestra --help
 paperorchestra doctor
-paperorchestra environment --summary
+paperorchestra environment
 paperorchestra status --json
-paperorchestra doctor
 ```
+
+If repo checkout commands are being tested, compare with `python3 -m paperorchestra.cli --help` and report any command-surface mismatch. Do not silently mix installed CLI examples with source-checkout-only commands.
 
 If MCP is expected, distinguish registration from active attachment:
 

@@ -55,16 +55,18 @@ authoring_round(
 
 If `background` is omitted, the MCP tool automatically backgrounds rounds that request `require_web_research` or `require_live_critic`. Poll `paperorchestra status --json`, tail the returned stderr log, and read the returned stdout JSON when the job exits.
 
-CLI fallback:
+CLI staged fallback:
+
+For MCP/source-checkout execution, `authoring_round` may delegate to `python -m paperorchestra.cli authoring-round`. For installed CLI fallback, do not assume `paperorchestra authoring-round` exists; first run `paperorchestra authoring-round --help`. If it fails, use the staged fallback and preserve the closest available artifact chain:
 
 ```bash
-paperorchestra authoring-round \
-  --citation-evidence-mode web \
-  --require-web-research \
-  --require-live-critic
+paperorchestra research-prior-work --provider shell --provider-command "$PAPERO_MODEL_CMD" --import
+paperorchestra plan-narrative --provider shell --provider-command "$PAPERO_MODEL_CMD"
+paperorchestra write-sections --provider shell --provider-command "$PAPERO_MODEL_CMD"
+paperorchestra critique --provider shell --provider-command "$PAPERO_MODEL_CMD" --citation-evidence-mode web
 ```
 
-Use `--skip-literature`, `--skip-critic`, or `--citation-evidence-mode heuristic` only for explicit local smoke tests or when the user accepts non-live evidence.
+Use mock providers or `--citation-evidence-mode heuristic` only for explicit local smoke tests or when the user accepts non-live evidence.
 
 ## Round recipe
 
@@ -72,7 +74,7 @@ Use `--skip-literature`, `--skip-critic`, or `--citation-evidence-mode heuristic
 2. Check for `paper-plan.md` with an author-approval marker such as `<!-- paperorchestra:plan-approved -->`. If missing, route to `$paperorchestra-plan` unless the user explicitly bypassed planning.
 3. Run one `authoring_round` so pre-draft literature/positioning happens before manuscript writing.
 4. If TeX is configured, compile in the round; otherwise record compile as skipped.
-5. If the MCP call returns `mode=background`, poll/tail the returned job paths until the underlying CLI finishes; then inspect `authoring-round.manifest.json`, `positioning_brief.md`, `paper.full.tex`, `citation_support_review.json`, and `revision_suggestions.json`.
+5. If the MCP/source authoring-round returns `mode=background`, poll/tail the returned job paths until the underlying CLI finishes; then inspect `authoring-round.manifest.json`, `positioning_brief.md`, `paper.full.tex`, `citation_support_review.json`, and `revision_suggestions.json`. In installed staged fallback mode, `authoring-round.manifest.json` may not exist; inspect the stage artifacts actually produced by each command.
 6. Route to `$paperorchestra-quality-gate` only after the round has real review artifacts or the user asks for a gate.
 
 ## Edit boundaries
