@@ -5,7 +5,6 @@ from typing import Any
 
 from paperorchestra.manuscript.claim_coverage_terms import (
     _coverage_term_positions,
-    _coverage_term_variants,
     _terms_nearby,
 )
 from paperorchestra.manuscript.claim_text import _section_visible_text, _visible_latex_text
