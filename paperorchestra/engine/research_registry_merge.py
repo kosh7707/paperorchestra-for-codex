@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 
 from paperorchestra.core.models import VerifiedPaper
-from paperorchestra.engine.research_registry_authority import merge_authoritative_external_ids, prior_work_metadata_is_authoritative
 from paperorchestra.engine.research_registry_entry_merge import merge_verified_entry_with_prior_keys
 from paperorchestra.research.bibtex import ensure_unique_bibtex_keys
 
