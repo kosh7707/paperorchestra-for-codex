@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from paperorchestra.core.session import load_session
+from paperorchestra.engine.authoring_round import run_authoring_round
 from paperorchestra.engine.pipeline import run_pipeline
 from paperorchestra.engine.research_prior_work_stage import import_prior_work, research_prior_work as generate_prior_work_seed
 from paperorchestra.engine.review_stages import review_current_paper
@@ -39,6 +40,45 @@ def handle_research_prior_work(cwd: Path, args: argparse.Namespace) -> int:
 def handle_import_prior_work(cwd: Path, args: argparse.Namespace) -> int:
     payload = import_prior_work(cwd, seed_file=args.seed_file, source=args.source, require_complete_metadata=args.require_complete_metadata)
     print(json.dumps(payload, indent=2, ensure_ascii=False))
+    return 0
+
+
+def handle_authoring_round(cwd: Path, args: argparse.Namespace) -> int:
+    trust_card = build_critic_trust_card(
+        provider_name=args.provider,
+        provider_command=args.provider_command,
+        citation_evidence_mode=args.citation_evidence_mode,
+        claim_safe=args.claim_safe,
+    )
+    if args.require_live_critic:
+        require_live_critic_trust(trust_card)
+    provider = provider_from_args(args)
+    with strict_omx_env(args.strict_omx_native):
+        result = run_authoring_round(
+            cwd,
+            provider,
+            round_dir=args.round_dir,
+            runtime_mode=args.runtime_mode,
+            only_sections=args.only_sections,
+            output_path=args.output_tex,
+            claim_safe=args.claim_safe,
+            bypass_plan_gate=args.bypass_plan_gate,
+            run_literature=not args.skip_literature,
+            import_literature_seed=not args.no_import_literature,
+            require_complete_metadata=args.require_complete_metadata,
+            require_web_research=args.require_web_research,
+            run_critic=not args.skip_critic,
+            require_live_critic=args.require_live_critic,
+            compile_paper=args.compile,
+            citation_evidence_mode=args.citation_evidence_mode,
+            citation_provider_name=args.citation_provider,
+            citation_provider_command=args.citation_provider_command,
+            provider_name=args.provider,
+            provider_command=args.provider_command,
+            progress_stream=sys.stderr if args.citation_evidence_mode in {"model", "web"} else None,
+        )
+    result["critic_trust"] = trust_card
+    print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0
 
 

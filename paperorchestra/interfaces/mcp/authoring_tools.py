@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from paperorchestra.core.session import load_session
+from paperorchestra.engine.authoring_round import run_authoring_round
 from paperorchestra.engine.pipeline import run_pipeline
 from paperorchestra.engine.research_prior_work_stage import import_prior_work, research_prior_work as generate_prior_work_seed
 from paperorchestra.engine.review_stages import compile_current_paper, review_current_paper
@@ -40,6 +41,37 @@ def tool_import_prior_work(arguments: JSON) -> JSON:
             seed_file=arguments["seed_file"],
             source=arguments.get("source", "manual_seed"),
             require_complete_metadata=bool(arguments.get("require_complete_metadata", False)),
+        )
+    )
+
+
+def tool_authoring_round(arguments: JSON) -> JSON:
+    cwd = default_cwd(arguments)
+    provider_name = arguments.get("provider", "mock")
+    evidence_mode = arguments.get("citation_evidence_mode") or ("heuristic" if provider_name == "mock" else "web")
+    provider_command = arguments.get("provider_command")
+    return ok(
+        run_authoring_round(
+            cwd,
+            provider_from_args(arguments),
+            round_dir=arguments.get("round_dir"),
+            runtime_mode=arguments.get("runtime_mode", "compatibility"),
+            only_sections=arguments.get("only_sections"),
+            output_path=arguments.get("output_path"),
+            claim_safe=bool(arguments.get("claim_safe", False)),
+            bypass_plan_gate=bool(arguments.get("bypass_plan_gate", False)),
+            run_literature=not bool(arguments.get("skip_literature", False)),
+            import_literature_seed=not bool(arguments.get("no_import_literature", False)),
+            require_complete_metadata=bool(arguments.get("require_complete_metadata", False)),
+            require_web_research=bool(arguments.get("require_web_research", False)),
+            run_critic=not bool(arguments.get("skip_critic", False)),
+            require_live_critic=bool(arguments.get("require_live_critic", False)),
+            compile_paper=bool(arguments.get("compile_paper", False)),
+            citation_evidence_mode=evidence_mode,
+            citation_provider_name=arguments.get("citation_provider"),
+            citation_provider_command=arguments.get("citation_provider_command"),
+            provider_name=provider_name,
+            provider_command=provider_command,
         )
     )
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from paperorchestra.interfaces.cli_parser_sections.common import add_common_provider_args, add_runtime_mode_args
+from paperorchestra.interfaces.cli_parser_sections.common import add_citation_provider_args, add_common_provider_args, add_runtime_mode_args
 
 
 def register_authoring_commands(subparsers: Any) -> None:
@@ -20,6 +20,25 @@ def register_authoring_commands(subparsers: Any) -> None:
     import_parser.add_argument("--seed-file", required=True)
     import_parser.add_argument("--source", default="manual_seed")
     import_parser.add_argument("--require-complete-metadata", action="store_true")
+
+
+    authoring_parser = subparsers.add_parser("authoring-round", help="Run one evidence-bearing manuscript authoring round")
+    authoring_parser.add_argument("--round-dir")
+    authoring_parser.add_argument("--only-sections")
+    authoring_parser.add_argument("--output-tex")
+    authoring_parser.add_argument("--claim-safe", action="store_true")
+    authoring_parser.add_argument("--bypass-plan-gate", action="store_true")
+    authoring_parser.add_argument("--skip-literature", action="store_true", help="Skip the pre-draft prior-work/positioning lane")
+    authoring_parser.add_argument("--no-import-literature", action="store_true", help="Do not import the generated prior-work seed")
+    authoring_parser.add_argument("--require-complete-metadata", action="store_true")
+    authoring_parser.add_argument("--require-web-research", action="store_true")
+    authoring_parser.add_argument("--skip-critic", action="store_true", help="Draft only; do not run review/section/citation critics")
+    authoring_parser.add_argument("--require-live-critic", action="store_true")
+    authoring_parser.add_argument("--compile", action="store_true")
+    authoring_parser.add_argument("--citation-evidence-mode", default="web", choices=["heuristic", "model", "web", "source"])
+    add_runtime_mode_args(authoring_parser, strict_flag=True)
+    add_common_provider_args(authoring_parser)
+    add_citation_provider_args(authoring_parser)
 
     sections_parser = subparsers.add_parser("write-sections", help="Draft or rewrite manuscript sections")
     sections_parser.add_argument("--only-sections")

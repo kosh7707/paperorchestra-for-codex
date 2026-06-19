@@ -44,6 +44,34 @@ AUTHORING_TOOLS: list[JSON] = [
             ["seed_file"],
         ),
     },
+
+    {
+        "name": "authoring_round",
+        "description": "Run one evidence-bearing manuscript authoring round: prior-work positioning, draft, optional compile, and critic artifacts.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "provider": {"type": "string"},
+                "provider_command": {"type": "string"},
+                "round_dir": {"type": "string"},
+                "runtime_mode": {"type": "string"},
+                "only_sections": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+                "output_path": {"type": "string"},
+                "claim_safe": {"type": "boolean"},
+                "bypass_plan_gate": {"type": "boolean"},
+                "skip_literature": {"type": "boolean"},
+                "no_import_literature": {"type": "boolean"},
+                "require_complete_metadata": {"type": "boolean"},
+                "require_web_research": {"type": "boolean"},
+                "skip_critic": {"type": "boolean"},
+                "require_live_critic": {"type": "boolean"},
+                "compile_paper": {"type": "boolean"},
+                "citation_evidence_mode": {"type": "string", "enum": ["heuristic", "model", "web", "source"]},
+                "citation_provider": {"type": "string"},
+                "citation_provider_command": {"type": "string"},
+            }
+        ),
+    },
     {
         "name": "write_sections",
         "description": "Draft or rewrite manuscript sections.",

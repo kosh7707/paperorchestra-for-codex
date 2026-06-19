@@ -5,6 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from paperorchestra.interfaces.cli_commands.authoring import (
+    handle_authoring_round,
     handle_critique,
     handle_import_prior_work,
     handle_research_prior_work,
@@ -40,6 +41,7 @@ CLI_HANDLERS: dict[str, CliHandler] = {
     "research-prior-work": handle_research_prior_work,
     "import-prior-work": handle_import_prior_work,
     "write-sections": handle_write_sections,
+    "authoring-round": handle_authoring_round,
     "compile": handle_compile,
     "environment": handle_environment,
     "doctor": handle_doctor,

@@ -24,6 +24,7 @@ MINIMAL_COMMANDS = {
     "export-current": ["export-current", "--output", "out"],
     "research-prior-work": ["research-prior-work"],
     "import-prior-work": ["import-prior-work", "--seed-file", "seed.json"],
+    "authoring-round": ["authoring-round"],
     "write-sections": ["write-sections"],
     "compile": ["compile"],
     "environment": ["environment"],
@@ -42,6 +43,38 @@ def test_public_commands_parse_minimal_arguments(command: str, argv: list[str]) 
     args = build_parser().parse_args(argv)
 
     assert args.command == command
+
+
+def test_authoring_round_flags_cover_first_draft_contract() -> None:
+    args = build_parser().parse_args(
+        [
+            "authoring-round",
+            "--round-dir",
+            "round-1",
+            "--require-web-research",
+            "--require-live-critic",
+            "--compile",
+            "--citation-evidence-mode",
+            "web",
+            "--provider",
+            "shell",
+            "--provider-command",
+            "codex --search exec",
+            "--citation-provider",
+            "shell",
+            "--citation-provider-command",
+            "codex --search exec",
+        ]
+    )
+
+    assert args.command == "authoring-round"
+    assert args.round_dir == "round-1"
+    assert args.require_web_research is True
+    assert args.require_live_critic is True
+    assert args.compile is True
+    assert args.citation_evidence_mode == "web"
+    assert args.provider_command == "codex --search exec"
+    assert args.citation_provider_command == "codex --search exec"
 
 
 def test_provider_runtime_and_citation_flags_remain_on_quality_step() -> None:

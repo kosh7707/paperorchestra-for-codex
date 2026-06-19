@@ -36,10 +36,19 @@ The router chooses the next skill for you. New papers normally go through:
 1. setup/status check;
 2. intake interview and material audit;
 3. `paper-plan.md` for author approval;
-4. one bounded authoring round;
-5. live review and quality gate as needed.
+4. one bounded authoring round that performs outline/narrative refresh, prior-work positioning, draft writing, and critic/citation review;
+5. quality gate or another revision round as needed.
 
 The important rule is: **plan before drafting**. For new papers, PaperOrchestra should not jump directly from materials to `paper.full.tex` unless `paper-plan.md` is author-approved. Mark approval by adding `<!-- paperorchestra:plan-approved -->` to the plan, or explicitly pass the bypass flag for legacy/manual runs.
+
+
+Low-level equivalent for an approved plan:
+
+```bash
+paperorchestra authoring-round --citation-evidence-mode web --require-web-research --require-live-critic
+```
+
+Use mock/heuristic mode only for local smoke checks, not for evidence-bearing paper writing.
 
 ## Useful explicit skills
 
@@ -49,8 +58,8 @@ You usually only need `$paperorchestra`, but these entry points are available:
 - `$paperorchestra-status` — inspect current materials, artifacts, trust, and next action.
 - `$paperorchestra-intake` — interview the author and inventory materials.
 - `$paperorchestra-plan` — create or revise `paper-plan.md` before drafting.
-- `$paperorchestra-authoring-round` — run one bounded manuscript-writing/revision round.
-- `$paperorchestra-live-review` — run real model/web critic or citation review.
+- `$paperorchestra-authoring-round` — run one bounded first-draft/revision round with outline/narrative refresh, prior-work positioning, and critic artifacts.
+- `$paperorchestra-live-review` — run an extra real model/web critic or citation review on an existing manuscript.
 - `$paperorchestra-quality-gate` — run validation and QA-loop state checks.
 
 ## Safety boundary

@@ -6,6 +6,7 @@ from paperorchestra.core.models import InputBundle
 from paperorchestra.core.session import create_session, load_session
 from paperorchestra.interfaces.mcp.authoring_tools import (
     tool_answer_human_needed,
+    tool_authoring_round,
     tool_compile_current_paper,
     tool_critique,
     tool_export_current,
@@ -100,6 +101,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "orchestrate": tool_orchestrate,
     "research_prior_work": tool_research_prior_work,
     "import_prior_work": tool_import_prior_work,
+    "authoring_round": tool_authoring_round,
     "write_sections": tool_write_sections,
     "critique": tool_critique,
     "quality_gate": tool_quality_gate,

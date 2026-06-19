@@ -50,7 +50,7 @@ Check for stale manuscript hash mismatches between current `paper.full.tex` and 
 - Recommend `plan recommended` when intake/materials are sufficient but no approved `paper-plan.md` exists.
 - Recommend `live-review recommended` when current critic/citation evidence is mock, heuristic, local diagnostic, stale, or missing for the current manuscript hash.
 - Recommend `quality-gate recommended` when live or acceptable evidence exists but no fresh quality-eval/qa-loop plan exists.
-- Recommend `authoring-round recommended` only after an approved plan exists and review/gate evidence identifies machine-actionable manuscript improvements.
+- Recommend `authoring-round recommended` after an approved plan exists and either no manuscript has been drafted yet, or review/gate evidence identifies machine-actionable manuscript improvements.
 - Recommend `human-needed answer required` for `human_needed` plans; list exactly the decisions required.
 - Recommend `materials missing` when factual paper drafting would require inventing claims, citations, figures, or results.
 

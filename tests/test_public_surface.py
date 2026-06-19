@@ -24,6 +24,7 @@ class PublicSurfaceTest(unittest.TestCase):
             commands,
             {
                 "answer-human-needed",
+                "authoring-round",
                 "compile",
                 "critique",
                 "doctor",
@@ -56,6 +57,7 @@ class PublicSurfaceTest(unittest.TestCase):
                 "orchestrate",
                 "research_prior_work",
                 "import_prior_work",
+                "authoring_round",
                 "write_sections",
                 "critique",
                 "quality_gate",
@@ -72,6 +74,7 @@ class PublicSurfaceTest(unittest.TestCase):
             names,
             {
                 "answer_human_needed",
+                "authoring_round",
                 "compile_current_paper",
                 "critique",
                 "export_current",

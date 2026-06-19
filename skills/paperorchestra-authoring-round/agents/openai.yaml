@@ -1,4 +1,4 @@
 interface:
   display_name: "PaperOrchestra Authoring Round"
-  short_description: "Run one evidence-grounded manuscript improvement round with artifacts preserved."
-  default_prompt: "Use $paperorchestra-authoring-round to improve this draft for one bounded round."
+  short_description: "Run one evidence-bearing first-draft or revision round with artifacts preserved."
+  default_prompt: "Use $paperorchestra-authoring-round for one bounded draft/revision round after the paper plan is approved."

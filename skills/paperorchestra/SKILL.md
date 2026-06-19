@@ -21,9 +21,9 @@ If there is insufficient material, that blocks drafting. Do not fabricate claims
 - `$paperorchestra-plan`: create or revise `paper-plan.md` for author approval before manuscript drafting.
 - `$paperorchestra-live-review`: run a real live/model/web critic lane and report trust tiers without silently using mock/heuristic paths.
 - `$paperorchestra-quality-gate`: run bounded validation/quality/QA state transitions and stop on `human_needed`, `failed`, or `ready_for_human_finalization`.
-- `$paperorchestra-authoring-round`: perform one manuscript-improvement round after status/review/gate evidence is available.
+- `$paperorchestra-authoring-round`: perform one evidence-bearing first-draft or revision round after plan approval.
 
-Default order for unclear first-use writing requests: `$paperorchestra-setup` if readiness is unknown → `$paperorchestra-status` → `$paperorchestra-intake` when materials/intent are not locked → `$paperorchestra-plan` → author approval → `$paperorchestra-authoring-round`.
+Default order for unclear first-use writing requests: `$paperorchestra-setup` if readiness is unknown → `$paperorchestra-status` → `$paperorchestra-intake` when materials/intent are not locked → `$paperorchestra-plan` → author approval → `$paperorchestra-authoring-round`. The authoring round must do prior-work/search positioning before first-draft writing and critic/citation review after the draft exists.
 
 Do not route directly to authoring when no approved `paper-plan.md` exists, unless the user explicitly asks to bypass planning.
 
@@ -33,7 +33,7 @@ Prefer high-level MCP tools when attached; otherwise use CLI fallback and say MC
 
 - `inspect_state`: inspect current session/material state and next valid actions.
 - `orchestrate`: bounded v1 orchestrator. With `execute_local=true`, it performs **one deterministic local step** only; this is **not a full pipeline** and not a full paper run.
-- Before any `run_pipeline` or `write_sections`, prefer intake/plan artifacts (`paper-intake.md`, `paper-plan.md`) for new projects.
+- Before any `run_pipeline` or `write_sections`, prefer intake/plan artifacts (`paper-intake.md`, `paper-plan.md`) for new projects. For actual first-draft work, prefer `authoring_round` over raw `write_sections` so related-work positioning and critic artifacts are produced in the same round.
 - `answer_human_needed`: record author judgment only when the engine explicitly asks.
 - `export_current` / `export-current`: copy final TeX/Bib/PDF/session outputs.
 
@@ -49,8 +49,7 @@ If the next action is `start_autoresearch` / `$autoresearch`, explain that remai
 
 ```bash
 paperorchestra status --json
-paperorchestra research-prior-work --provider mock --output prior_work_seed.json --import
-paperorchestra import-prior-work --seed-file prior_work_seed.json --source codex_web_seed
+paperorchestra authoring-round --provider mock --citation-evidence-mode heuristic
 paperorchestra critique --provider mock --source-paper ./main.tex
 paperorchestra quality-gate --no-fail-on-block
 paperorchestra qa-loop --quality-mode claim_safe
@@ -58,6 +57,6 @@ paperorchestra environment
 ```
 
 
-Core MCP tools: `status`, `research_prior_work`, `critique`, `write_sections`, `quality_gate`, `qa_loop`, `qa_loop_step`, `ralph_start`, and `export_current`. Prefer explicit workflow skills for sequencing.
+Core MCP tools: `status`, `research_prior_work`, `authoring_round`, `critique`, `write_sections`, `quality_gate`, `qa_loop`, `qa_loop_step`, `ralph_start`, and `export_current`. Prefer explicit workflow skills for sequencing.
 
 Keep specialized command sequencing in the explicit workflow skills, not here.
