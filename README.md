@@ -21,11 +21,19 @@ Semantic Scholar/S2 is optional. If you do not have an S2 key, use web/source ci
 
 PaperOrchestra is meant to be used through **Codex skills**, not by reading this README as a long runbook.
 
-In a fresh Codex/OMX session, start with:
+In a fresh Codex/OMX session, start with setup:
+
+```text
+$paperorchestra-setup
+```
+
+Then inspect the current paper state:
 
 ```text
 $paperorchestra-status
 ```
+
+Setup checks installation, provider, compile, and MCP readiness. Status checks whether a paper session, materials, source digest, claims, evidence, and review artifacts are ready.
 
 If status says materials are missing, give Codex the project/material paths and ask it to start there:
 
@@ -57,8 +65,8 @@ A good material bundle usually includes some of:
 Default flow:
 
 ```text
-$paperorchestra-status
-  -> $paperorchestra-setup        if environment readiness is missing
+$paperorchestra-setup             first after install/restart, or when runtime readiness is uncertain
+  -> $paperorchestra-status       inspect the current paper/material/review state
   -> $paperorchestra-live-review  if live critic/citation evidence is missing or stale
   -> $paperorchestra-quality-gate if evidence exists but gate state is missing or stale
   -> $paperorchestra-authoring-round when there are machine-actionable edits
