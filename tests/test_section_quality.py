@@ -66,3 +66,42 @@ def test_section_quality_check_rejects_stale_or_legacy_review(tmp_path) -> None:
     stale = _section_quality_check(tmp_path, _state(paper, review), quality_mode="claim_safe")
     assert stale["failing_codes"] == ["section_review_stale"]
     assert stale["actual_manuscript_sha256"] == "stale"
+
+
+def test_write_section_review_records_current_manuscript_hash(tmp_path) -> None:
+    from paperorchestra.core.io import read_json
+    from paperorchestra.core.models import InputBundle
+    from paperorchestra.core.session import create_session, load_session, save_session
+    from paperorchestra.loop_engine.quality.utils import _file_sha256
+    from paperorchestra.reviews.section_review import write_section_review
+
+    def write(name: str, text: str) -> str:
+        path = tmp_path / name
+        path.write_text(text, encoding="utf-8")
+        return str(path)
+
+    state = create_session(
+        tmp_path,
+        InputBundle(
+            idea_path=write("idea.md", "idea"),
+            experimental_log_path=write("experiment.md", "experiment"),
+            template_path=write("template.tex", "\\documentclass{article}"),
+            guidelines_path=write("guidelines.md", "guidelines"),
+        ),
+    )
+    paper = tmp_path / "paper.tex"
+    paper.write_text(
+        "\\documentclass{article}\\begin{document}\\section{Introduction} "
+        + "This section discusses evidence grounded triage. " * 12
+        + "\\end{document}",
+        encoding="utf-8",
+    )
+    state.artifacts.paper_full_tex = str(paper)
+    save_session(tmp_path, state)
+
+    review_path = write_section_review(tmp_path, tmp_path / "section_review.json")
+    payload = read_json(review_path)
+    refreshed = load_session(tmp_path)
+
+    assert payload["manuscript_sha256"] == _file_sha256(paper)
+    assert refreshed.artifacts.latest_section_review_json == str(review_path.resolve())
