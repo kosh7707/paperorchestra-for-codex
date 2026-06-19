@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from paperorchestra.manuscript.figure_matching import (
+from paperorchestra.manuscript.figure_matching_semantics import (
     _body_figure_has_nontechnical_asset,
     _caption_has_process_or_placeholder_text,
 )

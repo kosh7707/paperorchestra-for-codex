@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from paperorchestra.manuscript.figure_matching import _caption_manifest_relation, _included_asset_names, _match_plot_manifest
+from paperorchestra.manuscript.figure_matching_keys import _match_plot_manifest
+from paperorchestra.manuscript.figure_matching_semantics import _caption_manifest_relation, _included_asset_names
 from paperorchestra.manuscript.figure_patterns import CAPTION_RE, LABEL_RE
 from paperorchestra.manuscript.figure_review_helpers import compact_context, figure_references, figure_source_origin
 from paperorchestra.manuscript.figure_review_types import FigureContext

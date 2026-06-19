@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from paperorchestra.manuscript import figure_matching
+from paperorchestra.manuscript.figure_matching_keys import _match_plot_manifest
+from paperorchestra.manuscript.figure_matching_semantics import (
+    _body_figure_has_nontechnical_asset,
+    _caption_has_process_or_placeholder_text,
+    _caption_manifest_relation,
+    _included_asset_names,
+)
 from paperorchestra.manuscript.figure_review_builder import build_figure_placement_review
 
 
@@ -17,7 +23,7 @@ def test_match_plot_manifest_prefers_asset_and_marks_placeholder_unreviewable() 
     }
     plot_manifest = {"figures": [{"figure_id": "pipeline", "purpose": "Pipeline overview"}]}
 
-    match = figure_matching._match_plot_manifest(
+    match = _match_plot_manifest(
         label="fig:other",
         caption="Unrelated caption",
         included_assets=["pipeline-overview.pdf"],
@@ -34,7 +40,7 @@ def test_match_plot_manifest_prefers_asset_and_marks_placeholder_unreviewable() 
 
 
 def test_match_plot_manifest_uses_label_when_assets_do_not_match() -> None:
-    match = figure_matching._match_plot_manifest(
+    match = _match_plot_manifest(
         label="fig:cost-model",
         caption="Unrelated caption",
         included_assets=[],
@@ -48,7 +54,7 @@ def test_match_plot_manifest_uses_label_when_assets_do_not_match() -> None:
 
 
 def test_match_plot_manifest_marks_caption_token_matches_ambiguous() -> None:
-    match = figure_matching._match_plot_manifest(
+    match = _match_plot_manifest(
         label=None,
         caption="Precision recall latency triage.",
         included_assets=[],
@@ -68,7 +74,7 @@ def test_match_plot_manifest_marks_caption_token_matches_ambiguous() -> None:
 
 
 def test_caption_manifest_relation_detects_process_caption_mismatch() -> None:
-    relation = figure_matching._caption_manifest_relation(
+    relation = _caption_manifest_relation(
         "Placeholder figure prompt showing author workflow.",
         {
             "status": "matched",
@@ -86,9 +92,9 @@ def test_caption_manifest_relation_detects_process_caption_mismatch() -> None:
 def test_body_helpers_detect_nontechnical_and_placeholder_text() -> None:
     body = r"\\includegraphics{assets/author-headshot.png}"
 
-    assert figure_matching._included_asset_names(body) == ["assets/author-headshot.png"]
-    assert figure_matching._body_figure_has_nontechnical_asset(body, "Author profile photo") is True
-    assert figure_matching._caption_has_process_or_placeholder_text("Placeholder figure caption intent") is True
+    assert _included_asset_names(body) == ["assets/author-headshot.png"]
+    assert _body_figure_has_nontechnical_asset(body, "Author profile photo") is True
+    assert _caption_has_process_or_placeholder_text("Placeholder figure caption intent") is True
 
 
 def test_build_figure_placement_review_uses_manifest_matching_helpers() -> None:
