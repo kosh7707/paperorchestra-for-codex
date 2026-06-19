@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 from paperorchestra.runtime.provider_base import ProviderError, is_retryable_provider_stderr
+from paperorchestra.runtime.process_timeout import communicate_with_soft_timeout
 
 
 def parse_shell_provider_command(command: str) -> list[str]:
@@ -46,7 +47,6 @@ def run_provider_command_once(
     timeout_seconds: float | None,
     timeout_grace_seconds: float,
 ) -> tuple[int, bytes, bytes, bool]:
-    timed_out = False
     with subprocess.Popen(
         argv,
         stdin=subprocess.PIPE,
@@ -54,22 +54,12 @@ def run_provider_command_once(
         stderr=subprocess.PIPE,
         env=env,
     ) as proc:
-        try:
-            stdout, stderr = proc.communicate(input=prompt, timeout=timeout_seconds)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            if timeout_grace_seconds > 0:
-                try:
-                    stdout, stderr = proc.communicate(timeout=timeout_grace_seconds)
-                    return proc.returncode if proc.returncode is not None else 1, stdout or b"", stderr or b"", True
-                except subprocess.TimeoutExpired:
-                    pass
-            proc.kill()
-            stdout, stderr = proc.communicate()
-        except BaseException:
-            proc.kill()
-            proc.wait()
-            raise
+        stdout, stderr, timed_out = communicate_with_soft_timeout(
+            proc,
+            input_data=prompt,
+            timeout_seconds=timeout_seconds,
+            grace_seconds=timeout_grace_seconds,
+        )
     return proc.returncode if proc.returncode is not None else 1, stdout or b"", stderr or b"", timed_out
 
 

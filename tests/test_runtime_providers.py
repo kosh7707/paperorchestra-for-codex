@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 
 import pytest
 
@@ -18,6 +20,53 @@ from paperorchestra.runtime.provider_web_command import (
 )
 from paperorchestra.runtime.provider_web_prefix import exec_argv_prefix_proves_web_search
 from paperorchestra.runtime.shell_provider import ShellProvider
+from paperorchestra.runtime.shell_provider_command import run_provider_command_once
+
+
+def test_run_provider_command_once_forwards_stdin_and_stdout() -> None:
+    rc, stdout, stderr, timed_out = run_provider_command_once(
+        [
+            sys.executable,
+            "-c",
+            "import sys; data=sys.stdin.buffer.read(); sys.stdout.buffer.write(data.upper())",
+        ],
+        b"model input",
+        os.environ.copy(),
+        timeout_seconds=5,
+        timeout_grace_seconds=0,
+    )
+
+    assert timed_out is False
+    assert rc == 0
+    assert stdout == b"MODEL INPUT"
+    assert stderr == b""
+
+
+def test_run_provider_command_once_kills_after_timeout_without_grace() -> None:
+    rc, _stdout, _stderr, timed_out = run_provider_command_once(
+        [sys.executable, "-c", "import time; time.sleep(1)"],
+        b"",
+        os.environ.copy(),
+        timeout_seconds=0.05,
+        timeout_grace_seconds=0,
+    )
+
+    assert timed_out is True
+    assert rc != 0
+
+
+def test_run_provider_command_once_allows_grace_completion_after_timeout() -> None:
+    rc, stdout, _stderr, timed_out = run_provider_command_once(
+        [sys.executable, "-c", "import time; time.sleep(0.1); print('late')"],
+        b"",
+        os.environ.copy(),
+        timeout_seconds=0.02,
+        timeout_grace_seconds=1,
+    )
+
+    assert timed_out is True
+    assert rc == 0
+    assert stdout.strip() == b"late"
 
 
 def test_shell_provider_parses_json_and_shlex_commands(monkeypatch) -> None:
