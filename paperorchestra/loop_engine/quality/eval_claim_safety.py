@@ -6,9 +6,9 @@ from typing import Any
 from paperorchestra.loop_engine.quality.citation_support import _citation_support_check
 from paperorchestra.loop_engine.quality.eval_tiers import _status_from_failures, _tier
 from paperorchestra.loop_engine.quality.figure_grounding_check import _figure_grounding_check
+from paperorchestra.loop_engine.quality.high_risk_claim_sweep import _high_risk_claim_sweep
 from paperorchestra.loop_engine.quality.policy import TIER2_CLAIM_CODES
-from paperorchestra.loop_engine.quality.source_checks import (
-    _high_risk_claim_sweep,
+from paperorchestra.loop_engine.quality.source_material_checks import (
     _planning_satisfaction_check,
     _source_material_fidelity_check,
 )

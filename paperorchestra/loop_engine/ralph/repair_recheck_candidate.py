@@ -5,7 +5,7 @@ from typing import Any
 
 from paperorchestra.core.io import write_json
 from paperorchestra.core.session import artifact_path, load_session
-from paperorchestra.loop_engine.quality.source_checks import _high_risk_claim_sweep
+from paperorchestra.loop_engine.quality.high_risk_claim_sweep import _high_risk_claim_sweep
 from paperorchestra.loop_engine.ralph.repair_recheck_baseline import _canonical_high_risk_baseline
 from paperorchestra.loop_engine.ralph.repair_recheck_metrics import (
     _citation_integrity_metrics,
