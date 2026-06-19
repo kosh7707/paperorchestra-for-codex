@@ -10,22 +10,40 @@ from paperorchestra.interfaces.mcp import authoring_tools
 class _FakeProc:
     pid = 424242
 
+    def __init__(self) -> None:
+        self.wait_called = False
+
+    def wait(self) -> int:
+        self.wait_called = True
+        return 0
+
 
 def test_authoring_round_auto_backgrounds_live_web_requests(tmp_path: Path, monkeypatch) -> None:
     def fail_sync(*args: Any, **kwargs: Any) -> None:  # pragma: no cover - assertion path
         raise AssertionError("live/web MCP authoring should not block synchronously")
 
     captured: dict[str, Any] = {}
+    fake_proc = _FakeProc()
 
     def fake_popen(argv: list[str], **kwargs: Any) -> _FakeProc:
         captured["argv"] = argv
         captured["cwd"] = kwargs["cwd"]
         captured["start_new_session"] = kwargs["start_new_session"]
         captured["stdout_closed_before_return"] = kwargs["stdout"].closed
-        return _FakeProc()
+        return fake_proc
+
+    class InlineThread:
+        def __init__(self, *, target: Any, name: str, daemon: bool) -> None:
+            captured["thread_name"] = name
+            captured["thread_daemon"] = daemon
+            self._target = target
+
+        def start(self) -> None:
+            self._target()
 
     monkeypatch.setattr(authoring_tools, "run_authoring_round", fail_sync)
     monkeypatch.setattr(authoring_tools.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(authoring_tools.threading, "Thread", InlineThread)
 
     result = authoring_tools.tool_authoring_round(
         {
@@ -49,6 +67,9 @@ def test_authoring_round_auto_backgrounds_live_web_requests(tmp_path: Path, monk
     assert Path(payload["metadata"]).exists()
     assert captured["cwd"] == tmp_path.resolve()
     assert captured["start_new_session"] is True
+    assert captured["thread_name"] == "paperorchestra-mcp-job-424242"
+    assert captured["thread_daemon"] is True
+    assert fake_proc.wait_called is True
     assert captured["argv"][:3] == [authoring_tools.sys.executable, "-m", "paperorchestra.cli"]
     assert "--require-web-research" in captured["argv"]
     assert "--require-live-critic" in captured["argv"]

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -110,6 +111,7 @@ def _start_background_authoring_round(cwd: Path, arguments: JSON, *, evidence_mo
             start_new_session=True,
             env=env,
         )
+    _reap_background_process(proc)
     payload = {
         "status": "started",
         "mode": "background",
@@ -129,6 +131,13 @@ def _start_background_authoring_round(cwd: Path, arguments: JSON, *, evidence_mo
     }
     write_json(meta_path, payload)
     return payload
+
+
+def _reap_background_process(proc: subprocess.Popen[str]) -> None:
+    def wait_for_exit() -> None:
+        proc.wait()
+
+    threading.Thread(target=wait_for_exit, name=f"paperorchestra-mcp-job-{proc.pid}", daemon=True).start()
 
 
 def _authoring_round_cli_argv(arguments: JSON, *, evidence_mode: str) -> list[str]:
