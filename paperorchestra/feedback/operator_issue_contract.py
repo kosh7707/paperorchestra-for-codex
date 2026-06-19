@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.feedback.operator_answer_metadata import OPERATOR_FEEDBACK_INTENTS
-from paperorchestra.feedback.packet_artifacts import _canonical_sha256, _sha256_bytes
+from paperorchestra.feedback.operator_issue_identity import _normalize_issue_text, derive_operator_issue_id
+from paperorchestra.feedback.operator_issue_intent import _action_kind_values, _feedback_intents, _normalize_operator_intent
 
 OPERATOR_SOURCE = "codex_operator"
 
@@ -32,42 +31,6 @@ _REQUIRED_OPERATOR_ISSUE_FIELDS = (
 )
 
 
-def _normalize_operator_intent(feedback: dict[str, Any]) -> str:
-    intents = _feedback_intents(feedback)
-    primary = str(feedback.get("primary_intent") or "").strip()
-    normalized = [intent for intent in dict.fromkeys(intents) if intent]
-    invalid = [intent for intent in normalized + ([primary] if primary else []) if intent not in OPERATOR_FEEDBACK_INTENTS]
-    if invalid:
-        raise ContractError(f"unsupported operator feedback intent: {', '.join(invalid)}")
-    if primary:
-        if primary not in normalized and normalized:
-            raise ContractError("operator feedback primary_intent must be included in intents")
-        return primary
-    if len(normalized) != 1:
-        raise ContractError("operator feedback must include exactly one machine-readable intent or a primary_intent")
-    return normalized[0]
-
-
-def _feedback_intents(feedback: dict[str, Any]) -> list[str]:
-    intents: list[str] = []
-    raw_intents = feedback.get("intents")
-    if isinstance(raw_intents, list):
-        intents.extend(str(item) for item in raw_intents if str(item or "").strip())
-    if str(feedback.get("intent") or "").strip():
-        intents.append(str(feedback["intent"]))
-    intents.extend(_action_kind_values(feedback.get("issues")))
-    intents.extend(_action_kind_values(feedback.get("actions")))
-    return intents
-
-
-def _action_kind_values(items: Any) -> list[str]:
-    return [
-        str(item["action_kind"])
-        for item in items or []
-        if isinstance(item, dict) and str(item.get("action_kind") or "").strip()
-    ]
-
-
 def _validate_operator_issue(issue: dict[str, Any], packet: dict[str, Any]) -> dict[str, Any]:
     missing = [key for key in _REQUIRED_OPERATOR_ISSUE_FIELDS if not str(issue.get(key) or "").strip()]
     if missing:
@@ -79,30 +42,6 @@ def _validate_operator_issue(issue: dict[str, Any], packet: dict[str, Any]) -> d
     normalized["not_independent_human_review"] = True
     normalized["owner_category"] = _validated_owner_category(issue)
     return normalized
-
-
-def _normalize_issue_text(text: str) -> str:
-    return re.sub(r"\s+", " ", text.strip().lower())
-
-
-def derive_operator_issue_id(
-    packet_sha256: str,
-    *,
-    source_artifact_role: str,
-    source_item_key: str,
-    target_section: str,
-    rationale: str,
-    suggested_action: str,
-) -> str:
-    issue_text = _normalize_issue_text(f"{rationale}\n{suggested_action}")
-    payload = {
-        "packet_sha256": packet_sha256,
-        "source_artifact_role": source_artifact_role,
-        "source_item_key": source_item_key,
-        "target_section": target_section,
-        "issue_text_sha256": _sha256_bytes(issue_text.encode("utf-8")),
-    }
-    return "opfb-" + _canonical_sha256(payload)[:20]
 
 
 def _owner_category_for_issue(issue: dict[str, Any]) -> str:
@@ -162,6 +101,7 @@ def _action_for_issue(issue: dict[str, Any]) -> dict[str, Any]:
         "source": OPERATOR_SOURCE,
         "not_independent_human_review": True,
     }
+
 
 __all__ = [
     "ACTIONABLE_FAILURE_OWNER_CATEGORIES",
