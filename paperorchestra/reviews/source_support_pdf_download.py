@@ -7,12 +7,12 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
-from paperorchestra.reviews.source_support_candidates import (
+from paperorchestra.reviews.source_support_html import _response_final_url
+from paperorchestra.reviews.source_support_pdf_trust import (
     _candidate_redirect_rejection,
     _candidate_trust_rejection,
-    _public_pdf_candidate_decisions,
-    _response_final_url,
 )
+from paperorchestra.reviews.source_support_pdf_links import _public_pdf_candidate_decisions
 
 _USER_AGENT = "PaperOrchestra-reference-fetch/1.0"
 _MAX_SOURCE_BYTES = 10_000_000

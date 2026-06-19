@@ -9,6 +9,20 @@ from typing import Any
 from paperorchestra.reviews.source_support_html import _collapse_ws, _html_attrs, _html_to_text
 
 
+def _public_pdf_candidate_decisions(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    public: list[dict[str, Any]] = []
+    for item in candidates:
+        row = {
+            "url": str(item.get("url") or ""),
+            "decision": str(item.get("decision") or ""),
+            "reason": str(item.get("reason") or ""),
+        }
+        if item.get("final_url"):
+            row["final_url"] = str(item.get("final_url"))
+        public.append(row)
+    return public
+
+
 def _candidate_pdf_links(final_landing_url: str, html_value: str) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     seen: set[str] = set()

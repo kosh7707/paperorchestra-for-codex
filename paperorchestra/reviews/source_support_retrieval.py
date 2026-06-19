@@ -7,11 +7,9 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
-from paperorchestra.reviews.source_support_candidates import (
+from paperorchestra.reviews.source_support_html import (
     _blocked_html_reason,
-    _candidate_pdf_links,
     _html_to_text,
-    _public_pdf_candidate_decisions,
     _response_final_url,
 )
 from paperorchestra.reviews.citation_source_fields import _clean_optional_string
@@ -21,6 +19,7 @@ from paperorchestra.reviews.source_support_pdf_download import (
     _download_pdf_candidate,
     _extract_pdf_text,
 )
+from paperorchestra.reviews.source_support_pdf_links import _candidate_pdf_links, _public_pdf_candidate_decisions
 
 
 def _source_locators(source: dict[str, Any]) -> list[str]:
