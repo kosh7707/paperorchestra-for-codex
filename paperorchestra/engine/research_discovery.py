@@ -11,7 +11,7 @@ from paperorchestra.core.io import extract_json, write_json
 from paperorchestra.core.session import artifact_path
 from paperorchestra.engine.completion import _build_completion_request, _complete_with_runtime_mode
 from paperorchestra.engine.prompt_context import _data_block, _read_inputs
-from paperorchestra.engine.schemas import CANDIDATE_SCHEMA
+from paperorchestra.engine.schema_research import CANDIDATE_SCHEMA
 from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.research.literature import build_search_grounded_candidates, search_semantic_scholar
 from paperorchestra.runtime.provider_base import BaseProvider

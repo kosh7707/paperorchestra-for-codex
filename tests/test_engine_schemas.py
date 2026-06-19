@@ -3,10 +3,13 @@ from __future__ import annotations
 import pytest
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.engine import schemas
+from paperorchestra.engine.schema_outline import OUTLINE_SCHEMA, normalize_outline_payload, validate_outline
+from paperorchestra.engine.schema_plot import PLOT_SCHEMA, validate_plot_manifest
+from paperorchestra.engine.schema_research import CANDIDATE_SCHEMA, PRIOR_WORK_SEED_SCHEMA
+from paperorchestra.engine.schema_review import REVIEW_SCHEMA
 
 
-def test_outline_normalization_preserves_schema_facade_contract() -> None:
+def test_outline_normalization_preserves_schema_contract() -> None:
     payload = {
         "plotting_plan": [
             {
@@ -22,7 +25,7 @@ def test_outline_normalization_preserves_schema_facade_contract() -> None:
         "section_plan": [],
     }
 
-    normalized = schemas.normalize_outline_payload(payload)
+    normalized = normalize_outline_payload(payload)
 
     item = normalized["plotting_plan"][0]
     assert item["plot_type"] == "diagram"
@@ -32,7 +35,7 @@ def test_outline_normalization_preserves_schema_facade_contract() -> None:
 
 def test_outline_validation_rejects_invalid_plot_values() -> None:
     with pytest.raises(ContractError, match="Invalid plot_type"):
-        schemas.validate_outline(
+        validate_outline(
             {
                 "plotting_plan": [
                     {
@@ -52,7 +55,7 @@ def test_outline_validation_rejects_invalid_plot_values() -> None:
 
 def test_plot_manifest_validation_rejects_missing_required_keys() -> None:
     with pytest.raises(ContractError, match="Plot manifest figure missing key: caption"):
-        schemas.validate_plot_manifest(
+        validate_plot_manifest(
             {
                 "figures": [
                     {
@@ -70,9 +73,9 @@ def test_plot_manifest_validation_rejects_missing_required_keys() -> None:
         )
 
 
-def test_schema_facade_exposes_pipeline_schema_constants() -> None:
-    assert schemas.OUTLINE_SCHEMA["type"] == "object"
-    assert schemas.PLOT_SCHEMA["properties"]["figures"]["type"] == "array"
-    assert "macro_candidates" in schemas.CANDIDATE_SCHEMA["properties"]
-    assert "references" in schemas.PRIOR_WORK_SEED_SCHEMA["properties"]
-    assert "overall_score" in schemas.REVIEW_SCHEMA["properties"]
+def test_pipeline_schema_constants_are_available_from_owner_modules() -> None:
+    assert OUTLINE_SCHEMA["type"] == "object"
+    assert PLOT_SCHEMA["properties"]["figures"]["type"] == "array"
+    assert "macro_candidates" in CANDIDATE_SCHEMA["properties"]
+    assert "references" in PRIOR_WORK_SEED_SCHEMA["properties"]
+    assert "overall_score" in REVIEW_SCHEMA["properties"]

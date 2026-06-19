@@ -8,7 +8,7 @@ from paperorchestra.core.io import read_json, write_json
 from paperorchestra.core.session import artifact_path, build_path, load_session, save_session
 from paperorchestra.engine.completion import _lane_owner
 from paperorchestra.engine.plot_payload import _build_plot_payload
-from paperorchestra.engine.schemas import validate_plot_manifest
+from paperorchestra.engine.schema_plot import validate_plot_manifest
 from paperorchestra.engine.research_discovery import _build_candidate_payload, _write_candidate_artifacts
 from paperorchestra.manuscript.plot_assets import render_plot_assets
 from paperorchestra.runtime.parity import record_lane_manifest

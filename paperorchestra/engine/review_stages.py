@@ -22,7 +22,7 @@ from paperorchestra.engine.current_manuscript_stages import (
     write_figure_placement_review,
 )
 from paperorchestra.engine.prompt_context import _compact_citation_map_for_prompt, _data_block, _prompt_compact_text
-from paperorchestra.engine.schemas import REVIEW_SCHEMA
+from paperorchestra.engine.schema_review import REVIEW_SCHEMA
 from paperorchestra.manuscript.citations import canonical_citation_keys
 from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.runtime.parity import record_lane_manifest
@@ -125,4 +125,3 @@ def _extract_axis_scores(review_payload: dict[str, Any]) -> dict[str, float]:
             elif isinstance(value, (int, float)):
                 result[key] = float(value)
     return result
-

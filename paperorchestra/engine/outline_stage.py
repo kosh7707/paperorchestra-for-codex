@@ -6,7 +6,7 @@ from paperorchestra.core.io import extract_json, write_json
 from paperorchestra.core.session import artifact_path, load_session, save_session
 from paperorchestra.engine.completion import _build_completion_request, _complete_with_runtime_mode, _lane_owner
 from paperorchestra.engine.prompt_context import _data_block, _prompt_compact_text, _read_inputs
-from paperorchestra.engine.schemas import OUTLINE_SCHEMA, normalize_outline_payload, validate_outline
+from paperorchestra.engine.schema_outline import OUTLINE_SCHEMA, normalize_outline_payload, validate_outline
 from paperorchestra.manuscript.prompts import PROMPTS
 from paperorchestra.runtime.parity import record_lane_manifest
 from paperorchestra.runtime.provider_base import BaseProvider
