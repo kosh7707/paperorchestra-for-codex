@@ -1,80 +1,34 @@
 from __future__ import annotations
 
 import os
-import shutil
-from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from paperorchestra.runtime.compile_env_detection import (
+    LATEX_ENGINES,
+    PACKAGE_MANAGERS,
+    detect_cargo,
+    detect_latex_engine,
+    detect_package_manager,
+    detect_pkg_config,
+)
+from paperorchestra.runtime.compile_env_report import CompileEnvironmentReport
 from paperorchestra.runtime.compile_install import (
     _bootstrap_script_contents,
     _install_command_context,
     _install_command_templates,
-    _sudo_usable,
     _with_prefix,
 )
 
 from paperorchestra.runtime.compile_sandbox import (
     SANDBOX_TOOLS,
-    _command_text,
     _detect_sandbox_tool_with_notes,
     _sandbox_probe_command,
     _sandbox_tool_usable,
-    _trim_probe_output,
     _wrapper_script_contents,
     _write_sandbox_wrapper,
     detect_sandbox_tool,
 )
-
-LATEX_ENGINES = ["latexmk", "pdflatex", "tectonic"]
-PACKAGE_MANAGERS = ["apt-get", "dnf", "yum", "pacman", "brew", "apk"]
-
-
-@dataclass(frozen=True)
-class CompileEnvironmentReport:
-    latex_engine: str | None
-    sandbox_tool: str | None
-    sandbox_wrapper_path: str | None
-    auto_configured_wrapper: bool
-    ready_for_compile: bool
-    package_manager: str | None
-    bootstrap_script_path: str | None
-    install_context: dict[str, Any]
-    install_commands: list[str]
-    fallback_install_commands: list[str]
-    omx_optional_install_commands: list[str]
-    requires_privilege_escalation: bool
-    cargo_path: str | None
-    pkg_config_path: str | None
-    user_space_probe: dict[str, Any] | None
-    notes: list[str]
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-def detect_latex_engine() -> str | None:
-    for engine in LATEX_ENGINES:
-        path = shutil.which(engine)
-        if path:
-            return path
-    return None
-
-
-def detect_package_manager() -> str | None:
-    for tool in PACKAGE_MANAGERS:
-        path = shutil.which(tool)
-        if path:
-            return path
-    return None
-
-
-def detect_cargo() -> str | None:
-    return shutil.which("cargo")
-
-
-def detect_pkg_config() -> str | None:
-    return shutil.which("pkg-config") or shutil.which("pkgconf")
 
 
 def ensure_bootstrap_script(cwd: str | Path | None) -> str | None:
@@ -200,3 +154,19 @@ def inspect_compile_environment(cwd: str | Path | None, *, auto_configure_wrappe
         user_space_probe=user_space_probe,
         notes=notes,
     )
+
+
+__all__ = [
+    "CompileEnvironmentReport",
+    "LATEX_ENGINES",
+    "PACKAGE_MANAGERS",
+    "SANDBOX_TOOLS",
+    "detect_cargo",
+    "detect_latex_engine",
+    "detect_package_manager",
+    "detect_pkg_config",
+    "detect_sandbox_tool",
+    "ensure_bootstrap_script",
+    "ensure_sandbox_wrapper",
+    "inspect_compile_environment",
+]

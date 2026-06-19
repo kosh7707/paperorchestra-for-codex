@@ -78,6 +78,18 @@ def test_compile_env_reexports_sandbox_helpers_from_focused_module() -> None:
     assert compile_env.ensure_sandbox_wrapper is not compile_sandbox.ensure_sandbox_wrapper
 
 
+def test_compile_env_reexports_detection_and_report_helpers_from_focused_modules() -> None:
+    from paperorchestra.runtime import compile_env_detection, compile_env_report
+
+    assert compile_env.CompileEnvironmentReport is compile_env_report.CompileEnvironmentReport
+    assert compile_env.LATEX_ENGINES is compile_env_detection.LATEX_ENGINES
+    assert compile_env.PACKAGE_MANAGERS is compile_env_detection.PACKAGE_MANAGERS
+    assert compile_env.detect_latex_engine is compile_env_detection.detect_latex_engine
+    assert compile_env.detect_package_manager is compile_env_detection.detect_package_manager
+    assert compile_env.detect_cargo is compile_env_detection.detect_cargo
+    assert compile_env.detect_pkg_config is compile_env_detection.detect_pkg_config
+
+
 def test_compile_env_sandbox_wrapper_preserves_facade_monkeypatch_semantics(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(compile_env, "detect_sandbox_tool", lambda: "/usr/bin/firejail")
 
