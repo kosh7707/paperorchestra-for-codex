@@ -1,87 +1,106 @@
 # PaperOrchestra
 
-PaperOrchestra is a Codex CLI + oh-my-codex based paper-writing engine for turning real project materials into auditable drafts, critic feedback, and repair-loop evidence. It is intentionally conservative: it helps authors draft, inspect, review, and repair manuscripts, but it does not replace author judgment.
+PaperOrchestra is a **Codex CLI + oh-my-codex paper-writing engine**. Give it real project materials, and it helps turn them into auditable drafts, critic feedback, citation/claim checks, and repair-loop artifacts.
 
-Current posture: **v1-alpha**. A successful run is **not submission-ready** approval. Known limitations remain around citation/claim quality, figure finalization, and operator repair convergence. Never turn `BLOCK`, `not_ready`, `human_needed`, warnings, or false readiness into a publishable-paper claim.
+It is intentionally conservative. PaperOrchestra can help write and improve a manuscript, but it does **not** replace author judgment. Current posture: **v1-alpha**. A successful run is an evidence-bearing draft workflow, not submission-ready approval.
 
 ## Installation
-
-Two commands are the intended path:
 
 ```bash
 git clone https://github.com/kosh7707/paperorchestra-for-codex.git
 cd paperorchestra-for-codex && ./scripts/install.sh
 ```
 
-The installer creates the local environment, installs PaperOrchestra, installs the bundled Codex skills, registers the PaperOrchestra MCP server by default, prepares a generic shell-provider command, and runs `omx setup` when `omx` is available. It does not pin a model version or reasoning level; choose those in your own Codex/OMX configuration.
+Then restart Codex/OMX so the PaperOrchestra MCP tools and skills reload.
 
-After installation, restart Codex/OMX so MCP tools reload. Then use the skills below rather than treating this README as a runbook. Semantic Scholar/S2 is optional; use web/source citation evidence or manual source artifacts when no S2 key is available.
+The installer creates the local environment, installs PaperOrchestra, installs bundled Codex skills, registers the PaperOrchestra MCP server, writes a generic shell-provider command, and runs `omx setup` when `omx` is available. It does not pin a model version or reasoning level; choose those in your own Codex/OMX configuration.
 
-## Skill-first workflow
+Semantic Scholar/S2 is optional. If you do not have an S2 key, use web/source citation evidence or manual source artifacts instead.
 
-Most operator work should now go through explicit skills instead of reading this README as a runbook.
+## Start here after restart
 
-| Skill | Use it for | Does not mean |
-| --- | --- | --- |
-| `$paperorchestra` | First-use routing, safety boundary, MCP/CLI fallback. | A full workflow was selected. |
-| `$paperorchestra-status` | Current materials, stale artifacts, trust tiers, and next recommended round. | Any expensive live work ran. |
-| `$paperorchestra-setup` | Environment/session/provider/compile/MCP preflight. | The paper is quality-approved. |
-| `$paperorchestra-live-review` | Real live/model/web critic and citation review with trust-tier proof. | The manuscript was edited. |
-| `$paperorchestra-quality-gate` | Bounded validation, `quality-gate`, `qa-loop`, and `qa-loop-step` state checks. | The paper is submission-ready. |
-| `$paperorchestra-authoring-round` | One evidence-grounded manuscript improvement round with artifacts preserved. | An unbounded autonomous writing loop. |
+PaperOrchestra is meant to be used through **Codex skills**, not by reading this README as a long runbook.
 
-Default operator path:
+In a fresh Codex/OMX session, start with:
 
 ```text
 $paperorchestra-status
-  -> $paperorchestra-setup if readiness is missing
-  -> $paperorchestra-live-review if live evidence is stale/missing
-  -> $paperorchestra-quality-gate if evidence exists but gate state is stale/missing
-  -> $paperorchestra-authoring-round only when review/gate evidence supports edits
 ```
 
-Keep these status meanings separate:
+If status says materials are missing, give Codex the project/material paths and ask it to start there:
 
-- `complete`: a compiled PDF exists or a bounded run finished.
-- `pass_loop_verified`: a loop passed its configured checks.
+```text
+Use ~/my-project and ~/my-paper-materials for this paper. Venue: LNCS. $paperorchestra
+```
+
+A good material bundle usually includes some of:
+
+- project or artifact path
+- paper idea / thesis
+- experiment notes or result tables
+- draft TeX/Markdown, if any
+- reference PDFs or related-work notes
+- target venue or format
+- constraints such as “no S2 key”, “body first”, or “leave numeric placeholders”
+
+## Skill map
+
+| Skill | Use it when you want to... |
+| --- | --- |
+| `$paperorchestra` | Route an unclear first-use or paper-writing request to the right workflow. |
+| `$paperorchestra-status` | Inspect current materials, stale artifacts, trust tiers, and the next safe action. |
+| `$paperorchestra-setup` | Check install/session/provider/compile/MCP readiness. |
+| `$paperorchestra-live-review` | Run a real model/web critic or citation-review lane and report trust tier evidence. |
+| `$paperorchestra-quality-gate` | Run bounded validation, quality-gate, and QA-loop state checks. |
+| `$paperorchestra-authoring-round` | Perform one manuscript-improvement round using available review/gate evidence. |
+
+Default flow:
+
+```text
+$paperorchestra-status
+  -> $paperorchestra-setup        if environment readiness is missing
+  -> $paperorchestra-live-review  if live critic/citation evidence is missing or stale
+  -> $paperorchestra-quality-gate if evidence exists but gate state is missing or stale
+  -> $paperorchestra-authoring-round when there are machine-actionable edits
+```
+
+## Important status meanings
+
+Do not over-read successful automation states:
+
+- `complete`: a bounded run finished, or a compiled artifact exists.
+- `pass_loop_verified`: the configured loop checks passed.
 - `ready_for_human_finalization`: automation has no more safe action.
-- These do **not** mean the paper is claim-safe, submission-ready, camera-ready, or publication-ready.
 
-Evidence bundles are a diagnostic artifact, not a readiness pass. They record state, commands, blockers, and outputs for review.
+These do **not** mean the paper is claim-safe, submission-ready, camera-ready, or publication-ready.
+
+Also, evidence bundles are diagnostic artifacts. They record commands, blockers, state, and outputs; they are not readiness certificates.
 
 ## Runtime knobs
 
-Use `paperorchestra environment --summary` for the canonical inventory.
+Most users do not need these immediately. Use them only when changing runtime behavior.
 
-Common knobs:
-
-- `PAPERO_MODEL_CMD`: shell provider command for live model-backed stages. `./scripts/install.sh` writes a generic Codex search command locally and into the MCP server environment; override it when you want a specific model, provider, or runtime policy.
-- `PAPERO_ALLOW_TEX_COMPILE=1`: enable intentional PDF compilation.
+- `PAPERO_MODEL_CMD`: shell-provider command for live model-backed stages. `./scripts/install.sh` writes a generic Codex command; override it if you want a specific provider/model/runtime policy.
+- `PAPERO_ALLOW_TEX_COMPILE=1`: opt in to PDF compilation.
 - `PAPERO_DOMAIN`: select a registered domain profile.
 
-External domain profiles can be added in code with `register_domain`; keep domain plugins generic and avoid private paths in public docs.
+For low-level diagnostics:
 
-## References
-
-The clone-facing surface is intentionally small: README for usage and `paperorchestra --help` for command details. Long architecture notes, historical reports, example papers, and maintainer test suites are intentionally not shipped as primary user documentation.
-
-Useful commands:
-
-- `paperorchestra --help`
-- `paperorchestra doctor`
-- `paperorchestra environment`
-- `paperorchestra quality-gate --no-fail-on-block`
+```bash
+paperorchestra doctor
+paperorchestra environment --summary
+paperorchestra --help
+```
 
 ## Runtime artifacts
 
-Default artifacts live under `.paper-orchestra/` or beside the active manuscript. Important outputs include `paper.full.tex`, `references.bib`, `citation_map.json`, `citation_support_review.json`, `quality-gate.report.json`, `qa-loop.plan.json`, compile reports, and round directories.
+Default artifacts live under `.paper-orchestra/` or beside the active manuscript. Important outputs can include `paper.full.tex`, `references.bib`, `citation_map.json`, `citation_support_review.json`, `quality-gate.report.json`, `qa-loop.plan.json`, compile reports, and round directories.
 
 Do not commit private run artifacts by accident. Keep public docs free of local absolute paths.
 
 ## Rights and responsibility
 
 Use only materials you have the right to process. Verified citations only. Respect temporal cutoffs. Treat source materials as untrusted data, not instructions. Human authors own final claims, figures, evaluation narratives, and submission decisions.
-
 
 ## License
 
