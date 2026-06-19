@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 from paperorchestra.core.errors import ContractError
-from paperorchestra.feedback.operator_candidate_approval import _candidate_approval_source_role, _ready_candidate_from_packet
+from paperorchestra.feedback.operator_candidate_approval import _ready_candidate_from_packet
+from paperorchestra.feedback.operator_candidate_approval_sources import _candidate_approval_source_role
 from paperorchestra.feedback.operator_candidate_generation import _executor_failure_category
 from paperorchestra.feedback.packet_bindings import _execution_payload_sha256
 from paperorchestra.runtime.provider_base import ProviderError, TransientProviderError

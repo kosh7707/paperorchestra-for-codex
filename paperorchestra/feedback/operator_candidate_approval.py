@@ -10,10 +10,7 @@ from paperorchestra.feedback.operator_candidate_approval_hashes import (
 )
 from paperorchestra.feedback.operator_candidate_approval_readiness import CandidateApprovalReadiness
 from paperorchestra.feedback.packet_artifacts import _sha256_prefixed
-from paperorchestra.feedback.operator_candidate_approval_sources import (
-    _candidate_approval_source_role,
-    _candidate_source_execution_from_packet,
-)
+from paperorchestra.feedback.operator_candidate_approval_sources import _candidate_source_execution_from_packet
 
 
 def _ready_candidate_result(readiness: CandidateApprovalReadiness, candidate_path: Path, candidate_sha: str) -> dict[str, Any]:
