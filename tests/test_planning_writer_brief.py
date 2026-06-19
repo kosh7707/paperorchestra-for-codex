@@ -69,3 +69,65 @@ def test_author_facing_writer_brief_block_renders_validated_json() -> None:
     assert '<DATA_BLOCK name="scholarly_authoring_brief">' in block
     payload = json.loads(unescape(block.split("\n", 1)[1].rsplit("</DATA_BLOCK>", 1)[0]))
     assert payload["thesis"] == "Build a scholarly draft."
+
+
+def test_writer_brief_attaches_canonical_alias_claims_to_section_roles() -> None:
+    brief = planning_payloads._writer_brief_from_planning(
+        {
+            "thesis": "Evidence-grounded alert triage.",
+            "contribution_boundary": [],
+            "section_roles": [
+                {
+                    "section_title": "Methodology",
+                    "role": "Explain the pipeline.",
+                    "must_cover": [],
+                    "must_not_claim": [],
+                }
+            ],
+        },
+        {
+            "claims": [
+                {
+                    "target_section": "System",
+                    "authorial_claim": "The agent triage pipeline is evidence grounded.",
+                    "claim_type": "method",
+                    "grounding": "source_material",
+                    "coverage_groups": [["agent", "triage"]],
+                    "evidence_anchors": [{"evidence_excerpt": "pipeline evidence"}],
+                }
+            ]
+        },
+        {"placements": []},
+    )
+
+    method = brief["section_roles"][0]
+    assert method["must_cover"] == ["The agent triage pipeline is evidence grounded."]
+    assert method["required_claims"][0]["claim"] == "The agent triage pipeline is evidence grounded."
+
+
+def test_filter_planning_payloads_uses_canonical_section_aliases() -> None:
+    narrative = {
+        "section_roles": [{"section_title": "System"}, {"section_title": "Related Work"}],
+        "story_beats": [{"target_section": "System"}, {"target_section": "Related Work"}],
+    }
+    claim_map = {
+        "claims": [
+            {"id": "C1", "target_section": "System"},
+            {"id": "C2", "target_section": "Related Work"},
+        ]
+    }
+    citation_plan = {
+        "placements": [
+            {"claim_id": "C1", "target_section": "System"},
+            {"claim_id": "C2", "target_section": "Related Work"},
+        ]
+    }
+
+    filtered_narrative, filtered_claims, filtered_citations = planning_payloads._filter_planning_payloads_for_sections(
+        narrative, claim_map, citation_plan, ["Methodology"]
+    )
+
+    assert filtered_narrative["section_roles"] == [{"section_title": "System"}]
+    assert filtered_narrative["story_beats"] == [{"target_section": "System"}]
+    assert filtered_claims["claims"] == [{"id": "C1", "target_section": "System"}]
+    assert filtered_citations["placements"] == [{"claim_id": "C1", "target_section": "System"}]

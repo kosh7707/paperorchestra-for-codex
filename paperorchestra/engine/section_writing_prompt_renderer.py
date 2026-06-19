@@ -59,6 +59,7 @@ def _rewrite_scope_payload(context: SectionPromptContext) -> dict[str, object]:
     return {
         "only_sections": context.selected_sections,
         "preserve_all_other_sections": bool(context.selected_sections),
+        "expected_sections_for_validation": context.outline.expected_section_titles,
     }
 
 
@@ -75,6 +76,9 @@ def _global_section_instructions(context: SectionPromptContext) -> str:
         "- Write manuscript prose only; express evidence limits as scholarly assumptions, scope, and limitations.\n"
         "- Do NOT preserve input-note headings as manuscript sections; fold their constraints into normal prose, "
         "especially Discussion limitations.\n"
+        "- Include every required manuscript section listed in "
+        "rewrite_scope.json.expected_sections_for_validation. When a listed name is a canonical validator alias "
+        "such as method, experiments, or discussion, use the closest concrete section title from outline.json.\n"
     )
 
 

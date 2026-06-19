@@ -100,3 +100,13 @@ Existing experiments should stay outside the rewrite prompt.
     assert "Existing method skeleton" in plan.draft_context.template_content
     assert "Existing experiments should stay outside" not in plan.draft_context.template_content
     assert "Existing experiments should stay outside" not in plan.user_prompt
+
+
+def test_full_draft_prompt_lists_required_section_contract(tmp_path: Path) -> None:
+    state = _seed_section_prompt_session(tmp_path)
+
+    plan = build_section_writing_plan(tmp_path, state, selected_sections=[], claim_safe=False)
+
+    assert '&quot;expected_sections_for_validation&quot;' in plan.user_prompt
+    assert '&quot;Method&quot;' in plan.user_prompt
+    assert "Include every required manuscript section" in plan.user_prompt

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from paperorchestra.manuscript.structure import _canonical_generated_section_title
+
 
 def _filter_planning_payloads_for_sections(
     narrative_plan: dict[str, Any],
@@ -11,23 +13,23 @@ def _filter_planning_payloads_for_sections(
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     if not section_names:
         return narrative_plan, claim_map, citation_placement_plan
-    wanted = {name.strip().lower() for name in section_names if name.strip()}
+    wanted = {_canonical_generated_section_title(name) for name in section_names if name.strip()}
     claims = [
         claim
         for claim in claim_map.get("claims", [])
-        if isinstance(claim, dict) and str(claim.get("target_section") or "").strip().lower() in wanted
+        if isinstance(claim, dict) and _canonical_generated_section_title(str(claim.get("target_section") or "")) in wanted
     ]
     claim_ids = {str(claim.get("id")) for claim in claims}
     narrative = dict(narrative_plan)
     narrative["section_roles"] = [
         role
         for role in narrative_plan.get("section_roles", [])
-        if isinstance(role, dict) and str(role.get("section_title") or "").strip().lower() in wanted
+        if isinstance(role, dict) and _canonical_generated_section_title(str(role.get("section_title") or "")) in wanted
     ]
     narrative["story_beats"] = [
         beat
         for beat in narrative_plan.get("story_beats", [])
-        if isinstance(beat, dict) and str(beat.get("target_section") or "").strip().lower() in wanted
+        if isinstance(beat, dict) and _canonical_generated_section_title(str(beat.get("target_section") or "")) in wanted
     ]
     claim_payload = dict(claim_map)
     claim_payload["claims"] = claims
@@ -37,7 +39,7 @@ def _filter_planning_payloads_for_sections(
         for placement in citation_placement_plan.get("placements", [])
         if isinstance(placement, dict)
         and (
-            str(placement.get("target_section") or "").strip().lower() in wanted
+            _canonical_generated_section_title(str(placement.get("target_section") or "")) in wanted
             or str(placement.get("claim_id") or "") in claim_ids
         )
     ]

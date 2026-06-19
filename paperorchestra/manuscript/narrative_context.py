@@ -6,6 +6,7 @@ from typing import Any
 
 from paperorchestra.core.io import read_json
 from paperorchestra.core.session import load_session
+from paperorchestra.engine.plan_gate import approved_plan_path
 from paperorchestra.manuscript.narrative_contracts import planning_source_hashes
 from paperorchestra.manuscript.narrative_sections import _section_titles, default_sections
 from paperorchestra.manuscript.narrative_sources import _planning_source_text, _read_text
@@ -32,6 +33,11 @@ def load_planning_context(cwd: str | Path | None) -> PlanningContext:
         _read_text(state.inputs.experimental_log_path),
         preserve_numeric_percent=True,
     )
+    plan_path = approved_plan_path(cwd)
+    plan_planning_text = _planning_source_text(
+        _read_text(plan_path),
+        preserve_numeric_percent=True,
+    ) if plan_path is not None else ""
     template_text = _read_text(state.inputs.template_path)
     template_planning_text = _planning_source_text(template_text)
     sections = _section_titles(outline, template_text) or default_sections()
@@ -41,7 +47,7 @@ def load_planning_context(cwd: str | Path | None) -> PlanningContext:
         sections=sections,
         log_planning_text=log_planning_text,
         template_planning_text=template_planning_text,
-        planning_text="\n".join([idea_planning_text, log_planning_text, template_planning_text]),
-        author_source_text="\n".join([idea_planning_text, log_planning_text]),
+        planning_text="\n".join([plan_planning_text, idea_planning_text, log_planning_text, template_planning_text]),
+        author_source_text="\n".join([plan_planning_text, idea_planning_text, log_planning_text]),
         source_hashes=planning_source_hashes(cwd),
     )

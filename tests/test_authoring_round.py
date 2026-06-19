@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from paperorchestra.core.io import write_json
+from paperorchestra.core.io import read_json, write_json
 from paperorchestra.core.models import InputBundle
 from paperorchestra.core.session import artifact_path, create_session, load_session, save_session
 from paperorchestra.engine import authoring_round
@@ -184,3 +184,35 @@ def test_authoring_round_can_stop_after_draft_when_critic_disabled(tmp_path: Pat
 
     assert result["status"] == "drafted_without_critic"
     assert "review" not in result["artifacts"]
+
+
+def test_authoring_round_regenerates_existing_outline_before_drafting(tmp_path: Path, monkeypatch) -> None:
+    _session(tmp_path)
+    stale = artifact_path(tmp_path, "outline.json")
+    write_json(stale, {"section_plan": [{"section_title": "Old System"}]})
+    state = load_session(tmp_path)
+    state.artifacts.outline_json = str(stale)
+    save_session(tmp_path, state)
+    calls: list[str] = []
+    _install_planning_patches(tmp_path, monkeypatch, calls)
+    monkeypatch.setattr(authoring_round, "research_prior_work", lambda *args, **kwargs: {"path": kwargs["output"], "reference_count": 0})
+
+    def write_sections(cwd, provider, **kwargs):
+        calls.append("draft")
+        assert read_json(load_session(cwd).artifacts.outline_json)["section_plan"][0]["section_title"] == "Introduction"
+        path = Path(kwargs["output_path"])
+        path.write_text("\\documentclass{article}\n\\begin{document}Draft.\\end{document}\n", encoding="utf-8")
+        return path
+
+    monkeypatch.setattr(authoring_round, "write_sections", write_sections)
+
+    result = authoring_round.run_authoring_round(
+        tmp_path,
+        _NoCallProvider(),
+        run_literature=False,
+        run_critic=False,
+        citation_evidence_mode="heuristic",
+    )
+
+    assert calls == ["outline", "narrative-plan", "draft"]
+    assert "Outline regenerated before drafting." in result["notes"]

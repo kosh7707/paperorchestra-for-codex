@@ -84,3 +84,40 @@ def test_expected_section_titles_from_outline_ignores_control_sections_and_adds_
     }
 
     assert _expected_section_titles_from_outline(outline) == ["method", "experiments", "Related Work", "Discussion"]
+
+
+def test_expected_section_titles_accept_system_and_evaluation_aliases() -> None:
+    outline = {
+        "section_plan": [
+            {"section_title": "System"},
+            {"section_title": "Evaluation Design"},
+            {"section_title": "Discussion and Limitations"},
+        ]
+    }
+
+    assert _expected_section_titles_from_outline(outline) == ["method", "experiments", "discussion"]
+
+
+def test_section_scope_resolves_and_preserves_canonical_aliases() -> None:
+    source = r"""\documentclass{article}
+\begin{document}
+\section{Introduction}
+old intro
+\section{Methodology}
+old method
+\section{Experiment Setup}
+old experiments
+\end{document}
+"""
+    generated = source.replace("old intro", "new intro").replace("old method", "new method").replace("old experiments", "new experiments")
+
+    assert _resolve_selected_sections(source, ["Method", "Experiments"]) == ["Methodology", "Experiment Setup"]
+    template = _selected_section_template(source, ["Method", "Experiments"])
+    assert "old method" in template
+    assert "old experiments" in template
+    assert "old intro" not in template
+
+    merged = _preserve_all_except_sections(generated, source, rewritten_section_names=["Method"])
+    assert "old intro" in merged
+    assert "new method" in merged
+    assert "old experiments" in merged

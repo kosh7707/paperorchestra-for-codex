@@ -102,6 +102,16 @@ def check_plan_gate(cwd: str | Path | None, *, bypass: bool = False) -> PlanGate
     )
 
 
+def approved_plan_path(cwd: str | Path | None) -> Path | None:
+    """Return the author-approved plan path, if one exists.
+
+    This is intentionally stricter than "first paper-plan.md on disk":
+    unapproved plans can exist during intake/iteration and must not become
+    hidden drafting context.
+    """
+    return next((path for path in candidate_plan_paths(cwd) if path.exists() and is_plan_approved(path)), None)
+
+
 def ensure_approved_plan(cwd: str | Path | None, *, bypass: bool = False) -> PlanGateResult:
     result = check_plan_gate(cwd, bypass=bypass)
     if not result.allowed:
@@ -141,6 +151,7 @@ def _dedupe(paths: Iterable[Path]) -> list[Path]:
 
 __all__ = [
     "PlanGateResult",
+    "approved_plan_path",
     "candidate_plan_paths",
     "check_plan_gate",
     "ensure_approved_plan",

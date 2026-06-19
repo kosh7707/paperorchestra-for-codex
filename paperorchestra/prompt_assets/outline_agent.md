@@ -73,8 +73,12 @@ compete with or precede our approach.
 - Output Focus: Populate the intro_related_work_plan key.
 
 Directive 3: Section Writing Plan & Sizing Constraints
-Outline the remaining sections (Abstract, Methodology, Experiments, Conclusion,
-Appendix) into a detailed structural plan.
+Outline the manuscript sections from the provided template and any
+author-approved paper-plan.md. Prefer the exact approved/template section
+titles over generic defaults; if no skeleton is available, use conventional
+empirical-paper titles such as Abstract, Introduction, Background,
+Methodology, Experiment Setup, Results, Discussion, Related Work, Conclusion,
+and Appendix only when appropriate.
 - Structural Hierarchy: If Subsection X.1 is created, X.2 is mandatory. Do
 not create orphaned subsections. Omit subsections entirely if a section
 does not require division.

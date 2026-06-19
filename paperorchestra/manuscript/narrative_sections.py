@@ -51,12 +51,9 @@ def default_sections() -> list[str]:
 
 
 def section_targets(sections: list[str], *, citation_key: str | None) -> NarrativeSectionTargets:
-    method_section = next((s for s in sections if re.search(r"method|approach|construction", s, re.I)), "Method")
+    method_section = next((candidate for s in sections if (candidate := _method_candidate(s))), "Method")
     proof_section = next((s for s in sections if re.search(r"security|proof|analysis", s, re.I)), method_section)
-    results_section = next(
-        (s for s in sections if re.search(r"experiment|result|benchmark|evaluation", s, re.I)),
-        "Experiments",
-    )
+    results_section = _results_section(sections)
     discussion_section = next((s for s in sections if re.search(r"discussion|limitation", s, re.I)), "Discussion")
     positioning_section = _positioning_section(sections, citation_key=citation_key)
     return NarrativeSectionTargets(
@@ -68,8 +65,28 @@ def section_targets(sections: list[str], *, citation_key: str | None) -> Narrati
     )
 
 
+def _method_candidate(section: str) -> str:
+    if re.search(r"evaluation|experiment|benchmark|result|finding|discussion|related|background|conclusion", section, re.I):
+        return ""
+    if re.search(r"method|methodology|approach|construction|system|pipeline|architecture|framework", section, re.I):
+        return section
+    return ""
+
+
+def _results_section(sections: list[str]) -> str:
+    explicit_results = next((s for s in sections if re.search(r"result|finding|outcome", s, re.I)), "")
+    if explicit_results:
+        return explicit_results
+    return next(
+        (s for s in sections if re.search(r"experiment|benchmark|evaluation|empirical|measurement", s, re.I)),
+        "Experiments",
+    )
+
+
 def _positioning_section(sections: list[str], *, citation_key: str | None) -> str:
-    positioning_section = next((s for s in sections if re.search(r"related|introduction", s, re.I)), "")
+    positioning_section = next((s for s in sections if re.search(r"related", s, re.I)), "")
+    if not positioning_section:
+        positioning_section = next((s for s in sections if re.search(r"introduction", s, re.I)), "")
     if citation_key and not positioning_section:
         # Some minimal/generated outlines omit Introduction/Related Work even when the
         # template has them. Keep verified-citation positioning available instead of

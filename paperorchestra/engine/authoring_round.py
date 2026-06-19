@@ -208,13 +208,14 @@ def _ensure_outline(
     artifacts: dict[str, Any],
     notes: list[str],
 ) -> None:
-    state = load_session(cwd)
-    if not state.artifacts.outline_json or not Path(state.artifacts.outline_json).exists():
-        outline_path = generate_outline(cwd, provider, runtime_mode=runtime_mode)
-        notes.append("Outline generated before drafting.")
-    else:
-        outline_path = Path(state.artifacts.outline_json)
-        notes.append("Existing outline reused before drafting.")
+    # Authoring rounds are the user-facing "turn the approved plan into a draft"
+    # surface.  Reusing an older outline by mere file existence lets a previous
+    # section contract leak into a new approved plan, causing downstream
+    # narrative/claim validation failures.  Regenerate the outline whenever the
+    # caller asks us to ensure planning artifacts; callers that intentionally
+    # want legacy/manual artifacts can pass ensure_planning_artifacts=False.
+    outline_path = generate_outline(cwd, provider, runtime_mode=runtime_mode)
+    notes.append("Outline regenerated before drafting.")
     artifacts["outline_json"] = _artifact(outline_path)
 
 

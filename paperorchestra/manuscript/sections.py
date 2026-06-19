@@ -3,27 +3,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from paperorchestra.manuscript.structure_titles import _canonical_generated_section_title
+
 SECTION_RE = re.compile(r"\\section\*?\{([^}]+)\}")
 
 
 def _normalize_section_title(title: str) -> str:
-    raw = title.strip()
-    if re.fullmatch(r"\\+appendix\b.*", raw, flags=re.DOTALL | re.IGNORECASE):
-        raw = "appendix"
-    if re.fullmatch(r"\\+begin\{abstract\}", raw, flags=re.DOTALL | re.IGNORECASE):
-        raw = "abstract"
-    section_match = re.fullmatch(r"\\(?:sub)*section\*?\{(.+)\}", raw, flags=re.DOTALL)
-    if section_match:
-        raw = section_match.group(1).strip()
-    normalized = re.sub(r"\s+", " ", raw.lower())
-    aliases = {
-        "proposed method": "method",
-        "methodology": "method",
-        "implementation and results": "experiments",
-        "implementation results": "experiments",
-        "discussion and limitations": "discussion",
-    }
-    return aliases.get(normalized, normalized)
+    return _canonical_generated_section_title(title)
 
 
 def _section_bodies(latex: str) -> dict[str, str]:
@@ -78,4 +64,3 @@ def _section_for_index(latex: str, index: int) -> dict[str, Any] | None:
         if section["start"] <= index < section["end"]:
             return section
     return None
-

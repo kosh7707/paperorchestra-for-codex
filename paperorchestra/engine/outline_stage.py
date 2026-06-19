@@ -7,6 +7,7 @@ from paperorchestra.core.session import artifact_path, load_session, save_sessio
 from paperorchestra.engine.completion_env import _build_completion_request
 from paperorchestra.engine.completion_identity import _lane_owner
 from paperorchestra.engine.completion_runtime import _complete_with_runtime_mode
+from paperorchestra.engine.plan_gate import approved_plan_path
 from paperorchestra.engine.prompt_context import _data_block, _prompt_compact_text, _read_inputs
 from paperorchestra.engine.schema_outline import OUTLINE_SCHEMA, normalize_outline_payload, validate_outline
 from paperorchestra.manuscript.prompts import PROMPTS
@@ -20,8 +21,16 @@ def generate_outline(cwd: str | Path | None, provider: BaseProvider, *, runtime_
     prompt_idea = _prompt_compact_text(inputs["idea"], head_chars=8000, tail_chars=1500)
     prompt_experimental_log = _prompt_compact_text(inputs["experimental_log"], head_chars=9000, tail_chars=2500)
     prompt_template = _prompt_compact_text(inputs["template"], head_chars=9000, tail_chars=1000)
+    plan_path = approved_plan_path(cwd)
+    prompt_plan = (
+        _prompt_compact_text(plan_path.read_text(encoding="utf-8"), head_chars=9000, tail_chars=1500)
+        if plan_path is not None
+        else "No author-approved paper-plan.md was found for this outline run."
+    )
     user_prompt = f"""
 Inputs:
+{_data_block('paper-plan.md', prompt_plan)}
+
 {_data_block('idea.md', prompt_idea)}
 
 {_data_block('experimental_log.md', prompt_experimental_log)}
@@ -65,6 +74,7 @@ Manuscript prose hygiene:
             state.inputs.experimental_log_path,
             state.inputs.template_path,
             state.inputs.guidelines_path,
+            str(plan_path) if plan_path is not None else "",
         ],
         output_artifacts=[str(path)],
         fallback_used=fallback_used,

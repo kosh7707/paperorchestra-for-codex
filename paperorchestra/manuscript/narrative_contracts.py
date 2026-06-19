@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from paperorchestra.engine.plan_gate import approved_plan_path
 from paperorchestra.core.session import load_session
 from paperorchestra.manuscript.narrative_sources import file_sha256
 
@@ -12,8 +13,10 @@ CITATION_PLACEMENT_PLAN_SCHEMA_VERSION = "citation-placement-plan/1"
 
 def planning_source_hashes(cwd: str | Path | None) -> dict[str, str | None]:
     state = load_session(cwd)
+    plan_path = approved_plan_path(cwd)
     return {
         "outline_json": file_sha256(state.artifacts.outline_json),
+        "paper_plan_md": file_sha256(plan_path),
         "citation_map_json": file_sha256(state.artifacts.citation_map_json),
         "references_bib": file_sha256(state.artifacts.references_bib),
         "idea_md": file_sha256(state.inputs.idea_path),

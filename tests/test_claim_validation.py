@@ -88,3 +88,30 @@ def test_narrative_section_roles_reports_missing_coverage_group_and_story_beat()
     ]
     assert "Recall-preserving source triage" in issues[0].message
     assert "Report precision trend" in issues[1].message
+
+
+def test_claim_validation_matches_system_and_evaluation_aliases() -> None:
+    claim_map = {
+        "claims": [
+            {
+                "id": "C1",
+                "required": True,
+                "target_section": "System",
+                "coverage_groups": [["agent", "triage"]],
+                "evidence_anchors": ["method evidence"],
+            },
+            {
+                "id": "C2",
+                "required": True,
+                "target_section": "Evaluation Design",
+                "coverage_groups": [["benchmark", "measurements"]],
+                "evidence_anchors": ["evaluation evidence"],
+            },
+        ]
+    }
+    latex = (
+        r"\section{Methodology} The agent triage pipeline is described."
+        r"\section{Experiment Setup} The benchmark measurements are scoped."
+    )
+
+    assert claim_validation.check_claim_map_coverage(latex, claim_map) == []

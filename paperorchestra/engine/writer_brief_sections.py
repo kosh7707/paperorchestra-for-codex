@@ -4,6 +4,7 @@ from typing import Any
 
 from paperorchestra.core.boundary import sanitize_author_facing_text
 from paperorchestra.engine.prompt_context import _prompt_compact_text
+from paperorchestra.manuscript.structure import _canonical_generated_section_title
 
 
 def _section_roles_for_writer_brief(
@@ -15,7 +16,10 @@ def _section_roles_for_writer_brief(
         if not isinstance(role, dict):
             continue
         title = str(role.get("section_title") or "").strip()
-        required_claims = claims_by_section.get(title, [])
+        required_claims = claims_by_section.get(title, []) or claims_by_section.get(
+            _canonical_generated_section_title(title),
+            [],
+        )
         section_roles.append(
             {
                 "section": title,

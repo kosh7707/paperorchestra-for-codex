@@ -4,6 +4,7 @@ from typing import Any
 
 from paperorchestra.core.boundary import normalized_claim_projection, sanitize_author_facing_text
 from paperorchestra.engine.prompt_context import _prompt_compact_text
+from paperorchestra.manuscript.structure import _canonical_generated_section_title
 
 
 def _claims_by_section_for_writer_brief(claim_map: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -13,7 +14,11 @@ def _claims_by_section_for_writer_brief(claim_map: dict[str, Any]) -> dict[str, 
             continue
         projection = normalized_claim_projection(claim)
         section = str(projection.get("target_section") or "").strip() or "Unassigned"
-        claims_by_section.setdefault(section, []).append(_claim_for_writer_brief(claim, projection))
+        projected = _claim_for_writer_brief(claim, projection)
+        claims_by_section.setdefault(section, []).append(projected)
+        canonical = _canonical_generated_section_title(section)
+        if canonical and canonical != section:
+            claims_by_section.setdefault(canonical, []).append(projected)
     return claims_by_section
 
 

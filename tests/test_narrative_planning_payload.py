@@ -149,3 +149,32 @@ Plain template boilerplate contains enough ordinary words to exceed the term thr
     _narrative, claim_map, _citation_plan = build_planning_payloads(tmp_path)
 
     assert [claim["claim_type"] for claim in claim_map["claims"]] == []
+
+
+def test_planning_payload_targets_system_results_and_related_work_sections(tmp_path: Path) -> None:
+    _seed_session(
+        tmp_path,
+        outline={
+            "section_plan": [
+                {"section_title": "Introduction"},
+                {"section_title": "System"},
+                {"section_title": "Experiment Setup"},
+                {"section_title": "Results"},
+                {"section_title": "Related Work"},
+                {"section_title": "Conclusion"},
+            ]
+        },
+        citation_map={"smith2024": {"title": "Grounded Paper Writing"}},
+    )
+
+    narrative, claim_map, citation_plan = build_planning_payloads(tmp_path)
+
+    method_claims = [claim for claim in claim_map["claims"] if claim["claim_type"] == "method"]
+    benchmark_claims = [claim for claim in claim_map["claims"] if claim["claim_type"] == "benchmark"]
+    positioning_claims = [claim for claim in claim_map["claims"] if claim["claim_type"] == "positioning"]
+    assert method_claims and method_claims[0]["target_section"] == "System"
+    assert benchmark_claims and benchmark_claims[0]["target_section"] == "Results"
+    assert positioning_claims and positioning_claims[0]["target_section"] == "Related Work"
+    role_titles = [role["section_title"] for role in narrative["section_roles"]]
+    assert role_titles == ["Introduction", "System", "Experiment Setup", "Results", "Related Work", "Conclusion"]
+    assert citation_plan["placements"] == []
