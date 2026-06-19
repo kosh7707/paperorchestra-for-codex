@@ -6,6 +6,37 @@ from paperorchestra.core.boundary import (
     normalized_coverage_groups,
     scope_note_text,
 )
+from paperorchestra.core import boundary
+from paperorchestra.core import boundary_claims, boundary_control, boundary_sanitize
+
+
+def test_boundary_facade_exports_all_public_symbols() -> None:
+    assert sorted(boundary.__all__) == [
+        "CONTROL_PROSE_PATTERNS",
+        "_as_strings",
+        "_walk_strings",
+        "assert_author_facing_payload",
+        "author_facing_payload_markers",
+        "authorial_claim_text",
+        "control_prose_markers",
+        "generic_authorial_claim",
+        "is_machine_control_prose",
+        "is_material_packet_control_section_title",
+        "is_material_packet_section_title",
+        "normalized_claim_projection",
+        "normalized_coverage_groups",
+        "normalized_title",
+        "projection_for_claims",
+        "sanitize_author_facing_text",
+        "scope_note_text",
+    ]
+    assert all(hasattr(boundary, name) for name in boundary.__all__)
+
+
+def test_boundary_responsibility_modules_are_directly_importable() -> None:
+    assert boundary_control.control_prose_markers("source boundary") == ["source_boundary"]
+    assert boundary_claims.normalized_coverage_groups({"coverage_terms": ["x"]}) == [["x"]]
+    assert boundary_sanitize.sanitize_author_facing_text("supplied packet") == "stated evidence"
 
 
 def test_normalized_coverage_groups_preserves_grouping_and_falls_back_to_terms() -> None:
