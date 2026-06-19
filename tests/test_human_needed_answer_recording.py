@@ -9,6 +9,7 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import read_json, write_json
 from paperorchestra.core.models import InputBundle
 from paperorchestra.core.session import artifact_path, create_session, runtime_root, save_session
+from paperorchestra.feedback import human_needed_apply
 from paperorchestra.feedback import human_needed
 from paperorchestra.feedback.operator_contract import build_operator_review_packet
 from paperorchestra.feedback.packet_artifacts import _file_sha256
@@ -137,8 +138,8 @@ def test_record_human_needed_answer_apply_path_attaches_execution_summary(tmp_pa
         calls["apply"] = {"cwd": cwd_arg, "provider": provider, **kwargs}
         return execution_path, read_json(execution_path)
 
-    monkeypatch.setattr(human_needed, "import_operator_feedback", fake_import_operator_feedback)
-    monkeypatch.setattr(human_needed, "apply_operator_feedback", fake_apply_operator_feedback)
+    monkeypatch.setattr(human_needed_apply, "import_operator_feedback", fake_import_operator_feedback)
+    monkeypatch.setattr(human_needed_apply, "apply_operator_feedback", fake_apply_operator_feedback)
 
     result = human_needed.record_human_needed_answer(
         cwd,

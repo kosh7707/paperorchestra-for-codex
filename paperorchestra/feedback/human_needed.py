@@ -7,10 +7,10 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.session import load_session
 from paperorchestra.feedback.human_needed_artifacts import (
     _packet_file_sha256_after_canonical_validation,
-    _sha256_file,
     _write_private_answer_if_allowed,
     _write_public_answer_artifacts,
 )
+from paperorchestra.feedback.human_needed_apply import apply_recorded_human_needed_answer
 from paperorchestra.feedback.human_needed_decision import (
     _classify_action,
     _human_needed_actions,
@@ -18,17 +18,16 @@ from paperorchestra.feedback.human_needed_decision import (
     _select_action,
 )
 from paperorchestra.feedback.human_needed_paths import _attach_public_path_or_label
-from paperorchestra.feedback.operator_feedback_flow import apply_operator_feedback
 from paperorchestra.feedback.operator_contract import (
     _read_packet,
     build_operator_review_packet,
-    import_operator_feedback,
 )
 from paperorchestra.feedback.candidate_approval_roles import actionable_candidate_approval_role
 from paperorchestra.feedback.packet_artifacts import _file_sha256
 from paperorchestra.feedback.packet_artifact_validation import _validate_operator_packet_artifact_bindings
-from paperorchestra.runtime.mock_provider import MockProvider
 from paperorchestra.runtime.provider_base import BaseProvider
+
+
 def record_human_needed_answer(
     cwd: str | Path | None,
     answer: str,
@@ -106,16 +105,13 @@ def record_human_needed_answer(
     )
     _attach_public_path_or_label(result, cwd, "packet_path", packet_path_obj)
     if apply:
-        imported_path, _imported = import_operator_feedback(
+        apply_recorded_human_needed_answer(
+            result,
             cwd,
             packet_path=packet_path_obj,
             feedback_path=feedback_path,
-            output_path=imported_feedback_output,
-        )
-        execution_path, execution = apply_operator_feedback(
-            cwd,
-            provider or MockProvider(),
-            imported_feedback_path=imported_path,
+            imported_feedback_output=imported_feedback_output,
+            provider=provider,
             max_supervised_iterations=max_supervised_iterations,
             require_compile=require_compile,
             quality_mode=quality_mode,
@@ -127,16 +123,4 @@ def record_human_needed_answer(
             citation_provider_name=citation_provider_name,
             citation_provider_command=citation_provider_command,
         )
-        _attach_public_path_or_label(result, cwd, "imported_feedback_path", imported_path)
-        result["imported_feedback_sha256"] = _sha256_file(imported_path)
-        _attach_public_path_or_label(result, cwd, "operator_feedback_execution_path", execution_path)
-        result["operator_feedback_execution_sha256"] = _sha256_file(execution_path)
-        result["operator_feedback_execution_summary"] = {
-            "verdict": execution.get("verdict"),
-            "promotion_status": execution.get("promotion_status"),
-            "promotion_reason": execution.get("promotion_reason"),
-            "supervised_iteration_index": execution.get("supervised_iteration_index"),
-            "supervised_remaining": execution.get("supervised_remaining"),
-            "candidate_branch": execution.get("candidate_branch"),
-        }
     return result

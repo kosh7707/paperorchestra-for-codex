@@ -32,13 +32,18 @@ def test_operator_feedback_draft_modules_import_their_contracts_directly() -> No
     assert _imports_from("paperorchestra/feedback/operator_issue_draft.py", "paperorchestra.feedback.operator_issue_contract") == []
 
 
-def test_human_needed_imports_apply_from_flow() -> None:
-    assert _imports_from("paperorchestra/feedback/human_needed.py", "paperorchestra.feedback.operator_feedback_flow") == [
+def test_human_needed_apply_imports_apply_from_flow() -> None:
+    assert _imports_from("paperorchestra/feedback/human_needed.py", "paperorchestra.feedback.human_needed_apply") == [
+        "apply_recorded_human_needed_answer"
+    ]
+    assert _imports_from("paperorchestra/feedback/human_needed_apply.py", "paperorchestra.feedback.operator_feedback_flow") == [
         "apply_operator_feedback"
     ]
     assert set(_imports_from("paperorchestra/feedback/human_needed.py", "paperorchestra.feedback.operator_contract")) >= {
         "_read_packet",
         "build_operator_review_packet",
+    }
+    assert set(_imports_from("paperorchestra/feedback/human_needed_apply.py", "paperorchestra.feedback.operator_contract")) >= {
         "import_operator_feedback",
     }
 
