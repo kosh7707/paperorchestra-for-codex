@@ -5,6 +5,7 @@ from typing import Any
 
 from paperorchestra.engine import section_writing_repair as repair
 from paperorchestra.engine import section_writing_repair_retry as retry
+from paperorchestra.engine.section_writing_repair_bridge import can_bridge_retry_citation_coverage
 
 
 @dataclass(frozen=True)
@@ -188,6 +189,16 @@ def test_retry_citation_coverage_issue_can_bridge_related_work(monkeypatch) -> N
     assert result.validation_issues == []
     assert result.blocking_issues == []
     assert result.lane_type == "retry_lane"
+
+
+def test_retry_citation_bridge_policy_is_related_work_scoped() -> None:
+    citation_issue = _Issue("citation_coverage_insufficient")
+
+    assert can_bridge_retry_citation_coverage([citation_issue], [])
+    assert can_bridge_retry_citation_coverage([citation_issue], ["Related Work"])
+    assert can_bridge_retry_citation_coverage([citation_issue], ["Background and Related Work"])
+    assert not can_bridge_retry_citation_coverage([citation_issue], ["Method"])
+    assert not can_bridge_retry_citation_coverage([citation_issue, _Issue("plot_plan_not_reflected")], ["Related Work"])
 
 
 def test_retry_citation_coverage_bridge_ignores_non_citation_failures(monkeypatch) -> None:

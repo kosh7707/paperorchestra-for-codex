@@ -10,6 +10,7 @@ from paperorchestra.engine.completion import _build_completion_request, _complet
 from paperorchestra.engine.latex_postprocess import _stabilize_figure_float_placement
 from paperorchestra.engine.plot_repairs import _inject_missing_plot_assets
 from paperorchestra.engine.reports import _blocking_issues
+from paperorchestra.engine.section_writing_repair_bridge import can_bridge_retry_citation_coverage
 from paperorchestra.engine.section_writing_repair_prompt import build_section_repair_retry_prompt
 from paperorchestra.engine.section_writing_support import (
     SectionDraftContext,
@@ -18,7 +19,6 @@ from paperorchestra.engine.section_writing_support import (
     validate_section_draft,
 )
 from paperorchestra.manuscript.prompts import PROMPTS
-from paperorchestra.manuscript.structure import _canonical_generated_section_title
 from paperorchestra.runtime.provider_base import BaseProvider
 
 
@@ -87,12 +87,7 @@ def repair_retry_draft(
     retry_issues = validate_section_draft(retry_latex, validation_context)
     retry_blocking = _blocking_issues(retry_issues)
 
-    retry_codes = {issue.code for issue in retry_blocking}
-    can_bridge_citations = retry_blocking and retry_codes <= {"citation_coverage_insufficient"}
-    if can_bridge_citations and selected_sections:
-        selected_titles = {_canonical_generated_section_title(section) for section in selected_sections}
-        can_bridge_citations = bool(selected_titles & {"related work", "background and related work"})
-    if can_bridge_citations:
+    if can_bridge_retry_citation_coverage(retry_blocking, selected_sections):
         bridged_retry_latex = _ensure_minimum_citation_coverage(
             retry_latex,
             citation_map,
