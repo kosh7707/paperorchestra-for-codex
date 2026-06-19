@@ -29,13 +29,7 @@ def test_operator_feedback_draft_modules_import_their_contracts_directly() -> No
     assert _imports_from("paperorchestra/feedback/operator_issue_draft.py", "paperorchestra.feedback.operator_answer_metadata") == [
         "OPERATOR_FEEDBACK_INTENTS"
     ]
-    assert set(
-        _imports_from("paperorchestra/feedback/operator_issue_draft.py", "paperorchestra.feedback.operator_issue_contract")
-    ) >= {
-        "ACTIONABLE_FAILURE_OWNER_CATEGORIES",
-        "OPERATOR_SOURCE",
-        "derive_operator_issue_id",
-    }
+    assert _imports_from("paperorchestra/feedback/operator_issue_draft.py", "paperorchestra.feedback.operator_issue_contract") == []
 
 
 def test_human_needed_imports_apply_from_flow() -> None:

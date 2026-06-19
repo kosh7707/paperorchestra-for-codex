@@ -4,20 +4,12 @@ from typing import Any
 
 from paperorchestra.feedback.candidate_approval_issues import candidate_approval_issues_for_role
 from paperorchestra.feedback.operator_answer_metadata import OPERATOR_FEEDBACK_INTENTS
-from paperorchestra.feedback.operator_issue_contract import (
-    ACTIONABLE_FAILURE_OWNER_CATEGORIES,
-    OPERATOR_SOURCE,
-    derive_operator_issue_id,
-)
 from paperorchestra.feedback.operator_issue_defaults import (
     _default_candidate_approval_issue,
     _default_missing_approval_issue,
     _fallback_human_needed_issue,
 )
 from paperorchestra.feedback.operator_issue_policy import (
-    _MAX_GENERATED_OPERATOR_ISSUES,
-    _OPERATOR_ISSUE_ROLE_RANK,
-    _OPERATOR_ISSUE_SEVERITY_RANK,
     _cap_generated_issues,
     _infer_operator_issue_owner_category,
     _with_operator_issue_identity,
