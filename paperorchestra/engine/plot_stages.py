@@ -9,7 +9,6 @@ from paperorchestra.core.session import artifact_path, build_path, load_session,
 from paperorchestra.engine.completion import _lane_owner
 from paperorchestra.engine.plot_payload import _build_plot_payload
 from paperorchestra.engine.schemas import validate_plot_manifest
-from paperorchestra.engine.plot_repairs import _inject_missing_plot_assets
 from paperorchestra.engine.research_discovery import _build_candidate_payload, _write_candidate_artifacts
 from paperorchestra.manuscript.plot_assets import render_plot_assets
 from paperorchestra.runtime.parity import record_lane_manifest
@@ -148,4 +147,3 @@ def generate_plots(cwd: str | Path | None, provider: BaseProvider | None = None,
     state.notes.append(f"Lane manifest recorded: {lane_path.name}")
     save_session(cwd, state)
     return manifest_path
-
