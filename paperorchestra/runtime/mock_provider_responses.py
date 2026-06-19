@@ -1,11 +1,9 @@
 from __future__ import annotations
 
+from paperorchestra.runtime.mock_provider_citation_support import build_citation_support_response
+from paperorchestra.runtime.mock_provider_json_payloads import build_json_response
 from paperorchestra.runtime.mock_provider_latex import build_mock_latex_document
-from paperorchestra.runtime.mock_provider_payloads import (
-    build_citation_support_response,
-    build_json_response,
-    build_prior_work_seed_response,
-)
+from paperorchestra.runtime.mock_provider_prior_work import build_prior_work_seed_response
 from paperorchestra.runtime.provider_base import CompletionRequest
 
 

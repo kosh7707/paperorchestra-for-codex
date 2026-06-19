@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import json
-import re
+from typing import Callable
 
-from paperorchestra.domains import get_domain
 from paperorchestra.runtime.provider_base import CompletionRequest
 
 FIGURE_RENDERING_BRIEF = (
@@ -22,38 +21,6 @@ RELATED_OVERVIEW = (
     "and structure-grounded writing systems."
 )
 RELATED_BRIDGE = "The proposed pipeline decouples writing from experimentation and grounds citations via verification."
-
-
-def build_prior_work_seed_response() -> str:
-    return json.dumps(
-        {
-            "references": [dict(item) for item in get_domain().mock_prior_work_references],
-            "research_notes": ["Mock provider returns canonical seed examples without live web access."],
-        },
-        indent=2,
-    )
-
-
-def build_citation_support_response(request: CompletionRequest) -> str:
-    ids = re.findall(r'"id"\s*:\s*"(cite-\d+)"', request.user_prompt)
-    return json.dumps(
-        {
-            "items": [
-                {
-                    "id": item_id,
-                    "support_status": "needs_manual_check",
-                    "risk": "medium",
-                    "claim_type": "background",
-                    "evidence": [],
-                    "reasoning": "Mock provider cannot perform live web/source inspection.",
-                    "suggested_fix": "Run a web-search-capable provider or manually verify this cited sentence.",
-                }
-                for item_id in ids
-            ],
-            "research_notes": ["Mock provider does not claim cited-sentence support."],
-        },
-        indent=2,
-    )
 
 
 def _mock_candidate_payload() -> dict:
@@ -225,7 +192,8 @@ def _is_review_request(system_prompt: str) -> bool:
     )
 
 
-JSON_RESPONSE_BUILDERS = (
+JsonPayloadBuilder = Callable[[CompletionRequest], dict]
+JSON_RESPONSE_BUILDERS: tuple[tuple[Callable[[str], bool], JsonPayloadBuilder], ...] = (
     (_is_candidate_request, lambda request: _mock_candidate_payload()),
     (_is_figure_request, lambda request: _mock_figure_payload()),
     (_is_outline_request, lambda request: _mock_outline_payload()),
