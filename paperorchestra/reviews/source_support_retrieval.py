@@ -10,8 +10,6 @@ from typing import Any, Callable
 from paperorchestra.reviews.source_support_candidates import (
     _blocked_html_reason,
     _candidate_pdf_links,
-    _candidate_redirect_rejection,
-    _candidate_trust_rejection,
     _html_to_text,
     _public_pdf_candidate_decisions,
     _response_final_url,

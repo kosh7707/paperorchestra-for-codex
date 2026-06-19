@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from paperorchestra.reviews.source_support_retrieval import (
-    _candidate_pdf_links,
+from paperorchestra.reviews.source_support_retrieval import _candidate_pdf_links
+from paperorchestra.reviews.source_support_pdf_trust import (
     _candidate_redirect_rejection,
     _candidate_trust_rejection,
 )
