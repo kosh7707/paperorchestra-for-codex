@@ -51,6 +51,28 @@ A good material bundle usually includes some of:
 - target venue or format
 - constraints such as “no S2 key”, “body first”, or “leave numeric placeholders”
 
+### When materials are missing
+
+If `$paperorchestra-status` reports `materials missing`, the next step is to give Codex enough paths and constraints to initialize a paper session. For example:
+
+```text
+Use ~/sast-alert-triage as the project source.
+Write a provisional LNCS paper.
+S2 key is not available.
+Use placeholders for unfinished numeric results.
+$paperorchestra
+```
+
+A normal first paper session then proceeds as:
+
+1. initialize the PaperOrchestra session from the provided paths/materials;
+2. build a source/material digest;
+3. identify claims and evidence boundaries;
+4. create or update the manuscript draft;
+5. run live review, quality gate, and authoring rounds as needed.
+
+Do not start drafting if the material paths are absent or the requested factual claims would have to be invented.
+
 ## Skill map
 
 | Skill | Use it when you want to... |
