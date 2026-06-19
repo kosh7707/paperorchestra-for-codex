@@ -5,7 +5,7 @@ from typing import Any
 
 from paperorchestra.core.io import read_json
 from paperorchestra.core.session import artifact_path, load_session
-from paperorchestra.manuscript.source_obligations import source_obligations_path
+from paperorchestra.manuscript.source_obligation_eval import source_obligations_path
 from paperorchestra.loop_engine.quality.action_core import _action
 from paperorchestra.loop_engine.quality.action_families.figure_placeholder_actions import _generated_placeholder_figure_actions
 from paperorchestra.loop_engine.quality.action_families.figure_review_actions import _figure_review_actions

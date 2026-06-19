@@ -5,7 +5,7 @@ from typing import Any
 
 from paperorchestra.loop_engine.ralph.repair_claim_safety_issues import _truncate_issue_text
 from paperorchestra.loop_engine.ralph.state import _read_json
-from paperorchestra.manuscript.source_obligations import evaluate_source_obligations, source_obligations_path
+from paperorchestra.manuscript.source_obligation_eval import evaluate_source_obligations, source_obligations_path
 
 
 def _source_obligation_repair_context(cwd: str | Path | None, *, limit: int = 48) -> dict[str, Any]:

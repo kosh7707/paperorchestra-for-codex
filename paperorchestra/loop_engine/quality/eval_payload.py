@@ -6,7 +6,7 @@ from typing import Any
 from paperorchestra.core.models import utc_now_iso
 from paperorchestra.loop_engine.quality.policy import QUALITY_EVAL_SCHEMA_VERSION
 from paperorchestra.loop_engine.quality.utils import _file_sha256, _sha256_jsonable
-from paperorchestra.manuscript.source_obligations import source_obligations_path
+from paperorchestra.manuscript.source_obligation_eval import source_obligations_path
 from paperorchestra.reviews.citation_integrity_paths import (
     citation_integrity_audit_path,
     citation_integrity_critic_path,

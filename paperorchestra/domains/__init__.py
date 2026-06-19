@@ -33,7 +33,7 @@ def register_domain(profile: DomainProfile, *, replace: bool = False) -> DomainP
     import time for speed and reproducibility.  Plugins should therefore call
     this function, set ``PAPERO_DOMAIN`` or pass the registered name explicitly,
     and only then import modules such as ``pipeline``, ``critics``, or
-    ``source_obligations``.
+    ``source_obligation_extraction``.
     """
 
     if not isinstance(profile, DomainProfile):

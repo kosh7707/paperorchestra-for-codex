@@ -15,7 +15,7 @@ from paperorchestra.loop_engine.ralph.action_dispatch_types import (
     QaLoopActionDispatchContext,
     _QaLoopActionDispatchState,
 )
-from paperorchestra.manuscript.source_obligations import write_source_obligations
+from paperorchestra.manuscript.source_obligation_eval import write_source_obligations
 from paperorchestra.reviews.section_review import write_section_review
 
 

@@ -16,7 +16,7 @@ from paperorchestra.loop_engine.ralph.repair_recheck_metrics import (
     _strictly_improves,
 )
 from paperorchestra.loop_engine.ralph.state import _read_json
-from paperorchestra.manuscript.source_obligations import evaluate_source_obligations
+from paperorchestra.manuscript.source_obligation_eval import evaluate_source_obligations
 from paperorchestra.reviews.citation_integrity_audit import build_citation_integrity_audit
 
 
