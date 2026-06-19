@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from paperorchestra.core.errors import ContractError
+from paperorchestra.engine.pipeline_final_reports import write_pipeline_final_reports
 from paperorchestra.runtime.provider_base import BaseProvider
 
 
@@ -194,33 +195,12 @@ class PipelineRun:
         self.stage.save_session(self.cwd, state)
 
     def _write_final_reports(self) -> None:
-        runtime_parity_path, runtime_parity_payload = self.stage.record_runtime_parity_report(self.cwd)
-        state = self.stage.load_session(self.cwd)
-        state.artifacts.latest_runtime_parity_json = str(runtime_parity_path)
-        self.stage.save_session(self.cwd, state)
-        self.outputs["runtime_parity_report"] = str(runtime_parity_path)
-        self.outputs["runtime_parity"] = runtime_parity_payload
-
-        fidelity_path, fidelity_payload = self.stage.record_fidelity_report(self.cwd)
-        self.outputs["fidelity_report"] = str(fidelity_path)
-        self.outputs["fidelity"] = fidelity_payload
-
-        if self.stage.load_session(self.cwd).artifacts.paper_full_tex:
-            figure_review_path, figure_review_payload = self.stage.write_figure_placement_review(self.cwd)
-            self.outputs["figure_placement_review"] = str(figure_review_path)
-            self.outputs["figure_placement"] = figure_review_payload
-
-        reproducibility_path, reproducibility_payload = self.stage.write_reproducibility_audit(
-            self.cwd,
+        write_pipeline_final_reports(
+            cwd=self.cwd,
+            stage=self.stage,
+            outputs=self.outputs,
             require_live_verification=self.require_live_verification,
-        )
-        self.outputs["reproducibility_report"] = str(reproducibility_path)
-        self.outputs["reproducibility"] = reproducibility_payload
-        self._emit(
-            "pipeline",
-            "completed",
-            status=self.outputs.get("status"),
-            reproducibility_verdict=reproducibility_payload.get("verdict"),
+            emit=self._emit,
         )
 
     def _emit(self, stage: str, event: str, **payload: Any) -> None:
