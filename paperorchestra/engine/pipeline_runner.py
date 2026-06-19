@@ -4,8 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.core.errors import ContractError
 from paperorchestra.engine.pipeline_final_reports import write_pipeline_final_reports
+from paperorchestra.engine.pipeline_verification import validate_verify_fallback_mode, verify_papers_with_optional_fallback
 from paperorchestra.runtime.provider_base import BaseProvider
 
 
@@ -40,8 +40,7 @@ class PipelineRun:
         return self.outputs
 
     def _validate(self) -> None:
-        if self.verify_fallback_mode not in {"none", "mock"}:
-            raise ContractError(f"Unsupported verify fallback mode: {self.verify_fallback_mode}")
+        validate_verify_fallback_mode(self.verify_fallback_mode)
 
     def _initialize_session_metadata(self) -> None:
         state = self.stage.load_session(self.cwd)
@@ -96,27 +95,15 @@ class PipelineRun:
         self._emit("build_bib", "completed", path=self.outputs["bib"])
 
     def _verify_papers(self) -> None:
-        try:
-            self._emit("verify", "started", mode=self.verify_mode, on_error=self.verify_error_policy)
-            self.outputs["verified"] = str(
-                self.stage.verify_papers(self.cwd, mode=self.verify_mode, on_error=self.verify_error_policy)
-            )
-            self._emit("verify", "completed", path=self.outputs["verified"], mode=self.verify_mode)
-        except ContractError as exc:
-            if self.verify_mode == "live" and self.verify_fallback_mode == "mock":
-                self._use_mock_verification_fallback(exc)
-                return
-            raise
-
-    def _use_mock_verification_fallback(self, exc: ContractError) -> None:
-        self.outputs["verify_live_error"] = str(exc)
-        self._emit("verify", "fallback", error=str(exc), fallback_mode="mock")
-        self.outputs["verified"] = str(self.stage.verify_papers(self.cwd, mode="mock", on_error=self.verify_error_policy))
-        self.outputs["verify_fallback_used"] = "mock"
-        state = self.stage.load_session(self.cwd)
-        state.latest_verify_fallback_used = "mock"
-        self.stage.save_session(self.cwd, state)
-        self._emit("verify", "completed", path=self.outputs["verified"], mode="mock")
+        verify_papers_with_optional_fallback(
+            stage=self.stage,
+            cwd=self.cwd,
+            outputs=self.outputs,
+            verify_mode=self.verify_mode,
+            verify_error_policy=self.verify_error_policy,
+            verify_fallback_mode=self.verify_fallback_mode,
+            emit=self._emit,
+        )
 
     def _plan_narrative(self) -> None:
         self._emit("narrative_planning", "started")
