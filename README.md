@@ -64,13 +64,11 @@ A good material bundle usually includes some of:
 
 Default flow:
 
-```text
-$paperorchestra-setup             first after install/restart, or when runtime readiness is uncertain
-  -> $paperorchestra-status       inspect the current paper/material/review state
-  -> $paperorchestra-live-review  if live critic/citation evidence is missing or stale
-  -> $paperorchestra-quality-gate if evidence exists but gate state is missing or stale
-  -> $paperorchestra-authoring-round when there are machine-actionable edits
-```
+1. Run `$paperorchestra-setup` after install/restart, or whenever runtime readiness is uncertain.
+2. Run `$paperorchestra-status` to inspect the current paper, material, and review state.
+3. Run `$paperorchestra-live-review` when live critic or citation evidence is missing or stale.
+4. Run `$paperorchestra-quality-gate` when evidence exists but gate state is missing or stale.
+5. Run `$paperorchestra-authoring-round` when review/gate evidence identifies machine-actionable edits.
 
 ## Important status meanings
 
