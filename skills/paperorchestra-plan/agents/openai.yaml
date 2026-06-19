@@ -1,0 +1,4 @@
+interface:
+  display_name: "PaperOrchestra Plan"
+  short_description: "Create an approval-gated paper plan before drafting manuscript prose."
+  default_prompt: "Use $paperorchestra-plan to create a paper-plan.md with thesis, section structure, evidence mapping, and author approval gate."

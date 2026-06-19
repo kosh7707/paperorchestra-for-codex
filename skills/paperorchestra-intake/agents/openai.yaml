@@ -1,0 +1,4 @@
+interface:
+  display_name: "PaperOrchestra Intake"
+  short_description: "Interview the author and inventory materials before any manuscript drafting."
+  default_prompt: "Use $paperorchestra-intake to gather paper intent, material paths, experiment basis, and claim boundaries before planning."

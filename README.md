@@ -65,13 +65,29 @@ $paperorchestra
 
 A normal first paper session then proceeds as:
 
-1. initialize the PaperOrchestra session from the provided paths/materials;
-2. build a source/material digest;
-3. identify claims and evidence boundaries;
-4. create or update the manuscript draft;
-5. run live review, quality gate, and authoring rounds as needed.
+1. initialize or prepare the PaperOrchestra workspace from the provided paths/materials;
+2. run `$paperorchestra-intake` to lock intent, evidence basis, and claim boundaries;
+3. run `$paperorchestra-plan` to create `paper-plan.md` for author review;
+4. revise the plan until the author approves it;
+5. run `$paperorchestra-authoring-round` only after the plan is approved.
 
 Do not start drafting if the material paths are absent or the requested factual claims would have to be invented.
+
+## Planning before drafting
+
+For new papers, PaperOrchestra should behave like a coauthor, not a one-shot manuscript generator. The normal conversation is:
+
+```text
+I want to write a paper.
+Where are the materials?
+What kind of paper is this?
+What experiments/results are available?
+What should the paper claim or avoid claiming?
+Here is paper-plan.md; approve or revise it.
+After approval, run one authoring round.
+```
+
+This planning gate prevents the engine from inventing a thesis, section structure, results, or related-work framing before the author has accepted the manuscript direction.
 
 ## Skill map
 
@@ -80,6 +96,8 @@ Do not start drafting if the material paths are absent or the requested factual 
 | `$paperorchestra` | Route an unclear first-use or paper-writing request to the right workflow. |
 | `$paperorchestra-status` | Inspect current materials, stale artifacts, trust tiers, and the next safe action. |
 | `$paperorchestra-setup` | Check install/session/provider/compile/MCP readiness. |
+| `$paperorchestra-intake` | Interview the author and inventory materials before planning. |
+| `$paperorchestra-plan` | Produce or revise `paper-plan.md` for author approval before drafting. |
 | `$paperorchestra-live-review` | Run a real model/web critic or citation-review lane and report trust tier evidence. |
 | `$paperorchestra-quality-gate` | Run bounded validation, quality-gate, and QA-loop state checks. |
 | `$paperorchestra-authoring-round` | Perform one manuscript-improvement round using available review/gate evidence. |
@@ -88,9 +106,11 @@ Default flow:
 
 1. Run `$paperorchestra-setup` after install/restart, or whenever runtime readiness is uncertain.
 2. Run `$paperorchestra-status` to inspect the current paper, material, and review state.
-3. Run `$paperorchestra-live-review` when live critic or citation evidence is missing or stale.
-4. Run `$paperorchestra-quality-gate` when evidence exists but gate state is missing or stale.
-5. Run `$paperorchestra-authoring-round` when review/gate evidence identifies machine-actionable edits.
+3. Run `$paperorchestra-intake` when the material paths, paper type, thesis, evidence basis, or claim boundaries are not locked.
+4. Run `$paperorchestra-plan` to create `paper-plan.md` and get author approval.
+5. Run `$paperorchestra-live-review` when live critic or citation evidence is missing or stale.
+6. Run `$paperorchestra-quality-gate` when evidence exists but gate state is missing or stale.
+7. Run `$paperorchestra-authoring-round` only after the plan is approved and review/gate evidence identifies machine-actionable edits.
 
 ## Important status meanings
 

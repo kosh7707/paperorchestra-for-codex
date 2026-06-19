@@ -1,6 +1,6 @@
 ---
 name: paperorchestra
-description: Route PaperOrchestra paper-writing requests to the right explicit workflow skill. Use for first use, ambiguous “how do I use this?”, material inspection, draft generation requests, or when deciding between status, setup, live review, quality gate, and authoring round workflows.
+description: Route PaperOrchestra paper-writing requests to the right explicit workflow skill. Use for first use, ambiguous paper-writing requests, material inspection, intake interviews, paper planning, draft generation requests, or when deciding between setup, status, intake, plan, live review, quality gate, and authoring round workflows.
 ---
 
 # PaperOrchestra Router
@@ -17,11 +17,15 @@ If there is insufficient material, that blocks drafting. Do not fabricate claims
 
 - `$paperorchestra-status`: answer “what is ready?”, “what changed?”, “which round next?”, stale artifact, trust-tier, and human-needed questions.
 - `$paperorchestra-setup`: verify install/session/provider/compile readiness before a real paper loop.
+- `$paperorchestra-intake`: interview the author and inventory materials when thesis, paper type, venue, experiment basis, or claim boundaries are not locked.
+- `$paperorchestra-plan`: create or revise `paper-plan.md` for author approval before manuscript drafting.
 - `$paperorchestra-live-review`: run a real live/model/web critic lane and report trust tiers without silently using mock/heuristic paths.
 - `$paperorchestra-quality-gate`: run bounded validation/quality/QA state transitions and stop on `human_needed`, `failed`, or `ready_for_human_finalization`.
 - `$paperorchestra-authoring-round`: perform one manuscript-improvement round after status/review/gate evidence is available.
 
-Default order for unclear requests: `$paperorchestra-status` → recommended next skill.
+Default order for unclear first-use writing requests: `$paperorchestra-setup` if readiness is unknown → `$paperorchestra-status` → `$paperorchestra-intake` when materials/intent are not locked → `$paperorchestra-plan` → author approval → `$paperorchestra-authoring-round`.
+
+Do not route directly to authoring when no approved `paper-plan.md` exists, unless the user explicitly asks to bypass planning.
 
 ## High-level orchestrator surface
 
@@ -29,6 +33,7 @@ Prefer high-level MCP tools when attached; otherwise use CLI fallback and say MC
 
 - `inspect_state`: inspect current session/material state and next valid actions.
 - `orchestrate`: bounded v1 orchestrator. With `execute_local=true`, it performs **one deterministic local step** only; this is **not a full pipeline** and not a full paper run.
+- Before any `run_pipeline` or `write_sections`, prefer intake/plan artifacts (`paper-intake.md`, `paper-plan.md`) for new projects.
 - `answer_human_needed`: record author judgment only when the engine explicitly asks.
 - `export_current` / `export-current`: copy final TeX/Bib/PDF/session outputs.
 

@@ -36,7 +36,7 @@ Latest artifacts:
   quality gate:
   citation support:
 Recommended next round:
-  <setup needed | live-review recommended | quality-gate recommended | authoring-round recommended | human-needed answer required | materials missing | no safe paper action available>
+  <setup needed | intake recommended | plan recommended | live-review recommended | quality-gate recommended | authoring-round recommended | human-needed answer required | materials missing | no safe paper action available>
 Reason:
 Human needed:
 ```
@@ -46,9 +46,11 @@ Check for stale manuscript hash mismatches between current `paper.full.tex` and 
 ## Recommendation rules
 
 - Recommend `setup needed` when session/provider/compile prerequisites are missing.
+- Recommend `intake recommended` when runtime is ready but author intent, material paths, experiment basis, paper type, venue, or claim boundaries are not locked.
+- Recommend `plan recommended` when intake/materials are sufficient but no approved `paper-plan.md` exists.
 - Recommend `live-review recommended` when current critic/citation evidence is mock, heuristic, local diagnostic, stale, or missing for the current manuscript hash.
 - Recommend `quality-gate recommended` when live or acceptable evidence exists but no fresh quality-eval/qa-loop plan exists.
-- Recommend `authoring-round recommended` only after review/gate evidence identifies machine-actionable manuscript improvements.
+- Recommend `authoring-round recommended` only after an approved plan exists and review/gate evidence identifies machine-actionable manuscript improvements.
 - Recommend `human-needed answer required` for `human_needed` plans; list exactly the decisions required.
 - Recommend `materials missing` when factual paper drafting would require inventing claims, citations, figures, or results.
 
