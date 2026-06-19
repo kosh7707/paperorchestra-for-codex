@@ -26,6 +26,9 @@ def test_action_planner_strict_omx_blocks_before_generic_intake(tmp_path: Path) 
 
     assert action.action_type == "block"
     assert action.reason == "missing_omx_invocation_evidence"
+    assert action.requires_omx is True
+    assert action.evidence_required is True
+    assert action.omx_surface is None
 
 
 def test_action_planner_explicit_research_gap_outranks_missing_material_defaults(tmp_path: Path) -> None:
