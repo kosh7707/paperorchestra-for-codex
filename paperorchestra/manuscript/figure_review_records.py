@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from paperorchestra.manuscript.figure_review_checks import tail_clump_warnings
+from paperorchestra.manuscript.figure_placement_checks import tail_clump_warnings
 from paperorchestra.manuscript.figure_review_context import (
     _extract_figure_context,
     _figure_section_title,

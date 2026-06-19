@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from paperorchestra.manuscript.figure_review_checks import (
+from paperorchestra.manuscript.figure_placement_checks import (
     placement_location_warnings,
     placement_width_warnings,
+)
+from paperorchestra.manuscript.figure_semantic_checks import (
     reference_context_warnings,
     semantic_grounding_warnings,
 )
