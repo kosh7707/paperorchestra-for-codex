@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from paperorchestra.loop_engine.ralph.repair_candidate import build_repair_candidate
 from paperorchestra.runtime.provider_base import BaseProvider
 
 
@@ -94,36 +95,17 @@ class CitationClaimRepairRunner:
         return raw if isinstance(raw, dict) else {}
 
     def _build_candidate(self) -> str:
-        system_prompt, user_prompt = self.stage._repair_prompt(
-            self.original,
-            self.stage.canonical_citation_map(self.citation_map),
-            self.issues,
-            self.claim_safety_issues,
-            self.stage._source_obligation_repair_context(self.cwd),
-        )
-        response, lane_type, fallback_used, lane_notes = self.stage._complete_with_runtime_mode(
-            self.stage._build_completion_request(system_prompt=system_prompt, user_prompt=user_prompt),
+        candidate, metadata = build_repair_candidate(
+            stage=self.stage,
+            cwd=self.cwd,
             provider=self.provider,
             runtime_mode=self.runtime_mode,
-            cwd=self.cwd,
-            omx_lane_type="ralph",
-            trace_stage="citation_claim_repair",
+            original=self.original,
+            citation_map=self.citation_map,
+            issues=self.issues,
+            claim_safety_issues=self.claim_safety_issues,
         )
-        candidate = self.stage.extract_latex(response)
-        candidate, citation_replacements = self.stage.canonicalize_citation_keys(candidate, self.citation_map)
-        unknown = sorted(set(self.stage.extract_citation_keys(candidate)) - self.stage.allowed_citation_keys(self.citation_map))
-        candidate_path = self.stage.artifact_path(self.cwd, "paper.citation-repair.candidate.tex")
-        candidate_path.write_text(candidate, encoding="utf-8")
-        self.result.update(
-            {
-                "candidate_path": str(candidate_path),
-                "lane_type": lane_type,
-                "fallback_used": fallback_used,
-                "lane_notes": lane_notes,
-                "unknown_citation_keys": unknown,
-                "citation_replacements": citation_replacements,
-            }
-        )
+        self.result.update(metadata)
         return candidate
 
     def _validation_passes(self) -> bool:
