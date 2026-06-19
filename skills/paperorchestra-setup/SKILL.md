@@ -36,6 +36,13 @@ Report one of:
 
 S2 API key is optional. Its absence is not fatal when web/source citation evidence or manual source artifacts are used. Do not block setup solely because S2 is unset.
 
+## OMX companion routing
+
+- Use `$omx-setup` or `omx doctor` when the OMX runtime itself is missing or stale.
+- Recommend `$paperorchestra-status` after setup succeeds so the next paper-state action is read-only.
+- Recommend `$paperorchestra-live-review` only after shell-live readiness is confirmed.
+- Recommend `$paperorchestra-quality-gate` only after live review or acceptable citation evidence exists.
+
 ## Output
 
 Return a short setup card:

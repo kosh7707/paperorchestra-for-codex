@@ -20,6 +20,16 @@ paperorchestra qa-loop-step --quality-mode claim_safe --max-iterations 1
 
 `run` alone is draft generation, not full quality approval. A full quality gate must include validation, compile where allowed, critic/citation evidence, `quality-gate`, `qa-loop`, and at most a bounded `qa-loop-step`.
 
+## OMX companion routing
+
+Quality gate decides the next state; it does not silently perform an unbounded repair loop. Route follow-up work explicitly:
+
+- `$ralph`: machine-actionable repair steps exist and the user wants the loop to continue until the bounded PaperOrchestra stop condition.
+- `$ultrawork`: independent repair families can run in parallel, such as citations, section structure, reproducibility text, and figure/table cleanup.
+- `$autoresearch`: gate failures are citation/source-evidence gaps that can be solved by research.
+- `$best-practice-research`: failures concern venue norms, conventional phrasing, section shape, or reviewer expectations.
+- `$ultraqa`: fresh live review and quality artifacts exist and the next need is adversarial final QA.
+
 ## Stop states
 
 Treat these as correct terminal reports:

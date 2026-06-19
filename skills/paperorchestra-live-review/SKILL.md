@@ -17,6 +17,15 @@ paperorchestra critique --provider shell --provider-command "$PAPERO_MODEL_CMD" 
 
 If preflight reports `mock_smoke`, `local_diagnostic`, or `heuristic_citation`, never claim live validation. Say what is missing and route to `$paperorchestra-setup`.
 
+## OMX companion routing
+
+Live review should stop after reporting evidence, but it must name the right follow-up workflow:
+
+- `$autoresearch`: citation support is missing, weak, stale, or machine-solvable source discovery is needed.
+- `$best-practice-research`: the critic flags venue conventions, section structure, terminology, or related-work positioning as nonstandard.
+- `$ralph`: review findings are machine-actionable and the user wants a persistent repair loop over PaperOrchestra artifacts.
+- `$ultraqa`: live review is already fresh and the user wants hostile final-readiness checks rather than another normal review.
+
 ## Run live review
 
 Use an explicit output directory for review artifacts. The required live command shape is `critique --live --citation-evidence-mode web`:

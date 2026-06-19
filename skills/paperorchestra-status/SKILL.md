@@ -43,6 +43,18 @@ Human needed:
 
 Check for stale manuscript hash mismatches between current `paper.full.tex` and review/eval artifacts. Mark stale reviews clearly.
 
+## OMX companion hints
+
+Name both the PaperOrchestra workflow and the OMX companion when a companion would materially improve the next step:
+
+- `$paperorchestra-intake + $deep-interview`: author intent, material boundaries, venue, experiment basis, or allowed claims are unclear.
+- `$paperorchestra-plan + $ralplan`: manuscript structure, RQs, evidence table shape, or contribution boundaries need consensus planning.
+- `$paperorchestra-authoring-round + $ultrawork`: independent pre-draft lanes can run in parallel before one bounded authoring round.
+- `$paperorchestra-authoring-round + $ralph`: the user wants a persistent bounded loop over authoring, status, gate, and repair.
+- `$paperorchestra-live-review + $autoresearch`: citation/source evidence is missing, weak, stale, or machine-solvable.
+- `$paperorchestra-live-review + $best-practice-research`: venue/style norms or related-work positioning need external best-practice evidence.
+- `$paperorchestra-quality-gate + $ultraqa`: fresh review/gate artifacts exist and adversarial final QA is the next safe action.
+
 ## Recommendation rules
 
 - Recommend `setup needed` when session/provider/compile prerequisites are missing.

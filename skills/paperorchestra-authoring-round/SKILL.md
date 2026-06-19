@@ -17,6 +17,18 @@ approved plan -> outline -> prior-work/search seed -> narrative/claim/citation p
 
 For revision rounds, keep the same artifact chain but scope writing with `only_sections` when possible.
 
+## OMX companion routing
+
+Use one PaperOrchestra authoring round as the bounded paper-writing action, then compose OMX skills around it when useful:
+
+- `$ultrawork`: split independent pre-draft lanes before the round when materials are large or broad, e.g. prior-work search, paper-structure benchmarking, material inventory, and figure/table planning.
+- `$autoresearch`: run or recommend when Related Work, citation candidates, or source-backed evidence are missing and can be found by machine research.
+- `$best-practice-research`: use for venue/style conventions, section-shape norms, and positioning patterns from comparable papers before locking prose.
+- `$ralph`: supervise a persistent but bounded sequence such as status → one authoring round → quality gate → one repair step when the user asks to “keep going.”
+- `$ultraqa`: use after the draft and review artifacts exist when the user asks for adversarial readiness checks.
+
+Do not let companion skills bypass the plan gate or invent missing evidence. They prepare or verify the round; PaperOrchestra still writes and records the manuscript artifacts.
+
 ## Preferred execution
 
 Prefer the MCP tool when attached. For live/web first-draft rounds, run it as a background job so Codex MCP clients do not hit their `tools/call` timeout while the provider is still working:

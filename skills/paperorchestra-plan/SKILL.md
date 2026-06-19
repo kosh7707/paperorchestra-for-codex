@@ -13,6 +13,13 @@ Planning is a human-visible gate. Do not start authoring rounds until the plan i
 
 Wrap OMX planning behavior: use `$plan`/`$ralplan` style tradeoff review for section structure, claims, evaluation shape, and risk boundaries. If OMX runtime is unavailable, perform the same planning directly and preserve the approval gate.
 
+## OMX companion routing
+
+- Prefer `$ralplan` when thesis, section order, RQs, evaluation design, or claim boundaries have multiple plausible choices.
+- Use `$best-practice-research` when the plan depends on venue norms, common section names, comparable-paper narrative structure, or reviewer expectations.
+- Use `$autoresearch` only for bounded related-work seed discovery needed to make the plan credible; do not turn planning into full citation writing.
+- Use `$ultrawork` only when independent planning lanes are clearly separable, such as material inventory, related-work seed clustering, and table/figure planning.
+
 ## Workflow
 
 1. Read the current intake/material packet and inspect source artifacts read-only.

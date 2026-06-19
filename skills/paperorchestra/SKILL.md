@@ -5,11 +5,11 @@ description: Route PaperOrchestra paper-writing requests to the right explicit w
 
 # PaperOrchestra Router
 
-Use this skill as the thin front door for the packaged Codex/OMX paper-writing engine. Do not dump README. Inspect state, choose the narrowest operational skill, and preserve the v1-alpha safety boundary.
+Use this skill as the thin front door for the packaged Codex/OMX paper-writing engine. Do not dump README. Inspect state, choose the narrowest operational skill, and preserve the v1 safety boundary.
 
 ## Safety posture
 
-PaperOrchestra is **v1-alpha**. A successful run is an auditable draft/evidence result, **not submission-ready** approval. Known limitations remain around citation/claim quality, figure finalization, and operator repair convergence. Never convert `BLOCK`, `not_ready`, `human_needed`, warnings, or a diagnostic artifact into false readiness.
+PaperOrchestra v1 produces auditable paper-writing artifacts; it does **not** certify submission readiness. Known limitations remain around citation/claim quality, figure finalization, and operator repair convergence. Never convert `BLOCK`, `not_ready`, `human_needed`, warnings, or a diagnostic artifact into false readiness.
 
 If there is insufficient material, that blocks drafting. Do not fabricate claims, citations, figures, or results. Ask for a material upload/path or route to `$paperorchestra-status` instead. For “바로 써줘”, reject unsafe drafting when factual materials are missing.
 
@@ -26,6 +26,20 @@ If there is insufficient material, that blocks drafting. Do not fabricate claims
 Default order for unclear first-use writing requests: `$paperorchestra-setup` if readiness is unknown → `$paperorchestra-status` → `$paperorchestra-intake` when materials/intent are not locked → `$paperorchestra-plan` → author approval → `$paperorchestra-authoring-round`. The authoring round must do prior-work/search positioning before first-draft writing and critic/citation review after the draft exists.
 
 Do not route directly to authoring when no approved `paper-plan.md` exists, unless the user explicitly asks to bypass planning.
+
+## OMX companion routing
+
+PaperOrchestra owns paper state and artifacts; OMX companion skills supply orchestration power around that state. Invoke or recommend them explicitly when their trigger condition is present:
+
+- `$deep-interview`: broad ambiguity about thesis, claim boundaries, materials, venue, or experiment status before intake can be completed.
+- `$ralplan`: section structure, RQs, evaluation design, or claim tradeoffs need consensus-style planning before author approval.
+- `$ultrawork`: independent lanes can run in parallel, such as prior-work search, material inventory, section-structure benchmarking, and draft-outline synthesis.
+- `$ralph`: the user wants a persistent completion loop over a bounded PaperOrchestra goal, such as authoring round → status → quality gate → repair.
+- `$autoresearch`: machine-solvable citation/source discovery, bibliography expansion, or evidence verification remains.
+- `$best-practice-research`: venue/style norms, common section naming, related-work positioning practice, or reviewer-expectation questions need external evidence.
+- `$ultraqa`: final adversarial QA or hostile readiness checks are requested after live review and quality-gate artifacts exist.
+
+Keep the explicit PaperOrchestra skill as the paper workflow owner. For example, use `$paperorchestra-authoring-round + $ultrawork` for parallel first-draft preparation, not raw parallel agents that bypass the paper session.
 
 ## High-level orchestrator surface
 

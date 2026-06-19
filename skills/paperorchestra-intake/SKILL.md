@@ -22,6 +22,12 @@ Do not jump from “I want to write a paper” to `paper.full.tex`. First establ
 
 Wrap OMX interview behavior: ask only decision-shaping questions, keep them short, and stop once the next artifact can be written. Prefer `$deep-interview` when available and the ambiguity is broad; otherwise perform the same Socratic gating directly.
 
+## OMX companion routing
+
+- Use `$deep-interview` for broad ambiguity; intake is the PaperOrchestra artifact wrapper around that clarification.
+- Use `$paperorchestra-status` first when a session may already contain reusable materials or stale decisions.
+- Do not start `$autoresearch`, `$ultrawork`, or `$ralph` from intake unless the missing decision is resolved; route to `$paperorchestra-plan` once author intent is clear enough.
+
 ## Workflow
 
 1. Inspect current state with `mcp__paperorchestra.inspect_state` when attached; otherwise use `paperorchestra status --json` and nearby artifact inspection.
