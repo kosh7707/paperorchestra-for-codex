@@ -8,10 +8,8 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import extract_latex
 from paperorchestra.core.models import utc_now_iso
 from paperorchestra.core.session import artifact_path, load_session, save_session
-from paperorchestra.engine.completion import (
-    _build_completion_request,
-    _complete_with_runtime_mode,
-)
+from paperorchestra.engine.completion_env import _build_completion_request
+from paperorchestra.engine.completion_runtime import _complete_with_runtime_mode
 from paperorchestra.engine.review_stages import compile_current_paper, record_current_validation_report
 from paperorchestra.loop_engine.ralph.repair_issue_packet import (
     _claim_safety_repair_issues,

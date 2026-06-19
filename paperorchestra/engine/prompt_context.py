@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from paperorchestra.core.io import read_text
-from paperorchestra.engine.completion import _env_flag
+from paperorchestra.engine.completion_env import _env_flag
 
 from .prompt_citation_compaction import _compact_citation_map_for_prompt
 from .prompt_citation_context import _raise_if_strict_source_citations_unmapped, _unknown_citation_key_counts

@@ -6,7 +6,8 @@ from typing import Any
 
 from paperorchestra.core.io import extract_latex
 from paperorchestra.engine.citation_coverage import _ensure_minimum_citation_coverage
-from paperorchestra.engine.completion import _build_completion_request, _complete_with_runtime_mode
+from paperorchestra.engine.completion_env import _build_completion_request
+from paperorchestra.engine.completion_runtime import _complete_with_runtime_mode
 from paperorchestra.engine.latex_postprocess import _stabilize_figure_float_placement
 from paperorchestra.engine.plot_repairs import _inject_missing_plot_assets
 from paperorchestra.engine.reports import _blocking_issues

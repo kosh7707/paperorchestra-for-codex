@@ -6,7 +6,7 @@ from typing import Any
 
 from paperorchestra.core.io import write_text
 from paperorchestra.core.session import artifact_path, load_session, save_session
-from paperorchestra.engine.completion import _file_sha256
+from paperorchestra.engine.completion_trace import _file_sha256
 from paperorchestra.engine.refine_iteration_types import (
     PreparedRefinementDraft,
     RefinementCandidateAssessment,

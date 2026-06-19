@@ -7,7 +7,7 @@ from typing import Any
 
 from paperorchestra.core.io import write_text
 from paperorchestra.core.session import artifact_path
-from paperorchestra.engine.completion import _file_sha256
+from paperorchestra.engine.completion_trace import _file_sha256
 from paperorchestra.engine.reports import _blocking_issues, _record_validation_report, collect_paper_contract_issues
 from paperorchestra.manuscript.validation_types import ValidationIssue
 

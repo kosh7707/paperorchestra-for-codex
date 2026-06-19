@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from paperorchestra.engine.completion import _lane_owner
+from paperorchestra.engine.completion_identity import _lane_owner
 from paperorchestra.runtime.parity import record_lane_manifest
 
 REFINEMENT_STAGE = "refinement"

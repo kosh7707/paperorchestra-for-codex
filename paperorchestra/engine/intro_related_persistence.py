@@ -7,7 +7,10 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import write_text
 from paperorchestra.core.models import SessionState
 from paperorchestra.core.session import artifact_path, save_session
-from paperorchestra.engine.completion import _lane_owner, _provider_name
+from paperorchestra.engine.completion_identity import (
+    _lane_owner,
+    _provider_name,
+)
 from paperorchestra.engine.intro_related_generation import IntroRelatedDraft
 from paperorchestra.engine.reports import _blocking_issues, _issue_messages, _record_validation_report
 from paperorchestra.runtime.parity import record_lane_manifest

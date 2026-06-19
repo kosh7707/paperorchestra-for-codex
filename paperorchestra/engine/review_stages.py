@@ -9,13 +9,13 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import extract_json, read_json, read_text, write_json
 from paperorchestra.core.models import ScoreSnapshot
 from paperorchestra.core.session import load_session, review_path, save_session
-from paperorchestra.engine.completion import (
-    _build_completion_request,
-    _complete_with_runtime_mode,
+from paperorchestra.engine.completion_env import _build_completion_request
+from paperorchestra.engine.completion_identity import (
     _lane_owner,
     _provider_name,
-    _review_provenance_payload,
 )
+from paperorchestra.engine.completion_runtime import _complete_with_runtime_mode
+from paperorchestra.engine.completion_trace import _review_provenance_payload
 from paperorchestra.engine.current_manuscript_stages import (
     compile_current_paper,
     record_current_validation_report,

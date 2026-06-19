@@ -5,7 +5,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from paperorchestra.engine.citation_coverage import _ensure_minimum_citation_coverage
-from paperorchestra.engine.completion import _build_completion_request, _complete_with_runtime_mode
+from paperorchestra.engine.completion_env import _build_completion_request
+from paperorchestra.engine.completion_runtime import _complete_with_runtime_mode
 from paperorchestra.engine.intro_related_draft import IntroRelatedDraft, draft_from_intro_related_response
 from paperorchestra.engine.intro_related_prompt import IntroRelatedPromptPlan
 from paperorchestra.engine.intro_related_support import (

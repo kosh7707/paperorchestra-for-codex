@@ -5,7 +5,9 @@ from typing import Any
 
 from paperorchestra.core.session import load_session, save_session
 from paperorchestra.engine.authoring_common import _apply_mock_watermark
-from paperorchestra.engine.completion import _build_completion_request, _complete_with_runtime_mode, _provider_name
+from paperorchestra.engine.completion_env import _build_completion_request
+from paperorchestra.engine.completion_identity import _provider_name
+from paperorchestra.engine.completion_runtime import _complete_with_runtime_mode
 from paperorchestra.engine.latex_postprocess import _drop_unknown_citation_keys
 from paperorchestra.engine.prompt_context import _unknown_citation_key_counts
 from paperorchestra.engine.refine_context import build_refinement_iteration_context

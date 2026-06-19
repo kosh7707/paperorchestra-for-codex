@@ -5,7 +5,9 @@ from typing import Any
 
 from paperorchestra.core.io import extract_json, write_json
 from paperorchestra.core.session import artifact_path, load_session, save_session
-from paperorchestra.engine.completion import _build_completion_request, _complete_with_runtime_mode, _lane_owner
+from paperorchestra.engine.completion_env import _build_completion_request
+from paperorchestra.engine.completion_identity import _lane_owner
+from paperorchestra.engine.completion_runtime import _complete_with_runtime_mode
 from paperorchestra.engine.prompt_context import _read_inputs
 from paperorchestra.engine.prior_work_prompt import build_prior_work_seed_prompts
 from paperorchestra.engine.prior_work_policy import (

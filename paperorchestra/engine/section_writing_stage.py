@@ -7,12 +7,12 @@ from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import extract_latex, write_text
 from paperorchestra.core.session import artifact_path, load_session, save_session
 from paperorchestra.engine.authoring_common import _apply_mock_watermark
-from paperorchestra.engine.completion import (
-    _build_completion_request,
-    _complete_with_runtime_mode,
+from paperorchestra.engine.completion_env import _build_completion_request
+from paperorchestra.engine.completion_identity import (
     _lane_owner,
     _provider_name,
 )
+from paperorchestra.engine.completion_runtime import _complete_with_runtime_mode
 from paperorchestra.engine.reports import (
     _blocking_issues,
     _issue_messages,
