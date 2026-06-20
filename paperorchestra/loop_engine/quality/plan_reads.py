@@ -23,6 +23,9 @@ def _plan_reads(quality_eval_path: str | Path | None, quality_eval: dict[str, An
         "fidelity": _path_ref(source_artifacts.get("fidelity_audit")),
         "reproducibility": _path_ref(source_artifacts.get("reproducibility_audit")),
         "figure_placement": _path_ref(source_artifacts.get("figure_placement_review")),
+        "page_layout": _path_ref(source_artifacts.get("page_layout_review")),
+        "visual_repair_brief": _path_ref(source_artifacts.get("visual_repair_brief")),
+        "visual_repair_candidate": _path_ref(source_artifacts.get("visual_repair_candidate")),
         "citation_support": citation_support,
         "citation_integrity": {
             "audit": _path_ref(source_artifacts.get("citation_integrity_audit")),

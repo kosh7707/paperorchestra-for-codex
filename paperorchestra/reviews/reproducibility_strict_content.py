@@ -9,6 +9,9 @@ from paperorchestra.reviews.reproducibility_strict_figures import (
     _strict_figure_payload_issues,
     _strict_figure_review_issues,
 )
+from paperorchestra.reviews.reproducibility_strict_page_layout import (
+    _strict_page_layout_review_issues,
+)
 from paperorchestra.reviews.reproducibility_strict_validation import (
     STRICT_VALIDATION_WARNING_CODES,
     _strict_validation_report_issues,
@@ -27,4 +30,5 @@ def _strict_content_gates_enabled() -> bool:
 def _strict_content_gate_issues(state, session_artifact_dir: Path | None) -> list[dict[str, Any]]:
     issues = _strict_validation_report_issues(state, session_artifact_dir)
     issues.extend(_strict_figure_review_issues(state, session_artifact_dir))
+    issues.extend(_strict_page_layout_review_issues(state, session_artifact_dir))
     return issues

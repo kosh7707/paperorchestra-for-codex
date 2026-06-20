@@ -25,6 +25,7 @@ def test_all_paperorchestra_skills_have_omx_guidance() -> None:
         "paperorchestra-authoring-round",
         "paperorchestra-intake",
         "paperorchestra-figure",
+        "paperorchestra-visual-audit",
         "paperorchestra-live-review",
         "paperorchestra-plan",
         "paperorchestra-quality-gate",
@@ -80,6 +81,14 @@ def test_review_and_quality_gate_route_followup_workflows() -> None:
         "$ultrawork",
         "$ultraqa",
     )
+    assert_mentions(
+        "paperorchestra-visual-audit",
+        "OMX companion routing",
+        "$visual-verdict",
+        "$ultrawork",
+        "$ralph",
+        "$paperorchestra-quality-gate",
+    )
 
 
 def test_intake_plan_and_setup_route_to_narrow_omx_surfaces() -> None:
@@ -116,4 +125,5 @@ def test_status_reports_next_paperorchestra_skill_and_omx_companion() -> None:
         "$paperorchestra-live-review + $autoresearch",
         "$paperorchestra-live-review + $best-practice-research",
         "$paperorchestra-quality-gate + $ultraqa",
+        "$paperorchestra-visual-audit + $visual-verdict",
     )

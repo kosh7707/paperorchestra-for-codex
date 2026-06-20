@@ -30,6 +30,7 @@ MINIMAL_COMMANDS = {
     "environment": ["environment"],
     "doctor": ["doctor"],
     "critique": ["critique"],
+    "visual-audit": ["visual-audit"],
     "quality-gate": ["quality-gate"],
     "qa-loop": ["qa-loop"],
     "qa-loop-step": ["qa-loop-step"],
@@ -125,6 +126,28 @@ def test_provider_runtime_and_citation_flags_remain_on_quality_step() -> None:
     assert args.provider_command == "codex exec"
     assert args.citation_provider == "shell"
     assert args.citation_provider_command == "search cmd"
+
+
+def test_visual_audit_flags_cover_render_and_imported_findings_contract() -> None:
+    args = build_parser().parse_args(
+        [
+            "visual-audit",
+            "--pdf",
+            "compiled.pdf",
+            "--output",
+            "page-layout-review.json",
+            "--render-dir",
+            "rendered-pages",
+            "--findings-json",
+            "page-visual-findings.json",
+        ]
+    )
+
+    assert args.command == "visual-audit"
+    assert args.pdf == "compiled.pdf"
+    assert args.output == "page-layout-review.json"
+    assert args.render_dir == "rendered-pages"
+    assert args.findings_json == "page-visual-findings.json"
 
 
 def test_draft_generating_commands_require_explicit_plan_gate_bypass_flag() -> None:

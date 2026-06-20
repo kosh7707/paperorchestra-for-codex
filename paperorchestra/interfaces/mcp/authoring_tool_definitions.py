@@ -106,4 +106,17 @@ AUTHORING_TOOLS: list[JSON] = [
             }
         ),
     },
+    {
+        "name": "visual_audit",
+        "description": "Render compiled PDF pages, package page contact sheets, and optionally import visual findings into a page-layout review.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "pdf": {"type": "string"},
+                "output": {"type": "string"},
+                "render_dir": {"type": "string"},
+                "findings_json": {"type": "string"},
+            }
+        ),
+    },
 ]

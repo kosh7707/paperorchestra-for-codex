@@ -10,6 +10,7 @@ from paperorchestra.interfaces.cli_commands.authoring import (
     handle_import_prior_work,
     handle_research_prior_work,
     handle_run,
+    handle_visual_audit,
     handle_write_sections,
 )
 from paperorchestra.interfaces.cli_commands.orchestration import handle_inspect_state, handle_orchestrate
@@ -46,6 +47,7 @@ CLI_HANDLERS: dict[str, CliHandler] = {
     "environment": handle_environment,
     "doctor": handle_doctor,
     "critique": handle_critique,
+    "visual-audit": handle_visual_audit,
     "quality-gate": handle_quality_gate,
     "qa-loop": handle_qa_loop,
     "qa-loop-step": handle_qa_loop_step,

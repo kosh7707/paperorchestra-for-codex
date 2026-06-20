@@ -15,6 +15,7 @@ from paperorchestra.engine.pipeline import run_pipeline
 from paperorchestra.engine.research_prior_work_stage import import_prior_work, research_prior_work as generate_prior_work_seed
 from paperorchestra.engine.review_stages import compile_current_paper, review_current_paper
 from paperorchestra.engine.section_writing_stage import write_sections
+from paperorchestra.engine.current_manuscript_stages import write_page_layout_review
 from paperorchestra.feedback.human_needed import record_human_needed_answer
 from paperorchestra.interfaces.exporting import export_current_artifacts
 from paperorchestra.interfaces.mcp.common import JSON, default_cwd, ok, provider_from_args
@@ -220,6 +221,27 @@ def tool_critique(arguments: JSON) -> JSON:
         citation_review_json=citation_path,
     )
     return ok({"review": str(review_path), "section_review": str(section_path), "citation_support_review": str(citation_path), "revision_suggestions": str(suggestions_path)})
+
+
+def tool_visual_audit(arguments: JSON) -> JSON:
+    path, payload = write_page_layout_review(
+        default_cwd(arguments),
+        pdf_path=arguments.get("pdf"),
+        output_path=arguments.get("output"),
+        render_dir=arguments.get("render_dir"),
+        findings_json=arguments.get("findings_json"),
+    )
+    return ok(
+        {
+            "path": str(path),
+            "status": payload.get("status"),
+            "failing_codes": payload.get("failing_codes", []),
+            "warning_codes": payload.get("warning_codes", []),
+            "rendered_pages": payload.get("rendered_pages", []),
+            "contact_sheets": payload.get("contact_sheets", {}),
+            "repair_candidate_count": len(payload.get("repair_candidates") or []),
+        }
+    )
 
 
 def tool_compile_current_paper(arguments: JSON) -> JSON:

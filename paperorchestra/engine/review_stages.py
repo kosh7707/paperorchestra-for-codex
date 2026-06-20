@@ -20,6 +20,9 @@ from paperorchestra.engine.current_manuscript_stages import (
     compile_current_paper,
     record_current_validation_report,
     write_figure_placement_review,
+    write_page_layout_review,
+    write_visual_repair_candidate,
+    write_visual_repair_brief,
 )
 from paperorchestra.engine.prompt_context import _compact_citation_map_for_prompt, _data_block, _prompt_compact_text
 from paperorchestra.engine.schema_review import REVIEW_SCHEMA

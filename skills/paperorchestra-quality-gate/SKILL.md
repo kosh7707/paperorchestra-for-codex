@@ -30,11 +30,14 @@ Use `../paperorchestra/references/academic-writing.md` for manuscript-quality ch
 - sentence-intent alignment;
 - claim-evidence-boundary alignment;
 - figure-caption alignment and figure placement;
-- figure artifacts: `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, `figure-placement-review.json`, `figure_gate.report.json`;
+- rendered-page visual/layout evidence: page contact sheets, table overflow, figure readability, one-column/two-column fit, cross-figure style consistency;
+- figure artifacts: `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, `figure-placement-review.json`, `page-layout-review.json`, `visual_repair_brief.json`, `visual_repair_candidate.json`, `figure_gate.report.json`;
 - Related Work positioning quality;
 - whether paper-likeness failures are machine-actionable or require the author.
 
 For a figure-bearing manuscript, treat figure artifact availability as `present / missing / stale / not applicable`. Missing or stale expected figure artifacts are quality-gate blockers: route to `$paperorchestra-figure` instead of marking the figure/caption/placement accepted.
+
+For a compiled manuscript, treat page-visual artifacts as `present / missing / stale / pending reviewer / failing / not applicable`. Missing/stale `page-layout-review.json` or failed render evidence should be an automatic `paperorchestra visual-audit` step. Machine-actionable visual findings should create `visual_repair_brief.json` and then `visual_repair_candidate.json`, routing repair back to PaperOrchestra/Critic before asking the user. Human escalation is reserved for final artwork, semantic visual evidence disputes, aesthetic preference, or adoption/rejection of an already prepared candidate.
 
 ## OMX companion routing
 
@@ -46,6 +49,7 @@ Quality gate decides the next state; it does not silently perform an unbounded r
 - `$best-practice-research`: failures concern venue norms, conventional phrasing, section shape, or reviewer expectations.
 - `$ultraqa`: fresh live review and quality artifacts exist and the next need is adversarial final QA.
 - `$paperorchestra-figure`: failures concern figure-caption alignment, figure placement, unsupported visuals, or one-column/two-column readability.
+- `$paperorchestra-visual-audit`: failures concern rendered PDF page layout, table overflow, figure readability, contact-sheet review, or cross-figure visual consistency.
 
 ## Stop states
 

@@ -12,6 +12,14 @@ NARRATIVE_PLAN_CODES = {
 }
 VALIDATION_REFRESH_CODES = {"validation_report_missing", "validation_report_stale"}
 FIGURE_PLACEMENT_REVIEW_CODES = {"figure_placement_review_missing", "figure_placement_review_stale"}
+PAGE_LAYOUT_REVIEW_CODES = {
+    "page_layout_review_missing",
+    "page_layout_review_stale",
+    "page_layout_render_failed",
+    "page_layout_render_unavailable",
+}
+VISUAL_REPAIR_BRIEF_CODES = {"visual_layout_repair_brief_needed"}
+VISUAL_REPAIR_CANDIDATE_CODES = {"visual_layout_repair_candidate_needed"}
 CITATION_SUPPORT_REVIEW_CODES = CITATION_SUPPORT_REVIEW_REFRESH_CODES | {"citation_support_evidence_research_needed"}
 CITATION_QUALITY_REFRESH_CODES = {
     "critical_unknown_reference",

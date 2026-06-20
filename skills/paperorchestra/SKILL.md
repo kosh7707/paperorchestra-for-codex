@@ -1,6 +1,6 @@
 ---
 name: paperorchestra
-description: Route PaperOrchestra paper-writing requests to the right explicit workflow skill. Use for first use, ambiguous paper-writing requests, material inspection, intake interviews, paper planning, draft generation requests, or when deciding between setup, status, intake, plan, live review, quality gate, and authoring round workflows.
+description: Route PaperOrchestra paper-writing requests to the right explicit workflow skill. Use for first use, ambiguous paper-writing requests, material inspection, intake interviews, paper planning, draft generation requests, visual/page audit requests, or when deciding between setup, status, intake, plan, figure, visual audit, live review, quality gate, and authoring round workflows.
 ---
 
 # PaperOrchestra Router
@@ -34,6 +34,7 @@ For sibling workflow skills, the same guide is available at `../paperorchestra/r
 - `$paperorchestra-intake`: interview the author and inventory materials when thesis, paper type, venue, experiment basis, or claim boundaries are not locked.
 - `$paperorchestra-plan`: create or revise `paper-plan.md` for author approval before manuscript drafting.
 - `$paperorchestra-figure`: design, generate, or review pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures with claim/caption/placement alignment.
+- `$paperorchestra-visual-audit`: render compiled PDFs into page images/contact sheets, import visual findings, and route page-level visual/layout issues into `visual_repair_brief.json`.
 - `$paperorchestra-live-review`: run a real live/model/web critic lane and report trust tiers without silently using mock/heuristic paths.
 - `$paperorchestra-quality-gate`: run bounded validation/quality/QA state transitions and stop on `human_needed`, `failed`, or `ready_for_human_finalization`.
 - `$paperorchestra-authoring-round`: perform one evidence-bearing first-draft or revision round after plan approval.
@@ -53,9 +54,11 @@ PaperOrchestra owns paper state and artifacts; OMX companion skills supply orche
 - `$autoresearch`: machine-solvable citation/source discovery, bibliography expansion, or evidence verification remains.
 - `$best-practice-research`: venue/style norms, common section naming, related-work positioning practice, or reviewer-expectation questions need external evidence.
 - `$ultraqa`: final adversarial QA or hostile readiness checks are requested after live review and quality-gate artifacts exist.
+- `$visual-verdict`: rendered page images/contact sheets need visual QA for overflow, figure readability, one-column/two-column layout, or cross-figure consistency.
 
 Keep the explicit PaperOrchestra skill as the paper workflow owner. For example, use `$paperorchestra-authoring-round + $ultrawork` for parallel first-draft preparation, not raw parallel agents that bypass the paper session.
 Use `$paperorchestra-figure` when a manuscript needs pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures; figure work must stay tied to supported claims, source evidence, captions, and one-column/two-column placement.
+Use `$paperorchestra-visual-audit + $visual-verdict` when the compiled PDF itself must be inspected as pages. Do not make TeX-only claims about rendered layout, table overflow, figure readability, or visual style consistency.
 
 ## High-level orchestrator surface
 
@@ -90,6 +93,6 @@ paperorchestra environment
 ```
 
 
-Core MCP tools: `status`, `research_prior_work`, `authoring_round`, `critique`, `write_sections`, `quality_gate`, `qa_loop`, `qa_loop_step`, `ralph_start`, and `export_current`. Prefer explicit workflow skills for sequencing.
+Core MCP tools: `status`, `research_prior_work`, `authoring_round`, `critique`, `visual_audit`, `write_sections`, `quality_gate`, `qa_loop`, `qa_loop_step`, `ralph_start`, and `export_current`. Prefer explicit workflow skills for sequencing.
 
 Keep specialized command sequencing in the explicit workflow skills, not here.

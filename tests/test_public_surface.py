@@ -41,6 +41,7 @@ class PublicSurfaceTest(unittest.TestCase):
                 "research-prior-work",
                 "run",
                 "status",
+                "visual-audit",
                 "write-sections",
             },
         )
@@ -60,6 +61,7 @@ class PublicSurfaceTest(unittest.TestCase):
                 "authoring_round",
                 "write_sections",
                 "critique",
+                "visual_audit",
                 "quality_gate",
                 "qa_loop",
                 "qa_loop_step",
@@ -89,6 +91,7 @@ class PublicSurfaceTest(unittest.TestCase):
                 "research_prior_work",
                 "run_pipeline",
                 "status",
+                "visual_audit",
                 "write_sections",
             },
         )
@@ -115,6 +118,7 @@ class PublicSurfaceTest(unittest.TestCase):
             "paperorchestra.reviews.citation_model_writer",
             "paperorchestra.reviews.section_review",
             "paperorchestra.runtime.doctor",
+            "paperorchestra.visual.page_layout_review",
         ):
             with self.subTest(module=module):
                 importlib.import_module(module)

@@ -10,6 +10,9 @@ from paperorchestra.engine.review_stages import (
     record_current_validation_report,
     review_current_paper,
     write_figure_placement_review,
+    write_page_layout_review,
+    write_visual_repair_candidate,
+    write_visual_repair_brief,
 )
 from paperorchestra.loop_engine.ralph.action_dispatch_types import (
     QaLoopActionDispatchContext,
@@ -66,6 +69,64 @@ def handle_figure_placement_review(
     )
     execution["actions_attempted"].append(
         {"code": code, "handler": "review_figure_placement", "path": str(figure_path), "warning_count": warning_count}
+    )
+    return True
+
+
+def handle_page_layout_review(
+    code: str,
+    execution: dict[str, Any],
+    context: QaLoopActionDispatchContext,
+    state: _QaLoopActionDispatchState,
+) -> bool:
+    page_path, page_payload = write_page_layout_review(context.cwd)
+    execution["actions_attempted"].append(
+        {
+            "code": code,
+            "handler": "review_page_layout",
+            "path": str(page_path),
+            "status": page_payload.get("status"),
+            "warning_codes": page_payload.get("warning_codes", []),
+            "failing_codes": page_payload.get("failing_codes", []),
+        }
+    )
+    return True
+
+
+def handle_visual_repair_brief(
+    code: str,
+    execution: dict[str, Any],
+    context: QaLoopActionDispatchContext,
+    state: _QaLoopActionDispatchState,
+) -> bool:
+    brief_path, brief_payload = write_visual_repair_brief(context.cwd)
+    execution["actions_attempted"].append(
+        {
+            "code": code,
+            "handler": "write_visual_repair_brief",
+            "path": str(brief_path),
+            "action_count": brief_payload.get("action_count"),
+            "status": brief_payload.get("status"),
+        }
+    )
+    return True
+
+
+def handle_visual_repair_candidate(
+    code: str,
+    execution: dict[str, Any],
+    context: QaLoopActionDispatchContext,
+    state: _QaLoopActionDispatchState,
+) -> bool:
+    candidate_path, candidate_payload = write_visual_repair_candidate(context.cwd)
+    execution["actions_attempted"].append(
+        {
+            "code": code,
+            "handler": "write_visual_repair_candidate",
+            "path": str(candidate_path),
+            "candidate_count": candidate_payload.get("candidate_count"),
+            "status": candidate_payload.get("status"),
+        }
     )
     return True
 

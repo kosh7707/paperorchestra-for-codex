@@ -61,6 +61,12 @@ def register_authoring_commands(subparsers: Any) -> None:
     add_runtime_mode_args(critique_parser, strict_flag=True)
     add_common_provider_args(critique_parser)
 
+    visual_audit_parser = subparsers.add_parser("visual-audit", help="Render compiled PDF pages and write page-layout visual audit artifacts")
+    visual_audit_parser.add_argument("--pdf")
+    visual_audit_parser.add_argument("--output")
+    visual_audit_parser.add_argument("--render-dir")
+    visual_audit_parser.add_argument("--findings-json")
+
     run_parser = subparsers.add_parser("run", help="Run the full PaperOrchestra pipeline")
     run_parser.add_argument("--discovery-mode", default="model", choices=["model", "scholar-only", "search-grounded"])
     run_parser.add_argument("--verify-mode", default="live", choices=["live", "mock"])

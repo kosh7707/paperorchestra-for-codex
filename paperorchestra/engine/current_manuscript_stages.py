@@ -15,6 +15,11 @@ from paperorchestra.engine.section_scope import _expected_section_titles_from_ou
 from paperorchestra.manuscript.figure_review_builder import build_figure_placement_review
 from paperorchestra.manuscript.latex import compile_latex_with_report
 from paperorchestra.manuscript.narrative_artifacts import planning_artifact_status
+from paperorchestra.visual.page_layout_review import (
+    write_page_layout_review as _write_page_layout_review,
+    write_visual_repair_candidate as _write_visual_repair_candidate,
+    write_visual_repair_brief as _write_visual_repair_brief,
+)
 
 
 def write_figure_placement_review(
@@ -46,6 +51,41 @@ def write_figure_placement_review(
     state.artifacts.latest_figure_placement_review_json = str(path)
     save_session(cwd, state)
     return path, payload
+
+
+def write_page_layout_review(
+    cwd: str | Path | None,
+    *,
+    pdf_path: str | Path | None = None,
+    output_path: str | Path | None = None,
+    render_dir: str | Path | None = None,
+    findings_json: str | Path | None = None,
+) -> tuple[Path, dict[str, Any]]:
+    return _write_page_layout_review(
+        cwd,
+        pdf_path=pdf_path,
+        output_path=output_path,
+        render_dir=render_dir,
+        findings_json=findings_json,
+    )
+
+
+def write_visual_repair_brief(
+    cwd: str | Path | None,
+    *,
+    review_path: str | Path | None = None,
+    output_path: str | Path | None = None,
+) -> tuple[Path, dict[str, Any]]:
+    return _write_visual_repair_brief(cwd, review_path=review_path, output_path=output_path)
+
+
+def write_visual_repair_candidate(
+    cwd: str | Path | None,
+    *,
+    brief_path: str | Path | None = None,
+    output_path: str | Path | None = None,
+) -> tuple[Path, dict[str, Any]]:
+    return _write_visual_repair_candidate(cwd, brief_path=brief_path, output_path=output_path)
 
 
 def record_current_validation_report(

@@ -16,9 +16,11 @@ paperorchestra status --json
 paperorchestra environment
 ```
 
-Also inspect nearby artifacts when present: `.paper-orchestra/`, `paper-plan.md` approval state, `paper.full.tex`, figure assets, figure specs, caption drafts, `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, `figure-placement-review.json`, `figure_gate.report.json`, `citation_map.json`, `references.bib`, `citation_support_review.json`, `quality-eval.json`, `quality-gate.report.json`, `qa-loop.plan.json`, compile reports, and named round directories.
+Also inspect nearby artifacts when present: `.paper-orchestra/`, `paper-plan.md` approval state, `paper.full.tex`, compiled PDF, page renders/contact sheets, figure assets, figure specs, caption drafts, `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, `figure-placement-review.json`, `page-layout-review.json`, `visual_repair_brief.json`, `visual_repair_candidate.json`, `figure_gate.report.json`, `citation_map.json`, `references.bib`, `citation_support_review.json`, `quality-eval.json`, `quality-gate.report.json`, `qa-loop.plan.json`, compile reports, and named round directories.
 
 For a figure-bearing manuscript, report figure artifact availability as `present / missing / stale / not applicable` for `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, `figure-placement-review.json`, and `figure_gate.report.json`. If an expected figure artifact is missing or stale, recommend `$paperorchestra-figure` before authoring, live-review, or quality-gate claims rely on that figure.
+
+For a compiled manuscript, report page-visual artifact availability as `present / missing / stale / pending visual reviewer / failing / candidate ready / not applicable` for `page-layout-review.json`, rendered page contact sheets, `visual_repair_brief.json`, and `visual_repair_candidate.json`. If the compiled PDF exists but page-layout review is missing, stale, pending, or failing, recommend `$paperorchestra-visual-audit` before final quality claims.
 
 ## Fresh-start boundary
 
@@ -42,7 +44,7 @@ Latest artifacts:
   quality gate:
   citation support:
 Recommended next round:
-  <setup needed | intake recommended | plan recommended | live-review recommended | quality-gate recommended | authoring-round recommended | figure-repair recommended | human-needed answer required | materials missing | no safe paper action available>
+  <setup needed | intake recommended | plan recommended | live-review recommended | quality-gate recommended | authoring-round recommended | figure-repair recommended | visual-audit recommended | human-needed answer required | materials missing | no safe paper action available>
 Reason:
 Human needed:
 ```
@@ -60,6 +62,7 @@ Name both the PaperOrchestra workflow and the OMX companion when a companion wou
 - `$paperorchestra-live-review + $autoresearch`: citation/source evidence is missing, weak, stale, or machine-solvable.
 - `$paperorchestra-live-review + $best-practice-research`: venue/style norms or related-work positioning need external best-practice evidence.
 - `$paperorchestra-quality-gate + $ultraqa`: fresh review/gate artifacts exist and adversarial final QA is the next safe action.
+- `$paperorchestra-visual-audit + $visual-verdict`: compiled PDF/page screenshots need rendered-page layout, table overflow, figure readability, or cross-figure style review.
 - `$paperorchestra-figure`: figure assets, captions, supported claims, or one-column/two-column placement are missing or stale.
 
 ## Recommendation rules
@@ -71,6 +74,7 @@ Name both the PaperOrchestra workflow and the OMX companion when a companion wou
 - Recommend `quality-gate recommended` when live or acceptable evidence exists but no fresh quality-eval/qa-loop plan exists.
 - Recommend `authoring-round recommended` after an approved plan exists and either no manuscript has been drafted yet, or review/gate evidence identifies machine-actionable manuscript improvements.
 - Recommend `figure-repair recommended` for a figure-bearing manuscript when figure assets, captions, supported claims, placement, or expected figure artifacts are missing or stale; route to `$paperorchestra-figure`.
+- Recommend `visual-audit recommended` when a compiled PDF exists but rendered-page visual review/contact sheets are missing, stale, pending visual review, or contain machine-actionable visual findings; route to `$paperorchestra-visual-audit`.
 - Recommend `human-needed answer required` for `human_needed` plans; list exactly the decisions required.
 - Recommend `materials missing` when factual paper drafting would require inventing claims, citations, figures, or results.
 

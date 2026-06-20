@@ -13,6 +13,7 @@ from paperorchestra.interfaces.mcp.authoring_tools import (
     tool_import_prior_work,
     tool_research_prior_work,
     tool_run_pipeline,
+    tool_visual_audit,
     tool_write_sections,
 )
 from paperorchestra.interfaces.mcp.common import JSON, ToolHandler, default_cwd, ok
@@ -104,6 +105,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "authoring_round": tool_authoring_round,
     "write_sections": tool_write_sections,
     "critique": tool_critique,
+    "visual_audit": tool_visual_audit,
     "quality_gate": tool_quality_gate,
     "qa_loop": tool_qa_loop,
     "qa_loop_step": tool_qa_loop_step,

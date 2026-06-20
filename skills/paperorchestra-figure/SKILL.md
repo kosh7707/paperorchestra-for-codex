@@ -36,6 +36,7 @@ Decide layout before visual detail:
 - If this is an unknown template or the venue/template is unknown, use `figure` or mark the environment TODO; do not finalize `figure*`.
 - Captions must remain informative when the figure floats away from the paragraph.
 - After changing placement, require compile or quality-gate verification and inspect/update `figure-placement-review.json` when that artifact exists or is being produced.
+- After compile, route rendered-page readability, overflow, and cross-figure style checks to `$paperorchestra-visual-audit`; this skill owns figure intent/caption/placement, not full-PDF page screenshot acceptance.
 
 Always report:
 
@@ -67,6 +68,8 @@ Inspect and preserve these artifacts when present:
 - `plot_assets.json`: generated figure files, formats, and paths.
 - `plot_captions.json`: caption drafts and caption evidence maps.
 - `figure-placement-review.json`: one-column/two-column, `figure`/`figure*`, width, and float-risk checks.
+- `page-layout-review.json`: rendered PDF page-image audit for overflow, readability, and cross-figure style consistency.
+- `visual_repair_brief.json`: page-visual repair handoff generated before user escalation.
 - `figure_gate.report.json`: final figure quality-gate findings.
 
 Artifact availability checklist:
@@ -103,6 +106,7 @@ Before generating anything, consider cheaper alternatives:
 - `$best-practice-research`: use when venue norms, figure placement conventions, caption style, or comparable-paper visual patterns need external evidence.
 - `$ultrawork`: use when several independent figure variants can be explored in parallel, such as pipeline vs architecture vs taxonomy alternatives.
 - `$visual-verdict`: use when a rendered bitmap or screenshot-like figure needs visual QA against a reference.
+- `$paperorchestra-visual-audit`: use when the compiled PDF pages, tables, or multiple figures must be inspected together as rendered output.
 - `$ralph`: use when the user wants a persistent figure repair loop over generated artifacts, captions, placement, and manuscript integration.
 
 ## Workflow

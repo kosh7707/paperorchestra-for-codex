@@ -22,6 +22,18 @@ FIGURE_REPAIR_CODES = {
     "wide_figure_mismatch",
 }
 
+PAGE_LAYOUT_REVIEW_CODES = {
+    "page_layout_review_missing",
+    "page_layout_review_stale",
+    "page_layout_render_failed",
+    "page_layout_render_unavailable",
+}
+
+VISUAL_REPAIR_BRIEF_CODES = {
+    "visual_layout_repair_brief_needed",
+    "visual_layout_repair_candidate_needed",
+}
+
 MANUAL_REVIEW_CODES = {
     "placement_hint_missing",
 }
@@ -84,6 +96,8 @@ QA_LOOP_SUPPORTED_HANDLER_CODES = {
     "validation_report_stale",
     "figure_placement_review_missing",
     "figure_placement_review_stale",
+    *PAGE_LAYOUT_REVIEW_CODES,
+    *VISUAL_REPAIR_BRIEF_CODES,
     *CITATION_SUPPORT_REVIEW_REFRESH_CODES,
     "citation_support_evidence_research_needed",
     "rendered_reference_audit_missing",
@@ -142,8 +156,10 @@ __all__ = [
     "MANUAL_REVIEW_CODES",
     "NON_REVIEWABLE_ACTION_CODES",
     "NON_REVIEWABLE_TIER1_CODES",
+    "PAGE_LAYOUT_REVIEW_CODES",
     "QA_LOOP_SUPPORTED_HANDLER_CODES",
     "REVIEW_REFRESH_CODES",
     "SEMI_AUTO_REPAIR_CODES",
     "TIER2_CLAIM_CODES",
+    "VISUAL_REPAIR_BRIEF_CODES",
 ]

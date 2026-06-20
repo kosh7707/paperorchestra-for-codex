@@ -24,6 +24,9 @@ def write_pipeline_final_reports(
     if stage.load_session(cwd).artifacts.paper_full_tex:
         figure_path, figure_payload = stage.write_figure_placement_review(cwd)
         outputs.update(figure_placement_review=str(figure_path), figure_placement=figure_payload)
+    if stage.load_session(cwd).artifacts.compiled_pdf:
+        page_path, page_payload = stage.write_page_layout_review(cwd)
+        outputs.update(page_layout_review=str(page_path), page_layout=page_payload)
 
     repro_path, repro_payload = stage.write_reproducibility_audit(
         cwd,

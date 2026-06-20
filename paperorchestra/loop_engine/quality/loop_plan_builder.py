@@ -9,6 +9,7 @@ from paperorchestra.manuscript.source_obligation_eval import source_obligations_
 from paperorchestra.loop_engine.quality.action_core import _action
 from paperorchestra.loop_engine.quality.action_families.figure_placeholder_actions import _generated_placeholder_figure_actions
 from paperorchestra.loop_engine.quality.action_families.figure_review_actions import _figure_review_actions
+from paperorchestra.loop_engine.quality.action_families.visual_review_actions import _page_visual_review_actions
 from paperorchestra.loop_engine.quality.action_families.reproducibility_fidelity import _fidelity_actions
 from paperorchestra.loop_engine.quality.action_families.reproducibility_mode import _mode_actions
 from paperorchestra.loop_engine.quality.action_families.reproducibility_warnings import _warning_actions
@@ -106,6 +107,7 @@ def _plan_actions(
         + _validation_actions(reproducibility)
         + _figure_review_actions(state)
         + _generated_placeholder_figure_actions(state)
+        + _page_visual_review_actions(state)
         + _mode_actions(reproducibility)
         + _warning_actions(reproducibility)
         + _fidelity_actions(fidelity)

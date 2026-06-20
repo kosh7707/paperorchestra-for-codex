@@ -58,6 +58,46 @@ def _strict_issue_response(code: str, issue: dict[str, Any]) -> tuple[list[str],
             None,
             None,
         )
+    if code in {"page_layout_review_missing", "page_layout_review_stale"}:
+        return (
+            ["paperorchestra visual-audit", "paperorchestra quality-gate --no-fail-on-block", "paperorchestra qa-loop --quality-mode claim_safe"],
+            "Regenerate rendered-page visual review for the compiled manuscript before accepting page layout or visual artifacts.",
+            "automatic",
+            None,
+            None,
+        )
+    if code in {"page_layout_render_failed", "page_layout_render_unavailable"}:
+        return (
+            ["paperorchestra visual-audit", "paperorchestra quality-gate --no-fail-on-block", "paperorchestra qa-loop --quality-mode claim_safe"],
+            "Restore rendered-page evidence for the current compiled PDF; do not collapse render failure into a missing review or visual pass.",
+            "automatic",
+            None,
+            None,
+        )
+    if kind in {"page_layout_warning", "page_layout_failure"}:
+        return (
+            [
+                "paperorchestra visual-audit --findings-json page-visual-findings.json",
+                "paperorchestra qa-loop-step --quality-mode claim_safe --max-iterations 1",
+                "paperorchestra quality-gate --no-fail-on-block",
+            ],
+            "Create a visual repair brief and route machine-actionable layout fixes back into PaperOrchestra/Critic before human handoff.",
+            "semi_auto",
+            "Rendered PDF visual findings require page-image evidence and a repair brief; do not silently convert them into TeX-only approval.",
+            "visual_layout_critic",
+        )
+    if code == "visual_final_artwork_handoff" or kind == "page_layout_human":
+        return (
+            [
+                "Replace draft/generated artwork with human-authored final artwork or provide an explicit visual design decision.",
+                "paperorchestra visual-audit --findings-json page-visual-findings.json",
+                "paperorchestra quality-gate --no-fail-on-block",
+            ],
+            "Stop before pretending draft artwork or a disputed visual is final; prepare exact author-owned visual decisions/artifacts.",
+            "human_needed",
+            "Final artwork, semantic visual evidence disputes, and aesthetic preferences are human-owned publication decisions.",
+            "author_visual_owner",
+        )
     if kind in {"figure_placement_warning", "figure_placement_failure"}:
         return (
             [

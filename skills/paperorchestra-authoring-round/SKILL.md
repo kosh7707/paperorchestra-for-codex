@@ -12,7 +12,7 @@ Use this for one manuscript round, not for indefinite autonomous writing. For ne
 A first-draft round is not “just write TeX.” It should create an auditable chain:
 
 ```text
-approved plan -> outline -> prior-work/search seed -> narrative/claim/citation planning -> positioning brief -> manuscript draft -> compile if available -> critic/section/citation reviews -> revision suggestions -> manifest
+    approved plan -> outline -> prior-work/search seed -> narrative/claim/citation planning -> positioning brief -> manuscript draft -> compile if available -> rendered-page visual audit if PDF exists -> critic/section/citation reviews -> revision suggestions -> manifest
 ```
 
 For revision rounds, keep the same artifact chain but scope writing with `only_sections` when possible.
@@ -36,6 +36,7 @@ Use one PaperOrchestra authoring round as the bounded paper-writing action, then
 - `$best-practice-research`: use for venue/style conventions, section-shape norms, and positioning patterns from comparable papers before locking prose.
 - `$ralph`: supervise a persistent but bounded sequence such as status → one authoring round → quality gate → one repair step when the user asks to “keep going.”
 - `$ultraqa`: use after the draft and review artifacts exist when the user asks for adversarial readiness checks.
+- `$paperorchestra-visual-audit`: use after compile or when the draft has tables/figures whose rendered readability, one-column/two-column layout, or cross-figure style cannot be judged from TeX alone.
 
 Do not let companion skills bypass the plan gate or invent missing evidence. They prepare or verify the round; PaperOrchestra still writes and records the manuscript artifacts.
 
@@ -75,8 +76,9 @@ Use mock providers or `--citation-evidence-mode heuristic` only for explicit loc
 3. If a figure-dependent section needs a pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figure before prose can be coherent, route to `$paperorchestra-figure` before finalizing that section.
 4. Run one `authoring_round` so pre-draft literature/positioning happens before manuscript writing.
 5. If TeX is configured, compile in the round; otherwise record compile as skipped.
-6. If the MCP/source authoring-round returns `mode=background`, poll/tail the returned job paths until the underlying CLI finishes; then inspect `authoring-round.manifest.json`, `positioning_brief.md`, `paper.full.tex`, `citation_support_review.json`, and `revision_suggestions.json`. In installed staged fallback mode, `authoring-round.manifest.json` may not exist; inspect the stage artifacts actually produced by each command.
-7. Route to `$paperorchestra-quality-gate` only after the round has real review artifacts or the user asks for a gate.
+6. If a compiled PDF exists, route to `$paperorchestra-visual-audit` or run `paperorchestra visual-audit` so page screenshots/contact sheets are available before quality-gate claims about layout or visual evidence.
+7. If the MCP/source authoring-round returns `mode=background`, poll/tail the returned job paths until the underlying CLI finishes; then inspect `authoring-round.manifest.json`, `positioning_brief.md`, `paper.full.tex`, `page-layout-review.json` when compiled, `citation_support_review.json`, and `revision_suggestions.json`. In installed staged fallback mode, `authoring-round.manifest.json` may not exist; inspect the stage artifacts actually produced by each command.
+8. Route to `$paperorchestra-quality-gate` only after the round has real review artifacts or the user asks for a gate.
 
 ## Edit boundaries
 
@@ -97,6 +99,7 @@ Positioning brief:
 Draft:
 Critic/citation review:
 Compile/validate:
+Visual audit:
 Revision suggestions:
 Remaining risks:
 Next recommended skill:

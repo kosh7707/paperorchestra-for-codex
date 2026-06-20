@@ -1,0 +1,4 @@
+name: paperorchestra-visual-audit
+display_name: PaperOrchestra Visual Audit
+short_description: Render PDFs into page images and route visual layout findings into repair.
+default_prompt: Use $paperorchestra-visual-audit to inspect a compiled paper PDF at page-image level and route findings into PaperOrchestra repair.

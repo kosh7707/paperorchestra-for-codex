@@ -19,6 +19,7 @@ from paperorchestra.engine.review_stages import (
     compile_current_paper,
     review_current_paper,
     write_figure_placement_review,
+    write_page_layout_review,
 )
 from paperorchestra.engine.section_writing_stage import write_sections
 from paperorchestra.reviews.reproducibility import write_reproducibility_audit

@@ -11,6 +11,7 @@ from paperorchestra.engine.pipeline import run_pipeline
 from paperorchestra.engine.research_prior_work_stage import import_prior_work, research_prior_work as generate_prior_work_seed
 from paperorchestra.engine.review_stages import review_current_paper
 from paperorchestra.engine.section_writing_stage import write_sections
+from paperorchestra.engine.current_manuscript_stages import write_page_layout_review
 from paperorchestra.interfaces.cli_commands.common import provider_from_args, strict_omx_env
 from paperorchestra.manuscript.revisions import write_revision_suggestions
 from paperorchestra.reviews.critic_trust import build_critic_trust_card, require_live_critic_trust
@@ -138,6 +139,32 @@ def handle_critique(cwd: Path, args: argparse.Namespace) -> int:
                 "section_review": str(section_path),
                 "citation_support_review": str(citation_path),
                 "revision_suggestions": str(suggestions_path),
+            },
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+    return 0
+
+
+def handle_visual_audit(cwd: Path, args: argparse.Namespace) -> int:
+    path, payload = write_page_layout_review(
+        cwd,
+        pdf_path=args.pdf,
+        output_path=args.output,
+        render_dir=args.render_dir,
+        findings_json=args.findings_json,
+    )
+    print(
+        json.dumps(
+            {
+                "path": str(path),
+                "status": payload.get("status"),
+                "failing_codes": payload.get("failing_codes", []),
+                "warning_codes": payload.get("warning_codes", []),
+                "rendered_pages": payload.get("rendered_pages", []),
+                "contact_sheets": payload.get("contact_sheets", {}),
+                "repair_candidate_count": len(payload.get("repair_candidates") or []),
             },
             indent=2,
             ensure_ascii=False,

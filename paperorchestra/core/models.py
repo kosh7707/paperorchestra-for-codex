@@ -47,6 +47,9 @@ class ArtifactIndex:
     latest_reproducibility_json: str | None = None
     latest_provider_identity_json: str | None = None
     latest_figure_placement_review_json: str | None = None
+    latest_page_layout_review_json: str | None = None
+    latest_visual_repair_brief_json: str | None = None
+    latest_visual_repair_candidate_json: str | None = None
     latest_section_review_json: str | None = None
     narrative_plan_json: str | None = None
     claim_map_json: str | None = None

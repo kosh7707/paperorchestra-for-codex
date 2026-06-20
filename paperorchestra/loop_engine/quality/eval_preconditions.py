@@ -30,6 +30,8 @@ class PreconditionTierBuilder:
         "validation_report_stale",
         "figure_placement_review_missing",
         "figure_placement_review_stale",
+        "page_layout_review_missing",
+        "page_layout_review_stale",
     }
 
     def build(self, context: PreconditionContext) -> PreconditionTierResult:
