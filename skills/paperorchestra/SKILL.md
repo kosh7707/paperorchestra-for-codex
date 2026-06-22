@@ -75,13 +75,24 @@ Do not route directly to authoring when no approved `paper-plan.md` exists, unle
 
 ## OMX companion routing
 
-PaperOrchestra owns paper state and artifacts; OMX companion skills supply orchestration power around that state. Invoke or recommend them explicitly when their trigger condition is present:
+PaperOrchestra owns paper state and artifacts; OMX companion skills supply orchestration power around that state.
+
+### Companion invocation gate
+
+Do not treat companion workflow names as decorative hints. If a trigger below is present in the active user request or in the current PaperOrchestra status, the main agent must either:
+
+1. invoke the companion skill by loading its installed `SKILL.md` and executing its workflow/state protocol before continuing the PaperOrchestra step; or
+2. record a concrete skip reason such as `runtime unavailable`, `no independent lanes`, `citation work not machine-solvable`, or `user requested one-shot local drafting`.
+
+Merely naming the companion as a future recommendation is insufficient when the current turn asks to continue through the triggered work. In particular, after plan approval, user messages such as “continue”, “keep going”, “바로 진행”, or “계속” activate the bounded persistence branch: use `$ralph` around the next PaperOrchestra action unless the user explicitly asks for a one-shot, non-persistent local step.
+
+Invoke or recommend these companions explicitly when their trigger condition is present:
 
 - `$deep-interview`: mandatory for fresh or ambiguous paper requests before intake when thesis, claim boundaries, materials, venue, or experiment status are not already explicit.
 - `$ralplan`: section structure, RQs, evaluation design, or claim tradeoffs need consensus-style planning before author approval.
-- `$ultrawork`: independent lanes can run in parallel, such as prior-work search, material inventory, section-structure benchmarking, and draft-outline synthesis.
-- `$ralph`: the user wants a persistent completion loop over a bounded PaperOrchestra goal, such as authoring round → status → quality gate → repair.
-- `$autoresearch`: machine-solvable citation/source discovery, bibliography expansion, or evidence verification remains.
+- `$ultrawork`: mandatory before first-draft authoring when two or more independent pre-draft lanes are open, such as material inventory, prior-work/search seed, section-structure benchmarking, figure/table planning, and draft-outline synthesis.
+- `$ralph`: mandatory when the user asks to continue/persist through a bounded PaperOrchestra sequence, such as status → authoring round → quality gate → repair, or when a previous round ended with machine-actionable blockers and the user says to keep going.
+- `$autoresearch`: mandatory when machine-solvable citation/source discovery, bibliography expansion, or evidence verification remains and the current turn is allowed to do research or live/source-backed review.
 - `$best-practice-research`: venue/style norms, common section naming, related-work positioning practice, or reviewer-expectation questions need external evidence.
 - `$ultragoal`: approved implementation, engine-change, or repair plans should become durable sequential stories with `.omx/ultragoal` checkpoint evidence.
 - `$team`: combine with `$ultragoal` when those approved stories have independent lanes; Team executes parallel work while Ultragoal remains the ledger owner.

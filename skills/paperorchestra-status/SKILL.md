@@ -59,15 +59,15 @@ Check for stale manuscript hash mismatches between current `paper.full.tex` and 
 
 ## OMX companion hints
 
-Name both the PaperOrchestra workflow and the OMX companion when a companion would materially improve the next step:
+Name both the PaperOrchestra workflow and the OMX companion when a companion would materially improve the next step. If the current user message asks to continue into the recommended next round, treat the matching companion as an invocation obligation, not a passive hint: load that companion skill and execute its state/artifact protocol before returning to the PaperOrchestra workflow, or record a concrete skip reason.
 
-- `$deep-interview -> $paperorchestra-intake`: author intent, material boundaries, venue, experiment basis, or allowed claims are unclear. Run deep-interview first; intake only writes the handoff after the interview resolves.
+- `$deep-interview -> $paperorchestra-intake` (`$paperorchestra-intake + $deep-interview`): author intent, material boundaries, venue, experiment basis, or allowed claims are unclear. Run deep-interview first; intake only writes the handoff after the interview resolves.
 - `$paperorchestra-plan + $ralplan`: manuscript structure, RQs, evidence table shape, or contribution boundaries need consensus planning.
-- `$paperorchestra-authoring-round + $ultrawork`: independent pre-draft lanes can run in parallel before one bounded authoring round.
-- `$paperorchestra-authoring-round + $ralph`: the user wants a persistent bounded loop over authoring, status, gate, and repair.
+- `$paperorchestra-authoring-round + $ultrawork`: independent pre-draft lanes can run in parallel before one bounded authoring round; invoke it when two or more such lanes are open and the user asks to proceed.
+- `$paperorchestra-authoring-round + $ralph`: the user wants a persistent bounded loop over authoring, status, gate, and repair; invoke it on “continue/keep going/계속/바로 진행” after plan approval unless the user explicitly asks for a one-shot local step.
 - `$ultragoal`: durable multi-story implementation or repair follow-up is needed after a plan/gate/review produces concrete work items.
 - `$team + $ultragoal`: durable follow-up is also parallelizable; Team runs lanes, Ultragoal owns the ledger/checkpoints.
-- `$paperorchestra-live-review + $autoresearch`: citation/source evidence is missing, weak, stale, or machine-solvable.
+- `$paperorchestra-live-review + $autoresearch`: citation/source evidence is missing, weak, stale, or machine-solvable; invoke it before claiming Related Work, citation support, or source-backed positioning is complete.
 - `$paperorchestra-live-review + $best-practice-research`: venue/style norms or related-work positioning need external best-practice evidence.
 - `$paperorchestra-quality-gate + $ultraqa`: fresh review/gate artifacts exist and adversarial final QA is the next safe action.
 - `$paperorchestra-visual-audit + $visual-verdict`: compiled PDF/page screenshots need rendered-page layout, table overflow, figure readability, or cross-figure style review.

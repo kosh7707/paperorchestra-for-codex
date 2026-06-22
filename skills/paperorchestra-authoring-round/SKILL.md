@@ -11,6 +11,8 @@ Before executing any `$skill`, `omx`, `codex`, MCP, or PaperOrchestra CLI action
 
 Use this for one manuscript round, not for indefinite autonomous writing. For new papers, require an approved `paper-plan.md` or an explicit user instruction to bypass the planning gate.
 
+Plan approval must be hash-bound when the engine supports it: prefer MCP `approve_plan` or verified `paperorchestra approve-plan` so the approval is stored as a hidden approval record beside the session artifacts.
+
 ## Core contract
 
 A first-draft round is not “just write TeX.” It should create an auditable chain:
@@ -35,10 +37,25 @@ Before writing prose, establish each target section's paragraph-level rhetorical
 
 ## OMX companion routing
 
-Use one PaperOrchestra authoring round as the bounded paper-writing action, then compose OMX skills around it when useful:
+Use one PaperOrchestra authoring round as the bounded paper-writing action, then compose OMX skills around it through the gate below.
+
+### Mandatory companion preflight
+
+Before drafting prose or creating a local/manual authoring fallback, evaluate and record these companion decisions:
+
+| Trigger | Required action before drafting |
+| --- | --- |
+| User says “continue”, “keep going”, “바로 진행”, “계속”, or otherwise asks the system to carry a bounded sequence forward | Invoke `$ralph` as the single-owner supervision loop for status → one authoring round → status/readback → next blocker/repair. Do not silently do a manual one-shot draft unless the user explicitly asks to avoid persistence. |
+| Two or more independent pre-draft lanes are open (`two or more independent pre-draft lanes`), e.g. broad material inventory, prior-work/search seed, figure/table planning, section-structure benchmarking, claim-map/skeleton refresh | Invoke `$ultrawork` first so those lanes are planned/executed in parallel or explicitly ruled out with evidence. |
+| Related Work, citation candidates, bibliography, or source-backed evidence are missing and machine-solvable | Invoke `$autoresearch` or the PaperOrchestra research surface before finalizing Introduction/Related Work claims. If live/source research is unavailable, block citation claims instead of replacing `$autoresearch` with invented TODO prose. |
+| Venue/style norms or comparable-paper structure are a live concern | Invoke `$best-practice-research` before locking prose shape. |
+
+If a required companion cannot run because OMX runtime, credentials, provider configuration, or a validator is unavailable, stop with a PaperOrchestra blocker or create only clearly marked non-authoritative scaffolding. The final card must list the companion decision and evidence; “recommended next” is not enough for a trigger that was present in the current turn.
+
+Companion usage by workflow:
 
 - `$ultrawork`: split independent pre-draft lanes before the round when materials are large or broad, e.g. prior-work search, paper-structure benchmarking, material inventory, and figure/table planning.
-- `$autoresearch`: run or recommend when Related Work, citation candidates, or source-backed evidence are missing and can be found by machine research.
+- `$autoresearch`: run when Related Work, citation candidates, or source-backed evidence are missing and can be found by machine research.
 - `$best-practice-research`: use for venue/style conventions, section-shape norms, and positioning patterns from comparable papers before locking prose.
 - `$ultragoal`: use for durable implementation/repair follow-up that must survive multiple stories; do not use it to bypass the bounded authoring round.
 - `$team`: use with `$ultragoal` only when a durable implementation/repair plan has separable lanes; PaperOrchestra still owns manuscript artifacts.
@@ -80,14 +97,15 @@ Use mock providers or `--citation-evidence-mode heuristic` only for explicit loc
 ## Round recipe
 
 1. Start with `$paperorchestra-status` and identify the current session/materials.
-2. Check for `paper-plan.md` approval through the plan gate. Prefer MCP `approve_plan` when attached. Use a CLI approval command only after `paperorchestra <approval-command> --help` verifies it exists; otherwise accept explicit author approval text/marker only as transitional compatibility. If approval is missing or stale, route to `$paperorchestra-plan` unless the user explicitly bypassed planning.
-3. Generate or refresh `paper-skeleton.md` from the approved plan plus outline/narrative/claim/citation planning before manuscript prose when the engine supports it; if the skeleton is stale or tries to change the approved contract, route back to `$paperorchestra-plan`.
-4. If a figure-dependent section needs a pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figure before prose can be coherent, route to `$paperorchestra-figure` before finalizing that section.
-5. Run one `authoring_round` so pre-draft literature/positioning happens before manuscript writing.
-6. If TeX is configured, compile in the round; otherwise record compile as skipped.
-7. If a compiled PDF exists, route to `$paperorchestra-visual-audit`, or run a visual-audit command only after the current CLI/source surface verifies it with `--help`, so page screenshots/contact sheets are available before quality-gate claims about layout or visual evidence.
-8. If the MCP/source authoring-round returns `mode=background`, poll/tail the returned job paths until the underlying CLI finishes; then run `paperorchestra status --json` and inspect `authoring-round.manifest.json`, `paper-skeleton.md` when produced, `positioning_brief.md`, `paper.full.tex`, `page-layout-review.json` when compiled, `citation_support_review.json`, and `revision_suggestions.json`. In installed staged fallback mode, `authoring-round.manifest.json` may not exist; inspect the stage artifacts actually produced by each command.
-9. Route to `$paperorchestra-quality-gate` only after the round has real review artifacts or the user asks for a gate.
+2. Run the Mandatory companion preflight above. Required companions must be invoked before manuscript prose, not only named in the final card.
+3. Check for `paper-plan.md` approval through the plan gate. Prefer MCP `approve_plan` when attached. Use a CLI approval command only after `paperorchestra <approval-command> --help` verifies it exists; otherwise accept explicit author approval text/marker only as transitional compatibility. If approval is missing or stale, route to `$paperorchestra-plan` unless the user explicitly bypassed planning.
+4. Generate or refresh `paper-skeleton.md` from the approved plan plus outline/narrative/claim/citation planning before manuscript prose when the engine supports it; if the skeleton is stale or tries to change the approved contract, route back to `$paperorchestra-plan`.
+5. If a figure-dependent section needs a pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figure before prose can be coherent, route to `$paperorchestra-figure` before finalizing that section.
+6. Run one `authoring_round` so pre-draft literature/positioning happens before manuscript writing.
+7. If TeX is configured, compile in the round; otherwise record compile as skipped.
+8. If a compiled PDF exists, route to `$paperorchestra-visual-audit`, or run a visual-audit command only after the current CLI/source surface verifies it with `--help`, so page screenshots/contact sheets are available before quality-gate claims about layout or visual evidence.
+9. If the MCP/source authoring-round returns `mode=background`, poll/tail the returned job paths until the underlying CLI finishes; then run `paperorchestra status --json` and inspect `authoring-round.manifest.json`, `paper-skeleton.md` when produced, `positioning_brief.md`, `paper.full.tex`, `page-layout-review.json` when compiled, `citation_support_review.json`, and `revision_suggestions.json`. In installed staged fallback mode, `authoring-round.manifest.json` may not exist; inspect the stage artifacts actually produced by each command.
+10. Route to `$paperorchestra-quality-gate` only after the round has real review artifacts or the user asks for a gate.
 
 ## Edit boundaries
 

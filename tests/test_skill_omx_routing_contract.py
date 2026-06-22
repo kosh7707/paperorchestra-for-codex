@@ -41,6 +41,8 @@ def test_router_names_core_omx_companion_workflows() -> None:
     assert_mentions(
         "paperorchestra",
         "OMX companion routing",
+        "Companion invocation gate",
+        "Merely naming the companion as a future recommendation is insufficient",
         "$deep-interview",
         "$ralplan",
         "$ultrawork",
@@ -57,11 +59,40 @@ def test_authoring_round_routes_research_parallel_and_persistent_lanes() -> None
     assert_mentions(
         "paperorchestra-authoring-round",
         "OMX companion routing",
+        "Mandatory companion preflight",
+        "Required action before drafting",
         "$ultrawork",
         "$autoresearch",
         "$best-practice-research",
         "$ralph",
         "$ultraqa",
+    )
+
+
+def test_authoring_round_makes_core_companions_obligatory_on_triggers() -> None:
+    assert_mentions(
+        "paperorchestra-authoring-round",
+        "Before drafting prose or creating a local/manual authoring fallback",
+        "Invoke `$ralph`",
+        "Invoke `$ultrawork`",
+        "Invoke `$autoresearch`",
+        "continue",
+        "계속",
+        "two or more independent pre-draft lanes",
+        "Related Work, citation candidates, bibliography, or source-backed evidence are missing",
+        "Required companions must be invoked before manuscript prose",
+    )
+
+
+def test_router_continue_and_machine_solvable_gaps_are_not_passive_hints() -> None:
+    assert_mentions(
+        "paperorchestra",
+        "after plan approval",
+        "“continue”",
+        "“계속”",
+        "use `$ralph`",
+        "$ultrawork`: mandatory before first-draft authoring",
+        "$autoresearch`: mandatory when machine-solvable citation/source discovery",
     )
 
 
@@ -120,6 +151,7 @@ def test_status_reports_next_paperorchestra_skill_and_omx_companion() -> None:
     assert_mentions(
         "paperorchestra-status",
         "OMX companion hints",
+        "invocation obligation",
         "$paperorchestra-intake + $deep-interview",
         "$paperorchestra-plan + $ralplan",
         "$paperorchestra-authoring-round + $ultrawork",
@@ -130,6 +162,15 @@ def test_status_reports_next_paperorchestra_skill_and_omx_companion() -> None:
         "$paperorchestra-live-review + $best-practice-research",
         "$paperorchestra-quality-gate + $ultraqa",
         "$paperorchestra-visual-audit + $visual-verdict",
+    )
+
+
+def test_live_review_requires_autoresearch_for_continued_citation_gaps() -> None:
+    assert_mentions(
+        "paperorchestra-live-review",
+        "invoke `$autoresearch`",
+        "before another review/authoring pass",
+        "do not replace it with local TODO prose",
     )
 
 
