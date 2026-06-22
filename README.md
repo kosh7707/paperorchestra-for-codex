@@ -37,7 +37,7 @@ The router chooses the next skill for you. New papers normally go through:
 2. intake interview and material audit;
 3. `paper-plan.md` for author approval;
 4. one bounded authoring round that performs outline/narrative refresh, prior-work positioning, draft writing, and critic/citation review;
-5. quality gate or another revision round as needed.
+5. quality gate, visual audit, or another revision round as needed.
 
 The important rule is: **plan before drafting**. For new papers, PaperOrchestra should not jump directly from materials to `paper.full.tex` unless `paper-plan.md` is author-approved. Mark approval by adding `<!-- paperorchestra:plan-approved -->` to the plan, or explicitly pass the bypass flag for legacy/manual runs.
 
@@ -59,6 +59,8 @@ You usually only need `$paperorchestra`, but these entry points are available:
 - `$paperorchestra-intake` — interview the author and inventory materials.
 - `$paperorchestra-plan` — create or revise `paper-plan.md` before drafting.
 - `$paperorchestra-authoring-round` — run one bounded first-draft/revision round with outline/narrative refresh, prior-work positioning, and critic artifacts.
+- `$paperorchestra-figure` — draft figure plans and caption/claim/placement checks.
+- `$paperorchestra-visual-audit` — render compiled PDFs into page images/contact sheets and route layout findings into repair.
 - `$paperorchestra-live-review` — run an extra real model/web critic or citation review on an existing manuscript.
 - `$paperorchestra-quality-gate` — run validation and QA-loop state checks.
 
