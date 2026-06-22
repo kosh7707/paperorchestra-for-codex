@@ -54,6 +54,7 @@ class ArtifactIndex:
     narrative_plan_json: str | None = None
     claim_map_json: str | None = None
     citation_placement_plan_json: str | None = None
+    paper_skeleton_md: str | None = None
     source_obligations_json: str | None = None
 
 

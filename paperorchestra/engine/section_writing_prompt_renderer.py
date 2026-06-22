@@ -20,6 +20,8 @@ def render_section_writing_user_prompt(context: SectionPromptContext) -> str:
 
 {_author_facing_writer_brief_block(context.planning.writer_brief)}
 
+{_data_block('paper-skeleton.md', _prompt_compact_text(context.paper_skeleton or 'missing', head_chars=6000, tail_chars=1500))}
+
 {_data_block('idea.md', prompt_idea)}
 
 {_data_block('experimental_log.md', prompt_experimental_log)}

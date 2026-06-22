@@ -59,8 +59,19 @@ def _install_planning_patches(tmp_path: Path, monkeypatch, calls: list[str] | No
         save_session(cwd, state)
         return paths
 
+    def write_paper_skeleton(cwd, **kwargs):
+        if calls is not None:
+            calls.append("skeleton")
+        path = artifact_path(cwd, "paper-skeleton.md")
+        path.write_text("# Paper Skeleton\n\nDerived test skeleton.\n", encoding="utf-8")
+        state = load_session(cwd)
+        state.artifacts.paper_skeleton_md = str(path)
+        save_session(cwd, state)
+        return path
+
     monkeypatch.setattr(authoring_round, "generate_outline", generate_outline)
     monkeypatch.setattr(authoring_round, "plan_narrative_and_claims", plan_narrative_and_claims)
+    monkeypatch.setattr(authoring_round, "write_paper_skeleton", write_paper_skeleton)
 
 
 def _session(tmp_path: Path) -> None:
@@ -81,6 +92,22 @@ def _session(tmp_path: Path) -> None:
     )
     citation_map = tmp_path / ".paper-orchestra" / "runs" / state.session_id / "artifacts" / "citation_map.json"
     write_json(citation_map, {"iris2024": {"title": "IRIS", "authors": ["A"], "year": 2024}})
+    state.artifacts.citation_map_json = str(citation_map)
+    save_session(tmp_path, state)
+
+
+def _session_without_plan(tmp_path: Path) -> None:
+    state = create_session(
+        tmp_path,
+        InputBundle(
+            idea_path=_write(tmp_path / "idea.md", "Paper idea without approved plan."),
+            experimental_log_path=_write(tmp_path / "experiment.md", "Experiment notes."),
+            template_path=_write(tmp_path / "template.tex", "\\documentclass{article}\\begin{document}\\end{document}"),
+            guidelines_path=_write(tmp_path / "guide.md", "Use an academic systems-paper structure."),
+        ),
+    )
+    citation_map = artifact_path(tmp_path, "citation_map.json")
+    write_json(citation_map, {})
     state.artifacts.citation_map_json = str(citation_map)
     save_session(tmp_path, state)
 
@@ -151,9 +178,20 @@ def test_authoring_round_runs_literature_then_draft_then_critics(tmp_path: Path,
         provider_name="mock",
     )
 
-    assert calls == ["outline", "literature", "narrative-plan", "draft", "review", "section-review", "citation-review", "revision-suggestions"]
+    assert calls == [
+        "outline",
+        "literature",
+        "narrative-plan",
+        "skeleton",
+        "draft",
+        "review",
+        "section-review",
+        "citation-review",
+        "revision-suggestions",
+    ]
     assert result["status"] == "completed_with_critic"
     assert result["mode"] == "first_draft"
+    assert Path(result["artifacts"]["paper_skeleton"]["path"]).exists()
     assert Path(result["artifacts"]["positioning_brief"]["path"]).exists()
     assert Path(result["artifacts"]["manifest"]["path"]).exists()
     assert Path(result["artifacts"]["paper_full_tex"]["path"]).read_text(encoding="utf-8").startswith("\\documentclass")
@@ -186,6 +224,36 @@ def test_authoring_round_can_stop_after_draft_when_critic_disabled(tmp_path: Pat
     assert "review" not in result["artifacts"]
 
 
+def test_authoring_round_bypass_without_plan_does_not_create_skeleton(tmp_path: Path, monkeypatch) -> None:
+    _session_without_plan(tmp_path)
+    calls: list[str] = []
+    _install_planning_patches(tmp_path, monkeypatch, calls)
+
+    def write_sections(cwd, provider, **kwargs):
+        calls.append("draft")
+        path = Path(kwargs["output_path"])
+        path.write_text("\\documentclass{article}\n\\begin{document}Draft.\\end{document}\n", encoding="utf-8")
+        state = load_session(cwd)
+        state.artifacts.paper_full_tex = str(path)
+        save_session(cwd, state)
+        return path
+
+    monkeypatch.setattr(authoring_round, "write_sections", write_sections)
+
+    result = authoring_round.run_authoring_round(
+        tmp_path,
+        _NoCallProvider(),
+        run_literature=False,
+        run_critic=False,
+        bypass_plan_gate=True,
+        citation_evidence_mode="heuristic",
+    )
+
+    assert calls == ["outline", "narrative-plan", "draft"]
+    assert "paper_skeleton" not in result["artifacts"]
+    assert load_session(tmp_path).artifacts.paper_skeleton_md is None
+
+
 def test_authoring_round_regenerates_existing_outline_before_drafting(tmp_path: Path, monkeypatch) -> None:
     _session(tmp_path)
     stale = artifact_path(tmp_path, "outline.json")
@@ -214,5 +282,5 @@ def test_authoring_round_regenerates_existing_outline_before_drafting(tmp_path: 
         citation_evidence_mode="heuristic",
     )
 
-    assert calls == ["outline", "narrative-plan", "draft"]
+    assert calls == ["outline", "narrative-plan", "skeleton", "draft"]
     assert "Outline regenerated before drafting." in result["notes"]

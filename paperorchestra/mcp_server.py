@@ -22,6 +22,18 @@ SESSION_TOOLS: list[JSON] = [
         "inputSchema": _schema({"cwd": {"type": "string"}}),
     },
     {
+        "name": "approve_plan",
+        "description": "Approve the current paper-plan.md and store the machine contract fingerprint in a hidden approval record.",
+        "inputSchema": _schema(
+            {
+                "cwd": {"type": "string"},
+                "plan": {"type": "string"},
+                "revision": {"type": "integer"},
+                "approved_by": {"type": "string"},
+            }
+        ),
+    },
+    {
         "name": "init_session",
         "description": "Initialize a PaperOrchestra session from input files.",
         "inputSchema": _schema(

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from paperorchestra.manuscript.contract_refs import contract_context_for_text
+
 
 def _action(
     *,
@@ -17,6 +19,15 @@ def _action(
     approval_required_from: str | None = None,
     preconditions: list[str] | None = None,
 ) -> dict[str, Any]:
+    contract_context = contract_context_for_text(
+        code,
+        target,
+        reason,
+        ralph_instruction,
+        why_not_automatic,
+        approval_required_from,
+        automation=automation,
+    )
     payload = {
         "id": action_id,
         "code": code,
@@ -24,6 +35,7 @@ def _action(
         "target": target,
         "automation": automation,
         "reason": reason,
+        **contract_context,
         "suggested_commands": list(dict.fromkeys(suggested_commands or [])),
         "ralph_instruction": ralph_instruction or reason,
         "preconditions": preconditions or ["tier_1_structural must remain pass"],

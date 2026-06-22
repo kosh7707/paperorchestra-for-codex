@@ -47,6 +47,8 @@ def test_router_names_core_omx_companion_workflows() -> None:
         "$ralph",
         "$autoresearch",
         "$best-practice-research",
+        "$ultragoal",
+        "$team",
         "$ultraqa",
     )
 
@@ -122,8 +124,60 @@ def test_status_reports_next_paperorchestra_skill_and_omx_companion() -> None:
         "$paperorchestra-plan + $ralplan",
         "$paperorchestra-authoring-round + $ultrawork",
         "$paperorchestra-authoring-round + $ralph",
+        "$ultragoal",
+        "$team + $ultragoal",
         "$paperorchestra-live-review + $autoresearch",
         "$paperorchestra-live-review + $best-practice-research",
         "$paperorchestra-quality-gate + $ultraqa",
         "$paperorchestra-visual-audit + $visual-verdict",
+    )
+
+
+def test_plan_skill_defines_v3_contract_and_derived_skeleton_boundary() -> None:
+    assert_mentions(
+        "paperorchestra-plan",
+        "paper-plan.md v3",
+        "single author-approved contract",
+        "paper-skeleton.md",
+        "derived",
+        "never a second approval source",
+        "Claim-support ledger",
+        "Evidence registry",
+        "Section blueprint",
+        "Related-work positioning",
+        "Placeholder and blocker policy",
+        "paperorchestra approve-plan",
+        "hidden approval record",
+    )
+
+
+def test_authoring_and_status_preserve_skeleton_as_non_authoritative_projection() -> None:
+    assert_mentions(
+        "paperorchestra-authoring-round",
+        "derived paper-skeleton.md",
+        "not a second approval source",
+        "must not introduce new major claims",
+        "paperorchestra approve-plan",
+        "hidden approval record",
+    )
+    assert_mentions(
+        "paperorchestra-status",
+        "paper-skeleton.md",
+        "approved / approved legacy / unapproved / stale / missing / not applicable",
+        "present / missing / stale / not applicable",
+    )
+
+
+def test_skills_route_durable_engine_work_to_ultragoal_not_raw_ralph() -> None:
+    assert_mentions(
+        "paperorchestra",
+        "$ultragoal",
+        ".omx/ultragoal",
+        "reserve `$ralph`",
+    )
+    assert_mentions(
+        "paperorchestra-plan",
+        "$ultragoal",
+        "$team",
+        "Reserve `$ralph`",
     )

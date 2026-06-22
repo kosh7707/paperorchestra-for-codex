@@ -12,10 +12,12 @@ Use this for one manuscript round, not for indefinite autonomous writing. For ne
 A first-draft round is not “just write TeX.” It should create an auditable chain:
 
 ```text
-    approved plan -> outline -> prior-work/search seed -> narrative/claim/citation planning -> positioning brief -> manuscript draft -> compile if available -> rendered-page visual audit if PDF exists -> critic/section/citation reviews -> revision suggestions -> manifest
+    approved paper-plan.md -> outline -> narrative/claim/citation planning -> derived paper-skeleton.md -> prior-work/search seed -> positioning brief -> manuscript draft -> compile if available -> rendered-page visual audit if PDF exists -> critic/section/citation reviews -> revision suggestions -> manifest
 ```
 
 For revision rounds, keep the same artifact chain but scope writing with `only_sections` when possible.
+
+`paper-skeleton.md` is a derived execution projection, not a second approval source. It may guide paragraph-level moves, claim/evidence/citation refs, and section-specific exclusions, but it must not introduce new major claims, increase claim strength, or override the approved `paper-plan.md`.
 
 ## Academic writing doctrine
 
@@ -34,6 +36,8 @@ Use one PaperOrchestra authoring round as the bounded paper-writing action, then
 - `$ultrawork`: split independent pre-draft lanes before the round when materials are large or broad, e.g. prior-work search, paper-structure benchmarking, material inventory, and figure/table planning.
 - `$autoresearch`: run or recommend when Related Work, citation candidates, or source-backed evidence are missing and can be found by machine research.
 - `$best-practice-research`: use for venue/style conventions, section-shape norms, and positioning patterns from comparable papers before locking prose.
+- `$ultragoal`: use for durable implementation/repair follow-up that must survive multiple stories; do not use it to bypass the bounded authoring round.
+- `$team`: use with `$ultragoal` only when a durable implementation/repair plan has separable lanes; PaperOrchestra still owns manuscript artifacts.
 - `$ralph`: supervise a persistent but bounded sequence such as status → one authoring round → quality gate → one repair step when the user asks to “keep going.”
 - `$ultraqa`: use after the draft and review artifacts exist when the user asks for adversarial readiness checks.
 - `$paperorchestra-visual-audit`: use after compile or when the draft has tables/figures whose rendered readability, one-column/two-column layout, or cross-figure style cannot be judged from TeX alone.
@@ -72,13 +76,14 @@ Use mock providers or `--citation-evidence-mode heuristic` only for explicit loc
 ## Round recipe
 
 1. Start with `$paperorchestra-status` and identify the current session/materials.
-2. Check for `paper-plan.md` with an author-approval marker such as `<!-- paperorchestra:plan-approved -->`. If missing, route to `$paperorchestra-plan` unless the user explicitly bypassed planning.
-3. If a figure-dependent section needs a pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figure before prose can be coherent, route to `$paperorchestra-figure` before finalizing that section.
-4. Run one `authoring_round` so pre-draft literature/positioning happens before manuscript writing.
-5. If TeX is configured, compile in the round; otherwise record compile as skipped.
-6. If a compiled PDF exists, route to `$paperorchestra-visual-audit` or run `paperorchestra visual-audit` so page screenshots/contact sheets are available before quality-gate claims about layout or visual evidence.
-7. If the MCP/source authoring-round returns `mode=background`, poll/tail the returned job paths until the underlying CLI finishes; then inspect `authoring-round.manifest.json`, `positioning_brief.md`, `paper.full.tex`, `page-layout-review.json` when compiled, `citation_support_review.json`, and `revision_suggestions.json`. In installed staged fallback mode, `authoring-round.manifest.json` may not exist; inspect the stage artifacts actually produced by each command.
-8. Route to `$paperorchestra-quality-gate` only after the round has real review artifacts or the user asks for a gate.
+2. Check for `paper-plan.md` approval through the plan gate. Prefer the current MCP `approve_plan` / CLI `paperorchestra approve-plan` workflow, which keeps the machine fingerprint in a hidden approval record; accept legacy in-text markers only as transitional compatibility. If missing or stale, route to `$paperorchestra-plan` unless the user explicitly bypassed planning.
+3. Generate or refresh `paper-skeleton.md` from the approved plan plus outline/narrative/claim/citation planning before manuscript prose when the engine supports it; if the skeleton is stale or tries to change the approved contract, route back to `$paperorchestra-plan`.
+4. If a figure-dependent section needs a pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figure before prose can be coherent, route to `$paperorchestra-figure` before finalizing that section.
+5. Run one `authoring_round` so pre-draft literature/positioning happens before manuscript writing.
+6. If TeX is configured, compile in the round; otherwise record compile as skipped.
+7. If a compiled PDF exists, route to `$paperorchestra-visual-audit` or run `paperorchestra visual-audit` so page screenshots/contact sheets are available before quality-gate claims about layout or visual evidence.
+8. If the MCP/source authoring-round returns `mode=background`, poll/tail the returned job paths until the underlying CLI finishes; then inspect `authoring-round.manifest.json`, `paper-skeleton.md` when produced, `positioning_brief.md`, `paper.full.tex`, `page-layout-review.json` when compiled, `citation_support_review.json`, and `revision_suggestions.json`. In installed staged fallback mode, `authoring-round.manifest.json` may not exist; inspect the stage artifacts actually produced by each command.
+9. Route to `$paperorchestra-quality-gate` only after the round has real review artifacts or the user asks for a gate.
 
 ## Edit boundaries
 

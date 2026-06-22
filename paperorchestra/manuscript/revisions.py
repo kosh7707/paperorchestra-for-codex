@@ -9,6 +9,7 @@ from paperorchestra.manuscript.revision_action_taxonomy import (
     _priority_for_action,
     _target_for_item,
 )
+from paperorchestra.manuscript.contract_refs import contract_context_for_text
 from paperorchestra.manuscript.revision_action_templates import _patch_hunk_template
 from paperorchestra.manuscript.revision_issue_findings import _iter_citation_findings, _iter_section_findings
 from paperorchestra.manuscript.revision_review_findings import _iter_review_findings
@@ -61,6 +62,7 @@ def build_revision_suggestions(
         target = finding.get("target_area") or _target_for_item(item)
         action_type = finding.get("action_type") or _action_type_for_item(item)
         priority, severity = _priority_for_action(action_type, item)
+        contract_context = contract_context_for_text(item, target, action_type, automation="manual_revision")
         actions.append(
             {
                 "id": f"rev-{idx:02d}",
@@ -70,6 +72,7 @@ def build_revision_suggestions(
                 "target_area": target,
                 "target_file": section_map.get(target, str(source_path)),
                 "review_trace": {"source": finding["source"], "source_index": finding["source_index"]},
+                **contract_context,
                 "review_item": item,
                 "suggested_action": "Add or revise manuscript text to address this review item with grounded evidence and citations.",
                 "suggested_patch_hunk": _patch_hunk_template(target, action_type, item),

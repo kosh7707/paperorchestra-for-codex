@@ -7,7 +7,15 @@ import pytest
 
 from paperorchestra.core.errors import ContractError
 from paperorchestra.engine import pipeline
-from paperorchestra.engine.plan_gate import check_plan_gate, ensure_approved_plan
+from paperorchestra.engine.plan_gate import (
+    approve_plan,
+    canonical_plan_contract_text,
+    check_plan_gate,
+    compute_plan_contract_sha256,
+    ensure_approved_plan,
+    plan_approval_record_path,
+    plan_approval_info,
+)
 from paperorchestra.engine.section_writing_stage import write_sections
 from paperorchestra.runtime.provider_base import BaseProvider, CompletionRequest
 
@@ -26,6 +34,50 @@ class _DummyProvider:
 def _approve(path: Path) -> Path:
     path.write_text("# Paper plan\n\n<!-- paperorchestra:plan-approved -->\n", encoding="utf-8")
     return path
+
+
+def _v3_plan(*, generated_at: str = "2026-01-01T00:00:00Z", title: str = "Evidence-grounded triage") -> str:
+    return f"""---
+revision: 4
+schema: paperorchestra/paper-plan/3
+plan_id: demo-plan
+target_format: LNCS
+primary_archetype: systems
+generated_at: {generated_at}
+output_workspace: /tmp/paperorchestra-demo
+source_intake:
+  material_b: beta
+  material_a: alpha
+---
+
+# PaperOrchestra Paper Plan
+
+## 1. Approval summary
+
+- working title: {title}
+- one-sentence thesis: Evidence-grounded agent loops can support recall-preserving SAST alert triage.
+
+## 3. Claim-support ledger
+
+| ID | Claim and maximum strength | Claim class | Support mode | Evidence/status | Boundary or wording guard | Destination |
+| --- | --- | --- | --- | --- | --- | --- |
+| C1 | On the configured OWASP alert set, the pipeline reaches a recall-preserving operating point. | descriptive | internal evidence | E1 — provisional | Do not claim general SOTA. | S1, S4 |
+
+### Evidence registry
+
+| ID | Locator | What it proves | What it does not prove | Status |
+| --- | --- | --- | --- | --- |
+| E1 | results/owasp-summary.json | The stated run configuration outcome. | General Java SAST performance. | provisional |
+"""
+
+
+def _write_hashed_approved_plan(path: Path, text: str, *, revision: int = 4) -> tuple[Path, str]:
+    contract_hash = compute_plan_contract_sha256(text)
+    path.write_text(
+        f"{text}\n<!-- paperorchestra:plan-approved revision={revision} hash-v=1 contract-sha256={contract_hash} -->\n",
+        encoding="utf-8",
+    )
+    return path, contract_hash
 
 
 def test_plan_gate_reports_missing_plan(tmp_path: Path) -> None:
@@ -55,8 +107,164 @@ def test_plan_gate_accepts_author_approval_marker(tmp_path: Path) -> None:
     result = check_plan_gate(tmp_path)
 
     assert result.allowed is True
-    assert result.reason == "paper_plan_approved"
+    assert result.reason == "legacy_unhashed_approval"
+    assert result.approval_state == "legacy_unhashed_approval"
+    assert result.warning
     assert result.plan_path == str(plan_path)
+
+
+def test_plan_gate_accepts_hash_backed_v3_approval(tmp_path: Path) -> None:
+    plan_path, contract_hash = _write_hashed_approved_plan(tmp_path / "paper-plan.md", _v3_plan())
+
+    result = check_plan_gate(tmp_path)
+
+    assert result.allowed is True
+    assert result.reason == "paper_plan_approved_hashed"
+    assert result.approval_state == "approved_hashed"
+    assert result.approval_revision == 4
+    assert result.to_dict()["approval_hash_version"] == "1"
+    assert result.contract_sha256 == contract_hash
+    assert result.plan_path == str(plan_path)
+
+
+def test_approve_plan_writes_hidden_sidecar_and_gate_accepts(tmp_path: Path) -> None:
+    plan_path = tmp_path / "paper-plan.md"
+    plan_path.write_text(_v3_plan(), encoding="utf-8")
+
+    payload = approve_plan(tmp_path)
+    result = check_plan_gate(tmp_path)
+
+    assert payload["status"] == "approved"
+    assert payload["contract_sha256"] == compute_plan_contract_sha256(plan_path)
+    assert payload["approval_record_path"] == str(plan_approval_record_path(plan_path))
+    assert str(tmp_path / ".paper-orchestra" / "approvals") in payload["approval_record_path"]
+    assert result.allowed is True
+    assert result.reason == "paper_plan_approved"
+    assert result.approval_state == "approved_sidecar"
+    assert result.approval_record_path == payload["approval_record_path"]
+    assert result.contract_sha256 == payload["contract_sha256"]
+
+
+def test_approve_plan_sidecar_blocks_after_contract_change(tmp_path: Path) -> None:
+    plan_path = tmp_path / "paper-plan.md"
+    plan_path.write_text(_v3_plan(), encoding="utf-8")
+    payload = approve_plan(tmp_path)
+    old_hash = payload["contract_sha256"]
+
+    plan_path.write_text(_v3_plan(title="Changed approved contract"), encoding="utf-8")
+    result = check_plan_gate(tmp_path)
+
+    assert result.allowed is False
+    assert result.reason == "paper_plan_stale_approval"
+    assert result.approval_state == "stale_sidecar"
+    assert result.approval_record_path == payload["approval_record_path"]
+    assert result.contract_sha256 != old_hash
+    assert "approve-plan" in result.message
+
+
+def test_plan_gate_accepts_pre_versioned_hash_marker_as_v1(tmp_path: Path) -> None:
+    text = _v3_plan()
+    contract_hash = compute_plan_contract_sha256(text)
+    (tmp_path / "paper-plan.md").write_text(
+        f"{text}\n<!-- paperorchestra:plan-approved revision=4 contract-sha256={contract_hash} -->\n",
+        encoding="utf-8",
+    )
+
+    result = check_plan_gate(tmp_path)
+
+    assert result.allowed is True
+    assert result.reason == "paper_plan_approved_hashed"
+    assert result.to_dict()["approval_hash_version"] == "1"
+
+
+def test_plan_gate_blocks_unsupported_hash_version(tmp_path: Path) -> None:
+    text = _v3_plan()
+    contract_hash = compute_plan_contract_sha256(text)
+    (tmp_path / "paper-plan.md").write_text(
+        f"{text}\n<!-- paperorchestra:plan-approved revision=4 hash-v=999 contract-sha256={contract_hash} -->\n",
+        encoding="utf-8",
+    )
+
+    result = check_plan_gate(tmp_path)
+
+    assert result.allowed is False
+    assert result.reason == "paper_plan_unsupported_hash_version"
+    assert result.approval_state == "unsupported_hash_version"
+    assert result.to_dict()["approval_hash_version"] == "999"
+
+
+def test_plan_gate_blocks_stale_hash_backed_approval(tmp_path: Path) -> None:
+    plan_path, old_hash = _write_hashed_approved_plan(tmp_path / "paper-plan.md", _v3_plan())
+    plan_path.write_text(
+        plan_path.read_text(encoding="utf-8").replace(
+            "Evidence-grounded triage",
+            "Changed thesis contract",
+        ),
+        encoding="utf-8",
+    )
+
+    result = check_plan_gate(tmp_path)
+
+    assert result.allowed is False
+    assert result.reason == "paper_plan_stale_approval"
+    assert result.approval_state == "stale_hashed"
+    assert result.contract_sha256 != old_hash
+    assert "approve-plan" in result.message
+
+
+def test_v3_plain_approval_marker_is_stale_not_legacy(tmp_path: Path) -> None:
+    (tmp_path / "paper-plan.md").write_text(
+        _v3_plan() + "\n<!-- paperorchestra:plan-approved -->\n",
+        encoding="utf-8",
+    )
+
+    result = check_plan_gate(tmp_path)
+
+    assert result.allowed is False
+    assert result.reason == "paper_plan_approval_record_missing"
+    assert result.approval_state == "approval_record_missing"
+    assert "approve-plan" in result.message
+
+
+def test_v3_yaml_approval_does_not_bypass_hash_gate(tmp_path: Path) -> None:
+    (tmp_path / "paper-plan.md").write_text(
+        _v3_plan().replace("revision: 4", "revision: 4\napproved: true"),
+        encoding="utf-8",
+    )
+
+    result = check_plan_gate(tmp_path)
+
+    assert result.allowed is False
+    assert result.reason == "paper_plan_unapproved"
+    assert result.approval_state == "unapproved"
+
+
+def test_legacy_yaml_approval_is_transitional(tmp_path: Path) -> None:
+    (tmp_path / "paper-plan.md").write_text(
+        "---\napproved: true\n---\n# Legacy plan\n",
+        encoding="utf-8",
+    )
+
+    info = plan_approval_info(tmp_path / "paper-plan.md")
+
+    assert info.allowed is True
+    assert info.state == "legacy_unhashed_approval"
+    assert info.warning
+
+
+def test_plan_contract_hash_ignores_generated_metadata_and_formatting_noise() -> None:
+    base = _v3_plan(generated_at="2026-01-01T00:00:00Z")
+    noisy = (
+        _v3_plan(generated_at="2026-06-22T12:34:56Z")
+        .replace("primary_archetype: systems", "primary_archetype: systems   ")
+        .replace("  material_b: beta\n  material_a: alpha", "  material_a: alpha\n  material_b: beta")
+        .replace("| C1 | On the configured OWASP", "|  C1  |  On the configured OWASP")
+        .replace("provisional |", "provisional   |")
+        .replace("\n", "\r\n")
+    )
+
+    assert compute_plan_contract_sha256(base) == compute_plan_contract_sha256(noisy)
+    assert canonical_plan_contract_text(base) == canonical_plan_contract_text(noisy)
 
 
 def test_write_sections_requires_approved_plan_before_loading_session(tmp_path: Path) -> None:

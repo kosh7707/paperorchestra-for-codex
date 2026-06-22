@@ -70,3 +70,5 @@ def test_revision_suggestions_include_section_and_citation_findings(tmp_path: Pa
 
     assert payload["action_count"] == 3
     assert any(action["action_type"] == "curate_and_verify_citations" for action in payload["actions"])
+    assert all(action["repair_class"] == "contract_internal_repair" for action in payload["actions"])
+    assert all("contract_refs" in action for action in payload["actions"])

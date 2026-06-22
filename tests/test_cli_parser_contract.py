@@ -18,6 +18,7 @@ MINIMAL_COMMANDS = {
         "guide.md",
     ],
     "status": ["status"],
+    "approve-plan": ["approve-plan"],
     "inspect-state": ["inspect-state"],
     "orchestrate": ["orchestrate"],
     "answer-human-needed": ["answer-human-needed", "--answer", "approved"],
@@ -76,6 +77,27 @@ def test_authoring_round_flags_cover_first_draft_contract() -> None:
     assert args.citation_evidence_mode == "web"
     assert args.provider_command == "codex --search exec"
     assert args.citation_provider_command == "codex --search exec"
+
+
+def test_approve_plan_flags_keep_user_hash_free() -> None:
+    args = build_parser().parse_args(
+        [
+            "approve-plan",
+            "--plan",
+            "paper-plan.md",
+            "--revision",
+            "3",
+            "--approved-by",
+            "maintainer",
+            "--json",
+        ]
+    )
+
+    assert args.command == "approve-plan"
+    assert args.plan == "paper-plan.md"
+    assert args.revision == 3
+    assert args.approved_by == "maintainer"
+    assert args.json is True
 
 
 def test_provider_runtime_and_citation_flags_remain_on_quality_step() -> None:

@@ -62,6 +62,7 @@ class TemplatePromptContext:
 class SectionPromptContext:
     selected_sections: list[str]
     current_source: str | None
+    paper_skeleton: str | None
     planning: PlanningPromptPayloads
     outline: OutlinePromptContext
     citations: CitationPromptContext

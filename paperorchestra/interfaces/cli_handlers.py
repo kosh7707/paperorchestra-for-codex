@@ -22,6 +22,7 @@ from paperorchestra.interfaces.cli_commands.quality import (
     handle_ralph_start,
 )
 from paperorchestra.interfaces.cli_commands.session import (
+    handle_approve_plan,
     handle_compile,
     handle_doctor,
     handle_environment,
@@ -35,6 +36,7 @@ CliHandler = Callable[[Path, argparse.Namespace], int]
 CLI_HANDLERS: dict[str, CliHandler] = {
     "init": handle_init,
     "status": handle_status,
+    "approve-plan": handle_approve_plan,
     "inspect-state": handle_inspect_state,
     "orchestrate": handle_orchestrate,
     "answer-human-needed": handle_answer_human_needed,

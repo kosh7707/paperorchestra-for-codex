@@ -27,6 +27,9 @@ def status_summary_lines(cwd: Path, payload: dict[str, Any]) -> list[str]:
     lines = [
         f"Session: {payload['session_id']}",
         f"Phase: {payload['current_phase']}",
+        f"Plan gate: {_status_label(payload.get('plan_gate'))}",
+        f"Planning artifacts: {_status_label(payload.get('planning_artifacts'))}",
+        f"Paper skeleton: {_status_label(payload.get('paper_skeleton'))}",
         "",
         "Main files:",
         f"  TeX: {path_or_missing(artifacts.get('paper_full_tex'))}",
@@ -49,6 +52,14 @@ def status_summary_lines(cwd: Path, payload: dict[str, Any]) -> list[str]:
     else:
         lines.append("  paperorchestra export-current --output ./paperorchestra-output")
     return lines
+
+
+def _status_label(value: Any) -> str:
+    if not isinstance(value, dict):
+        return "unknown"
+    status = value.get("status") or value.get("reason") or "unknown"
+    detail = value.get("reason") if value.get("status") else value.get("approval_state")
+    return f"{status} ({detail})" if detail and detail != status else str(status)
 
 
 def ok_warn(value: bool) -> str:

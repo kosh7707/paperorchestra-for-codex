@@ -36,6 +36,7 @@ def export_current_artifacts(cwd: str | Path, output: str | Path, *, include_all
     artifacts = state.artifacts
     export_map = [
         ("paper_full_tex", artifacts.paper_full_tex, output_dir / "paper.full.tex"),
+        ("paper_skeleton_md", artifacts.paper_skeleton_md, output_dir / "paper-skeleton.md"),
         ("compiled_pdf", artifacts.compiled_pdf, output_dir / "paper.full.pdf"),
         ("references_bib", artifacts.references_bib, output_dir / "references.bib"),
         ("latest_review_json", artifacts.latest_review_json, output_dir / "review.latest.json"),

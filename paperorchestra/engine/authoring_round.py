@@ -13,6 +13,7 @@ from paperorchestra.engine.planning_stages import generate_outline, plan_narrati
 from paperorchestra.engine.research_prior_work_stage import research_prior_work
 from paperorchestra.engine.review_stages import review_current_paper
 from paperorchestra.engine.section_writing_stage import write_sections
+from paperorchestra.manuscript.skeleton import can_derive_paper_skeleton, write_paper_skeleton
 from paperorchestra.manuscript.revisions import write_revision_suggestions
 from paperorchestra.reviews.citation_model_writer import write_citation_support_review
 from paperorchestra.reviews.critic_trust import build_critic_trust_card, require_live_critic_trust
@@ -105,6 +106,12 @@ def run_authoring_round(
 
     if ensure_planning_artifacts:
         _refresh_narrative_planning(cwd, provider, runtime_mode=runtime_mode, artifacts=artifacts, notes=notes)
+        if can_derive_paper_skeleton(gate):
+            skeleton_path = write_paper_skeleton(cwd, gate=gate)
+            artifacts["paper_skeleton"] = _artifact(skeleton_path)
+            notes.append("Derived paper-skeleton.md after narrative planning and before drafting.")
+        else:
+            notes.append("paper-skeleton.md derivation skipped because this round used explicit plan-gate bypass without an approved plan.")
 
     positioning_path = round_path / "positioning_brief.md"
     _write_positioning_brief(positioning_path, cwd=cwd, gate=gate, literature_result=literature_result, seed_path=seed_path if seed_path.exists() else None)

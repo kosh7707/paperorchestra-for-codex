@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from paperorchestra.core.models import InputBundle
-from paperorchestra.core.session import create_session, load_session
+from paperorchestra.core.session import create_session
+from paperorchestra.engine.plan_gate import approve_plan
 from paperorchestra.interfaces.mcp.authoring_tools import (
     tool_answer_human_needed,
     tool_authoring_round,
@@ -18,6 +19,7 @@ from paperorchestra.interfaces.mcp.authoring_tools import (
 )
 from paperorchestra.interfaces.mcp.common import JSON, ToolHandler, default_cwd, ok
 from paperorchestra.interfaces.mcp.quality_tools import tool_qa_loop, tool_qa_loop_step, tool_quality_gate, tool_ralph_start
+from paperorchestra.interfaces.status_payload import build_session_status_payload
 from paperorchestra.orchestra.controller import OrchestraOrchestrator, inspect_state as orchestrator_inspect_state
 from paperorchestra.orchestra.evidence import write_orchestrator_evidence_bundle
 from paperorchestra.orchestra.executor import LocalActionExecutor
@@ -25,7 +27,18 @@ from paperorchestra.orchestra.omx_action_executor import OmxActionExecutor
 
 
 def tool_status(arguments: JSON) -> JSON:
-    return ok(load_session(default_cwd(arguments)).to_dict())
+    return ok(build_session_status_payload(default_cwd(arguments)))
+
+
+def tool_approve_plan(arguments: JSON) -> JSON:
+    return ok(
+        approve_plan(
+            default_cwd(arguments),
+            plan_path=arguments.get("plan"),
+            revision=arguments.get("revision"),
+            approved_by=str(arguments.get("approved_by") or "author"),
+        )
+    )
 
 
 def tool_init_session(arguments: JSON) -> JSON:
@@ -97,6 +110,7 @@ def tool_orchestrate(arguments: JSON) -> JSON:
 
 TOOL_HANDLERS: dict[str, ToolHandler] = {
     "status": tool_status,
+    "approve_plan": tool_approve_plan,
     "init_session": tool_init_session,
     "inspect_state": tool_inspect_state,
     "orchestrate": tool_orchestrate,

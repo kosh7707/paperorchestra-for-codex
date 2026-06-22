@@ -5,11 +5,13 @@ import json
 from pathlib import Path
 
 from paperorchestra.core.models import InputBundle
-from paperorchestra.core.session import create_session, load_session
+from paperorchestra.core.session import create_session
+from paperorchestra.engine.plan_gate import approve_plan
 from paperorchestra.engine.review_stages import compile_current_paper
 from paperorchestra.interfaces.cli_output import environment_summary_lines, status_summary_lines
 from paperorchestra.interfaces.exporting import export_current_artifacts
-from paperorchestra.runtime.doctor import build_doctor_report, build_session_recovery_hint
+from paperorchestra.interfaces.status_payload import build_session_status_payload
+from paperorchestra.runtime.doctor import build_doctor_report
 from paperorchestra.runtime.environment import build_environment_inventory
 
 
@@ -33,9 +35,7 @@ def handle_init(cwd: Path, args: argparse.Namespace) -> int:
 
 
 def handle_status(cwd: Path, args: argparse.Namespace) -> int:
-    state = load_session(cwd)
-    payload = state.to_dict()
-    payload["session_recovery"] = build_session_recovery_hint(cwd)
+    payload = build_session_status_payload(cwd, include_recovery=True)
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     elif args.summary:
@@ -45,6 +45,17 @@ def handle_status(cwd: Path, args: argparse.Namespace) -> int:
         print(f"current_phase: {payload['current_phase']}")
         print(f"active_artifact: {payload['active_artifact']}")
         print(f"artifacts: {json.dumps(payload['artifacts'], indent=2, ensure_ascii=False)}")
+    return 0
+
+
+def handle_approve_plan(cwd: Path, args: argparse.Namespace) -> int:
+    payload = approve_plan(cwd, plan_path=args.plan, revision=args.revision, approved_by=args.approved_by)
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print("paper-plan approved")
+        print(f"Plan: {payload['plan_path']}")
+        print(f"Approval record: {payload['approval_record_path']}")
     return 0
 
 

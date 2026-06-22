@@ -32,14 +32,14 @@ For sibling workflow skills, the same guide is available at `../paperorchestra/r
 - `$paperorchestra-status`: answer “what is ready?”, “what changed?”, “which round next?”, stale artifact, trust-tier, and human-needed questions.
 - `$paperorchestra-setup`: verify install/session/provider/compile readiness before a real paper loop.
 - `$paperorchestra-intake`: interview the author and inventory materials when thesis, paper type, venue, experiment basis, or claim boundaries are not locked.
-- `$paperorchestra-plan`: create or revise `paper-plan.md` for author approval before manuscript drafting.
+- `$paperorchestra-plan`: create or revise `paper-plan.md` v3 as the compact author-approved contract before manuscript drafting.
 - `$paperorchestra-figure`: design, generate, or review pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures with claim/caption/placement alignment.
 - `$paperorchestra-visual-audit`: render compiled PDFs into page images/contact sheets, import visual findings, and route page-level visual/layout issues into `visual_repair_brief.json`.
 - `$paperorchestra-live-review`: run a real live/model/web critic lane and report trust tiers without silently using mock/heuristic paths.
 - `$paperorchestra-quality-gate`: run bounded validation/quality/QA state transitions and stop on `human_needed`, `failed`, or `ready_for_human_finalization`.
 - `$paperorchestra-authoring-round`: perform one evidence-bearing first-draft or revision round after plan approval.
 
-Default order for unclear first-use writing requests: `$paperorchestra-setup` if readiness is unknown → `$paperorchestra-status` → `$paperorchestra-intake` when materials/intent are not locked → `$paperorchestra-plan` → author approval → `$paperorchestra-authoring-round`. The authoring round must do prior-work/search positioning before first-draft writing and critic/citation review after the draft exists.
+Default order for unclear first-use writing requests: `$paperorchestra-setup` if readiness is unknown → `$paperorchestra-status` → `$paperorchestra-intake` when materials/intent are not locked → `$paperorchestra-plan` → author approval → derived `paper-skeleton.md` when supported → `$paperorchestra-authoring-round`. The authoring round must do prior-work/search positioning before first-draft writing and critic/citation review after the draft exists.
 
 Do not route directly to authoring when no approved `paper-plan.md` exists, unless the user explicitly asks to bypass planning.
 
@@ -53,12 +53,15 @@ PaperOrchestra owns paper state and artifacts; OMX companion skills supply orche
 - `$ralph`: the user wants a persistent completion loop over a bounded PaperOrchestra goal, such as authoring round → status → quality gate → repair.
 - `$autoresearch`: machine-solvable citation/source discovery, bibliography expansion, or evidence verification remains.
 - `$best-practice-research`: venue/style norms, common section naming, related-work positioning practice, or reviewer-expectation questions need external evidence.
+- `$ultragoal`: approved implementation, engine-change, or repair plans should become durable sequential stories with `.omx/ultragoal` checkpoint evidence.
+- `$team`: combine with `$ultragoal` when those approved stories have independent lanes; Team executes parallel work while Ultragoal remains the ledger owner.
 - `$ultraqa`: final adversarial QA or hostile readiness checks are requested after live review and quality-gate artifacts exist.
 - `$visual-verdict`: rendered page images/contact sheets need visual QA for overflow, figure readability, one-column/two-column layout, or cross-figure consistency.
 
 Keep the explicit PaperOrchestra skill as the paper workflow owner. For example, use `$paperorchestra-authoring-round + $ultrawork` for parallel first-draft preparation, not raw parallel agents that bypass the paper session.
 Use `$paperorchestra-figure` when a manuscript needs pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures; figure work must stay tied to supported claims, source evidence, captions, and one-column/two-column placement.
 Use `$paperorchestra-visual-audit + $visual-verdict` when the compiled PDF itself must be inspected as pages. Do not make TeX-only claims about rendered layout, table overflow, figure readability, or visual style consistency.
+Use `$ultragoal` rather than raw `$ralph` for durable multi-step engine or repair work; reserve `$ralph` for explicitly requested single-owner persistence.
 
 ## High-level orchestrator surface
 

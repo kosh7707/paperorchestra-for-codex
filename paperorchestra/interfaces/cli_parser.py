@@ -40,6 +40,12 @@ def register_session_commands(subparsers: Any) -> None:
     status_parser.add_argument("--json", action="store_true")
     status_parser.add_argument("--summary", action="store_true")
 
+    approve_parser = subparsers.add_parser("approve-plan", help="Approve the current paper-plan.md")
+    approve_parser.add_argument("--plan", help="Path to the paper-plan.md to approve")
+    approve_parser.add_argument("--revision", type=int, help="Override the approved plan revision")
+    approve_parser.add_argument("--approved-by", default="author", help="Approval actor label for the machine record")
+    approve_parser.add_argument("--json", action="store_true")
+
     export_parser = subparsers.add_parser("export-current", help="Copy current manuscript outputs to a destination directory")
     export_parser.add_argument("--output", required=True)
     export_parser.add_argument("--include-all-artifacts", action="store_true")

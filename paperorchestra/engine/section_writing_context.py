@@ -24,6 +24,7 @@ from paperorchestra.engine.planning_payloads import (
 )
 from paperorchestra.engine.section_scope import _resolve_selected_sections
 from paperorchestra.engine.section_writing_types import PlanningPromptPayloads, SectionPromptContext
+from paperorchestra.manuscript.skeleton import paper_skeleton_status
 
 
 def _current_source_for_scope(state: SessionState, selected_sections: list[str]) -> tuple[str | None, list[str]]:
@@ -84,6 +85,7 @@ def build_section_prompt_context(
     return SectionPromptContext(
         selected_sections=selected_sections,
         current_source=current_source,
+        paper_skeleton=_fresh_paper_skeleton_text(cwd, state),
         planning=planning,
         outline=outline,
         citations=citations,
@@ -93,6 +95,26 @@ def build_section_prompt_context(
         source_critical_context=_source_critical_context_for_prompt(inputs),
         figures_dir=state.inputs.figures_dir,
         strict_claim_safe_prompt=strict_claim_safe_prompt,
+    )
+
+
+def _read_optional_text(path: str | Path | None) -> str | None:
+    if not path or not Path(path).exists():
+        return None
+    return read_text(path)
+
+
+def _fresh_paper_skeleton_text(cwd: str | Path | None, state: SessionState) -> str | None:
+    if not state.artifacts.paper_skeleton_md:
+        return None
+    status = paper_skeleton_status(cwd)
+    if status.get("status") == "pass":
+        return _read_optional_text(state.artifacts.paper_skeleton_md)
+    if status.get("status") == "missing":
+        return None
+    raise ContractError(
+        "Recorded paper-skeleton.md is not fresh enough for drafting. "
+        f"Status: {status.get('status')}; reason: {status.get('reason') or status.get('detail') or 'unknown'}."
     )
 
 

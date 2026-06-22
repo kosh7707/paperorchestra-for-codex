@@ -16,7 +16,9 @@ paperorchestra status --json
 paperorchestra environment
 ```
 
-Also inspect nearby artifacts when present: `.paper-orchestra/`, `paper-plan.md` approval state, `paper.full.tex`, compiled PDF, page renders/contact sheets, figure assets, figure specs, caption drafts, `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, `figure-placement-review.json`, `page-layout-review.json`, `visual_repair_brief.json`, `visual_repair_candidate.json`, `figure_gate.report.json`, `citation_map.json`, `references.bib`, `citation_support_review.json`, `quality-eval.json`, `quality-gate.report.json`, `qa-loop.plan.json`, compile reports, and named round directories.
+Also inspect nearby artifacts when present: `.paper-orchestra/`, `paper-plan.md` approval state, `paper-skeleton.md` provenance/staleness, `paper.full.tex`, compiled PDF, page renders/contact sheets, figure assets, figure specs, caption drafts, `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, `figure-placement-review.json`, `page-layout-review.json`, `visual_repair_brief.json`, `visual_repair_candidate.json`, `figure_gate.report.json`, `citation_map.json`, `references.bib`, `citation_support_review.json`, `quality-eval.json`, `quality-gate.report.json`, `qa-loop.plan.json`, compile reports, and named round directories.
+
+For a planned or drafted manuscript, report plan/skeleton availability as `approved / approved legacy / unapproved / stale / missing / not applicable` for `paper-plan.md` and `present / missing / stale / not applicable` for `paper-skeleton.md`. Do not surface internal contract hashes in user-facing summaries; they are machine fingerprints for staleness checks. A stale or missing skeleton should not override an approved plan; recommend regeneration or `$paperorchestra-plan` only when the approved contract itself is stale or insufficient.
 
 For a figure-bearing manuscript, report figure artifact availability as `present / missing / stale / not applicable` for `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, `figure-placement-review.json`, and `figure_gate.report.json`. If an expected figure artifact is missing or stale, recommend `$paperorchestra-figure` before authoring, live-review, or quality-gate claims rely on that figure.
 
@@ -59,6 +61,8 @@ Name both the PaperOrchestra workflow and the OMX companion when a companion wou
 - `$paperorchestra-plan + $ralplan`: manuscript structure, RQs, evidence table shape, or contribution boundaries need consensus planning.
 - `$paperorchestra-authoring-round + $ultrawork`: independent pre-draft lanes can run in parallel before one bounded authoring round.
 - `$paperorchestra-authoring-round + $ralph`: the user wants a persistent bounded loop over authoring, status, gate, and repair.
+- `$ultragoal`: durable multi-story implementation or repair follow-up is needed after a plan/gate/review produces concrete work items.
+- `$team + $ultragoal`: durable follow-up is also parallelizable; Team runs lanes, Ultragoal owns the ledger/checkpoints.
 - `$paperorchestra-live-review + $autoresearch`: citation/source evidence is missing, weak, stale, or machine-solvable.
 - `$paperorchestra-live-review + $best-practice-research`: venue/style norms or related-work positioning need external best-practice evidence.
 - `$paperorchestra-quality-gate + $ultraqa`: fresh review/gate artifacts exist and adversarial final QA is the next safe action.

@@ -24,6 +24,7 @@ class PublicSurfaceTest(unittest.TestCase):
             commands,
             {
                 "answer-human-needed",
+                "approve-plan",
                 "authoring-round",
                 "compile",
                 "critique",
@@ -53,6 +54,7 @@ class PublicSurfaceTest(unittest.TestCase):
             ordered_names,
             [
                 "status",
+                "approve_plan",
                 "init_session",
                 "inspect_state",
                 "orchestrate",
@@ -76,6 +78,7 @@ class PublicSurfaceTest(unittest.TestCase):
             names,
             {
                 "answer_human_needed",
+                "approve_plan",
                 "authoring_round",
                 "compile_current_paper",
                 "critique",
