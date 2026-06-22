@@ -39,6 +39,7 @@ For sibling workflow skills, the same guide is available at `../paperorchestra/r
 - `$paperorchestra-plan`: create or revise `paper-plan.md` v3 as the compact author-approved contract before manuscript drafting.
 - `$paperorchestra-figure`: design, generate, or review pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures with claim/caption/placement alignment.
 - `$paperorchestra-visual-audit`: render compiled PDFs into page images/contact sheets, import visual findings, and route page-level visual/layout issues into `visual_repair_brief.json`.
+- `$paperorchestra-research-swarm`: run parallel, source-backed prior-work/citation discovery when Related Work, `citation_map.json`, `references.bib`, or evidence verification needs broad/multi-cluster web research.
 - `$paperorchestra-live-review`: run a real live/model/web critic lane and report trust tiers without silently using mock/heuristic paths.
 - `$paperorchestra-quality-gate`: run bounded validation/quality/QA state transitions and stop on `human_needed`, `failed`, or `ready_for_human_finalization`.
 - `$paperorchestra-authoring-round`: perform one evidence-bearing first-draft or revision round after plan approval.
@@ -92,7 +93,8 @@ Invoke or recommend these companions explicitly when their trigger condition is 
 - `$ralplan`: section structure, RQs, evaluation design, or claim tradeoffs need consensus-style planning before author approval.
 - `$ultrawork`: mandatory before first-draft authoring when two or more independent pre-draft lanes are open, such as material inventory, prior-work/search seed, section-structure benchmarking, figure/table planning, and draft-outline synthesis.
 - `$ralph`: mandatory when the user asks to continue/persist through a bounded PaperOrchestra sequence, such as status → authoring round → quality gate → repair, or when a previous round ended with machine-actionable blockers and the user says to keep going.
-- `$autoresearch`: mandatory when machine-solvable citation/source discovery, bibliography expansion, or evidence verification remains and the current turn is allowed to do research or live/source-backed review.
+- `$paperorchestra-research-swarm`: mandatory before raw `$autoresearch` when machine-solvable citation/source discovery, bibliography expansion, or evidence verification is broad/deep, spans multiple clusters, or benefits from parallel web lanes. This skill invokes `$ultrawork`/`$team` for subagent lanes and `$autoresearch` for the validator gate.
+- `$autoresearch`: mandatory as the validator-gated research loop for single-lane citation/source discovery, or as the completion gate inside `$paperorchestra-research-swarm`.
 - `$best-practice-research`: venue/style norms, common section naming, related-work positioning practice, or reviewer-expectation questions need external evidence.
 - `$ultragoal`: approved implementation, engine-change, or repair plans should become durable sequential stories with `.omx/ultragoal` checkpoint evidence.
 - `$team`: combine with `$ultragoal` when those approved stories have independent lanes; Team executes parallel work while Ultragoal remains the ledger owner.
@@ -100,6 +102,7 @@ Invoke or recommend these companions explicitly when their trigger condition is 
 - `$visual-verdict`: rendered page images/contact sheets need visual QA for overflow, figure readability, one-column/two-column layout, or cross-figure consistency.
 
 Keep the explicit PaperOrchestra skill as the paper workflow owner. For example, use `$paperorchestra-authoring-round + $ultrawork` for parallel first-draft preparation, not raw parallel agents that bypass the paper session.
+Use `$paperorchestra-research-swarm + $ultrawork + $autoresearch` for broad prior-work/search seed generation, not ad-hoc browsing that bypasses `prior_work_seed.json`, `citation_map.json`, or `references.bib`.
 Use `$paperorchestra-figure` when a manuscript needs pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures; figure work must stay tied to supported claims, source evidence, captions, and one-column/two-column placement.
 Use `$paperorchestra-visual-audit + $visual-verdict` when the compiled PDF itself must be inspected as pages. Do not make TeX-only claims about rendered layout, table overflow, figure readability, or visual style consistency.
 Use `$ultragoal` rather than raw `$ralph` for durable multi-step engine or repair work; reserve `$ralph` for explicitly requested single-owner persistence.

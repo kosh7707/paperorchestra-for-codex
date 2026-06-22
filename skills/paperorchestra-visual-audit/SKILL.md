@@ -52,7 +52,7 @@ Preferred source/MCP tool:
 visual_audit(cwd=..., pdf=..., render_dir=..., findings_json=..., output=...)
 ```
 
-CLI equivalent, only when the current installed/source command surface verifies it with `paperorchestra visual-audit --help` or `python -m paperorchestra.cli visual-audit --help`:
+CLI equivalent, only when the current installed/source command surface verifies it with `paperorchestra visual-audit --help` or `python -m paperorchestra.cli visual-audit --help`. Do not assume the installed CLI exposes `paperorchestra visual-audit`:
 
 ```bash
 paperorchestra visual-audit --pdf compiled.pdf --render-dir rendered-pages

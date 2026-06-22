@@ -51,7 +51,8 @@ Quality gate decides the next state; it does not silently perform an unbounded r
 
 - `$ralph`: machine-actionable repair steps exist and the user wants the loop to continue until the bounded PaperOrchestra stop condition.
 - `$ultrawork`: independent repair families can run in parallel, such as citations, section structure, reproducibility text, and figure/table cleanup.
-- `$autoresearch`: gate failures are citation/source-evidence gaps that can be solved by research.
+- `$paperorchestra-research-swarm`: gate failures are broad/multi-cluster citation/source-evidence gaps that can be solved by parallel web/source research before another repair or review pass.
+- `$autoresearch`: gate failures are single-lane citation/source-evidence gaps that can be solved by validator-gated research, or the validator gate inside `$paperorchestra-research-swarm`.
 - `$best-practice-research`: failures concern venue norms, conventional phrasing, section shape, or reviewer expectations.
 - `$ultraqa`: fresh live review and quality artifacts exist and the next need is adversarial final QA.
 - `$paperorchestra-figure`: failures concern figure-caption alignment, figure placement, unsupported visuals, or one-column/two-column readability.

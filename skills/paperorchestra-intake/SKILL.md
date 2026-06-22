@@ -66,7 +66,7 @@ If the user explicitly requests a fresh start, context reset, or new paper sessi
 
 - Use `$deep-interview` first for fresh or broad ambiguity; intake is the PaperOrchestra artifact wrapper around that clarification, not a replacement for it.
 - Use `$paperorchestra-status` first when a session may already contain reusable materials or stale decisions.
-- Do not start `$autoresearch`, `$ultrawork`, or `$ralph` from intake unless the missing decision is resolved; route to `$paperorchestra-plan` once author intent is clear enough.
+- Do not start `$paperorchestra-research-swarm`, `$autoresearch`, `$ultrawork`, or `$ralph` from intake unless the missing decision is resolved; route to `$paperorchestra-plan` once author intent is clear enough.
 
 ## Workflow
 

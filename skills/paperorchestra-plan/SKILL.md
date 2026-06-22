@@ -50,7 +50,8 @@ failure mode if omitted:
 
 - Prefer `$ralplan` when thesis, section order, RQs, evaluation design, or claim boundaries have multiple plausible choices.
 - Use `$best-practice-research` when the plan depends on venue norms, common section names, comparable-paper narrative structure, or reviewer expectations.
-- Use `$autoresearch` only for bounded related-work seed discovery needed to make the plan credible; do not turn planning into full citation writing.
+- Use `$paperorchestra-research-swarm` only when bounded related-work seed discovery needed to make the plan credible is broad/multi-cluster citation/source work and should produce `prior_work_seed.json`, `citation_map.json`, or `references.bib` evidence before approval. Do not turn planning into full citation writing.
+- Use `$autoresearch` only for single-lane related-work seed discovery needed to make the plan credible, or as the validator gate inside `$paperorchestra-research-swarm`.
 - Use `$ultrawork` only when independent planning lanes are clearly separable, such as material inventory, related-work seed clustering, and table/figure planning.
 - Recommend `$ultragoal` after the author approves a substantial implementation/repair plan that should be completed as durable sequential stories.
 - Recommend `$team` with `$ultragoal` when approved follow-up work has separable lanes, such as plan-gate code, skeleton generation, review integration, and verification.

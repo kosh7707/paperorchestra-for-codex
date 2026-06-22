@@ -88,6 +88,18 @@ figure_gate.report.json: present / missing / stale / not applicable
 
 For a figure-bearing manuscript, expected figure artifacts must not silently disappear. If an expected artifact is missing or stale, block and route to `$paperorchestra-figure` or the owning quality/status workflow before claiming the figure is integrated.
 
+## Command surface
+
+Prefer MCP/source figure tools when attached. Installed CLI fallback is staged and must be verified with `--help` before use:
+
+```bash
+paperorchestra generate-plots --provider mock
+paperorchestra generate-plots --provider shell --provider-command "$PAPERO_MODEL_CMD"
+paperorchestra review-figure-placement --output figure-placement-review.json
+```
+
+Use `--provider mock` only for local smoke tests. For evidence-bearing figure work, use a live/shell provider or source/MCP tool, then inspect `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, and `figure-placement-review.json` before claiming the figure artifacts are ready.
+
 ## Output policy
 
 Use vector-first outputs for precise paper content:

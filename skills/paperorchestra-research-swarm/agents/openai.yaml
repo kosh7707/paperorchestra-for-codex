@@ -1,0 +1,4 @@
+interface:
+  display_name: "PaperOrchestra Research Swarm"
+  short_description: "Parallel source-backed paper research"
+  default_prompt: "Use $paperorchestra-research-swarm to run parallel web/source research for PaperOrchestra prior work and citations."

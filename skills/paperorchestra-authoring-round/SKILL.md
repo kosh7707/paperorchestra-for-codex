@@ -47,7 +47,8 @@ Before drafting prose or creating a local/manual authoring fallback, evaluate an
 | --- | --- |
 | User says “continue”, “keep going”, “바로 진행”, “계속”, or otherwise asks the system to carry a bounded sequence forward | Invoke `$ralph` as the single-owner supervision loop for status → one authoring round → status/readback → next blocker/repair. Do not silently do a manual one-shot draft unless the user explicitly asks to avoid persistence. |
 | Two or more independent pre-draft lanes are open (`two or more independent pre-draft lanes`), e.g. broad material inventory, prior-work/search seed, figure/table planning, section-structure benchmarking, claim-map/skeleton refresh | Invoke `$ultrawork` first so those lanes are planned/executed in parallel or explicitly ruled out with evidence. |
-| Related Work, citation candidates, bibliography, or source-backed evidence are missing and machine-solvable | Invoke `$autoresearch` or the PaperOrchestra research surface before finalizing Introduction/Related Work claims. If live/source research is unavailable, block citation claims instead of replacing `$autoresearch` with invented TODO prose. |
+| Related Work, citation candidates, bibliography, or source-backed evidence are missing and machine-solvable, and the gap is broad/multi-cluster citation/source work | Invoke `$paperorchestra-research-swarm` before drafting prose so `$ultrawork`/`$team` can run parallel web lanes and `$autoresearch` can validate completion. |
+| Related Work, citation candidates, bibliography, or source-backed evidence are missing and machine-solvable, but the gap is a single bounded source task | Invoke `$autoresearch` or the PaperOrchestra research surface before finalizing Introduction/Related Work claims. If live/source research is unavailable, block citation claims instead of replacing `$autoresearch` with invented TODO prose. |
 | Venue/style norms or comparable-paper structure are a live concern | Invoke `$best-practice-research` before locking prose shape. |
 
 If a required companion cannot run because OMX runtime, credentials, provider configuration, or a validator is unavailable, stop with a PaperOrchestra blocker or create only clearly marked non-authoritative scaffolding. The final card must list the companion decision and evidence; “recommended next” is not enough for a trigger that was present in the current turn.
@@ -55,7 +56,8 @@ If a required companion cannot run because OMX runtime, credentials, provider co
 Companion usage by workflow:
 
 - `$ultrawork`: split independent pre-draft lanes before the round when materials are large or broad, e.g. prior-work search, paper-structure benchmarking, material inventory, and figure/table planning.
-- `$autoresearch`: run when Related Work, citation candidates, or source-backed evidence are missing and can be found by machine research.
+- `$paperorchestra-research-swarm`: run before manuscript prose when broad/multi-cluster citation/source gaps, missing `prior_work_seed.json`, missing `citation_map.json`, or missing `references.bib` require parallel web/source lanes. It must invoke `$ultrawork` or `$team` for subagent lanes and `$autoresearch` for the validator gate.
+- `$autoresearch`: run when a single bounded Related Work, citation candidate, or source-backed evidence task can be found by machine research, or as the validator gate inside `$paperorchestra-research-swarm`.
 - `$best-practice-research`: use for venue/style conventions, section-shape norms, and positioning patterns from comparable papers before locking prose.
 - `$ultragoal`: use for durable implementation/repair follow-up that must survive multiple stories; do not use it to bypass the bounded authoring round.
 - `$team`: use with `$ultragoal` only when a durable implementation/repair plan has separable lanes; PaperOrchestra still owns manuscript artifacts.

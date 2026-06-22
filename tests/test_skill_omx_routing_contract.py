@@ -29,6 +29,7 @@ def test_all_paperorchestra_skills_have_omx_guidance() -> None:
         "paperorchestra-live-review",
         "paperorchestra-plan",
         "paperorchestra-quality-gate",
+        "paperorchestra-research-swarm",
         "paperorchestra-setup",
         "paperorchestra-status",
     }
@@ -47,6 +48,7 @@ def test_router_names_core_omx_companion_workflows() -> None:
         "$ralplan",
         "$ultrawork",
         "$ralph",
+        "$paperorchestra-research-swarm",
         "$autoresearch",
         "$best-practice-research",
         "$ultragoal",
@@ -62,6 +64,7 @@ def test_authoring_round_routes_research_parallel_and_persistent_lanes() -> None
         "Mandatory companion preflight",
         "Required action before drafting",
         "$ultrawork",
+        "$paperorchestra-research-swarm",
         "$autoresearch",
         "$best-practice-research",
         "$ralph",
@@ -92,7 +95,8 @@ def test_router_continue_and_machine_solvable_gaps_are_not_passive_hints() -> No
         "“계속”",
         "use `$ralph`",
         "$ultrawork`: mandatory before first-draft authoring",
-        "$autoresearch`: mandatory when machine-solvable citation/source discovery",
+        "$paperorchestra-research-swarm`: mandatory before raw `$autoresearch`",
+        "$autoresearch`: mandatory as the validator-gated research loop",
     )
 
 
@@ -101,6 +105,7 @@ def test_review_and_quality_gate_route_followup_workflows() -> None:
         "paperorchestra-live-review",
         "OMX companion routing",
         "$autoresearch",
+        "$paperorchestra-research-swarm",
         "$best-practice-research",
         "$ralph",
         "$ultraqa",
@@ -109,6 +114,7 @@ def test_review_and_quality_gate_route_followup_workflows() -> None:
         "paperorchestra-quality-gate",
         "OMX companion routing",
         "$autoresearch",
+        "$paperorchestra-research-swarm",
         "$best-practice-research",
         "$ralph",
         "$ultrawork",
@@ -159,6 +165,7 @@ def test_status_reports_next_paperorchestra_skill_and_omx_companion() -> None:
         "$ultragoal",
         "$team + $ultragoal",
         "$paperorchestra-live-review + $autoresearch",
+        "$paperorchestra-research-swarm + $ultrawork + $autoresearch",
         "$paperorchestra-live-review + $best-practice-research",
         "$paperorchestra-quality-gate + $ultraqa",
         "$paperorchestra-visual-audit + $visual-verdict",

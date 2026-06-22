@@ -37,7 +37,8 @@ Use `../paperorchestra/references/academic-writing.md` as the critic rubric when
 
 Live review should stop after reporting evidence, but it must invoke or name the right follow-up workflow according to the active trigger:
 
-- `$autoresearch`: citation support is missing, weak, stale, or machine-solvable source discovery is needed. If the current turn asks to continue resolving citation/source gaps, invoke `$autoresearch` before another review/authoring pass; do not replace it with local TODO prose.
+- `$paperorchestra-research-swarm`: citation support is missing, weak, stale, or machine-solvable source discovery is needed and the gap is broad/multi-cluster citation/source work. If the current turn asks to continue resolving those gaps, invoke `$paperorchestra-research-swarm` before another review/authoring pass; do not replace it with local TODO prose.
+- `$autoresearch`: citation support is missing, weak, stale, or machine-solvable source discovery is needed but the gap is single-lane or already scoped. If the current turn asks to continue resolving citation/source gaps, invoke `$autoresearch` before another review/authoring pass; do not replace it with local TODO prose.
 - `$best-practice-research`: the critic flags venue conventions, section structure, terminology, or related-work positioning as nonstandard.
 - `$ralph`: review findings are machine-actionable and the user wants a persistent repair loop over PaperOrchestra artifacts.
 - `$ultraqa`: live review is already fresh and the user wants hostile final-readiness checks rather than another normal review.

@@ -67,7 +67,8 @@ Name both the PaperOrchestra workflow and the OMX companion when a companion wou
 - `$paperorchestra-authoring-round + $ralph`: the user wants a persistent bounded loop over authoring, status, gate, and repair; invoke it on “continue/keep going/계속/바로 진행” after plan approval unless the user explicitly asks for a one-shot local step.
 - `$ultragoal`: durable multi-story implementation or repair follow-up is needed after a plan/gate/review produces concrete work items.
 - `$team + $ultragoal`: durable follow-up is also parallelizable; Team runs lanes, Ultragoal owns the ledger/checkpoints.
-- `$paperorchestra-live-review + $autoresearch`: citation/source evidence is missing, weak, stale, or machine-solvable; invoke it before claiming Related Work, citation support, or source-backed positioning is complete.
+- `$paperorchestra-research-swarm + $ultrawork + $autoresearch`: citation/source evidence is missing, weak, stale, or machine-solvable and the gap is broad/multi-cluster; invoke it before claiming Related Work, citation support, or source-backed positioning is complete.
+- `$paperorchestra-live-review + $autoresearch`: citation/source evidence is missing, weak, stale, or machine-solvable but the gap is single-lane or review-shaped; invoke it before claiming Related Work, citation support, or source-backed positioning is complete.
 - `$paperorchestra-live-review + $best-practice-research`: venue/style norms or related-work positioning need external best-practice evidence.
 - `$paperorchestra-quality-gate + $ultraqa`: fresh review/gate artifacts exist and adversarial final QA is the next safe action.
 - `$paperorchestra-visual-audit + $visual-verdict`: compiled PDF/page screenshots need rendered-page layout, table overflow, figure readability, or cross-figure style review.

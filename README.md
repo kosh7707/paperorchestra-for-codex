@@ -58,6 +58,7 @@ You usually only need `$paperorchestra`, but these entry points are available:
 - `$paperorchestra-status` — inspect current materials, artifacts, trust, and next action.
 - `$paperorchestra-intake` — interview the author and inventory materials.
 - `$paperorchestra-plan` — create or revise `paper-plan.md` before drafting.
+- `$paperorchestra-research-swarm` — run parallel source-backed web research for broad prior-work/citation gaps before drafting or review.
 - `$paperorchestra-authoring-round` — run one bounded first-draft/revision round with outline/narrative refresh, prior-work positioning, and critic artifacts.
 - `$paperorchestra-figure` — draft figure plans and caption/claim/placement checks.
 - `$paperorchestra-visual-audit` — render compiled PDFs into page images/contact sheets and route layout findings into repair.
@@ -74,7 +75,7 @@ Do not invent results, citations, figures, or claims. Use only materials you hav
 
 ```bash
 paperorchestra doctor
-paperorchestra environment --summary
+paperorchestra environment
 paperorchestra --help
 ```
 

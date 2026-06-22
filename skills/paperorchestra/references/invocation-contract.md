@@ -10,7 +10,7 @@ When a PaperOrchestra skill says another skill is **required**, stop the current
 
 ## OMX runtime workflows
 
-For OMX-owned workflows such as `$deep-interview`, `$ralplan`, `$ultrawork`, `$ralph`, `$team`, `$ultraqa`, `$autoresearch`, `$best-practice-research`, and `$visual-verdict`:
+For OMX-owned workflows such as `$deep-interview`, `$ralplan`, `$ultrawork`, `$ralph`, `$team`, `$ultraqa`, `$autoresearch`, `$best-practice-research`, `$paperorchestra-research-swarm`, and `$visual-verdict`:
 
 1. read the target skill instructions first;
 2. follow that skill's state/artifact protocol;
