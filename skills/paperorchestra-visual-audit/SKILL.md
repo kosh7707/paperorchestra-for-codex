@@ -5,6 +5,10 @@ description: Render and inspect compiled PaperOrchestra PDFs at page-image level
 
 # PaperOrchestra Visual Audit
 
+## Invocation contract
+
+Before executing any `$skill`, `omx`, `codex`, MCP, or PaperOrchestra CLI action from this skill, read `../paperorchestra/references/invocation-contract.md` and follow it. Required companion skills must be invoked, not merely recommended.
+
 Use this skill after a manuscript has a compiled PDF or when a reviewer says the visual result cannot be judged from TeX alone. The goal is not final artwork generation; the goal is to create strong draft diagnostics and route repairable findings back into PaperOrchestra before bothering the author.
 
 ## Core contract
@@ -48,12 +52,14 @@ Preferred source/MCP tool:
 visual_audit(cwd=..., pdf=..., render_dir=..., findings_json=..., output=...)
 ```
 
-CLI equivalent:
+CLI equivalent, only when the current installed/source command surface verifies it with `paperorchestra visual-audit --help` or `python -m paperorchestra.cli visual-audit --help`:
 
 ```bash
 paperorchestra visual-audit --pdf compiled.pdf --render-dir rendered-pages
 paperorchestra visual-audit --pdf compiled.pdf --findings-json page-visual-findings.json
 ```
+
+If neither command exists, do not invent a CLI fallback. Use the attached MCP/source tool if visible, or block with the missing command named and route to `$paperorchestra-quality-gate` / `$paperorchestra-figure` only for non-rendered evidence checks.
 
 The command writes:
 
@@ -89,7 +95,7 @@ Imported findings should use this compact schema:
 
 Classify before handoff:
 
-- `automatic`: missing/stale page layout review or render evidence failure; rerun `paperorchestra visual-audit` after render prerequisites are restored.
+- `automatic`: missing/stale page layout review or render evidence failure; rerun a verified visual-audit MCP/source/CLI path after render prerequisites are restored.
 - `semi_auto`: table overflow, unreadable figure, float clump, heading orphan, column imbalance, excessive whitespace, visual style inconsistency, visual review pending. Generate `visual_repair_brief.json`, then `visual_repair_candidate.json`; let PaperOrchestra/Critic propose a bounded candidate before author handoff and rerun the audit after adoption.
 - `human_needed`: final artwork replacement, semantic visual evidence dispute, aesthetic preference, or adoption/rejection of an already prepared repair candidate. Give the author exact decisions/artifacts needed; do not say only “the picture is bad.”
 

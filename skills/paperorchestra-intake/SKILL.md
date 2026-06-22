@@ -5,6 +5,10 @@ description: Run the PaperOrchestra intake interview and material handoff workfl
 
 # PaperOrchestra Intake
 
+## Invocation contract
+
+Before executing any `$skill`, `omx`, `codex`, MCP, or PaperOrchestra CLI action from this skill, read `../paperorchestra/references/invocation-contract.md` and follow it. Required companion skills must be invoked, not merely recommended.
+
 Use this after `$deep-interview` has clarified the author intent, or when the current user message already contains all required intent decisions. The output is an intake handoff, not a draft manuscript.
 
 ## Principle
@@ -20,7 +24,7 @@ Do not jump from “I want to write a paper” to `paper.full.tex`. First establ
 - claims explicitly disallowed;
 - missing human decisions.
 
-Wrap OMX interview behavior: invoke `$deep-interview` before writing intake whenever author intent is missing or ambiguous. Ask only decision-shaping questions, keep them short, and stop once the next artifact can be written. Use direct Socratic gating only as an explicit fallback when `$deep-interview` is unavailable; state that fallback before asking.
+Wrap OMX interview behavior: invoke `$deep-interview` before writing intake whenever author intent is missing or ambiguous. Ask only decision-shaping questions, keep them short, and stop once the next artifact can be written. Use direct Socratic gating only as an explicit fallback outside an available OMX runtime; state that fallback before asking, mark the PaperOrchestra intake blocked, and do not write `paper-intake.md` in the same turn.
 
 ## Mandatory deep-interview gate
 
@@ -36,6 +40,13 @@ Required decisions before writing `paper-intake.md`:
 - experiment/result maturity and whether placeholders are allowed;
 - citation strategy or known related-work seeds;
 - allowed claims, disallowed claims, and non-goals.
+
+Required invocation evidence before writing `paper-intake.md`:
+
+- either the current user message explicitly answers every required decision above;
+- or a resolved `$deep-interview` handoff artifact path under `.omx/specs/deep-interview-*.md`, created from the same material inventory/output workspace.
+
+If neither exists, stop after inventory and execute `$deep-interview`; do not create an intake handoff.
 
 ## Academic writing doctrine
 
@@ -68,7 +79,7 @@ If the user explicitly requests a fresh start, context reset, or new paper sessi
    - experiment status and whether numbers may be placeholders;
    - citation strategy and known related-work seeds;
    - claim boundaries and non-goals.
-5. Write `paper-intake.md` only after `$deep-interview` or the current user message supplies the required decisions, or after the author explicitly authorizes placeholders for the still-open decisions. Use a user-supplied output workspace or a newly created, clearly named workspace for this run; do not reuse an old `/tmp` directory unless the user explicitly identifies it as current.
+5. Write `paper-intake.md` only after `$deep-interview` produces a handoff artifact or the current user message supplies the required decisions, or after the author explicitly authorizes placeholders for the still-open decisions. Use a user-supplied output workspace or a newly created, clearly named workspace for this run; do not reuse an old `/tmp` directory unless the user explicitly identifies it as current.
 6. Recommend `$paperorchestra-plan` next when enough information exists to propose a manuscript plan.
 
 ## paper-intake.md shape

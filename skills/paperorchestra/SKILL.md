@@ -5,6 +5,10 @@ description: Route PaperOrchestra paper-writing requests to the right explicit w
 
 # PaperOrchestra Router
 
+## Invocation contract
+
+Before executing any `$skill`, `omx`, `codex`, MCP, or PaperOrchestra CLI action from this skill, read `references/invocation-contract.md` and follow it. Required companion skills must be invoked, not merely recommended.
+
 Use this skill as the thin front door for the packaged Codex/OMX paper-writing engine. Do not dump README. Inspect state, choose the narrowest operational skill, and preserve the v1 safety boundary.
 
 ## Safety posture
@@ -48,6 +52,24 @@ For a new paper request, a material path plus an output path is **not** enough t
 Do not collapse `$deep-interview`, `$paperorchestra-intake`, and `$paperorchestra-plan` into one turn unless the user has already supplied explicit answers for paper type, target venue/format, central thesis, evidence/result maturity, placeholder policy, citation strategy, and claim boundaries. If those answers are absent or inferred only from repository docs, route to `$deep-interview` first. `$paperorchestra-intake` may only write the handoff after the interview resolves or explicitly defers those decisions.
 
 The router must not treat `$paperorchestra-intake` as a substitute for `$deep-interview`. Intake is the PaperOrchestra artifact wrapper around resolved interview answers; `$deep-interview` is the ambiguity-gating conversation before intake and plan.
+
+## Deep-interview invocation contract
+
+`$deep-interview` is an OMX skill, not a `paperorchestra` CLI subcommand. To invoke it, the main agent must load the installed `deep-interview` skill instructions and execute that workflow. Do not merely mention `$deep-interview` as the next recommendation.
+
+In an attached tmux OMX runtime, a valid invocation includes:
+
+1. read the `deep-interview` skill;
+2. initialize/persist `deep-interview` mode state with `omx state write`;
+3. ask each interview round through `OMX_QUESTION_RETURN_PANE=$TMUX_PANE omx question --input '<json>' --json` with `source:"deep-interview"`;
+4. write a resolved handoff artifact under `.omx/specs/deep-interview-*.md` and transcript under `.omx/interviews/` before handing off to intake/plan.
+
+If that runtime path is unavailable, ask exactly one fallback question and mark the run blocked for PaperOrchestra intake; do not write `paper-intake.md` or `paper-plan.md` from fallback questioning in the same turn.
+
+Before `$paperorchestra-intake` or `$paperorchestra-plan`, require either:
+
+- an explicit current user message that answers all required intake decisions; or
+- a deep-interview handoff artifact path from `.omx/specs/deep-interview-*.md` plus the material inventory it was based on.
 
 Do not route directly to authoring when no approved `paper-plan.md` exists, unless the user explicitly asks to bypass planning.
 

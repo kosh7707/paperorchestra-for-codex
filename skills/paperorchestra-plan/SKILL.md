@@ -5,6 +5,10 @@ description: Create or revise a PaperOrchestra paper-plan.md v3 contract for aut
 
 # PaperOrchestra Plan
 
+## Invocation contract
+
+Before executing any `$skill`, `omx`, `codex`, MCP, or PaperOrchestra CLI action from this skill, read `../paperorchestra/references/invocation-contract.md` and follow it. Required companion skills must be invoked, not merely recommended.
+
 Use this after `$deep-interview` and `$paperorchestra-intake`, or when the current user message already contains all required intake decisions and materials. The output is `paper-plan.md`, not `paper.full.tex`.
 
 ## Principle
@@ -19,7 +23,7 @@ Wrap OMX planning behavior: use `$plan`/`$ralplan` style tradeoff review for sec
 
 Do not write `paper-plan.md` for a new paper until `$deep-interview` has resolved the author intent and a real intake has happened. A generated material inventory, repository README, or inferred thesis is not enough.
 
-Before planning, verify that `paper-intake.md` exists from a resolved interview, or that the current user message explicitly answers all intake decisions: paper type, target venue/format, central thesis, experiment/result maturity, placeholder policy, citation strategy, allowed claims, disallowed claims, and non-goals. If any author-blocking decision is missing, route back to `$deep-interview` / `$paperorchestra-intake` instead of drafting the plan.
+Before planning, verify that `paper-intake.md` exists from a resolved `$deep-interview` handoff, or that the current user message explicitly answers all intake decisions: paper type, target venue/format, central thesis, experiment/result maturity, placeholder policy, citation strategy, allowed claims, disallowed claims, and non-goals. A valid resolved interview should have a referenced `.omx/specs/deep-interview-*.md` artifact or equivalent explicit current-turn answers. If any author-blocking decision is missing, route back to `$deep-interview` / `$paperorchestra-intake` instead of drafting the plan.
 
 If an existing `paper-intake.md` lists unresolved `human-needed` decisions that affect thesis, claim strength, evidence boundaries, venue, or placeholder policy, route back to `$deep-interview` and then `$paperorchestra-intake`; do not “fill in” those decisions from source materials.
 

@@ -5,6 +5,10 @@ description: Verify the Codex/OMX paper-writing engine environment, session, pro
 
 # PaperOrchestra Setup
 
+## Invocation contract
+
+Before executing any `$skill`, `omx`, `codex`, MCP, or PaperOrchestra CLI action from this skill, read `../paperorchestra/references/invocation-contract.md` and follow it. Required companion skills must be invoked, not merely recommended.
+
 Run this before live review, quality gates, or authoring rounds when environment readiness is uncertain.
 
 ## Checks

@@ -5,11 +5,15 @@ description: Run the bounded PaperOrchestra quality gate and QA-loop state trans
 
 # PaperOrchestra Quality Gate
 
+## Invocation contract
+
+Before executing any `$skill`, `omx`, `codex`, MCP, or PaperOrchestra CLI action from this skill, read `../paperorchestra/references/invocation-contract.md` and follow it. Required companion skills must be invoked, not merely recommended.
+
 Use this for state-machine verification. It may call critics, but its job is to decide the current quality/repair state, not to perform an unbounded writing loop.
 
 ## Bounded order
 
-Run only the needed suffix if fresh artifacts already exist; otherwise follow this order. Preferred MCP/source gate: `quality_gate(...)` or, when verified available, `paperorchestra quality-gate --no-fail-on-block`. Installed CLI fallback: `validate-current` → `critique` → `quality-eval` → `qa-loop-plan` → bounded `qa-loop-step`. The citation-support stage is `critique --citation-evidence-mode web`:
+Run only the needed suffix if fresh artifacts already exist; otherwise follow this order. Preferred MCP/source gate: `quality_gate(...)` or a CLI gate only when `paperorchestra quality-gate --help` verifies it exists. Installed CLI fallback: `validate-current` → `critique` → `quality-eval` → `qa-loop-plan` → bounded `qa-loop-step`. The citation-support stage is `critique --citation-evidence-mode web`:
 
 ```bash
 paperorchestra validate-current
@@ -20,6 +24,8 @@ paperorchestra qa-loop-step --quality-mode claim_safe --max-iterations 1
 ```
 
 `run` alone is draft generation, not full quality approval. A full quality gate must include validation, compile where allowed, critic/citation evidence, `quality-eval`, `qa-loop-plan`, and at most a bounded `qa-loop-step`.
+
+After every state-changing gate command, run `paperorchestra status --json` and inspect the expected `quality-eval.json`, `qa-loop.plan.json`, `qa-loop-history.jsonl`, validation JSON, and repair-step artifacts before reporting the gate state.
 
 ## Academic writing doctrine
 
@@ -37,7 +43,7 @@ Use `../paperorchestra/references/academic-writing.md` for manuscript-quality ch
 
 For a figure-bearing manuscript, treat figure artifact availability as `present / missing / stale / not applicable`. Missing or stale expected figure artifacts are quality-gate blockers: route to `$paperorchestra-figure` instead of marking the figure/caption/placement accepted.
 
-For a compiled manuscript, treat page-visual artifacts as `present / missing / stale / pending reviewer / failing / not applicable`. Missing/stale `page-layout-review.json` or failed render evidence should be an automatic `paperorchestra visual-audit` step. Machine-actionable visual findings should create `visual_repair_brief.json` and then `visual_repair_candidate.json`, routing repair back to PaperOrchestra/Critic before asking the user. Human escalation is reserved for final artwork, semantic visual evidence disputes, aesthetic preference, or adoption/rejection of an already prepared candidate.
+For a compiled manuscript, treat page-visual artifacts as `present / missing / stale / pending reviewer / failing / not applicable`. Missing/stale `page-layout-review.json` or failed render evidence should route to `$paperorchestra-visual-audit` or a verified visual-audit command; do not assume the installed CLI exposes `paperorchestra visual-audit`. Machine-actionable visual findings should create `visual_repair_brief.json` and then `visual_repair_candidate.json`, routing repair back to PaperOrchestra/Critic before asking the user. Human escalation is reserved for final artwork, semantic visual evidence disputes, aesthetic preference, or adoption/rejection of an already prepared candidate.
 
 ## OMX companion routing
 

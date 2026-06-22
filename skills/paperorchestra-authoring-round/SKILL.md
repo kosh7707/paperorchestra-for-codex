@@ -5,6 +5,10 @@ description: Run one bounded PaperOrchestra manuscript authoring round. Use for 
 
 # PaperOrchestra Authoring Round
 
+## Invocation contract
+
+Before executing any `$skill`, `omx`, `codex`, MCP, or PaperOrchestra CLI action from this skill, read `../paperorchestra/references/invocation-contract.md` and follow it. Required companion skills must be invoked, not merely recommended.
+
 Use this for one manuscript round, not for indefinite autonomous writing. For new papers, require an approved `paper-plan.md` or an explicit user instruction to bypass the planning gate.
 
 ## Core contract
@@ -58,11 +62,11 @@ authoring_round(
 )
 ```
 
-If `background` is omitted, the MCP tool automatically backgrounds rounds that request `require_web_research` or `require_live_critic`. Poll `paperorchestra status --json`, tail the returned stderr log, and read the returned stdout JSON when the job exits.
+If `background` is omitted, the MCP tool automatically backgrounds rounds that request `require_web_research` or `require_live_critic`. Poll `paperorchestra status --json`, tail the returned stderr log, and read the returned stdout JSON when the job exits. If a job id is returned or discoverable, also poll `paperorchestra job-status --job-id <id>` / `run-status --job-id <id>` until terminal before claiming the round completed.
 
 CLI staged fallback:
 
-For MCP/source-checkout execution, `authoring_round` may delegate to `python -m paperorchestra.cli authoring-round`. For installed CLI fallback, do not assume `paperorchestra authoring-round` exists; first run `paperorchestra authoring-round --help`. If it fails, use the staged fallback and preserve the closest available artifact chain:
+For MCP/source-checkout execution, `authoring_round` may delegate to a source-only `authoring-round` surface only after `python -m paperorchestra.cli authoring-round --help` succeeds. For installed CLI fallback, do not assume `paperorchestra authoring-round` exists; first run `paperorchestra authoring-round --help`. If it fails, use the staged fallback and preserve the closest available artifact chain:
 
 ```bash
 paperorchestra research-prior-work --provider shell --provider-command "$PAPERO_MODEL_CMD" --import
@@ -76,13 +80,13 @@ Use mock providers or `--citation-evidence-mode heuristic` only for explicit loc
 ## Round recipe
 
 1. Start with `$paperorchestra-status` and identify the current session/materials.
-2. Check for `paper-plan.md` approval through the plan gate. Prefer the current MCP `approve_plan` / CLI `paperorchestra approve-plan` workflow, which keeps the machine fingerprint in a hidden approval record; accept legacy in-text markers only as transitional compatibility. If missing or stale, route to `$paperorchestra-plan` unless the user explicitly bypassed planning.
+2. Check for `paper-plan.md` approval through the plan gate. Prefer MCP `approve_plan` when attached. Use a CLI approval command only after `paperorchestra <approval-command> --help` verifies it exists; otherwise accept explicit author approval text/marker only as transitional compatibility. If approval is missing or stale, route to `$paperorchestra-plan` unless the user explicitly bypassed planning.
 3. Generate or refresh `paper-skeleton.md` from the approved plan plus outline/narrative/claim/citation planning before manuscript prose when the engine supports it; if the skeleton is stale or tries to change the approved contract, route back to `$paperorchestra-plan`.
 4. If a figure-dependent section needs a pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figure before prose can be coherent, route to `$paperorchestra-figure` before finalizing that section.
 5. Run one `authoring_round` so pre-draft literature/positioning happens before manuscript writing.
 6. If TeX is configured, compile in the round; otherwise record compile as skipped.
-7. If a compiled PDF exists, route to `$paperorchestra-visual-audit` or run `paperorchestra visual-audit` so page screenshots/contact sheets are available before quality-gate claims about layout or visual evidence.
-8. If the MCP/source authoring-round returns `mode=background`, poll/tail the returned job paths until the underlying CLI finishes; then inspect `authoring-round.manifest.json`, `paper-skeleton.md` when produced, `positioning_brief.md`, `paper.full.tex`, `page-layout-review.json` when compiled, `citation_support_review.json`, and `revision_suggestions.json`. In installed staged fallback mode, `authoring-round.manifest.json` may not exist; inspect the stage artifacts actually produced by each command.
+7. If a compiled PDF exists, route to `$paperorchestra-visual-audit`, or run a visual-audit command only after the current CLI/source surface verifies it with `--help`, so page screenshots/contact sheets are available before quality-gate claims about layout or visual evidence.
+8. If the MCP/source authoring-round returns `mode=background`, poll/tail the returned job paths until the underlying CLI finishes; then run `paperorchestra status --json` and inspect `authoring-round.manifest.json`, `paper-skeleton.md` when produced, `positioning_brief.md`, `paper.full.tex`, `page-layout-review.json` when compiled, `citation_support_review.json`, and `revision_suggestions.json`. In installed staged fallback mode, `authoring-round.manifest.json` may not exist; inspect the stage artifacts actually produced by each command.
 9. Route to `$paperorchestra-quality-gate` only after the round has real review artifacts or the user asks for a gate.
 
 ## Edit boundaries

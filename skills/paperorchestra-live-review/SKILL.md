@@ -5,6 +5,10 @@ description: Run or verify a real PaperOrchestra live/model/web critic lane. Use
 
 # PaperOrchestra Live Critic Review
 
+## Invocation contract
+
+Before executing any `$skill`, `omx`, `codex`, MCP, or PaperOrchestra CLI action from this skill, read `../paperorchestra/references/invocation-contract.md` and follow it. Required companion skills must be invoked, not merely recommended.
+
 Use this when the goal is to review the current manuscript with real provider evidence, not to edit the paper or run the whole QA state machine.
 
 ## Preflight first

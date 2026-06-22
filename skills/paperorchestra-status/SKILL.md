@@ -5,6 +5,10 @@ description: Inspect PaperOrchestra state and recommend the next safe workflow. 
 
 # PaperOrchestra Status
 
+## Invocation contract
+
+Before executing any `$skill`, `omx`, `codex`, MCP, or PaperOrchestra CLI action from this skill, read `../paperorchestra/references/invocation-contract.md` and follow it. Required companion skills must be invoked, not merely recommended.
+
 Use this as the first operational skill before expensive or state-changing work. It is read-only except for optional evidence/status exports requested by the user.
 
 ## Inspect
@@ -46,7 +50,7 @@ Latest artifacts:
   quality gate:
   citation support:
 Recommended next round:
-  <setup needed | intake recommended | plan recommended | live-review recommended | quality-gate recommended | authoring-round recommended | figure-repair recommended | visual-audit recommended | human-needed answer required | materials missing | no safe paper action available>
+  <setup needed | deep-interview required | intake recommended | plan recommended | live-review recommended | quality-gate recommended | authoring-round recommended | figure-repair recommended | visual-audit recommended | human-needed answer required | materials missing | no safe paper action available>
 Reason:
 Human needed:
 ```
@@ -57,7 +61,7 @@ Check for stale manuscript hash mismatches between current `paper.full.tex` and 
 
 Name both the PaperOrchestra workflow and the OMX companion when a companion would materially improve the next step:
 
-- `$paperorchestra-intake + $deep-interview`: author intent, material boundaries, venue, experiment basis, or allowed claims are unclear.
+- `$deep-interview -> $paperorchestra-intake`: author intent, material boundaries, venue, experiment basis, or allowed claims are unclear. Run deep-interview first; intake only writes the handoff after the interview resolves.
 - `$paperorchestra-plan + $ralplan`: manuscript structure, RQs, evidence table shape, or contribution boundaries need consensus planning.
 - `$paperorchestra-authoring-round + $ultrawork`: independent pre-draft lanes can run in parallel before one bounded authoring round.
 - `$paperorchestra-authoring-round + $ralph`: the user wants a persistent bounded loop over authoring, status, gate, and repair.
@@ -72,8 +76,9 @@ Name both the PaperOrchestra workflow and the OMX companion when a companion wou
 ## Recommendation rules
 
 - Recommend `setup needed` when session/provider/compile prerequisites are missing.
-- Recommend `intake recommended` when runtime is ready but author intent, material paths, experiment basis, paper type, venue, or claim boundaries are not locked.
-- Recommend `plan recommended` when intake/materials are sufficient but no approved `paper-plan.md` exists.
+- Recommend `deep-interview required` when runtime is ready but author intent, experiment basis, paper type, venue, claim boundaries, non-goals, or decision boundaries are not locked.
+- Recommend `intake recommended` only when a resolved deep-interview handoff or explicit current-turn answers exist and `paper-intake.md` still needs to be written.
+- Recommend `plan recommended` when intake/materials are sufficient, intake is based on a resolved deep-interview handoff or explicit current-turn answers, but no approved `paper-plan.md` exists.
 - Recommend `live-review recommended` when current critic/citation evidence is mock, heuristic, local diagnostic, stale, or missing for the current manuscript hash.
 - Recommend `quality-gate recommended` when live or acceptable evidence exists but no fresh quality-eval/qa-loop plan exists.
 - Recommend `authoring-round recommended` after an approved plan exists and either no manuscript has been drafted yet, or review/gate evidence identifies machine-actionable manuscript improvements.
