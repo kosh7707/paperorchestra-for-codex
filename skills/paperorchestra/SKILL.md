@@ -31,7 +31,7 @@ For sibling workflow skills, the same guide is available at `../paperorchestra/r
 
 - `$paperorchestra-status`: answer “what is ready?”, “what changed?”, “which round next?”, stale artifact, trust-tier, and human-needed questions.
 - `$paperorchestra-setup`: verify install/session/provider/compile readiness before a real paper loop.
-- `$paperorchestra-intake`: interview the author and inventory materials when thesis, paper type, venue, experiment basis, or claim boundaries are not locked.
+- `$paperorchestra-intake`: convert a completed `$deep-interview` author clarification plus material inventory into `paper-intake.md` when thesis, paper type, venue, experiment basis, and claim boundaries are locked.
 - `$paperorchestra-plan`: create or revise `paper-plan.md` v3 as the compact author-approved contract before manuscript drafting.
 - `$paperorchestra-figure`: design, generate, or review pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures with claim/caption/placement alignment.
 - `$paperorchestra-visual-audit`: render compiled PDFs into page images/contact sheets, import visual findings, and route page-level visual/layout issues into `visual_repair_brief.json`.
@@ -39,13 +39,15 @@ For sibling workflow skills, the same guide is available at `../paperorchestra/r
 - `$paperorchestra-quality-gate`: run bounded validation/quality/QA state transitions and stop on `human_needed`, `failed`, or `ready_for_human_finalization`.
 - `$paperorchestra-authoring-round`: perform one evidence-bearing first-draft or revision round after plan approval.
 
-Default order for unclear first-use writing requests: `$paperorchestra-setup` if readiness is unknown → `$paperorchestra-status` → `$paperorchestra-intake` when materials/intent are not locked → `$paperorchestra-plan` → author approval → derived `paper-skeleton.md` when supported → `$paperorchestra-authoring-round`. The authoring round must do prior-work/search positioning before first-draft writing and critic/citation review after the draft exists.
+Default order for unclear first-use writing requests: `$paperorchestra-setup` if readiness is unknown → `$paperorchestra-status` / read-only material inventory → `$deep-interview` for author clarification → `$paperorchestra-intake` to write the intake handoff → `$paperorchestra-plan` → author approval → derived `paper-skeleton.md` when supported → `$paperorchestra-authoring-round`. The authoring round must do prior-work/search positioning before first-draft writing and critic/citation review after the draft exists.
 
 ## First-use interview gate
 
-For a new paper request, a material path plus an output path is **not** enough to write `paper-intake.md` or `paper-plan.md`. Treat that as permission to inspect materials read-only and create a material inventory only. Then stop and ask the author for missing paper-shaping decisions.
+For a new paper request, a material path plus an output path is **not** enough to write `paper-intake.md` or `paper-plan.md`. Treat that as permission to inspect materials read-only and create a material inventory only. Then invoke `$deep-interview` with the inventory and stop on its author questions.
 
-Do not collapse `$paperorchestra-intake` and `$paperorchestra-plan` into one turn unless the user has already supplied explicit answers for paper type, target venue/format, central thesis, evidence/result maturity, placeholder policy, citation strategy, and claim boundaries. If those answers are absent or inferred only from repository docs, route to `$paperorchestra-intake` and end with concise interview questions.
+Do not collapse `$deep-interview`, `$paperorchestra-intake`, and `$paperorchestra-plan` into one turn unless the user has already supplied explicit answers for paper type, target venue/format, central thesis, evidence/result maturity, placeholder policy, citation strategy, and claim boundaries. If those answers are absent or inferred only from repository docs, route to `$deep-interview` first. `$paperorchestra-intake` may only write the handoff after the interview resolves or explicitly defers those decisions.
+
+The router must not treat `$paperorchestra-intake` as a substitute for `$deep-interview`. Intake is the PaperOrchestra artifact wrapper around resolved interview answers; `$deep-interview` is the ambiguity-gating conversation before intake and plan.
 
 Do not route directly to authoring when no approved `paper-plan.md` exists, unless the user explicitly asks to bypass planning.
 
@@ -53,7 +55,7 @@ Do not route directly to authoring when no approved `paper-plan.md` exists, unle
 
 PaperOrchestra owns paper state and artifacts; OMX companion skills supply orchestration power around that state. Invoke or recommend them explicitly when their trigger condition is present:
 
-- `$deep-interview`: broad ambiguity about thesis, claim boundaries, materials, venue, or experiment status before intake can be completed.
+- `$deep-interview`: mandatory for fresh or ambiguous paper requests before intake when thesis, claim boundaries, materials, venue, or experiment status are not already explicit.
 - `$ralplan`: section structure, RQs, evaluation design, or claim tradeoffs need consensus-style planning before author approval.
 - `$ultrawork`: independent lanes can run in parallel, such as prior-work search, material inventory, section-structure benchmarking, and draft-outline synthesis.
 - `$ralph`: the user wants a persistent completion loop over a bounded PaperOrchestra goal, such as authoring round → status → quality gate → repair.

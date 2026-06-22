@@ -5,7 +5,7 @@ description: Create or revise a PaperOrchestra paper-plan.md v3 contract for aut
 
 # PaperOrchestra Plan
 
-Use this after `$paperorchestra-intake` or when materials and author intent are sufficient but the manuscript contract is not approved. The output is `paper-plan.md`, not `paper.full.tex`.
+Use this after `$deep-interview` and `$paperorchestra-intake`, or when the current user message already contains all required intake decisions and materials. The output is `paper-plan.md`, not `paper.full.tex`.
 
 ## Principle
 
@@ -17,11 +17,11 @@ Wrap OMX planning behavior: use `$plan`/`$ralplan` style tradeoff review for sec
 
 ## Pre-plan intake gate
 
-Do not write `paper-plan.md` for a new paper until a real intake has happened. A generated material inventory, repository README, or inferred thesis is not enough.
+Do not write `paper-plan.md` for a new paper until `$deep-interview` has resolved the author intent and a real intake has happened. A generated material inventory, repository README, or inferred thesis is not enough.
 
-Before planning, verify that `paper-intake.md` exists or the current user message explicitly answers all intake decisions: paper type, target venue/format, central thesis, experiment/result maturity, placeholder policy, citation strategy, allowed claims, disallowed claims, and non-goals. If any author-blocking decision is missing, stop and ask concise interview questions instead of drafting the plan.
+Before planning, verify that `paper-intake.md` exists from a resolved interview, or that the current user message explicitly answers all intake decisions: paper type, target venue/format, central thesis, experiment/result maturity, placeholder policy, citation strategy, allowed claims, disallowed claims, and non-goals. If any author-blocking decision is missing, route back to `$deep-interview` / `$paperorchestra-intake` instead of drafting the plan.
 
-If an existing `paper-intake.md` lists unresolved `human-needed` decisions that affect thesis, claim strength, evidence boundaries, venue, or placeholder policy, route back to `$paperorchestra-intake`; do not “fill in” those decisions from source materials.
+If an existing `paper-intake.md` lists unresolved `human-needed` decisions that affect thesis, claim strength, evidence boundaries, venue, or placeholder policy, route back to `$deep-interview` and then `$paperorchestra-intake`; do not “fill in” those decisions from source materials.
 
 ## Academic writing doctrine
 
