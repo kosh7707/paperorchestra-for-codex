@@ -17,11 +17,23 @@ Use the narrowest available surface:
 
 ```bash
 command -v paperorchestra
+command -v paperorchestra-mcp
 paperorchestra --help
 paperorchestra doctor
 paperorchestra environment
 paperorchestra status --json
 ```
+
+When running from a repository checkout, also verify the checkout-local virtualenv commands when present:
+
+```bash
+test -x .venv/bin/paperorchestra
+test -x .venv/bin/paperorchestra-mcp
+.venv/bin/paperorchestra --version
+.venv/bin/paperorchestra doctor
+```
+
+Report a PATH/source mismatch when `command -v paperorchestra` points outside the current checkout while `.venv/bin/paperorchestra` exists, or when `paperorchestra doctor` reports a `package_context.package_root` that does not match the current checkout. Prefer the checkout-local `.venv/bin/paperorchestra` for setup evidence in that case. This is a setup warning, not a paper-readiness pass.
 
 If repo checkout commands are being tested, compare with `python3 -m paperorchestra.cli --help` and report any command-surface mismatch. Do not silently mix installed CLI examples with source-checkout-only commands.
 
@@ -31,6 +43,15 @@ If MCP is expected, distinguish registration from active attachment:
 codex mcp list
 paperorchestra doctor
 ```
+
+Do not treat `codex mcp list` `enabled` as sufficient. Inspect the PaperOrchestra doctor JSON field `paperorchestra_mcp_health` and report:
+
+- config registration: `paperorchestra_mcp_health.config.registered`, `enabled`, and registered MCP command;
+- binary health: `paperorchestra_mcp_health.binary.exists` and `resolved_command`;
+- stdio server health: `paperorchestra_mcp_health.server.ok`, `initialize_ok`, `tools_list_ok`, and missing expected tools;
+- active session attachment: `paperorchestra_mcp_health.active_session_attachment` plus whether `mcp__paperorchestra__...` tools are visible in this Codex session.
+
+If the registered MCP command points to a missing path, for example a deleted checkout `.venv/bin/paperorchestra-mcp`, setup is degraded even when `codex mcp list` says `enabled`. Repair by creating/installing the checkout venv (`python3 -m venv .venv && .venv/bin/python -m pip install -e .`) and re-running `scripts/register-codex-mcp.sh --use-local-venv`, or by registering an existing `paperorchestra-mcp` command explicitly. After repair, rerun `paperorchestra doctor` or `.venv/bin/paperorchestra doctor` and verify `binary.exists=true` and `server.ok=true`. A Codex restart may still be required before active MCP tools appear.
 
 ## Classify readiness
 
@@ -59,6 +80,10 @@ Session:
 Provider:
 Compile:
 MCP:
+MCP registration command:
+MCP binary/server:
+Active MCP attachment:
+PATH/source:
 Citation evidence:
 S2:
 Readiness:

@@ -81,8 +81,17 @@ def test_setup_and_status_use_current_environment_command() -> None:
     assert_mentions(
         "paperorchestra-setup",
         "command -v paperorchestra",
+        "command -v paperorchestra-mcp",
         "paperorchestra --help",
         "paperorchestra environment",
+        "paperorchestra doctor",
+        "paperorchestra_mcp_health",
+        "binary.exists",
+        "server.ok",
+        "active_session_attachment",
+        "registered MCP command",
+        ".venv/bin/paperorchestra",
+        ".venv/bin/paperorchestra-mcp",
         "python3 -m paperorchestra.cli --help",
         "command-surface mismatch",
     )
