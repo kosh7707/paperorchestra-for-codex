@@ -90,7 +90,7 @@ class McpServerSmokeRunner:
             "params": {
                 "protocolVersion": "2025-06-18" if self.transport == TRANSPORT_NEWLINE else "2024-11-05",
                 "capabilities": {},
-                "clientInfo": {"name": "paperorchestra-mcp-smoke", "version": "1.0.0"},
+                "clientInfo": {"name": "paperorchestra-mcp-smoke", "version": "1.1.0"},
             },
         }
 

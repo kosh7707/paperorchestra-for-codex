@@ -101,7 +101,7 @@ TOOLS: list[JSON] = [
     *UTILITY_TOOLS,
 ]
 
-SERVER_INFO = {"name": "paperorchestra-mcp", "version": "1.0.0"}
+SERVER_INFO = {"name": "paperorchestra-mcp", "version": "1.1.0"}
 
 
 def _handle_request(message: JSON) -> JSON | None:
