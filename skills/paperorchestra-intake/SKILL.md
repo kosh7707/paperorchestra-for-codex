@@ -22,6 +22,21 @@ Do not jump from “I want to write a paper” to `paper.full.tex`. First establ
 
 Wrap OMX interview behavior: ask only decision-shaping questions, keep them short, and stop once the next artifact can be written. Prefer `$deep-interview` when available and the ambiguity is broad; otherwise perform the same Socratic gating directly.
 
+## Mandatory interview gate
+
+For a fresh paper-writing request, perform at least one author interview turn before writing `paper-intake.md`, unless the user already supplied explicit answers to all required decisions in the current request. Repository documents may suggest a thesis or venue, but they do not count as author approval.
+
+If the user supplies only a material path, a read-only constraint, or an output directory, inspect materials read-only and create at most a material inventory/status note in the output workspace. Then stop with short questions. Do **not** write `paper-intake.md`, `paper-plan.md`, `paper-skeleton.md`, or manuscript files yet.
+
+Required decisions before writing `paper-intake.md`:
+
+- paper type / primary archetype;
+- target venue/format or explicit “unspecified is OK”;
+- central thesis or preferred framing;
+- experiment/result maturity and whether placeholders are allowed;
+- citation strategy or known related-work seeds;
+- allowed claims, disallowed claims, and non-goals.
+
 ## Academic writing doctrine
 
 Use `../paperorchestra/references/academic-writing.md` to classify the paper archetype and fill the generic paper arc before planning:
@@ -46,14 +61,14 @@ If the user explicitly requests a fresh start, context reset, or new paper sessi
 
 1. Inspect current state with `mcp__paperorchestra.inspect_state` when attached; otherwise use `paperorchestra status --json` and nearby artifact inspection.
 2. If no material path exists, ask for the material/project path before drafting.
-3. If material exists, inspect it read-only and create a compact material inventory.
+3. If material exists, inspect it read-only and create a compact material inventory. This inventory is not an intake handoff and must not imply author intent is locked.
 4. Ask only for missing decisions that cannot be inferred safely:
    - paper type: system pipeline, empirical study, benchmark paper, position paper, etc.;
    - target format/venue;
    - experiment status and whether numbers may be placeholders;
    - citation strategy and known related-work seeds;
    - claim boundaries and non-goals.
-5. Write `paper-intake.md` only in a user-supplied output workspace or a newly created, clearly named workspace for this run; do not reuse an old `/tmp` directory unless the user explicitly identifies it as current.
+5. Write `paper-intake.md` only after the author answers the required decisions or explicitly authorizes placeholders for the still-open decisions. Use a user-supplied output workspace or a newly created, clearly named workspace for this run; do not reuse an old `/tmp` directory unless the user explicitly identifies it as current.
 6. Recommend `$paperorchestra-plan` next when enough information exists to propose a manuscript plan.
 
 ## paper-intake.md shape

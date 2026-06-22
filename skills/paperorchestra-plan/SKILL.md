@@ -15,6 +15,14 @@ Planning is a human-visible gate. Do not start authoring rounds until the plan i
 
 Wrap OMX planning behavior: use `$plan`/`$ralplan` style tradeoff review for section structure, claims, evaluation shape, and risk boundaries. If OMX runtime is unavailable, perform the same planning directly and preserve the approval gate.
 
+## Pre-plan intake gate
+
+Do not write `paper-plan.md` for a new paper until a real intake has happened. A generated material inventory, repository README, or inferred thesis is not enough.
+
+Before planning, verify that `paper-intake.md` exists or the current user message explicitly answers all intake decisions: paper type, target venue/format, central thesis, experiment/result maturity, placeholder policy, citation strategy, allowed claims, disallowed claims, and non-goals. If any author-blocking decision is missing, stop and ask concise interview questions instead of drafting the plan.
+
+If an existing `paper-intake.md` lists unresolved `human-needed` decisions that affect thesis, claim strength, evidence boundaries, venue, or placeholder policy, route back to `$paperorchestra-intake`; do not “fill in” those decisions from source materials.
+
 ## Academic writing doctrine
 
 Read `../paperorchestra/references/academic-writing.md` before proposing or revising the section plan. The plan must instantiate:
@@ -46,7 +54,7 @@ failure mode if omitted:
 
 ## Workflow
 
-1. Read the current intake/material packet and inspect source artifacts read-only.
+1. Read the current intake/material packet and inspect source artifacts read-only. Confirm the intake gate above is satisfied before writing or revising `paper-plan.md`.
 2. Identify the paper archetype: system pipeline, empirical evaluation, benchmark/resource, position, survey, tool/demo, etc.
 3. Draft the thesis, argument contract, contribution list, non-contributions, and required caveats.
 4. Register only thesis-critical claims in a claim-support ledger. Use stable IDs (`C1`, `E1`, `S1`, `F1`, `T1`, `RW1`, `Q1`) so later critic, citation, visual, and repair artifacts can reference the contract without restating it.
@@ -54,7 +62,7 @@ failure mode if omitted:
 6. Map every section to rhetorical job, reader belief transition, claim refs, evidence refs, key moves, section-specific exclusions, completion checks, and blockers.
 7. Propose tables/figures with TODO cells where final numbers are not available. For each planned figure, include figure rhetorical job, supported claim, source evidence, caption contract, placement contract (`figure` vs `figure*` when known), output form, and TODO/final-artwork status. Route complex pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures to `$paperorchestra-figure`.
 8. Propose related-work positioning clusters and known seed papers/queries, but do not fabricate citations.
-9. Write `paper-plan.md` in the output workspace. For new plans, prefer a v3 approval contract and leave it unapproved until the author accepts it. When the author approves, use MCP `approve_plan` when attached or CLI `paperorchestra approve-plan` as fallback so the engine stores the machine contract fingerprint in a hidden approval record instead of exposing it in the plan text.
+9. Write `paper-plan.md` in the output workspace. For new plans, prefer a v3 approval contract and leave it unapproved until the author accepts it. When the author approves, use MCP `approve_plan` when attached. Use a CLI approval command only if the installed `paperorchestra --help` surface actually exposes one; otherwise record the explicit author approval text or marker in the output workspace and do not invent an unavailable CLI command.
 10. Stop for author approval or revision. Recommend `$paperorchestra-authoring-round` only after approval; recommend `$ultragoal` only for durable implementation/repair follow-up, not ordinary manuscript prose drafting.
 
 ## paper-plan.md v3 shape
@@ -136,7 +144,7 @@ For each section:
 - approval does not certify:
 - approved revision:
 - approved by:
-- approval command: MCP `approve_plan` or CLI `paperorchestra approve-plan`
+- approval command: MCP `approve_plan` when attached; otherwise use an installed CLI approval command only if `paperorchestra --help` exposes one, or record explicit author approval text/marker.
 ```
 
 Do not put full material inventories, detailed citation TODOs, or paragraph-level intent in `paper-plan.md`; route those to sidecar evidence artifacts or the derived `paper-skeleton.md`.
@@ -145,6 +153,6 @@ Do not put full material inventories, detailed citation TODOs, or paragraph-leve
 
 Stop when `paper-plan.md` exists and the next action is clear:
 
-- author approves -> run MCP `approve_plan` or CLI `paperorchestra approve-plan`, then `$paperorchestra-authoring-round`;
+- author approves -> record approval with MCP `approve_plan` when attached, with an exposed CLI approval command if available, or with explicit author approval text/marker; then `$paperorchestra-authoring-round`;
 - author requests changes -> revise `$paperorchestra-plan`;
 - material is insufficient -> return to `$paperorchestra-intake` or `$paperorchestra-status`.

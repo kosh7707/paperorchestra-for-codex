@@ -41,6 +41,12 @@ For sibling workflow skills, the same guide is available at `../paperorchestra/r
 
 Default order for unclear first-use writing requests: `$paperorchestra-setup` if readiness is unknown → `$paperorchestra-status` → `$paperorchestra-intake` when materials/intent are not locked → `$paperorchestra-plan` → author approval → derived `paper-skeleton.md` when supported → `$paperorchestra-authoring-round`. The authoring round must do prior-work/search positioning before first-draft writing and critic/citation review after the draft exists.
 
+## First-use interview gate
+
+For a new paper request, a material path plus an output path is **not** enough to write `paper-intake.md` or `paper-plan.md`. Treat that as permission to inspect materials read-only and create a material inventory only. Then stop and ask the author for missing paper-shaping decisions.
+
+Do not collapse `$paperorchestra-intake` and `$paperorchestra-plan` into one turn unless the user has already supplied explicit answers for paper type, target venue/format, central thesis, evidence/result maturity, placeholder policy, citation strategy, and claim boundaries. If those answers are absent or inferred only from repository docs, route to `$paperorchestra-intake` and end with concise interview questions.
+
 Do not route directly to authoring when no approved `paper-plan.md` exists, unless the user explicitly asks to bypass planning.
 
 ## OMX companion routing
