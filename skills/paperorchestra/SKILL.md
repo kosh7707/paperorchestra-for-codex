@@ -29,6 +29,12 @@ When a task involves paper planning, drafting, review, or repair, use `reference
 Phenomenon → Gap → Contribution → Evidence → Boundary → Implication
 ```
 
+Follow the academic-writing section topology discipline: headings are rhetorical
+boundaries, not length controls. Continuing, expanding, or targeting more pages
+should normally deepen existing argument moves. Route substantial heading-structure
+changes through `$paperorchestra-plan` or require the authoring-round topology
+necessity test.
+
 For sibling workflow skills, the same guide is available at `../paperorchestra/references/academic-writing.md` after installation.
 
 ## Route by intent
@@ -39,7 +45,7 @@ For sibling workflow skills, the same guide is available at `../paperorchestra/r
 - `$paperorchestra-plan`: create or revise `paper-plan.md` v3 as the compact author-approved contract before manuscript drafting.
 - `$paperorchestra-figure`: design, generate, or review pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures with claim/caption/placement alignment.
 - `$paperorchestra-visual-audit`: render compiled PDFs into page images/contact sheets, import visual findings, and route page-level visual/layout issues into `visual_repair_brief.json`.
-- `$paperorchestra-research-swarm`: run parallel, source-backed prior-work/citation discovery when Related Work, `citation_map.json`, `references.bib`, or evidence verification needs broad/multi-cluster web research.
+- `$paperorchestra-research-swarm`: run parallel, source-backed prior-work/citation discovery when Related Work, citation-bearing prose, `citation_map.json`, `references.bib`, or evidence verification is missing/weak/stale, local-only, or needs broad/multi-cluster web research before authoring/review/gate claims.
 - `$paperorchestra-live-review`: run a real live/model/web critic lane and report trust tiers without silently using mock/heuristic paths.
 - `$paperorchestra-quality-gate`: run bounded validation/quality/QA state transitions and stop on `human_needed`, `failed`, or `ready_for_human_finalization`.
 - `$paperorchestra-authoring-round`: perform one evidence-bearing first-draft or revision round after plan approval.
@@ -87,13 +93,19 @@ Do not treat companion workflow names as decorative hints. If a trigger below is
 
 Merely naming the companion as a future recommendation is insufficient when the current turn asks to continue through the triggered work. In particular, after plan approval, user messages such as “continue”, “keep going”, “바로 진행”, or “계속” activate the bounded persistence branch: use `$ralph` around the next PaperOrchestra action unless the user explicitly asks for a one-shot, non-persistent local step.
 
+### Citation/source evidence gate
+
+For paper planning, authoring, live review, or quality-gate work that will create, rewrite, or validate Introduction, Related Work, positioning, citation-bearing claims, or source-backed evidence, do not treat the mere presence of `citation_map.json` or `references.bib` as sufficient. The active paper state must have current, source-backed evidence for the relevant manuscript/plan state, such as `prior_work_seed.json`, `candidate_papers.json`, `citation_registry.json`, `citation_support_review.json`, a research-swarm manifest, or an `$autoresearch` validator result. Treat evidence as insufficient if it is missing, weak, stale for the current manuscript hash or plan state, heuristic/mock/local-only, candidate-only without support notes, or produced outside the current PaperOrchestra workspace.
+
+When that gate fails and the gap is broad, multi-cluster, or would benefit from parallel web/source lanes, `$paperorchestra-research-swarm` + `$ultrawork` + `$autoresearch` is required before PaperOrchestra may finalize Related Work, citation support, or source-backed positioning. When the gap is single-lane, `$autoresearch` or `$paperorchestra-live-review` + `$autoresearch` is required before finalizing those claims. If runtime, web, provider, or validator support is unavailable, record the skip/block reason in a PaperOrchestra artifact and write only clearly marked non-authoritative scaffolding; do not silently proceed with local/manual bibliography-only drafting.
+
 Invoke or recommend these companions explicitly when their trigger condition is present:
 
 - `$deep-interview`: mandatory for fresh or ambiguous paper requests before intake when thesis, claim boundaries, materials, venue, or experiment status are not already explicit.
 - `$ralplan`: section structure, RQs, evaluation design, or claim tradeoffs need consensus-style planning before author approval.
 - `$ultrawork`: mandatory before first-draft authoring when two or more independent pre-draft lanes are open, such as material inventory, prior-work/search seed, section-structure benchmarking, figure/table planning, and draft-outline synthesis.
 - `$ralph`: mandatory when the user asks to continue/persist through a bounded PaperOrchestra sequence, such as status → authoring round → quality gate → repair, or when a previous round ended with machine-actionable blockers and the user says to keep going.
-- `$paperorchestra-research-swarm`: mandatory before raw `$autoresearch` when machine-solvable citation/source discovery, bibliography expansion, or evidence verification is broad/deep, spans multiple clusters, or benefits from parallel web lanes. This skill invokes `$ultrawork`/`$team` for subagent lanes and `$autoresearch` for the validator gate.
+- `$paperorchestra-research-swarm`: mandatory before raw `$autoresearch` and before authoring/review/gate claims when machine-solvable citation/source discovery, bibliography expansion, or evidence verification is missing/weak/stale/local-only and is broad/deep, spans multiple clusters, or benefits from parallel web lanes. This skill invokes `$ultrawork`/`$team` for subagent lanes and `$autoresearch` for the validator gate.
 - `$autoresearch`: mandatory as the validator-gated research loop for single-lane citation/source discovery, or as the completion gate inside `$paperorchestra-research-swarm`.
 - `$best-practice-research`: venue/style norms, common section naming, related-work positioning practice, or reviewer-expectation questions need external evidence.
 - `$ultragoal`: approved implementation, engine-change, or repair plans should become durable sequential stories with `.omx/ultragoal` checkpoint evidence.
@@ -101,10 +113,10 @@ Invoke or recommend these companions explicitly when their trigger condition is 
 - `$ultraqa`: final adversarial QA or hostile readiness checks are requested after live review and quality-gate artifacts exist.
 - `$visual-verdict`: rendered page images/contact sheets need visual QA for overflow, figure readability, one-column/two-column layout, or cross-figure consistency.
 
-Keep the explicit PaperOrchestra skill as the paper workflow owner. For example, use `$paperorchestra-authoring-round + $ultrawork` for parallel first-draft preparation, not raw parallel agents that bypass the paper session.
-Use `$paperorchestra-research-swarm + $ultrawork + $autoresearch` for broad prior-work/search seed generation, not ad-hoc browsing that bypasses `prior_work_seed.json`, `citation_map.json`, or `references.bib`.
+Keep the explicit PaperOrchestra skill as the paper workflow owner. For example, use `$paperorchestra-authoring-round` + `$ultrawork` for parallel first-draft preparation, not raw parallel agents that bypass the paper session.
+Use `$paperorchestra-research-swarm` + `$ultrawork` + `$autoresearch` for broad prior-work/search seed generation, not ad-hoc browsing that bypasses `prior_work_seed.json`, `citation_map.json`, or `references.bib`.
 Use `$paperorchestra-figure` when a manuscript needs pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures; figure work must stay tied to supported claims, source evidence, captions, and one-column/two-column placement.
-Use `$paperorchestra-visual-audit + $visual-verdict` when the compiled PDF itself must be inspected as pages. Do not make TeX-only claims about rendered layout, table overflow, figure readability, or visual style consistency.
+Use `$paperorchestra-visual-audit` + `$visual-verdict` when the compiled PDF itself must be inspected as pages. Do not make TeX-only claims about rendered layout, table overflow, figure readability, or visual style consistency.
 Use `$ultragoal` rather than raw `$ralph` for durable multi-step engine or repair work; reserve `$ralph` for explicitly requested single-owner persistence.
 
 ## High-level orchestrator surface

@@ -46,12 +46,19 @@ evidence used:
 failure mode if omitted:
 ```
 
+Also plan the section topology, not just the section list. Each heading must
+correspond to a real rhetorical boundary: a new reader question, a distinct
+argument job, or a necessary navigation point inside a dense section. Page-budget
+expansion must not be translated into extra headings; it should usually deepen
+paragraphs, tables, figures, examples, analysis, or related-work positioning
+inside the existing topology.
+
 ## OMX companion routing
 
 - Prefer `$ralplan` when thesis, section order, RQs, evaluation design, or claim boundaries have multiple plausible choices.
 - Use `$best-practice-research` when the plan depends on venue norms, common section names, comparable-paper narrative structure, or reviewer expectations.
-- Use `$paperorchestra-research-swarm` only when bounded related-work seed discovery needed to make the plan credible is broad/multi-cluster citation/source work and should produce `prior_work_seed.json`, `citation_map.json`, or `references.bib` evidence before approval. Do not turn planning into full citation writing.
-- Use `$autoresearch` only for single-lane related-work seed discovery needed to make the plan credible, or as the validator gate inside `$paperorchestra-research-swarm`.
+- Use `$paperorchestra-research-swarm` when bounded related-work seed discovery needed to make the plan credible is broad/multi-cluster citation/source work, or when planned Related Work/positioning would otherwise rely only on missing/weak/stale/mock/heuristic/local-only bibliography artifacts. The output should produce or update `prior_work_seed.json`, `candidate_papers.json`, `citation_registry.json`, `citation_map.json`, `references.bib`, or a research-swarm/autoresearch validator artifact before approval. Do not turn planning into full citation writing.
+- Use `$autoresearch` only for single-lane related-work seed discovery needed to make the plan credible, for single-lane source freshness checks before approving Related Work/positioning claims, or as the validator gate inside `$paperorchestra-research-swarm`.
 - Use `$ultrawork` only when independent planning lanes are clearly separable, such as material inventory, related-work seed clustering, and table/figure planning.
 - Recommend `$ultragoal` after the author approves a substantial implementation/repair plan that should be completed as durable sequential stories.
 - Recommend `$team` with `$ultragoal` when approved follow-up work has separable lanes, such as plan-gate code, skeleton generation, review integration, and verification.
@@ -63,10 +70,10 @@ failure mode if omitted:
 2. Identify the paper archetype: system pipeline, empirical evaluation, benchmark/resource, position, survey, tool/demo, etc.
 3. Draft the thesis, argument contract, contribution list, non-contributions, and required caveats.
 4. Register only thesis-critical claims in a claim-support ledger. Use stable IDs (`C1`, `E1`, `S1`, `F1`, `T1`, `RW1`, `Q1`) so later critic, citation, visual, and repair artifacts can reference the contract without restating it.
-5. Propose a concise section blueprint. Avoid placeholder section names like “Problem”, “Approach”, or “Findings” unless the target venue commonly uses them.
+5. Propose a concise section blueprint and topology rationale. Avoid placeholder section names like “Problem”, “Approach”, or “Findings” unless the target venue commonly uses them. Do not add sections merely to hit a page target.
 6. Map every section to rhetorical job, reader belief transition, claim refs, evidence refs, key moves, section-specific exclusions, completion checks, and blockers.
 7. Propose tables/figures with TODO cells where final numbers are not available. For each planned figure, include figure rhetorical job, supported claim, source evidence, caption contract, placement contract (`figure` vs `figure*` when known), output form, and TODO/final-artwork status. Route complex pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures to `$paperorchestra-figure`.
-8. Propose related-work positioning clusters and known seed papers/queries, but do not fabricate citations.
+8. Propose related-work positioning clusters and known seed papers/queries, but do not fabricate citations. If the plan's Related Work or positioning depends on external source facts and the current artifacts are only local bibliography/citation-map files or are missing/weak/stale, invoke `$paperorchestra-research-swarm` for broad/multi-cluster gaps or `$autoresearch` for single-lane gaps before presenting that positioning as approval-ready. Otherwise mark the related-work row as candidate/provisional and keep it out of the approval-critical claim ledger.
 9. Write `paper-plan.md` in the output workspace. For new plans, prefer a v3 approval contract and leave it unapproved until the author accepts it. When the author approves, use MCP `approve_plan` when attached or verified `paperorchestra approve-plan` when the CLI exposes it so the approval becomes a hash-bound hidden approval record. Use a CLI approval command only if the installed `paperorchestra --help` surface actually exposes one; otherwise record the explicit author approval text or marker in the output workspace and do not invent an unavailable CLI command.
 10. Stop for author approval or revision. Recommend `$paperorchestra-authoring-round` only after approval; recommend `$ultragoal` only for durable implementation/repair follow-up, not ordinary manuscript prose drafting.
 
@@ -112,6 +119,13 @@ failure mode if omitted:
 | --- | --- | --- | --- | --- | --- |
 
 ## 6. Section blueprint
+Topology rationale:
+- target pages:
+- why these top-level sections are the right rhetorical phases:
+- when subsections are allowed:
+- headings likely to merge if the draft fragments:
+- re-approval trigger if the argument topology changes:
+
 For each section:
 - title:
 - rhetorical job:

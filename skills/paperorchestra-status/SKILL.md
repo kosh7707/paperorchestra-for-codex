@@ -20,11 +20,13 @@ paperorchestra status --json
 paperorchestra environment
 ```
 
-Also inspect nearby artifacts when present: `.paper-orchestra/`, `paper-plan.md` approval state, `paper-skeleton.md` provenance/staleness, `paper.full.tex`, compiled PDF, page renders/contact sheets, figure assets, figure specs, caption drafts, `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, `figure-placement-review.json`, `page-layout-review.json`, `visual_repair_brief.json`, `visual_repair_candidate.json`, `figure_gate.report.json`, `citation_map.json`, `references.bib`, `citation_support_review.json`, `quality-eval.json`, `quality-gate.report.json`, `qa-loop.plan.json`, compile reports, and named round directories.
+Also inspect nearby artifacts when present: `.paper-orchestra/`, `paper-plan.md` approval state, `paper-skeleton.md` provenance/staleness, `paper.full.tex`, compiled PDF, page renders/contact sheets, figure assets, figure specs, caption drafts, `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, `figure-placement-review.json`, `page-layout-review.json`, `visual_repair_brief.json`, `visual_repair_candidate.json`, `figure_gate.report.json`, `prior_work_seed.json`, `candidate_papers.json`, `citation_registry.json`, `citation_map.json`, `references.bib`, `citation_support_review.json`, `research-swarm.manifest.json`, `$autoresearch` validator `result.json`, `quality-eval.json`, `quality-gate.report.json`, `qa-loop.plan.json`, compile reports, and named round directories.
 
 For a planned or drafted manuscript, report plan/skeleton availability as `approved / approved legacy / unapproved / stale / missing / not applicable` for `paper-plan.md` and `present / missing / stale / not applicable` for `paper-skeleton.md`. Do not surface internal contract hashes in user-facing summaries; they are machine fingerprints for staleness checks. A stale or missing skeleton should not override an approved plan; recommend regeneration or `$paperorchestra-plan` only when the approved contract itself is stale or insufficient.
 
 For a figure-bearing manuscript, report figure artifact availability as `present / missing / stale / not applicable` for `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, `figure-placement-review.json`, and `figure_gate.report.json`. If an expected figure artifact is missing or stale, recommend `$paperorchestra-figure` before authoring, live-review, or quality-gate claims rely on that figure.
+
+For citation/source evidence, report availability as `fresh-source-backed / present-local-only / missing / weak / stale / mock-heuristic / candidate-only / not applicable` for prior-work seed, candidate papers, citation registry, citation map, references, citation-support review, research-swarm manifest, and autoresearch validator result. `citation_map.json` or `references.bib` alone should be `present-local-only`, not `fresh-source-backed`, unless a current live/source research, review, or validator artifact supports it. If Introduction, Related Work, positioning, citation-bearing claims, or source-backed evidence will be authored or validated next and the status is not `fresh-source-backed`, recommend `$paperorchestra-research-swarm` + `$ultrawork` + `$autoresearch` for broad/multi-cluster gaps or `$paperorchestra-live-review` + `$autoresearch` for single-lane/review-shaped gaps.
 
 For a compiled manuscript, report page-visual artifact availability as `present / missing / stale / pending visual reviewer / failing / candidate ready / not applicable` for `page-layout-review.json`, rendered page contact sheets, `visual_repair_brief.json`, and `visual_repair_candidate.json`. If the compiled PDF exists but page-layout review is missing, stale, pending, or failing, recommend `$paperorchestra-visual-audit` before final quality claims.
 
@@ -44,6 +46,7 @@ Materials:
 Current trust:
   critic:
   citation review:
+  citation/source evidence:
   claim-safe live:
 Latest artifacts:
   compile:
@@ -61,17 +64,17 @@ Check for stale manuscript hash mismatches between current `paper.full.tex` and 
 
 Name both the PaperOrchestra workflow and the OMX companion when a companion would materially improve the next step. If the current user message asks to continue into the recommended next round, treat the matching companion as an invocation obligation, not a passive hint: load that companion skill and execute its state/artifact protocol before returning to the PaperOrchestra workflow, or record a concrete skip reason.
 
-- `$deep-interview -> $paperorchestra-intake` (`$paperorchestra-intake + $deep-interview`): author intent, material boundaries, venue, experiment basis, or allowed claims are unclear. Run deep-interview first; intake only writes the handoff after the interview resolves.
-- `$paperorchestra-plan + $ralplan`: manuscript structure, RQs, evidence table shape, or contribution boundaries need consensus planning.
-- `$paperorchestra-authoring-round + $ultrawork`: independent pre-draft lanes can run in parallel before one bounded authoring round; invoke it when two or more such lanes are open and the user asks to proceed.
-- `$paperorchestra-authoring-round + $ralph`: the user wants a persistent bounded loop over authoring, status, gate, and repair; invoke it on “continue/keep going/계속/바로 진행” after plan approval unless the user explicitly asks for a one-shot local step.
+- `$deep-interview` -> `$paperorchestra-intake` (`$paperorchestra-intake` + `$deep-interview`): author intent, material boundaries, venue, experiment basis, or allowed claims are unclear. Run deep-interview first; intake only writes the handoff after the interview resolves.
+- `$paperorchestra-plan` + `$ralplan`: manuscript structure, RQs, evidence table shape, or contribution boundaries need consensus planning.
+- `$paperorchestra-authoring-round` + `$ultrawork`: independent pre-draft lanes can run in parallel before one bounded authoring round; invoke it when two or more such lanes are open and the user asks to proceed.
+- `$paperorchestra-authoring-round` + `$ralph`: the user wants a persistent bounded loop over authoring, status, gate, and repair; invoke it on “continue/keep going/계속/바로 진행” after plan approval unless the user explicitly asks for a one-shot local step.
 - `$ultragoal`: durable multi-story implementation or repair follow-up is needed after a plan/gate/review produces concrete work items.
-- `$team + $ultragoal`: durable follow-up is also parallelizable; Team runs lanes, Ultragoal owns the ledger/checkpoints.
-- `$paperorchestra-research-swarm + $ultrawork + $autoresearch`: citation/source evidence is missing, weak, stale, or machine-solvable and the gap is broad/multi-cluster; invoke it before claiming Related Work, citation support, or source-backed positioning is complete.
-- `$paperorchestra-live-review + $autoresearch`: citation/source evidence is missing, weak, stale, or machine-solvable but the gap is single-lane or review-shaped; invoke it before claiming Related Work, citation support, or source-backed positioning is complete.
-- `$paperorchestra-live-review + $best-practice-research`: venue/style norms or related-work positioning need external best-practice evidence.
-- `$paperorchestra-quality-gate + $ultraqa`: fresh review/gate artifacts exist and adversarial final QA is the next safe action.
-- `$paperorchestra-visual-audit + $visual-verdict`: compiled PDF/page screenshots need rendered-page layout, table overflow, figure readability, or cross-figure style review.
+- `$team` + `$ultragoal`: durable follow-up is also parallelizable; Team runs lanes, Ultragoal owns the ledger/checkpoints.
+- `$paperorchestra-research-swarm` + `$ultrawork` + `$autoresearch`: citation/source evidence is missing, weak, stale, mock/heuristic/local-only, present only as bibliography/citation-map files, or otherwise machine-solvable and the gap is broad/multi-cluster; invoke it before claiming Related Work, citation support, or source-backed positioning is complete or before continuing into authoring that touches those claims.
+- `$paperorchestra-live-review` + `$autoresearch`: citation/source evidence is missing, weak, stale, mock/heuristic/local-only, present only as bibliography/citation-map files, or otherwise machine-solvable but the gap is single-lane or review-shaped; invoke it before claiming Related Work, citation support, or source-backed positioning is complete or before continuing into authoring that touches those claims.
+- `$paperorchestra-live-review` + `$best-practice-research`: venue/style norms or related-work positioning need external best-practice evidence.
+- `$paperorchestra-quality-gate` + `$ultraqa`: fresh review/gate artifacts exist and adversarial final QA is the next safe action.
+- `$paperorchestra-visual-audit` + `$visual-verdict`: compiled PDF/page screenshots need rendered-page layout, table overflow, figure readability, or cross-figure style review.
 - `$paperorchestra-figure`: figure assets, captions, supported claims, or one-column/two-column placement are missing or stale.
 
 ## Recommendation rules

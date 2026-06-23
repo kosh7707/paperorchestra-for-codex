@@ -9,7 +9,7 @@ description: Run parallel, source-backed prior-work and citation web research fo
 
 Before executing any `$skill`, `omx`, `codex`, MCP, web, or PaperOrchestra CLI action from this skill, read `../paperorchestra/references/invocation-contract.md` and follow it. Required companion skills must be invoked, not merely recommended.
 
-Use this skill as the PaperOrchestra-owned high-throughput research layer. It sits between `$paperorchestra-status` and manuscript writing/review when citation/source work is broad enough to benefit from parallel lanes.
+Use this skill as the PaperOrchestra-owned high-throughput research layer. It sits between `$paperorchestra-status` and manuscript writing/review when citation/source work is broad enough to benefit from parallel lanes. When invoked from an authoring citation/source evidence gate, the downstream authoring round remains blocked until the swarm produces/imports source-backed artifacts and passes the `$autoresearch` validator gate.
 
 ## Core contract
 
@@ -25,7 +25,7 @@ Do not fabricate papers, BibTeX, DOIs, URLs, quotes, results, or citation suppor
 
 Use `$paperorchestra-research-swarm` when any active PaperOrchestra workflow has machine-solvable source gaps and at least one of these is true:
 
-- Related Work, citation candidates, bibliography, `citation_map.json`, `references.bib`, or source-backed positioning is missing/weak/stale.
+- Related Work, citation candidates, bibliography, `citation_map.json`, `references.bib`, source-backed positioning, or the validator/review artifact that makes them trustworthy is missing/weak/stale/mock/heuristic/local-only/candidate-only.
 - Two or more independent research clusters can run in parallel.
 - The authoring round needs prior-work/search positioning before drafting.
 - Live review or quality gate found broad citation/source-evidence gaps.
@@ -95,7 +95,7 @@ Before claiming completion, verify and report:
 - `$ultrawork` was invoked for two or more lanes, or `$team` was invoked for durable workers, or a concrete skip reason was recorded.
 - Subagent/worker lane evidence exists: lane IDs, prompts/assignments, returned source lists, and any failed/blocked lane.
 - `$autoresearch` validator artifact exists and `result.json` records `passed: true`.
-- PaperOrchestra import produced or updated at least one of: `prior_work_seed.json`, `candidate_papers.json`, `citation_registry.json`, `citation_map.json`, `references.bib`.
+- PaperOrchestra import produced or updated at least one of: `prior_work_seed.json`, `candidate_papers.json`, `citation_registry.json`, `citation_map.json`, `references.bib`, and the manifest records whether each accepted citation is fresh-source-backed, candidate-only, weak, or blocked.
 - Each accepted citation has source metadata and a claim-support note; weak sources remain candidate-only.
 - No manuscript claim was strengthened beyond available evidence.
 

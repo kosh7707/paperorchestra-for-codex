@@ -1,6 +1,6 @@
 ---
 name: paperorchestra-figure
-description: Design, draft, review, or generate evidence-bearing paper figures for PaperOrchestra manuscripts. Use when a paper plan, section, review, or quality gate needs pipeline, architecture, taxonomy, teaser, result-summary, case-study, or visual-abstract figures; handles caption/claim alignment, one-column vs two-column LaTeX placement, and routes to imagegen only for bitmap illustrations.
+description: Design, draft, review, or generate evidence-bearing paper figures for PaperOrchestra manuscripts using imagegen-generated bitmap assets as the mandatory figure-generation path. Use when a paper plan, section, review, or quality gate needs pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures; handles caption/claim alignment, one-column vs two-column LaTeX placement, and forbids TikZ/SVG/Mermaid as final generated figure content.
 ---
 
 # PaperOrchestra Figure
@@ -24,7 +24,7 @@ reader belief before:
 reader belief after:
 caption contract:
 placement contract:
-output form: Mermaid | SVG | TikZ | LaTeX snippet | image prompt | bitmap illustration | caption only
+output form: imagegen bitmap asset | image prompt + generated image | LaTeX placement snippet for generated bitmap | caption only for review-only tasks
 ```
 
 Reject decorative figures. If the figure has no supported claim or source evidence, route back to `$paperorchestra-plan` or ask for the missing evidence.
@@ -90,32 +90,33 @@ For a figure-bearing manuscript, expected figure artifacts must not silently dis
 
 ## Command surface
 
-Prefer MCP/source figure tools when attached. Installed CLI fallback is staged and must be verified with `--help` before use:
+Use the installed `imagegen` skill/tool for figure asset generation. PaperOrchestra MCP/source/CLI tools remain useful for state inspection, artifact indexing, placement review, and quality gates, but they must not replace imagegen with TikZ/SVG/Mermaid generation.
+
+If using installed CLI fallback surfaces, verify each command with `--help` before use. These commands are for orchestration or review, not a reason to bypass imagegen:
 
 ```bash
-paperorchestra generate-plots --provider mock
-paperorchestra generate-plots --provider shell --provider-command "$PAPERO_MODEL_CMD"
 paperorchestra review-figure-placement --output figure-placement-review.json
 ```
 
-Use `--provider mock` only for local smoke tests. For evidence-bearing figure work, use a live/shell provider or source/MCP tool, then inspect `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, and `figure-placement-review.json` before claiming the figure artifacts are ready.
+For evidence-bearing figure work, generate or edit the bitmap through imagegen, then inspect or write `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, and `figure-placement-review.json` before claiming the figure artifacts are ready.
 
 ## Output policy
 
-Use vector-first outputs for precise paper content:
+Use imagegen as the mandatory generation path for PaperOrchestra figures:
 
-- Prefer **Mermaid**, **SVG**, or **TikZ** for pipeline, architecture, taxonomy, and method diagrams.
-- Prefer table/plot code or a plot spec for result-summary figures when data drives the claim.
-- Use `imagegen` only when the requested output is a bitmap illustration, visual abstract, teaser image, or presentation-style conceptual art where exact geometry is not the evidence.
-- Do not use imagegen for diagrams that must preserve exact node labels, arrows, numeric results, code paths, or reproducible layout.
-- If bitmap output is claimed, the agent must actually call the imagegen skill/tool and report the generated artifact. If no imagegen call was made, label the result `prompt only / no image generated` and do not imply that an image file exists.
+- Do **not** create Mermaid, SVG, TikZ, Graphviz, canvas, or other vector/code-native diagrams as final generated figure content.
+- For every new or replacement paper figure asset, invoke the installed `imagegen` skill/tool and persist the selected bitmap into the PaperOrchestra workspace before claiming the figure exists.
+- Use LaTeX only for placement around the generated bitmap, for example `\includegraphics`, figure width, label, and caption. Do not use LaTeX/TikZ to draw the figure itself.
+- For pipeline, architecture, taxonomy, method, case-study, threat-model, and visual-abstract figures, translate exact evidence requirements into an imagegen prompt with short, high-level labels. Put exact terminology, verdict mappings, numeric values, and caveats in the caption/evidence map rather than relying on tiny in-image text.
+- For result-summary figures, use imagegen for the visual summary graphic. Keep exact numbers in tables or captions unless the user explicitly accepts approximate in-image text.
+- If an imagegen call cannot be made, stop with a blocker or return `prompt only / no image generated`; do not substitute TikZ/SVG/Mermaid and do not imply that an image file exists.
 
-Before generating anything, consider cheaper alternatives:
+Before generating anything, still consider whether a figure is necessary:
 
 - remove the figure if it does not support a necessary claim;
 - convert to prose if a sentence explains the point more clearly;
-- convert to table when the evidence is categorical or numeric;
-- defer to human final artwork when the concept is right but the final visual style should be designed manually.
+- convert to a table when exact categorical or numeric evidence matters more than visual rhetoric;
+- defer to human final artwork only when the concept is right but no imagegen output should be treated as final.
 
 ## OMX companion routing
 
@@ -133,14 +134,15 @@ Before generating anything, consider cheaper alternatives:
 4. Choose one-column vs two-column placement and `figure` vs `figure*`.
 5. Build the Caption evidence map and reject/downgrade unsupported caption claims; weak caption rejected/downgraded is the correct outcome when the caption is not self-contained, not evidence-mapped, or stronger than the evidence.
 6. Choose output form:
-   - Mermaid/SVG/TikZ for precise diagrams;
-   - LaTeX snippet when placement/caption is the main need;
-   - imagegen only for bitmap illustration.
-7. Draft the caption:
+   - imagegen bitmap asset for every new or replacement figure;
+   - LaTeX placement snippet only to embed the generated bitmap;
+   - caption only when the task is explicitly review-only and no new figure asset is requested.
+7. Invoke imagegen for generated assets, save the selected output into the PaperOrchestra workspace, and record the image path in `plot_assets.json` or the round artifact manifest before claiming success.
+8. Draft the caption:
    - first sentence: what the figure shows;
    - second sentence: what claim it supports;
    - optional final sentence: key caveat or reading order.
-8. Return an artifact card and route follow-up edits to the owning paper workflow.
+9. Return an artifact card and route follow-up edits to the owning paper workflow.
 
 ## Review checklist
 
@@ -151,7 +153,7 @@ Check every figure for:
 - caption sufficiency: can the reader understand the figure if it floats?
 - placement: does `figure` vs `figure*` match one-column/two-column readability?
 - visual necessity: would prose or a table be clearer?
-- no invented components, citations, metrics, labels, or arrows.
+- no invented components, citations, metrics, labels, or arrows; if imagegen introduces unsupported detail, reject or regenerate the asset.
 
 ## Final card
 
@@ -161,6 +163,8 @@ Rhetorical job:
 Supported claim:
 Source evidence:
 Output form:
+Imagegen prompt:
+Generated image artifact:
 Recommended LaTeX environment:
 Width target:
 Caption draft:

@@ -44,6 +44,44 @@ failure mode if omitted:
 
 A section exists only if it moves the reader through the paper arc. A paragraph exists only if it performs one local move inside the section: context, gap sharpening, mechanism, evidence, contrast, caveat, transition, or implication.
 
+## Section topology discipline
+
+Headings are not containers for text; they are claims about the paper's argument
+structure. A top-level section exists when the reader must enter a new rhetorical
+phase of the paper. A subsection exists when a long or technically dense section
+needs internal navigation. If a heading merely names the next paragraph, artifact,
+implementation component, or TODO item, it is probably over-splitting.
+
+Use this necessity test before adding, splitting, or keeping a heading:
+
+```text
+heading:
+new reader question introduced:
+distinct rhetorical job:
+distinct evidence or argument basis:
+why this cannot be a paragraph, table row, figure caption, or transition inside an existing section:
+what would be lost if merged:
+```
+
+Add the heading if the test shows a real structural boundary. Do not add it if the
+content can be absorbed by an existing section without confusing the reader.
+
+Common over-splitting signals:
+
+- several adjacent headings answer the same reader question;
+- headings describe artifacts/components rather than argument moves;
+- a subsection contains only one short paragraph or one table explanation;
+- the section title could be replaced by "also";
+- the draft expands by creating headings instead of deepening evidence,
+  examples, analysis, or interpretation;
+- caveats, implementation details, and evaluation mechanics are scattered into
+  separate headings when one coherent section would carry them better.
+
+When a draft feels thin, deepen the argument before changing the topology: add
+evidence, worked examples, comparative positioning, result interpretation, or
+transitions inside existing sections. When a draft feels fragmented, merge first
+and only then decide whether any split is truly necessary.
+
 ## Sentence Intent Principle
 
 Every sentence must have a reason to appear at this exact time and position. If the author cannot explain why a sentence belongs here, rewrite, move, merge, or delete it.
@@ -80,6 +118,7 @@ A reviewer or critic should ask:
 1. What paper archetype is this, and does the structure fit that archetype?
 2. Is the Phenomenon → Gap → Contribution → Evidence → Boundary → Implication arc visible?
 3. Does every section have a rhetorical job and a reader-belief transition?
+3a. Does each heading mark a real rhetorical boundary, or is the draft over-split into paragraph-sized headings?
 4. Are strong claims connected to evidence, citations, or caveats?
 5. Does Related Work position this paper rather than merely summarize papers?
 6. Does the methodology describe a reproducible research method rather than dumping implementation details?
