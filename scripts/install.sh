@@ -111,6 +111,14 @@ print_step "Install package"
 echo "plan: pip install -e '$INSTALL_TARGET'"
 run "$ROOT/.venv/bin/python" -m pip install -e "$INSTALL_TARGET"
 
+print_step "Verify CLI command surface"
+echo "plan: scripts/check-cli-surface.py --require visual-audit"
+if [[ "$DRY_RUN" -eq 0 ]]; then
+  "$ROOT/.venv/bin/python" "$ROOT/scripts/check-cli-surface.py" --source-root "$ROOT" --require visual-audit
+else
+  echo "+ dry-run: skip CLI surface probe"
+fi
+
 if [[ "$SKIP_SKILLS" -eq 0 ]]; then
   print_step "Install Codex skills"
   echo "plan: scripts/install-skill.sh"
@@ -149,9 +157,11 @@ fi
 cat <<EOF_NEXT
 
 Next:
+  export PATH="$ROOT/.venv/bin:\$PATH"
   .venv/bin/paperorchestra status --json
 
 Optional:
+  scripts/check-cli-surface.py --strict-installed --require visual-audit
   ./scripts/install.sh --skip-mcp  # install without Codex MCP registration
   ./scripts/install.sh --skip-omx  # install without running omx setup
 

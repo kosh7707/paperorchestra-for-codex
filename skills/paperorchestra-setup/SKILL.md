@@ -24,6 +24,36 @@ paperorchestra environment
 paperorchestra status --json
 ```
 
+Always include a command-surface probe for source-only/stale-install drift. The recurring setup failure is: Codex skills are updated from one checkout, but the `paperorchestra` console script on PATH imports an older editable checkout and therefore hides newer commands such as `visual-audit`.
+
+From a repository checkout, run the bundled probe:
+
+```bash
+scripts/check-cli-surface.py --source-root "$(pwd)" --require visual-audit
+```
+
+Use strict mode when the setup verdict needs to fail closed on a stale installed console:
+
+```bash
+scripts/check-cli-surface.py --source-root "$(pwd)" --require visual-audit --strict-installed --json
+```
+
+If the probe reports `installed_mismatch` or `warning` while the source/venv command is OK, do not block the paper workflow as if the command does not exist. Use the checkout-local command surface and report the mismatch:
+
+```bash
+.venv/bin/paperorchestra visual-audit --help
+PYTHONPATH="$(pwd)" python3 -m paperorchestra.cli visual-audit --help
+```
+
+Repair the installed surface by reinstalling the current checkout and putting its venv first on PATH:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e .
+export PATH="$(pwd)/.venv/bin:$PATH"
+scripts/register-codex-mcp.sh --use-local-venv
+```
+
 When running from a repository checkout, also verify the checkout-local virtualenv commands when present:
 
 ```bash
@@ -35,7 +65,7 @@ test -x .venv/bin/paperorchestra-mcp
 
 Report a PATH/source mismatch when `command -v paperorchestra` points outside the current checkout while `.venv/bin/paperorchestra` exists, or when `paperorchestra doctor` reports a `package_context.package_root` that does not match the current checkout. Prefer the checkout-local `.venv/bin/paperorchestra` for setup evidence in that case. This is a setup warning, not a paper-readiness pass.
 
-If repo checkout commands are being tested, compare with `python3 -m paperorchestra.cli --help` and report any command-surface mismatch. Do not silently mix installed CLI examples with source-checkout-only commands.
+If repo checkout commands are being tested, compare with `python3 -m paperorchestra.cli --help` and report any command-surface mismatch. Do not silently mix installed CLI examples with source-checkout-only commands. If the source surface verifies a command and the installed console does not, either use `.venv/bin/paperorchestra <command>` or `PYTHONPATH=<checkout> python3 -m paperorchestra.cli <command>` and record the fallback in the setup card.
 
 If MCP is expected, distinguish registration from active attachment:
 
@@ -84,6 +114,7 @@ MCP registration command:
 MCP binary/server:
 Active MCP attachment:
 PATH/source:
+CLI surface:
 Citation evidence:
 S2:
 Readiness:

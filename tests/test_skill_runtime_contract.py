@@ -92,7 +92,10 @@ def test_setup_and_status_use_current_environment_command() -> None:
         "registered MCP command",
         ".venv/bin/paperorchestra",
         ".venv/bin/paperorchestra-mcp",
+        "scripts/check-cli-surface.py",
+        "--strict-installed",
         "python3 -m paperorchestra.cli --help",
+        "PYTHONPATH=<checkout> python3 -m paperorchestra.cli <command>",
         "command-surface mismatch",
     )
     assert_mentions(

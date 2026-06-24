@@ -59,7 +59,22 @@ paperorchestra visual-audit --pdf compiled.pdf --render-dir rendered-pages
 paperorchestra visual-audit --pdf compiled.pdf --findings-json page-visual-findings.json
 ```
 
-If neither command exists, do not invent a CLI fallback. Use the attached MCP/source tool if visible, or block with the missing command named and route to `$paperorchestra-quality-gate` / `$paperorchestra-figure` only for non-rendered evidence checks.
+When operating from a PaperOrchestra source checkout, first run the drift detector so a stale installed console does not hide source-supported commands:
+
+```bash
+scripts/check-cli-surface.py --source-root "$(pwd)" --require visual-audit
+```
+
+If a manuscript workspace is outside the checkout and the active `paperorchestra` command lacks `visual-audit`, locate the current checkout (for example the plugin/repo path used by setup) and verify the source command explicitly:
+
+```bash
+PYTHONPATH=/path/to/paperorchestra-for-codex python3 -m paperorchestra.cli visual-audit --help
+PYTHONPATH=/path/to/paperorchestra-for-codex python3 -m paperorchestra.cli visual-audit --pdf compiled.pdf --render-dir rendered-pages
+```
+
+Prefer `.venv/bin/paperorchestra visual-audit ...` when the checkout venv probe succeeds. Use `PYTHONPATH=<checkout> python3 -m paperorchestra.cli visual-audit ...` only after its `--help` succeeds. Record the exact verified invocation in the final card.
+
+If neither installed, venv, source-module, nor MCP command exists, do not invent a CLI fallback. Block with the missing command named and route to `$paperorchestra-setup` for repair. Route to `$paperorchestra-quality-gate` / `$paperorchestra-figure` only for non-rendered evidence checks.
 
 The command writes:
 

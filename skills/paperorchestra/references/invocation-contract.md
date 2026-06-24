@@ -36,9 +36,22 @@ Before using a CLI command that is not already verified in the current run, chec
 paperorchestra <command> --help
 ```
 
-Do not invent commands from MCP tool names. Source checkout helpers may expose commands that the installed `paperorchestra` console script does not. If the installed command is absent, use the documented staged fallback or block with the missing command named.
+Do not invent commands from MCP tool names. Source checkout helpers may expose commands that the installed `paperorchestra` console script does not. If the installed command is absent, use a documented staged fallback, a verified checkout venv command, or a verified source-module command; otherwise block with the missing command named.
 
-Currently observed installed CLI gaps include `paperorchestra authoring-round`, `paperorchestra approve-plan`, `paperorchestra quality-gate`, and `paperorchestra visual-audit`; use MCP/source tools only when actually attached/verified, or staged fallbacks.
+When operating from a PaperOrchestra checkout, run the command-surface drift detector before declaring a source-supported command missing:
+
+```bash
+scripts/check-cli-surface.py --source-root "$(pwd)" --require <command>
+```
+
+If the installed console is stale but the checkout source/venv probe succeeds, use one of these verified forms and record it in the evidence:
+
+```bash
+.venv/bin/paperorchestra <command> --help
+PYTHONPATH="$(pwd)" python3 -m paperorchestra.cli <command> --help
+```
+
+Currently observed installed CLI gaps may include source-supported commands such as `paperorchestra authoring-round`, `paperorchestra approve-plan`, `paperorchestra quality-gate`, and `paperorchestra visual-audit` when PATH points at an older editable checkout. Treat that as a setup mismatch, not proof that the current source lacks the command. Use MCP/source tools only when actually attached/verified, or staged fallbacks.
 
 ## State-update verification
 

@@ -123,7 +123,7 @@ Use `$ultragoal` rather than raw `$ralph` for durable multi-step engine or repai
 
 Prefer high-level MCP tools when attached; otherwise use CLI fallback and say MCP active attachment is unavailable.
 
-CLI fallback assumes the installed `paperorchestra` console script. If running from a source checkout, first verify the surface with `paperorchestra <cmd> --help`; do not substitute `python -m paperorchestra.cli` unless explicitly working on the checkout implementation.
+CLI fallback starts with the installed `paperorchestra` console script, but setup drift is common after git pulls or skill reinstalls. If running from a source checkout, first verify the surface with `paperorchestra <cmd> --help` and `scripts/check-cli-surface.py --require <cmd>` when the bundled probe is present. If the installed console is stale but the checkout source/venv command verifies, use `.venv/bin/paperorchestra <cmd>` or `PYTHONPATH=<checkout> python3 -m paperorchestra.cli <cmd>` and record that evidence instead of declaring the command unavailable.
 
 - `inspect_state`: inspect current session/material state and next valid actions.
 - `orchestrate`: bounded v1 orchestrator. With `execute_local=true`, it performs **one deterministic local step** only; this is **not a full pipeline** and not a full paper run.

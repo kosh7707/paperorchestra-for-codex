@@ -17,6 +17,15 @@ The installer creates the local environment, installs bundled Codex skills, regi
 
 Semantic Scholar/S2 is optional.
 
+If you pull a new version and a skill says a fresh command is missing, check for a stale console script before debugging the manuscript workflow:
+
+```bash
+scripts/check-cli-surface.py --require visual-audit
+export PATH="$(pwd)/.venv/bin:$PATH"
+```
+
+The checker compares the source checkout, `.venv/bin/paperorchestra`, and the `paperorchestra` command on PATH. A mismatch usually means PATH still points at an older editable install; rerun `./scripts/install.sh` or use `.venv/bin/paperorchestra ...`.
+
 ## How to use
 
 In a fresh Codex/OMX session, start with:
@@ -77,6 +86,7 @@ Do not invent results, citations, figures, or claims. Use only materials you hav
 paperorchestra doctor
 paperorchestra environment
 paperorchestra --help
+scripts/check-cli-surface.py --require visual-audit
 ```
 
 Runtime artifacts usually live under `.paper-orchestra/` or beside the active manuscript. Do not commit private run artifacts by accident.

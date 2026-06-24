@@ -13,6 +13,8 @@ def test_visual_audit_skill_routes_to_vision_and_repair_loop() -> None:
     assert "$visual-verdict" in text
     assert "$ralph" in text
     assert "paperorchestra visual-audit" in text
+    assert "scripts/check-cli-surface.py" in text
+    assert "PYTHONPATH=/path/to/paperorchestra-for-codex python3 -m paperorchestra.cli visual-audit --help" in text
     assert "visual_repair_brief.json" in text
     assert "visual_repair_candidate.json" in text
     assert "claim" in text.lower()
