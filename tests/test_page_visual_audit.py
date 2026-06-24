@@ -242,3 +242,47 @@ def test_renderer_clears_stale_page_images_on_failed_render(monkeypatch, tmp_pat
     assert payload["status"] == "fail"
     assert payload["pages"] == []
     assert not stale.exists()
+
+
+def test_page_layout_review_records_required_figure_visual_checks() -> None:
+    payload = build_page_layout_review_payload(
+        pdf_path=Path("paper.pdf"),
+        manuscript_path=None,
+        rendered_pages=[],
+        contact_sheets={},
+        imported_findings={
+            "schema_version": "page-visual-findings/1",
+            "reviewer": "vision-agent",
+            "checks_completed": ["ai_artifact_check", "publication_figure_check"],
+            "page_findings": [],
+            "document_findings": [],
+        },
+        imported_findings_path="page-visual-findings.json",
+        render_status={"status": "pass"},
+        review_focus="figure",
+        require_ai_artifact_check=True,
+        require_publication_figure_check=True,
+    )
+
+    assert payload["status"] == "pass"
+    assert payload["review_focus"] == "figure"
+    assert payload["required_visual_checks"] == ["ai_artifact_check", "publication_figure_check"]
+
+
+def test_page_layout_review_blocks_missing_required_figure_visual_checks() -> None:
+    payload = build_page_layout_review_payload(
+        pdf_path=Path("paper.pdf"),
+        manuscript_path=None,
+        rendered_pages=[],
+        contact_sheets={},
+        imported_findings={"schema_version": "page-visual-findings/1", "reviewer": "vision-agent", "page_findings": [], "document_findings": []},
+        imported_findings_path="page-visual-findings.json",
+        render_status={"status": "pass"},
+        review_focus="figure",
+        require_ai_artifact_check=True,
+        require_publication_figure_check=True,
+    )
+
+    assert payload["status"] == "fail"
+    assert payload["missing_required_visual_checks"] == ["ai_artifact_check", "publication_figure_check"]
+    assert "required_visual_check_missing" in payload["failing_codes"]

@@ -66,6 +66,9 @@ def register_authoring_commands(subparsers: Any) -> None:
     visual_audit_parser.add_argument("--output")
     visual_audit_parser.add_argument("--render-dir")
     visual_audit_parser.add_argument("--findings-json")
+    visual_audit_parser.add_argument("--review-focus")
+    visual_audit_parser.add_argument("--require-ai-artifact-check", action="store_true")
+    visual_audit_parser.add_argument("--require-publication-figure-check", action="store_true")
 
     run_parser = subparsers.add_parser("run", help="Run the full PaperOrchestra pipeline")
     run_parser.add_argument("--discovery-mode", default="model", choices=["model", "scholar-only", "search-grounded"])

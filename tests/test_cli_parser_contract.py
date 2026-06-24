@@ -162,6 +162,10 @@ def test_visual_audit_flags_cover_render_and_imported_findings_contract() -> Non
             "rendered-pages",
             "--findings-json",
             "page-visual-findings.json",
+            "--review-focus",
+            "figure",
+            "--require-ai-artifact-check",
+            "--require-publication-figure-check",
         ]
     )
 
@@ -170,6 +174,9 @@ def test_visual_audit_flags_cover_render_and_imported_findings_contract() -> Non
     assert args.output == "page-layout-review.json"
     assert args.render_dir == "rendered-pages"
     assert args.findings_json == "page-visual-findings.json"
+    assert args.review_focus == "figure"
+    assert args.require_ai_artifact_check is True
+    assert args.require_publication_figure_check is True
 
 
 def test_draft_generating_commands_require_explicit_plan_gate_bypass_flag() -> None:

@@ -154,6 +154,9 @@ def handle_visual_audit(cwd: Path, args: argparse.Namespace) -> int:
         output_path=args.output,
         render_dir=args.render_dir,
         findings_json=args.findings_json,
+        review_focus=getattr(args, "review_focus", None),
+        require_ai_artifact_check=bool(getattr(args, "require_ai_artifact_check", False)),
+        require_publication_figure_check=bool(getattr(args, "require_publication_figure_check", False)),
     )
     print(
         json.dumps(
@@ -164,6 +167,9 @@ def handle_visual_audit(cwd: Path, args: argparse.Namespace) -> int:
                 "warning_codes": payload.get("warning_codes", []),
                 "rendered_pages": payload.get("rendered_pages", []),
                 "contact_sheets": payload.get("contact_sheets", {}),
+                "required_visual_checks": payload.get("required_visual_checks", []),
+                "completed_visual_checks": payload.get("completed_visual_checks", []),
+                "missing_required_visual_checks": payload.get("missing_required_visual_checks", []),
                 "repair_candidate_count": len(payload.get("repair_candidates") or []),
             },
             indent=2,

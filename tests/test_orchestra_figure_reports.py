@@ -8,6 +8,19 @@ from paperorchestra.core.session import save_session, set_current_session
 from paperorchestra.orchestra import figure_reports, figures
 
 
+def write_loop_artifacts(base: Path, figure_id: str) -> None:
+    safe = figure_id.replace(":", "-")
+    (base / f"figure-plan.{safe}.md").write_text("Figure plan", encoding="utf-8")
+    (base / f"figure-critic.{safe}.json").write_text(
+        json.dumps({"verdict": "pass", "blocking_issues": [], "reinforcements": [], "acceptance_checks": []}),
+        encoding="utf-8",
+    )
+    (base / f"figure-visual-findings.{safe}.json").write_text(
+        json.dumps({"schema_version": "figure-visual-findings/1", "verdict": "pass", "checks_completed": ["ai_artifact_check", "publication_figure_check"], "findings": []}),
+        encoding="utf-8",
+    )
+
+
 def test_figures_facade_preserves_public_report_entrypoints() -> None:
     assert figures.figure_gate_report_path is figure_reports.figure_gate_report_path
     assert figures.derive_figure_slots is figure_reports.derive_figure_slots
@@ -17,6 +30,7 @@ def test_figures_facade_preserves_public_report_entrypoints() -> None:
 
 def test_derive_figure_slots_deduplicates_sources_by_slot_id(tmp_path: Path) -> None:
     assets = tmp_path / "plot-assets.json"
+    write_loop_artifacts(tmp_path, "pipeline")
     assets.write_text(
         json.dumps(
             {
@@ -51,6 +65,7 @@ def test_build_figure_gate_report_matches_real_asset(tmp_path: Path) -> None:
     (figures_dir / "method-data-flow.pdf").write_text("pdf", encoding="utf-8")
     captions = tmp_path / "captions.json"
     captions.write_text(json.dumps({"figures": [{"id": "flow", "caption": "Method data flow"}]}), encoding="utf-8")
+    write_loop_artifacts(tmp_path, "flow")
 
     report = figure_reports.build_figure_gate_report(figures_dir=figures_dir, plot_captions_path=captions)
 
@@ -65,6 +80,7 @@ def test_figures_facade_report_uses_facade_policy(monkeypatch, tmp_path: Path) -
     (figures_dir / "method-data-flow.pdf").write_text("pdf", encoding="utf-8")
     captions = tmp_path / "captions.json"
     captions.write_text(json.dumps({"figures": [{"id": "flow", "caption": "Method data flow"}]}), encoding="utf-8")
+    write_loop_artifacts(tmp_path, "flow")
 
     class FacadePolicy:
         def match_slot(self, slot, assets, generated_assets=None):
@@ -98,6 +114,7 @@ def test_build_figure_gate_report_uses_generated_placeholder_asset(tmp_path: Pat
     snippet = generated / "pipeline.tex"
     snippet.write_text("% generated placeholder", encoding="utf-8")
     assets = tmp_path / "plot-assets.json"
+    write_loop_artifacts(tmp_path, "pipeline")
     assets.write_text(
         json.dumps(
             {
@@ -162,6 +179,7 @@ def test_build_figure_gate_report_uses_session_paths(tmp_path: Path) -> None:
     (figures_dir / "method-data-flow.pdf").write_text("pdf", encoding="utf-8")
     captions = tmp_path / "captions.json"
     captions.write_text(json.dumps({"figures": [{"id": "flow", "caption": "Method data flow"}]}), encoding="utf-8")
+    write_loop_artifacts(tmp_path, "flow")
     now = utc_now_iso()
     state = SessionState(
         session_id="figure-report-test",
@@ -199,3 +217,19 @@ def test_derive_figure_slots_reads_caption_mapping_and_skips_invalid_items(tmp_p
         ("figure_slot_2", "No id", False),
         ("pipeline", "Pipeline caption", True),
     ]
+
+
+def test_build_figure_gate_report_blocks_missing_loop_artifacts_for_matched_figure(tmp_path: Path) -> None:
+    figures_dir = tmp_path / "figures"
+    figures_dir.mkdir()
+    (figures_dir / "method-data-flow.pdf").write_text("pdf", encoding="utf-8")
+    captions = tmp_path / "captions.json"
+    captions.write_text(json.dumps({"figures": [{"id": "flow", "caption": "Method data flow"}]}), encoding="utf-8")
+
+    report = figure_reports.build_figure_gate_report(figures_dir=figures_dir, plot_captions_path=captions)
+
+    assert report["status"] == "blocked"
+    assert "figure_loop_artifact_missing" in report["blocking_reasons"]
+    assert "figure_plan_missing" in report["blocking_reasons"]
+    assert report["figure_loop_artifacts"]["status"] == "blocked"
+    assert report["figure_loop_artifacts"]["figures"][0]["status"] == "blocked"

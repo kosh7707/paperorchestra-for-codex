@@ -30,7 +30,8 @@ Check rendered pages for issues TeX/source review cannot reliably see:
 - float clumps, orphaned headings, column imbalance, excessive whitespace;
 - one-column vs two-column placement mistakes (`figure` vs `figure*`, table width, caption float risk);
 - cross-document visual consistency: figure palette, line weights, typography, diagram density, caption style;
-- generated draft artwork still used as if it were final evidence.
+- generated draft artwork still used as if it were final evidence;
+- AI-generated-artifact tells in figures: garbled/blurry text, warped geometry, object bleeding, inconsistent light/shadow, overdecorated stock-art sheen, fake UI chrome, unsupported decorative icons, or excessive detail that distracts from the scientific claim.
 
 For every finding, preserve claim/location/caption coupling:
 
@@ -57,6 +58,7 @@ CLI equivalent, only when the current installed/source command surface verifies 
 ```bash
 paperorchestra visual-audit --pdf compiled.pdf --render-dir rendered-pages
 paperorchestra visual-audit --pdf compiled.pdf --findings-json page-visual-findings.json
+paperorchestra visual-audit --pdf compiled.pdf --review-focus figure --require-ai-artifact-check --require-publication-figure-check --findings-json page-visual-findings.json
 ```
 
 When operating from a PaperOrchestra source checkout, first run the drift detector so a stale installed console does not hide source-supported commands:
@@ -83,14 +85,18 @@ The command writes:
 - `visual_repair_brief.json` during QA repair when visual findings are machine-actionable.
 - `visual_repair_candidate.json` after the brief, with concrete bounded TeX/table/figure repair strategies and claim/location/caption guards before author handoff.
 
+Imported findings should use this compact schema. When `--require-ai-artifact-check` or `--require-publication-figure-check` is used, the corresponding `checks_completed` entries are mandatory; an otherwise empty findings file must not pass.
+
 Imported findings should use this compact schema:
 
 ```json
 {
   "schema_version": "page-visual-findings/1",
   "reviewer": "visual-verdict|vision-agent|human|codex-subagent",
+  "checks_completed": ["ai_artifact_check", "publication_figure_check"],
   "page_findings": [
-    {"page": 2, "code": "table_overflow", "severity": "fail", "target": "Table 2", "detail": "...", "suggested_fix": "..."}
+    {"page": 2, "code": "table_overflow", "severity": "fail", "target": "Table 2", "detail": "...", "suggested_fix": "..."},
+    {"page": 3, "code": "ai_generated_artifact", "severity": "fail", "target": "Figure 1", "detail": "Garbled microtext and warped arrows make the generated figure look machine-made.", "suggested_fix": "Regenerate with fewer labels or move details to the caption/table."}
   ],
   "document_findings": [
     {"code": "visual_style_inconsistent", "severity": "warn", "target": "figures", "detail": "...", "suggested_fix": "..."}
@@ -100,7 +106,7 @@ Imported findings should use this compact schema:
 
 ## OMX companion routing
 
-- `$visual-verdict`: use for page screenshots/contact sheets that need visual QA, especially before importing `page-visual-findings.json`.
+- `$visual-verdict`: use for page screenshots/contact sheets that need visual QA, especially before importing `page-visual-findings.json`; PaperOrchestra figure work must include AI-artifact and publication-readiness checks.
 - `$ultrawork`: use when multiple independent visual reviewers can inspect different page ranges, figures, tables, or one-column/two-column variants.
 - `$ralph`: use when visual findings should continue through repair, recompile, rerender, and re-audit until a bounded stop condition.
 - `$paperorchestra-figure`: use when a finding concerns figure intent, caption evidence map, output form, or final artwork replacement.

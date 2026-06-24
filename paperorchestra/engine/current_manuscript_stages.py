@@ -60,6 +60,9 @@ def write_page_layout_review(
     output_path: str | Path | None = None,
     render_dir: str | Path | None = None,
     findings_json: str | Path | None = None,
+    review_focus: str | None = None,
+    require_ai_artifact_check: bool = False,
+    require_publication_figure_check: bool = False,
 ) -> tuple[Path, dict[str, Any]]:
     return _write_page_layout_review(
         cwd,
@@ -67,6 +70,9 @@ def write_page_layout_review(
         output_path=output_path,
         render_dir=render_dir,
         findings_json=findings_json,
+        review_focus=review_focus,
+        require_ai_artifact_check=require_ai_artifact_check,
+        require_publication_figure_check=require_publication_figure_check,
     )
 
 

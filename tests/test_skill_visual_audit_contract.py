@@ -20,3 +20,13 @@ def test_visual_audit_skill_routes_to_vision_and_repair_loop() -> None:
     assert "claim" in text.lower()
     assert "caption" in text.lower()
     assert "one-column" in text or "two-column" in text
+
+
+def test_visual_audit_skill_names_ai_artifact_findings_for_figures() -> None:
+    text = SKILL.read_text(encoding="utf-8")
+
+    assert "AI-generated-artifact tells" in text
+    assert "ai_generated_artifact" in text
+    assert "--require-ai-artifact-check" in text
+    assert "--require-publication-figure-check" in text
+    assert "publication-readiness" in text

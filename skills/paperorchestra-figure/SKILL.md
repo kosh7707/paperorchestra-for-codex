@@ -1,6 +1,6 @@
 ---
 name: paperorchestra-figure
-description: Design, draft, review, or generate evidence-bearing paper figures for PaperOrchestra manuscripts using imagegen-generated bitmap assets as the mandatory figure-generation path. Use when a paper plan, section, review, or quality gate needs pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures; handles caption/claim alignment, one-column vs two-column LaTeX placement, and forbids TikZ/SVG/Mermaid as final generated figure content.
+description: Design, draft, review, generate, and repair evidence-bearing PaperOrchestra manuscript figures through a mandatory plan → Critic validation → imagegen bitmap generation → AI-artifact/visual QA → repair loop. Use when a paper plan, section, review, or quality gate needs pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures; handles caption/claim alignment, one-column vs two-column LaTeX placement, Ralph-backed iteration, visual-verdict/page-audit checks, and forbids TikZ/SVG/Mermaid as final generated figure content.
 ---
 
 # PaperOrchestra Figure
@@ -28,6 +28,41 @@ output form: imagegen bitmap asset | image prompt + generated image | LaTeX plac
 ```
 
 Reject decorative figures. If the figure has no supported claim or source evidence, route back to `$paperorchestra-plan` or ask for the missing evidence.
+
+## Mandatory figure Ralph loop
+
+Every new or replacement evidence-bearing figure must run this loop before it can be claimed integrated. Treat this as required even when the user asks for a quick figure. Skip only for explicitly review-only/caption-only tasks, and record the skip reason.
+
+```text
+figure plan -> Critic validation + reinforcement -> imagegen bitmap generation -> figure visual QA -> repair/regenerate -> compile/render -> page visual audit -> accept or continue
+```
+
+Use `$ralph` as the persistence wrapper when the current session has OMX runtime support or the user asks to keep going through the figure. Ralph's stop condition is not "an image exists"; it is: plan accepted, generated bitmap persisted, AI-artifact/visual findings resolved or explicitly human-owned, compiled PDF rendered, and figure/page artifacts recorded. If runtime Ralph is unavailable, execute the same loop locally and record `ralph_unavailable` in the figure manifest.
+
+Required artifacts for every generated/replacement figure:
+
+- `figure-plan.<id>.md`: figure intent contract, claim/caption/placement contract, prompt strategy, and acceptance checks.
+- `figure-critic.<id>.json`: Critic verdict before generation. Must include `verdict`, `blocking_issues[]`, `reinforcements[]`, and `acceptance_checks[]`.
+- `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`: updated for the selected bitmap.
+- `figure-visual-findings.<id>.json`: visual-verdict/vision/Critic findings for the bitmap or rendered page. It must explicitly address AI-generated-artifact tells and publication-figure readability.
+- `figure-placement-review.json`: refreshed after LaTeX placement changes.
+- `page-layout-review.json`: refreshed after compile/render; cannot be TeX-only.
+- `figure_gate.report.json`: refreshed after artifact checks; it must block matched/generated/realized figure slots whose plan, Critic, or visual findings artifact is missing or failing.
+
+Critic validation must happen before generation. The Critic should reject or reinforce the plan when the figure is a faux figure, overcrowded, decorative, too local-term-heavy, caption-dependent, unsupported by evidence, or better expressed as prose/table. Critic reinforcement should simplify the visual claim, reduce labels, move exact terms/numbers into the caption/table, and define the visual hierarchy before imagegen is invoked.
+
+## AI-artifact and publication visual QA
+
+For every generated or replacement bitmap, inspect the raw bitmap and the rendered PDF page. Fail or request repair for:
+
+- garbled, blurry, misspelled, or too-small text; labels that would not survive IEEE page-width or column-width rendering;
+- warped geometry, inconsistent arrows, impossible joins, object bleeding, strange shadows/lighting, overdecorated stock-art sheen, glossy stock-art sheen, or unnecessary photorealism;
+- too many colors, random color semantics, red/green-only distinctions, low contrast, color behind text, or reliance on color alone;
+- decorative icons, fake UI chrome, excessive detail, or a "faux figure" that is really a list/table dressed up as art;
+- unsupported local implementation terms in the image when the caption/table could carry the exact detail more safely;
+- unreadable crop, bad aspect ratio, table/figure overlap, float clump, excessive whitespace, or caption drift after rendering.
+
+The default pass threshold is strict: no blocking visual finding, no unresolved `visual_review_pending`, no AI-artifact tell that would make the figure look machine-generated or unserious, and no caption/claim mismatch. If the reviewer finds only aesthetic preference that cannot be resolved objectively, mark it `human_needed` instead of pretending the figure passed.
 
 ## Placement contract
 
@@ -84,6 +119,9 @@ plot_assets.json: present / missing / stale / not applicable
 plot_captions.json: present / missing / stale / not applicable
 figure-placement-review.json: present / missing / stale / not applicable
 figure_gate.report.json: present / missing / stale / not applicable
+figure-plan.<id>.md: present / missing / stale / not applicable
+figure-critic.<id>.json: present / missing / stale / not applicable
+figure-visual-findings.<id>.json: present / missing / stale / not applicable
 ```
 
 For a figure-bearing manuscript, expected figure artifacts must not silently disappear. If an expected artifact is missing or stale, block and route to `$paperorchestra-figure` or the owning quality/status workflow before claiming the figure is integrated.
@@ -105,7 +143,7 @@ For evidence-bearing figure work, generate or edit the bitmap through imagegen, 
 Use imagegen as the mandatory generation path for PaperOrchestra figures:
 
 - Do **not** create Mermaid, SVG, TikZ, Graphviz, canvas, or other vector/code-native diagrams as final generated figure content.
-- For every new or replacement paper figure asset, invoke the installed `imagegen` skill/tool and persist the selected bitmap into the PaperOrchestra workspace before claiming the figure exists.
+- For every new or replacement paper figure asset, invoke the installed `imagegen` skill/tool as part of the mandatory figure Ralph loop, persist the selected bitmap into the PaperOrchestra workspace, and pass AI-artifact/publication visual QA before claiming the figure exists.
 - Use LaTeX only for placement around the generated bitmap, for example `\includegraphics`, figure width, label, and caption. Do not use LaTeX/TikZ to draw the figure itself.
 - For pipeline, architecture, taxonomy, method, case-study, threat-model, and visual-abstract figures, translate exact evidence requirements into an imagegen prompt with short, high-level labels. Put exact terminology, verdict mappings, numeric values, and caveats in the caption/evidence map rather than relying on tiny in-image text.
 - For result-summary figures, use imagegen for the visual summary graphic. Keep exact numbers in tables or captions unless the user explicitly accepts approximate in-image text.
@@ -122,27 +160,30 @@ Before generating anything, still consider whether a figure is necessary:
 
 - `$best-practice-research`: use when venue norms, figure placement conventions, caption style, or comparable-paper visual patterns need external evidence.
 - `$ultrawork`: use when several independent figure variants can be explored in parallel, such as pipeline vs architecture vs taxonomy alternatives.
-- `$visual-verdict`: use when a rendered bitmap or screenshot-like figure needs visual QA against a reference.
-- `$paperorchestra-visual-audit`: use when the compiled PDF pages, tables, or multiple figures must be inspected together as rendered output.
-- `$ralph`: use when the user wants a persistent figure repair loop over generated artifacts, captions, placement, and manuscript integration.
+- `$visual-verdict`: mandatory after bitmap generation or rendered-page screenshot capture; use it to inspect readability, visual hierarchy, and AI-artifact tells before the next edit.
+- `$paperorchestra-visual-audit`: mandatory after compile for integrated figures; use `--require-ai-artifact-check --require-publication-figure-check` when available.
+- `$ralph`: mandatory wrapper for every new or replacement evidence-bearing figure when OMX runtime is available; otherwise mirror the same loop locally and record the skip reason.
 
 ## Workflow
 
 1. Start with current PaperOrchestra session/status inspection unless purely reviewing a provided snippet. The figure skill must route back to the owning workflow (`$paperorchestra-plan`, `$paperorchestra-authoring-round`, `$paperorchestra-quality-gate`, or `$paperorchestra-live-review`) and must not become a parallel paper workflow.
 2. Inspect the paper plan, section draft, or review finding.
-3. Fill the Figure intent contract.
+3. Fill the Figure intent contract and write `figure-plan.<id>.md`.
 4. Choose one-column vs two-column placement and `figure` vs `figure*`.
 5. Build the Caption evidence map and reject/downgrade unsupported caption claims; weak caption rejected/downgraded is the correct outcome when the caption is not self-contained, not evidence-mapped, or stronger than the evidence.
-6. Choose output form:
+6. Run Critic validation before generation and write `figure-critic.<id>.json`; reinforce the plan until the Critic verdict is non-blocking.
+7. Choose output form:
    - imagegen bitmap asset for every new or replacement figure;
    - LaTeX placement snippet only to embed the generated bitmap;
    - caption only when the task is explicitly review-only and no new figure asset is requested.
-7. Invoke imagegen for generated assets, save the selected output into the PaperOrchestra workspace, and record the image path in `plot_assets.json` or the round artifact manifest before claiming success.
-8. Draft the caption:
+8. Invoke imagegen for generated assets, save the selected output into the PaperOrchestra workspace, and record the image path in `plot_assets.json` or the round artifact manifest before claiming success.
+9. Run visual-verdict/vision review on the bitmap or rendered page and write `figure-visual-findings.<id>.json`; if it reports AI-artifact, readability, hierarchy, or publication-fit problems, repair/regenerate before continuing.
+10. Draft the caption:
    - first sentence: what the figure shows;
    - second sentence: what claim it supports;
    - optional final sentence: key caveat or reading order.
-9. Return an artifact card and route follow-up edits to the owning paper workflow.
+11. Compile, run figure-placement review, run paperorchestra visual-audit on rendered pages, run/write `figure_gate.report.json`, and continue the Ralph loop until visual findings pass and the figure gate no longer blocks, or the issue becomes explicit `human_needed`.
+12. Return an artifact card and route follow-up edits to the owning paper workflow.
 
 ## Review checklist
 
@@ -154,6 +195,8 @@ Check every figure for:
 - placement: does `figure` vs `figure*` match one-column/two-column readability?
 - visual necessity: would prose or a table be clearer?
 - no invented components, citations, metrics, labels, or arrows; if imagegen introduces unsupported detail, reject or regenerate the asset.
+- no AI-generated-artifact tells: garbled text, warped geometry, object bleeding, inconsistent lighting/shadows, fake UI chrome, or stock-art gloss.
+- publication-fit: readable at final IEEE column/page width, restrained palette, colorblind-safe semantics, enough whitespace, no faux-figure/list-with-icons smell.
 
 ## Final card
 
@@ -164,7 +207,11 @@ Supported claim:
 Source evidence:
 Output form:
 Imagegen prompt:
+Figure plan artifact:
+Critic validation artifact:
 Generated image artifact:
+Visual findings artifact:
+Ralph loop state / skip reason:
 Recommended LaTeX environment:
 Width target:
 Caption draft:
@@ -172,6 +219,7 @@ Caption evidence map:
 Self-contained/floating-caption check:
 Weak-caption status:
 Generation/edit artifact:
+AI-artifact/publication QA verdict:
 Risks/TODOs:
 Next paper skill:
 ```

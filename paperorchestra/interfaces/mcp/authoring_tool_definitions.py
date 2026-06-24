@@ -108,7 +108,7 @@ AUTHORING_TOOLS: list[JSON] = [
     },
     {
         "name": "visual_audit",
-        "description": "Render compiled PDF pages, package page contact sheets, and optionally import visual findings into a page-layout review.",
+        "description": "Render compiled PDF pages, package page contact sheets, and optionally import visual findings into a page-layout review. For PaperOrchestra figures, pass review_focus plus AI-artifact/publication-figure checks before accepting generated artwork.",
         "inputSchema": _schema(
             {
                 "cwd": {"type": "string"},
@@ -116,6 +116,9 @@ AUTHORING_TOOLS: list[JSON] = [
                 "output": {"type": "string"},
                 "render_dir": {"type": "string"},
                 "findings_json": {"type": "string"},
+                "review_focus": {"type": "string"},
+                "require_ai_artifact_check": {"type": "boolean"},
+                "require_publication_figure_check": {"type": "boolean"},
             }
         ),
     },

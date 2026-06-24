@@ -25,6 +25,15 @@ SEMI_AUTO_VISUAL_CODES = {
     "column_imbalance",
     "excessive_whitespace",
     "visual_style_inconsistent",
+    "ai_generated_artifact",
+    "garbled_or_blurry_text",
+    "warped_geometry",
+    "object_bleeding_or_unphysical_join",
+    "overdecorated_ai_style",
+    "inconsistent_light_shadow",
+    "unsupported_decorative_icon",
+    "publication_figure_overcrowded",
+    "color_or_contrast_accessibility",
 }
 HUMAN_VISUAL_CODES = {
     "final_artwork_required",
@@ -42,6 +51,9 @@ def write_page_layout_review(
     output_path: str | Path | None = None,
     render_dir: str | Path | None = None,
     findings_json: str | Path | None = None,
+    review_focus: str | None = None,
+    require_ai_artifact_check: bool = False,
+    require_publication_figure_check: bool = False,
 ) -> tuple[Path, dict[str, Any]]:
     state = load_session(cwd)
     selected_pdf = Path(pdf_path or state.artifacts.compiled_pdf or "").expanduser()
@@ -62,6 +74,9 @@ def write_page_layout_review(
         imported_findings=imported_findings,
         imported_findings_path=findings_json,
         render_status={key: value for key, value in render_payload.items() if key != "pages"},
+        review_focus=review_focus,
+        require_ai_artifact_check=require_ai_artifact_check,
+        require_publication_figure_check=require_publication_figure_check,
     )
     path = Path(output_path).resolve() if output_path else artifact_path(cwd, "page-layout-review.json")
     write_json(path, payload)
@@ -79,15 +94,27 @@ def build_page_layout_review_payload(
     imported_findings: dict[str, Any] | None,
     render_status: dict[str, Any],
     imported_findings_path: str | Path | None = None,
+    review_focus: str | None = None,
+    require_ai_artifact_check: bool = False,
+    require_publication_figure_check: bool = False,
 ) -> dict[str, Any]:
     imported_findings_valid = _valid_imported_findings(imported_findings)
+    required_checks = _required_visual_checks(
+        require_ai_artifact_check=require_ai_artifact_check,
+        require_publication_figure_check=require_publication_figure_check,
+    )
+    missing_required_checks = _missing_required_visual_checks(required_checks, imported_findings if imported_findings_valid else None)
     page_findings, document_findings = _normalized_findings(imported_findings if imported_findings_valid else None)
     failing_codes, warning_codes = _finding_codes(page_findings + document_findings)
+    if missing_required_checks:
+        failing_codes.append("required_visual_check_missing")
     repair_candidates = _repair_candidates(page_findings, document_findings)
     requires_visual_reviewer = not imported_findings_valid
     if requires_visual_reviewer:
         warning_codes.append("visual_review_pending")
         repair_candidates.append(_pending_visual_review_candidate(rendered_pages, contact_sheets))
+    if missing_required_checks:
+        repair_candidates.append(_missing_required_visual_checks_candidate(missing_required_checks))
     if str(render_status.get("status") or "").lower() not in {"pass", "ok", "success"}:
         render_code = "visual_render_unavailable" if render_status.get("status") == "unavailable" else "visual_render_failed"
         failing_codes.append(render_code)
@@ -106,6 +133,10 @@ def build_page_layout_review_payload(
         "rendered_pages": rendered_pages,
         "contact_sheets": contact_sheets,
         "requires_visual_reviewer": requires_visual_reviewer,
+        "review_focus": review_focus,
+        "required_visual_checks": required_checks,
+        "completed_visual_checks": _completed_visual_checks(imported_findings if imported_findings_valid else None),
+        "missing_required_visual_checks": missing_required_checks,
         "imported_findings_path": str(Path(imported_findings_path).resolve()) if imported_findings_path else None,
         "imported_findings_schema_version": imported_findings.get("schema_version") if isinstance(imported_findings, dict) else None,
         "imported_findings_valid": imported_findings_valid,
@@ -192,6 +223,29 @@ def write_visual_repair_candidate(
     state.artifacts.latest_visual_repair_candidate_json = str(path)
     save_session(cwd, state)
     return path, payload
+
+
+def _required_visual_checks(*, require_ai_artifact_check: bool, require_publication_figure_check: bool) -> list[str]:
+    checks: list[str] = []
+    if require_ai_artifact_check:
+        checks.append("ai_artifact_check")
+    if require_publication_figure_check:
+        checks.append("publication_figure_check")
+    return checks
+
+
+def _completed_visual_checks(imported_findings: dict[str, Any] | None) -> list[str]:
+    if not isinstance(imported_findings, dict):
+        return []
+    raw = imported_findings.get("checks_completed") or imported_findings.get("completed_checks") or []
+    if not isinstance(raw, list):
+        return []
+    return [str(item).strip() for item in raw if str(item).strip()]
+
+
+def _missing_required_visual_checks(required_checks: list[str], imported_findings: dict[str, Any] | None) -> list[str]:
+    completed = set(_completed_visual_checks(imported_findings))
+    return [check for check in required_checks if check not in completed]
 
 
 def _valid_imported_findings(imported_findings: dict[str, Any] | None) -> bool:
@@ -289,13 +343,28 @@ def _pending_visual_review_candidate(rendered_pages: list[dict[str, Any]], conta
         "page": None,
         "target": "rendered PDF pages",
         "detail": "Rendered page images exist, but no imported page-visual-findings review has been provided yet.",
-        "suggested_fix": "Run a vision reviewer or $visual-verdict over the contact sheet, then rerun visual-audit with --findings-json.",
+        "suggested_fix": "Run a vision reviewer or $visual-verdict over the contact sheet, including AI-artifact and publication-figure checks, then rerun visual-audit with --findings-json.",
         "proposed_owner": "paperorchestra",
         "candidate_instruction": (
             "Use the rendered page images/contact sheet to obtain visual findings; do not mark the PDF visually accepted from TeX-only evidence."
         ),
         "page_count": len(rendered_pages),
         "contact_sheets": contact_sheets,
+    }
+
+
+def _missing_required_visual_checks_candidate(missing_checks: list[str]) -> dict[str, Any]:
+    return {
+        "code": "required_visual_check_missing",
+        "source_finding_code": "required_visual_check_missing",
+        "automation": "semi_auto",
+        "scope": "document",
+        "page": None,
+        "target": "required PaperOrchestra figure visual checks",
+        "detail": "Imported findings did not declare completed required visual checks: " + ", ".join(missing_checks),
+        "suggested_fix": "Run a vision reviewer or $visual-verdict with category_hint=paper-figure, record checks_completed, then rerun visual-audit.",
+        "proposed_owner": "paperorchestra",
+        "candidate_instruction": "Do not accept generated figure artwork until AI-artifact and publication-figure checks are explicitly completed in findings JSON.",
     }
 
 
@@ -348,6 +417,7 @@ def _brief_action(candidate: dict[str, Any], *, index: int) -> dict[str, Any]:
             "The repaired page still supports the same manuscript claim; no stronger claim is introduced.",
             "The figure/table remains near the intended rhetorical location or has a documented float reason.",
             "The caption remains accurate, self-contained, and aligned with the visual after repair.",
+            "No AI-generated-artifact tells remain: garbled text, warped geometry, impossible joins, inconsistent lighting/shadows, overdecorated stock-art sheen, or unsupported decorative icons.",
             "One-column/two-column layout choice remains readable and does not overflow page or column bounds.",
             "Recompile and rerun page visual audit after the candidate repair.",
         ],

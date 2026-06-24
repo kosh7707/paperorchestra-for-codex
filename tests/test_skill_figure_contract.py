@@ -277,3 +277,34 @@ def test_figure_skill_installs_with_other_paperorchestra_skills(tmp_path: Path) 
     installed = target / "paperorchestra-figure" / "SKILL.md"
     assert installed.exists()
     assert text(installed) == text(FIGURE_SKILL)
+
+
+def test_figure_skill_requires_ralph_backed_plan_critic_generate_visual_loop() -> None:
+    body = text(FIGURE_SKILL)
+    assert_contains(
+        "paperorchestra-figure",
+        body,
+        "Mandatory figure Ralph loop",
+        "figure plan -> Critic validation + reinforcement -> imagegen bitmap generation -> figure visual QA -> repair/regenerate -> compile/render -> page visual audit -> accept or continue",
+        "Every new or replacement evidence-bearing figure must run this loop",
+        "figure-plan.<id>.md",
+        "figure-critic.<id>.json",
+        "figure-visual-findings.<id>.json",
+        "$ralph",
+    )
+
+
+def test_figure_skill_requires_ai_artifact_and_publication_visual_qa() -> None:
+    body = text(FIGURE_SKILL)
+    assert_contains(
+        "paperorchestra-figure",
+        body,
+        "AI-artifact and publication visual QA",
+        "garbled, blurry, misspelled, or too-small text",
+        "warped geometry",
+        "object bleeding",
+        "overdecorated stock-art sheen",
+        "faux figure",
+        "colorblind-safe",
+        "AI-artifact/publication QA verdict:",
+    )

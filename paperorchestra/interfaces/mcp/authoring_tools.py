@@ -230,6 +230,9 @@ def tool_visual_audit(arguments: JSON) -> JSON:
         output_path=arguments.get("output"),
         render_dir=arguments.get("render_dir"),
         findings_json=arguments.get("findings_json"),
+        review_focus=arguments.get("review_focus"),
+        require_ai_artifact_check=bool(arguments.get("require_ai_artifact_check", False)),
+        require_publication_figure_check=bool(arguments.get("require_publication_figure_check", False)),
     )
     return ok(
         {
