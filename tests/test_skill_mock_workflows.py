@@ -169,9 +169,9 @@ def test_authoring_round_mock_contract() -> None:
 def test_figure_mock_contract() -> None:
     assert_mentions(
         "paperorchestra-figure",
-        "paperorchestra generate-plots",
         "paperorchestra review-figure-placement",
-        "mock",
+        "imagegen",
+        "prompt only / no image generated",
         "$visual-verdict",
     )
 

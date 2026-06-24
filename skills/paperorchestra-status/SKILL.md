@@ -64,6 +64,8 @@ Check for stale manuscript hash mismatches between current `paper.full.tex` and 
 
 Name both the PaperOrchestra workflow and the OMX companion when a companion would materially improve the next step. If the current user message asks to continue into the recommended next round, treat the matching companion as an invocation obligation, not a passive hint: load that companion skill and execute its state/artifact protocol before returning to the PaperOrchestra workflow, or record a concrete skip reason.
 
+Compact routing phrases for status cards: `$paperorchestra-intake + $deep-interview`; `$paperorchestra-plan + $ralplan`; `$paperorchestra-authoring-round + $ultrawork`; `$paperorchestra-authoring-round + $ralph`; `$team + $ultragoal`; `$paperorchestra-live-review + $autoresearch`; `$paperorchestra-research-swarm + $ultrawork + $autoresearch`; `$paperorchestra-live-review + $best-practice-research`; `$paperorchestra-quality-gate + $ultraqa`; `$paperorchestra-visual-audit + $visual-verdict`.
+
 - `$deep-interview` -> `$paperorchestra-intake` (`$paperorchestra-intake` + `$deep-interview`): author intent, material boundaries, venue, experiment basis, or allowed claims are unclear. Run deep-interview first; intake only writes the handoff after the interview resolves.
 - `$paperorchestra-plan` + `$ralplan`: manuscript structure, RQs, evidence table shape, or contribution boundaries need consensus planning.
 - `$paperorchestra-authoring-round` + `$ultrawork`: independent pre-draft lanes can run in parallel before one bounded authoring round; invoke it when two or more such lanes are open and the user asks to proceed.

@@ -48,7 +48,7 @@ def test_figure_skill_handles_column_layout_and_latex_environment() -> None:
     )
 
 
-def test_figure_skill_prefers_reproducible_vector_outputs_and_gates_imagegen() -> None:
+def test_figure_skill_requires_imagegen_and_forbids_vector_final_outputs() -> None:
     body = text(FIGURE_SKILL)
     assert_contains(
         "paperorchestra-figure",
@@ -56,18 +56,21 @@ def test_figure_skill_prefers_reproducible_vector_outputs_and_gates_imagegen() -
         "Mermaid",
         "SVG",
         "TikZ",
-        "vector-first",
+        "mandatory generation path",
         "imagegen",
-        "bitmap illustration",
+        "bitmap",
+        "Do **not** create Mermaid, SVG, TikZ, Graphviz, canvas, or other vector/code-native diagrams as final generated figure content.",
     )
 
 
-def test_figure_skill_rejects_imagegen_for_precise_diagrams() -> None:
+def test_figure_skill_moves_exact_content_to_caption_or_tables() -> None:
     body = text(FIGURE_SKILL)
     assert_contains(
         "paperorchestra-figure",
         body,
-        "Do not use imagegen for diagrams that must preserve exact node labels, arrows, numeric results, code paths, or reproducible layout.",
+        "translate exact evidence requirements into an imagegen prompt with short, high-level labels",
+        "Put exact terminology, verdict mappings, numeric values, and caveats in the caption/evidence map",
+        "Keep exact numbers in tables or captions",
     )
 
 
@@ -105,7 +108,7 @@ def test_figure_skill_offers_remove_or_table_instead_of_generate() -> None:
         body,
         "remove the figure",
         "convert to prose",
-        "convert to table",
+        "convert to a table",
         "defer to human final artwork",
     )
 
@@ -152,9 +155,9 @@ def test_figure_skill_fails_closed_on_claimed_bitmap_generation() -> None:
     assert_contains(
         "paperorchestra-figure",
         body,
-        "If bitmap output is claimed",
-        "must actually call the imagegen skill/tool",
-        "report the generated artifact",
+        "For every new or replacement paper figure asset, invoke the installed `imagegen` skill/tool",
+        "persist the selected bitmap",
+        "Generated image artifact:",
         "prompt only / no image generated",
     )
 

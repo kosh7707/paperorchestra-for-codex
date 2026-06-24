@@ -68,6 +68,8 @@ If a required companion cannot run because OMX runtime, credentials, provider co
 
 Before drafting prose, rewriting, or finalizing any Introduction, Related Work, positioning, citation-bearing, or source-backed claim, inspect the current workspace for `prior_work_seed.json`, `candidate_papers.json`, `citation_registry.json`, `citation_map.json`, `references.bib`, `citation_support_review.json`, `research-swarm.manifest.json`, and `$autoresearch` validator `result.json`. Check whether those artifacts are current for the active `paper-plan.md` and current manuscript hash when a draft exists.
 
+Operational shorthand: when Related Work, citation candidates, bibliography, or source-backed evidence are missing, weak, stale, mock/heuristic/local-only, or not current, the citation/source evidence gate fails and the required research companion must run before manuscript prose.
+
 Treat the gate as failing when source evidence is absent, weak, stale, heuristic/mock/local-only, candidate-only without claim-support notes, outside the active PaperOrchestra workspace, or represented only by bibliography/citation-map files without a fresh research/review/validator artifact. A failing broad or multi-cluster gate requires `$paperorchestra-research-swarm` before prose. A failing single-lane gate requires `$autoresearch` or `$paperorchestra-live-review` + `$autoresearch` before finalizing claims. If the user explicitly asks for a one-shot local scaffold, keep citation-bearing prose visibly provisional and record the skipped gate plus reason in the round artifacts and final card.
 
 Companion usage by workflow:
