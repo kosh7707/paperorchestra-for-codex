@@ -13,17 +13,18 @@ Use this for state-machine verification. It may call critics, but its job is to 
 
 ## Bounded order
 
-Run only the needed suffix if fresh artifacts already exist; otherwise follow this order. Preferred MCP/source gate: `quality_gate(...)` or a CLI gate only when `paperorchestra quality-gate --help` verifies it exists. Installed CLI fallback: `validate-current` → `critique` → `quality-eval` → `qa-loop-plan` → bounded `qa-loop-step`. The citation-support stage is `critique --citation-evidence-mode web`:
+Run only the needed suffix if fresh artifacts already exist; otherwise follow this order. Preferred MCP/source gate: `quality_gate(...)` or a CLI gate only when `paperorchestra quality-gate --help` verifies it exists on the exact surface you will run. Current source/venv CLI fallback is `critique` → `quality-gate` → `qa-loop` → bounded `qa-loop-step`. The citation-support stage is `critique --citation-evidence-mode web`:
 
 ```bash
-paperorchestra validate-current
 paperorchestra critique --provider shell --provider-command "$PAPERO_MODEL_CMD" --citation-evidence-mode web
-paperorchestra quality-eval --quality-mode claim_safe --require-live-verification
-paperorchestra qa-loop-plan --quality-mode claim_safe --require-live-verification
+paperorchestra quality-gate --quality-mode claim_safe --require-live-verification
+paperorchestra qa-loop --quality-mode claim_safe --require-live-verification
 paperorchestra qa-loop-step --quality-mode claim_safe --max-iterations 1
 ```
 
-`run` alone is draft generation, not full quality approval. A full quality gate must include validation, compile where allowed, critic/citation evidence, `quality-eval`, `qa-loop-plan`, and at most a bounded `qa-loop-step`.
+Legacy installations may expose older staged commands such as `validate-current`, `quality-eval`, or `qa-loop-plan`. Use them only after that same CLI surface verifies them with `--help`; otherwise treat current `quality-gate`/`qa-loop` as the documented path.
+
+`run` alone is draft generation, not full quality approval. A full quality gate must include validation/quality-gate state, compile where allowed, critic/citation evidence, a repair plan (`qa-loop` or legacy `qa-loop-plan`), and at most a bounded `qa-loop-step`.
 
 After every state-changing gate command, run `paperorchestra status --json` and inspect the expected `quality-eval.json`, `qa-loop.plan.json`, `qa-loop-history.jsonl`, validation JSON, and repair-step artifacts before reporting the gate state.
 

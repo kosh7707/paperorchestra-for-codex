@@ -6,6 +6,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "skills"
 PAPERO_SKILLS = sorted(path.parent.name for path in SKILLS.glob("paperorchestra*/SKILL.md"))
+PAPERO_CLI = ROOT / ".venv" / "bin" / "paperorchestra"
+CLI = str(PAPERO_CLI if PAPERO_CLI.exists() else "paperorchestra")
 
 
 def skill_text(name: str) -> str:
@@ -51,7 +53,7 @@ def write_minimal_session(tmp_path: Path) -> Path:
     guidelines.write_text("Use concise article format.\n", encoding="utf-8")
     init = run_cmd(
         [
-            "paperorchestra",
+            CLI,
             "init",
             "--idea",
             str(idea),
@@ -95,7 +97,7 @@ def test_router_mock_contract() -> None:
     assert_mentions(
         "paperorchestra",
         "paperorchestra run --provider mock --verify-mode mock --runtime-mode compatibility",
-        "paperorchestra quality-eval --quality-mode claim_safe",
+        "paperorchestra quality-gate --quality-mode claim_safe",
         "$paperorchestra-research-swarm",
         "If the next action is `start_autoresearch` / `$autoresearch`",
     )
@@ -159,7 +161,7 @@ def test_authoring_round_mock_contract() -> None:
         "paperorchestra-authoring-round",
         "Use mock providers or `--citation-evidence-mode heuristic` only for explicit local smoke tests",
         "paperorchestra research-prior-work",
-        "paperorchestra plan-narrative",
+        "paperorchestra authoring-round --provider shell",
         "paperorchestra write-sections",
         "paperorchestra critique",
         "$paperorchestra-research-swarm",
@@ -169,7 +171,8 @@ def test_authoring_round_mock_contract() -> None:
 def test_figure_mock_contract() -> None:
     assert_mentions(
         "paperorchestra-figure",
-        "paperorchestra review-figure-placement",
+        "paperorchestra visual-audit",
+        "deterministic bitmap render",
         "imagegen",
         "prompt only / no image generated",
         "$visual-verdict",
@@ -200,10 +203,9 @@ def test_live_review_mock_contract() -> None:
 def test_quality_gate_mock_contract() -> None:
     assert_mentions(
         "paperorchestra-quality-gate",
-        "paperorchestra validate-current",
         "paperorchestra critique --provider shell --provider-command \"$PAPERO_MODEL_CMD\" --citation-evidence-mode web",
-        "paperorchestra quality-eval --quality-mode claim_safe",
-        "paperorchestra qa-loop-plan --quality-mode claim_safe",
+        "paperorchestra quality-gate --quality-mode claim_safe",
+        "paperorchestra qa-loop --quality-mode claim_safe",
         "paperorchestra qa-loop-step --quality-mode claim_safe --max-iterations 1",
         "$paperorchestra-research-swarm",
     )
@@ -216,26 +218,25 @@ def test_installed_cli_help_supports_mock_fallback_commands() -> None:
         "environment": [],
         "doctor": [],
         "run": ["--provider", "mock", "--verify-mode", "mock"],
-        "outline": ["--provider", "mock"],
-        "generate-plots": ["--provider", "mock"],
         "research-prior-work": ["--provider", "mock", "--import"],
-        "plan-narrative": ["--provider", "mock"],
-        "write-intro-related": ["--provider", "mock"],
+        "import-prior-work": ["--seed-file"],
+        "authoring-round": ["--provider", "mock", "--citation-evidence-mode"],
         "write-sections": ["--provider", "mock"],
-        "review": ["--provider", "mock"],
-        "review-citations": ["--provider", "mock", "--evidence-mode"],
-        "review-figure-placement": [],
         "critique": ["--provider", "mock", "--citation-evidence-mode"],
-        "validate-current": [],
-        "validate-claim-safe-current": [],
-        "quality-eval": ["--quality-mode", "claim_safe"],
-        "qa-loop-plan": ["--quality-mode", "claim_safe"],
+        "visual-audit": ["--require-ai-artifact-check", "--require-publication-figure-check"],
+        "quality-gate": ["--quality-mode", "claim_safe"],
+        "qa-loop": ["--quality-mode", "claim_safe"],
         "qa-loop-step": ["--provider", "mock", "--citation-evidence-mode", "heuristic"],
         "compile": [],
-        "refine": ["--provider", "mock"],
+        "approve-plan": ["--approved-by", "--json"],
+        "export-current": ["--output", "--json"],
+        "inspect-state": ["--json"],
+        "orchestrate": ["--execute-local", "--json"],
+        "answer-human-needed": ["--answer", "--apply"],
+        "ralph-start": ["--dry-run", "--launch"],
     }
     for command, tokens in commands.items():
-        result = run_cmd(["paperorchestra", command, "--help"], ROOT)
+        result = run_cmd([CLI, command, "--help"], ROOT)
         assert result.returncode == 0, f"{command} --help failed: {result.stderr or result.stdout}"
         help_text = result.stdout + result.stderr
         for token in tokens:
@@ -244,14 +245,15 @@ def test_installed_cli_help_supports_mock_fallback_commands() -> None:
 
 def test_mock_session_status_and_core_diagnostic_commands_do_not_need_real_project(tmp_path: Path) -> None:
     workspace = write_minimal_session(tmp_path)
-    status = run_cmd(["paperorchestra", "status", "--json"], workspace)
+    status = run_cmd([CLI, "status", "--json"], workspace)
     assert status.returncode == 0, status.stderr or status.stdout
     data = json.loads(status.stdout)
     assert data.get("session_id") or data.get("initialized") is not None
 
-    env = run_cmd(["paperorchestra", "environment"], workspace)
+    env = run_cmd([CLI, "environment"], workspace)
     assert env.returncode == 0, env.stderr or env.stdout
 
-    validate = run_cmd(["paperorchestra", "validate-current"], workspace)
-    assert validate.returncode != 0
-    assert "Need paper.full.tex before validating the current manuscript" in (validate.stderr + validate.stdout)
+    inspect = run_cmd([CLI, "inspect-state", "--json"], workspace)
+    assert inspect.returncode == 0, inspect.stderr or inspect.stdout
+    inspect_data = json.loads(inspect.stdout)
+    assert inspect_data.get("session_id") == data.get("session_id")

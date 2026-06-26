@@ -20,7 +20,15 @@ paperorchestra status --json
 paperorchestra environment
 ```
 
+Run CLI fallback commands from the paper workspace directory. The installed `paperorchestra` CLI currently has no global `--cwd` option, so do not use `paperorchestra status --json --cwd <path>` or `paperorchestra --cwd <path> status --json` unless `paperorchestra --help` later documents that option. Use:
+
+```bash
+(cd /path/to/paper-workspace && paperorchestra status --json)
+```
+
 Also inspect nearby artifacts when present: `.paper-orchestra/`, `paper-plan.md` approval state, `paper-skeleton.md` provenance/staleness, `paper.full.tex`, compiled PDF, page renders/contact sheets, figure assets, figure specs, caption drafts, `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, `figure-placement-review.json`, `page-layout-review.json`, `visual_repair_brief.json`, `visual_repair_candidate.json`, `figure_gate.report.json`, `prior_work_seed.json`, `candidate_papers.json`, `citation_registry.json`, `citation_map.json`, `references.bib`, `citation_support_review.json`, `research-swarm.manifest.json`, `$autoresearch` validator `result.json`, `quality-eval.json`, `quality-gate.report.json`, `qa-loop.plan.json`, compile reports, and named round directories.
+
+When PaperOrchestra status points at canonical run artifacts under `.paper-orchestra/runs/<session>/artifacts/`, compare them with root-level convenience files before treating the root as current. Mark root copies as `stale` when hashes or figure references differ. Because this status skill is read-only except for optional evidence/status exports, recommend a sync/export/repair workflow instead of overwriting root copies here; any later sync must preserve a backup and record source/destination hashes.
 
 For a planned or drafted manuscript, report plan/skeleton availability as `approved / approved legacy / unapproved / stale / missing / not applicable` for `paper-plan.md` and `present / missing / stale / not applicable` for `paper-skeleton.md`. Do not surface internal contract hashes in user-facing summaries; they are machine fingerprints for staleness checks. A stale or missing skeleton should not override an approved plan; recommend regeneration or `$paperorchestra-plan` only when the approved contract itself is stale or insufficient.
 

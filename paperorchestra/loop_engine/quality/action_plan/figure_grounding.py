@@ -44,8 +44,10 @@ def _append_figure_grounding_actions(actions: list[dict[str, Any]], figure_check
                         "paperorchestra qa-loop --quality-mode claim_safe",
                     ],
                     ralph_instruction=(
-                        "Do not route unsafe figure/caption grounding to automatic repair. Ask a figure-placement critic/operator to remove, "
-                        "replace, or recaption the affected figure, then rerun review-figure-placement."
+                        "Do not route unsafe figure/caption grounding to automatic repair. Ask a figure-placement critic/operator "
+                        "to remove, replace, or recaption the affected figure, then rerun a verified figure-placement/page-visual "
+                        "check such as visual-audit when the active PaperOrchestra surface exposes it, or refresh "
+                        "figure-placement-review.json from inspected manuscript/template facts."
                     ),
                     why_not_automatic="Changing figure placement, captions, or visual evidence can alter paper meaning and requires figure-grounding critic/operator approval.",
                     approval_required_from="figure_placement_review_critic",

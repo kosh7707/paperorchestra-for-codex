@@ -4,6 +4,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "skills"
+PAPERO_CLI = ROOT / ".venv" / "bin" / "paperorchestra"
+CLI = str(PAPERO_CLI if PAPERO_CLI.exists() else "paperorchestra")
 
 
 def skill_text(name: str) -> str:
@@ -24,6 +26,10 @@ def test_skills_do_not_document_stale_cli_commands() -> None:
     text = all_skill_text()
     stale = [
         "paperorchestra environment --summary",
+        "paperorchestra plan-narrative",
+        "paperorchestra validate-current",
+        "paperorchestra quality-eval --quality-mode claim_safe",
+        "paperorchestra qa-loop-plan --quality-mode claim_safe",
     ]
     missing = [token for token in stale if token in text]
     assert not missing, f"Stale/unsupported CLI snippets remain: {missing}"
@@ -33,8 +39,8 @@ def test_cli_fallbacks_use_current_command_surface() -> None:
     assert_mentions(
         "paperorchestra",
         "paperorchestra run --provider mock --verify-mode mock --runtime-mode compatibility",
-        "paperorchestra quality-eval --quality-mode claim_safe",
-        "paperorchestra qa-loop-plan --quality-mode claim_safe",
+        "paperorchestra quality-gate --quality-mode claim_safe",
+        "paperorchestra qa-loop --quality-mode claim_safe",
         "paperorchestra qa-loop-step --quality-mode claim_safe --max-iterations 1",
     )
     assert_mentions(
@@ -42,19 +48,18 @@ def test_cli_fallbacks_use_current_command_surface() -> None:
         "For MCP/source-checkout execution",
         "python -m paperorchestra.cli authoring-round",
         "paperorchestra authoring-round --help",
-        "If it fails, use the staged fallback",
+        "paperorchestra authoring-round --provider shell",
+        "If `authoring-round` is unavailable",
         "paperorchestra research-prior-work",
-        "paperorchestra plan-narrative",
         "paperorchestra write-sections",
         "paperorchestra critique",
     )
     assert_mentions(
         "paperorchestra-quality-gate",
         "Preferred MCP/source gate",
-        "Installed CLI fallback",
-        "paperorchestra validate-current",
-        "paperorchestra quality-eval --quality-mode claim_safe",
-        "paperorchestra qa-loop-plan --quality-mode claim_safe",
+        "Current source/venv CLI fallback",
+        "paperorchestra quality-gate --quality-mode claim_safe",
+        "paperorchestra qa-loop --quality-mode claim_safe",
     )
     assert_mentions(
         "paperorchestra-live-review",
@@ -136,17 +141,17 @@ def test_documented_installed_cli_fallback_commands_have_help() -> None:
         "status",
         "environment",
         "critique",
-        "quality-eval",
-        "qa-loop-plan",
+        "quality-gate",
+        "qa-loop",
         "qa-loop-step",
-        "validate-current",
-        "plan-narrative",
         "research-prior-work",
+        "authoring-round",
         "write-sections",
+        "visual-audit",
     ]
     for command in commands:
         result = subprocess.run(
-            ["paperorchestra", command, "--help"],
+            [CLI, command, "--help"],
             cwd=ROOT,
             text=True,
             stdout=subprocess.PIPE,
@@ -190,5 +195,5 @@ def test_source_checkout_specific_commands_are_caveated() -> None:
         assert_mentions(
             "paperorchestra-quality-gate",
             "Preferred MCP/source gate",
-            "Installed CLI fallback",
+            "Legacy installations may expose older staged commands",
         )

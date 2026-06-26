@@ -104,11 +104,16 @@ If `background` is omitted, the MCP tool automatically backgrounds rounds that r
 
 CLI staged fallback:
 
-For MCP/source-checkout execution, `authoring_round` may delegate to a source-only `authoring-round` surface only after `python -m paperorchestra.cli authoring-round --help` succeeds. For installed CLI fallback, do not assume `paperorchestra authoring-round` exists; first run `paperorchestra authoring-round --help`. If it fails, use the staged fallback and preserve the closest available artifact chain:
+For MCP/source-checkout execution, `authoring_round` may delegate to a source-only `authoring-round` surface only after `python -m paperorchestra.cli authoring-round --help` succeeds. For installed CLI fallback, do not assume `paperorchestra authoring-round` exists; first run `paperorchestra authoring-round --help`. If it succeeds, prefer the bounded round command:
+
+```bash
+paperorchestra authoring-round --provider shell --provider-command "$PAPERO_MODEL_CMD" --citation-evidence-mode web --require-web-research --require-live-critic
+```
+
+If `authoring-round` is unavailable but the selected CLI surface verifies the staged commands with `--help`, preserve the closest available artifact chain:
 
 ```bash
 paperorchestra research-prior-work --provider shell --provider-command "$PAPERO_MODEL_CMD" --import
-paperorchestra plan-narrative --provider shell --provider-command "$PAPERO_MODEL_CMD"
 paperorchestra write-sections --provider shell --provider-command "$PAPERO_MODEL_CMD"
 paperorchestra critique --provider shell --provider-command "$PAPERO_MODEL_CMD" --citation-evidence-mode web
 ```

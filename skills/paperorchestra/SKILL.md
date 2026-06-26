@@ -145,8 +145,8 @@ If the next action is `start_autoresearch` / `$autoresearch`, explain that remai
 paperorchestra status --json
 paperorchestra run --provider mock --verify-mode mock --runtime-mode compatibility
 paperorchestra critique --provider mock --source-paper ./main.tex
-paperorchestra quality-eval --quality-mode claim_safe
-paperorchestra qa-loop-plan --quality-mode claim_safe
+paperorchestra quality-gate --quality-mode claim_safe
+paperorchestra qa-loop --quality-mode claim_safe
 paperorchestra qa-loop-step --quality-mode claim_safe --max-iterations 1
 paperorchestra environment
 ```

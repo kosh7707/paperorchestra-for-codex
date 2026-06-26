@@ -28,12 +28,37 @@ with `source:"deep-interview"`. A valid deep-interview handoff normally includes
 
 Prefer visible MCP tools when attached. Active attachment means the tool namespace is present in the current session, not merely that `codex mcp list` shows a registration. If no visible `mcp__paperorchestra__...` tools exist, use CLI fallback and say MCP active attachment is unavailable.
 
+## Pre-change diagnosis gate
+
+Before patching PaperOrchestra skills, workflow docs, CLI guidance, or code in response to a failure, first identify the observed problem with read-only evidence. Use `$analyze` when available, or mirror its contract locally:
+
+1. state the symptom, expected behavior, and observed behavior;
+2. identify which surface is being evaluated (MCP attachment, PATH-installed console, checkout `.venv`, or source-module invocation);
+3. verify relevant command/help/state artifacts instead of relying on memory;
+4. rank the plausible causes and mark evidence, inference, and unknowns separately.
+
+Only patch after the diagnosis points to a concrete mismatch. Trivial typo-only edits may skip the full writeup, but not the evidence check.
+
 ## CLI fallback discipline
 
 Before using a CLI command that is not already verified in the current run, check the installed surface with:
 
 ```bash
 paperorchestra <command> --help
+```
+
+When more than one PaperOrchestra surface is present, do not extrapolate command availability across them. Record whether evidence came from the PATH-installed console (`command -v paperorchestra`), the checkout venv (`.venv/bin/paperorchestra`), or the source module (`PYTHONPATH=<checkout> python3 -m paperorchestra.cli`).
+
+Run PaperOrchestra CLI commands from the intended manuscript workspace. The installed console script does **not** expose a global `--cwd` option, and commands such as `paperorchestra status --json --cwd <path>` or `paperorchestra --cwd <path> status --json` are invalid unless a future `--help` output explicitly documents them. Use a subshell or `cd` instead:
+
+```bash
+(cd /path/to/paper-workspace && paperorchestra status --json)
+```
+
+When using a checkout-local venv binary from outside the workspace, still change the working directory first:
+
+```bash
+(cd /path/to/paper-workspace && /path/to/paperorchestra/.venv/bin/paperorchestra status --json)
 ```
 
 Do not invent commands from MCP tool names. Source checkout helpers may expose commands that the installed `paperorchestra` console script does not. If the installed command is absent, use a documented staged fallback, a verified checkout venv command, or a verified source-module command; otherwise block with the missing command named.
@@ -62,6 +87,8 @@ For PaperOrchestra state changes:
 ```bash
 paperorchestra status --json
 ```
+
+Run that readback from the same workspace directory that was changed. If the action wrote a canonical run artifact under `.paper-orchestra/runs/<session>/artifacts/`, compare any root-level convenience copies (`paper.full.tex`, `paper.full.pdf`, `plot_*.json`, `figures/*`) before presenting the root as current; stale root copies must be called out explicitly. Sync root copies only inside an explicit state-changing repair/export workflow or direct user request, and preserve a timestamped backup plus source/destination hashes before overwriting.
 
 Check the session id, `current_phase`, expected artifact paths, review/gate JSON, and notes. For background jobs, also use `paperorchestra jobs-list` and `paperorchestra job-status --job-id <id>` / `run-status --job-id <id>` until the job reaches a terminal state, then inspect the produced stdout/stderr JSON or manifest.
 

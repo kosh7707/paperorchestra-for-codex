@@ -24,7 +24,7 @@ reader belief before:
 reader belief after:
 caption contract:
 placement contract:
-output form: imagegen bitmap asset | image prompt + generated image | LaTeX placement snippet for generated bitmap | caption only for review-only tasks
+output form: imagegen bitmap asset | mixed imagegen-concept + deterministic bitmap render | image prompt + generated image | LaTeX placement snippet for generated bitmap | caption only for review-only tasks
 ```
 
 Reject decorative figures. If the figure has no supported claim or source evidence, route back to `$paperorchestra-plan` or ask for the missing evidence.
@@ -130,11 +130,17 @@ For a figure-bearing manuscript, expected figure artifacts must not silently dis
 
 Use the installed `imagegen` skill/tool for figure asset generation. PaperOrchestra MCP/source/CLI tools remain useful for state inspection, artifact indexing, placement review, and quality gates, but they must not replace imagegen with TikZ/SVG/Mermaid generation.
 
-If using installed CLI fallback surfaces, verify each command with `--help` before use. These commands are for orchestration or review, not a reason to bypass imagegen:
+If using CLI fallback surfaces, verify each command with `--help` on the exact surface you will run (PATH-installed console, checkout `.venv`, or source-module invocation). These commands are for orchestration or review, not a reason to bypass imagegen. Do not call undocumented commands such as `paperorchestra review-figure-placement` unless that same surface lists them. When the verified surface exposes `visual-audit`, integrated rendered-page checks use:
 
 ```bash
-paperorchestra review-figure-placement --output figure-placement-review.json
+.venv/bin/paperorchestra visual-audit --help  # or the verified paperorchestra surface
+.venv/bin/paperorchestra visual-audit \
+  --output page-layout-review.json \
+  --require-ai-artifact-check \
+  --require-publication-figure-check
 ```
+
+For figure-only placement metadata, write or update `figure-placement-review.json` from inspected manuscript/template facts, or use a verified source/helper command if the selected surface exposes one; do not invent a console command or reuse a command observed only on a different PaperOrchestra installation.
 
 For evidence-bearing figure work, generate or edit the bitmap through imagegen, then inspect or write `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`, and `figure-placement-review.json` before claiming the figure artifacts are ready.
 
@@ -144,10 +150,16 @@ Use imagegen as the mandatory generation path for PaperOrchestra figures:
 
 - Do **not** create Mermaid, SVG, TikZ, Graphviz, canvas, or other vector/code-native diagrams as final generated figure content.
 - For every new or replacement paper figure asset, invoke the installed `imagegen` skill/tool as part of the mandatory figure Ralph loop, persist the selected bitmap into the PaperOrchestra workspace, and pass AI-artifact/publication visual QA before claiming the figure exists.
+- For exact-label scientific diagrams where imagegen produces garbled text, unsupported details, or no discoverable persisted file path, treat the imagegen call as a concept/style exploration rather than the final asset. You may then render the final **bitmap** deterministically with a local raster renderer such as Pillow/PIL, provided that:
+  - the final deliverable is a PNG/WebP/PDF-wrapped bitmap, not TikZ/SVG/Mermaid/Graphviz/canvas/HTML;
+  - the imagegen prompt/result role is recorded as `concept_only` or `style_reference`, not as the final generated asset;
+  - the deterministic render script, source evidence, caption evidence map, and SHA-256 are stored with the figure artifacts;
+  - visual QA explicitly checks both AI-artifact concerns and text/label readability on the rendered page;
+  - the final card discloses the mixed path (`imagegen concept + deterministic bitmap render`) so future reviewers do not mistake it for a purely model-rendered image.
 - Use LaTeX only for placement around the generated bitmap, for example `\includegraphics`, figure width, label, and caption. Do not use LaTeX/TikZ to draw the figure itself.
 - For pipeline, architecture, taxonomy, method, case-study, threat-model, and visual-abstract figures, translate exact evidence requirements into an imagegen prompt with short, high-level labels. Put exact terminology, verdict mappings, numeric values, and caveats in the caption/evidence map rather than relying on tiny in-image text.
 - For result-summary figures, use imagegen for the visual summary graphic. Keep exact numbers in tables or captions unless the user explicitly accepts approximate in-image text.
-- If an imagegen call cannot be made, stop with a blocker or return `prompt only / no image generated`; do not substitute TikZ/SVG/Mermaid and do not imply that an image file exists.
+- If an imagegen call cannot be made at all, stop with a blocker or return `prompt only / no image generated`; do not substitute TikZ/SVG/Mermaid and do not imply that an image file exists. The deterministic-bitmap exception above requires that imagegen was actually invoked for concept/style exploration or that the user explicitly authorized a non-imagegen deterministic figure.
 
 Before generating anything, still consider whether a figure is necessary:
 
@@ -174,15 +186,16 @@ Before generating anything, still consider whether a figure is necessary:
 6. Run Critic validation before generation and write `figure-critic.<id>.json`; reinforce the plan until the Critic verdict is non-blocking.
 7. Choose output form:
    - imagegen bitmap asset for every new or replacement figure;
+   - mixed imagegen-concept + deterministic bitmap render for exact-label diagrams when the imagegen output is not publication-safe or not persistable;
    - LaTeX placement snippet only to embed the generated bitmap;
    - caption only when the task is explicitly review-only and no new figure asset is requested.
-8. Invoke imagegen for generated assets, save the selected output into the PaperOrchestra workspace, and record the image path in `plot_assets.json` or the round artifact manifest before claiming success.
-9. Run visual-verdict/vision review on the bitmap or rendered page and write `figure-visual-findings.<id>.json`; if it reports AI-artifact, readability, hierarchy, or publication-fit problems, repair/regenerate before continuing.
+8. Invoke imagegen for generated assets. If the imagegen bitmap is final, save the selected output into the PaperOrchestra workspace and record it in `plot_assets.json` or the round artifact manifest. If using the mixed deterministic path, save the imagegen prompt/result metadata as concept evidence, render the exact-label final bitmap locally, and record the render script plus final bitmap path/hash in `plot_assets.json`.
+9. Run visual-verdict/vision review on the bitmap or rendered page and write `figure-visual-findings.<id>.json`; if it reports AI-artifact, readability, hierarchy, label-text, or publication-fit problems, repair/regenerate before continuing.
 10. Draft the caption:
    - first sentence: what the figure shows;
    - second sentence: what claim it supports;
    - optional final sentence: key caveat or reading order.
-11. Compile, run figure-placement review, run paperorchestra visual-audit on rendered pages, run/write `figure_gate.report.json`, and continue the Ralph loop until visual findings pass and the figure gate no longer blocks, or the issue becomes explicit `human_needed`.
+11. Compile, write or refresh `figure-placement-review.json` from verified manuscript/template facts, run `paperorchestra visual-audit` on rendered pages, run/write `figure_gate.report.json`, and continue the Ralph loop until visual findings pass and the figure gate no longer blocks, or the issue becomes explicit `human_needed`.
 12. Return an artifact card and route follow-up edits to the owning paper workflow.
 
 ## Review checklist
@@ -207,9 +220,12 @@ Supported claim:
 Source evidence:
 Output form:
 Imagegen prompt:
+Imagegen concept evidence:
 Figure plan artifact:
 Critic validation artifact:
 Generated image artifact:
+Final bitmap artifact:
+Deterministic render script/hash:
 Visual findings artifact:
 Ralph loop state / skip reason:
 Recommended LaTeX environment:
