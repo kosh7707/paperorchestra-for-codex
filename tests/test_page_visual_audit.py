@@ -169,7 +169,11 @@ def test_write_page_layout_review_updates_session_artifacts(monkeypatch, tmp_pat
         rendered = Path(render_dir) / "page-1.png"
         rendered.parent.mkdir(parents=True, exist_ok=True)
         rendered.write_bytes(b"png")
-        return {"status": "pass", "backend": "fake", "pages": [{"page": 1, "image_path": str(rendered)}]}
+        return {
+            "status": "pass",
+            "backend": "fake",
+            "pages": [{"page": 1, "image_path": str(rendered)}],
+        }
 
     monkeypatch.setattr(page_layout_review, "render_pdf_pages", fake_render)
 
@@ -179,6 +183,44 @@ def test_write_page_layout_review_updates_session_artifacts(monkeypatch, tmp_pat
     assert refreshed.artifacts.latest_page_layout_review_json == str(path)
     assert payload["warning_codes"] == ["visual_review_pending"]
     assert Path(payload["contact_sheets"]["html"]).exists()
+
+
+def test_write_page_layout_review_can_run_without_session_when_pdf_is_explicit(monkeypatch, tmp_path: Path) -> None:
+    from paperorchestra.visual import page_layout_review
+
+    paper = tmp_path / "paper.full.tex"
+    pdf = tmp_path / "paper.full.pdf"
+    output = tmp_path / "page-layout-review.json"
+    render_dir = tmp_path / "rendered-pages"
+    paper.write_text("\\section{Method} body", encoding="utf-8")
+    pdf.write_bytes(b"pdf")
+
+    def fake_render(pdf_path: str | Path, render_dir: str | Path, *, dpi: int = 144):
+        rendered = Path(render_dir) / "page-1.png"
+        rendered.parent.mkdir(parents=True, exist_ok=True)
+        rendered.write_bytes(b"png")
+        return {
+            "status": "pass",
+            "backend": "fake",
+            "pages": [{"page": 1, "image_path": str(rendered)}],
+        }
+
+    monkeypatch.setattr(page_layout_review, "render_pdf_pages", fake_render)
+
+    path, payload = page_layout_review.write_page_layout_review(
+        tmp_path,
+        pdf_path=pdf,
+        output_path=output,
+        render_dir=render_dir,
+    )
+
+    assert path == output.resolve()
+    assert payload["pdf_path"] == str(pdf.resolve())
+    assert payload["manuscript_path"] == str(paper.resolve())
+    assert payload["render_status"]["status"] == "pass"
+    assert payload["warning_codes"] == ["visual_review_pending"]
+    assert output.exists()
+    assert not (tmp_path / ".paper-orchestra" / "current_session.txt").exists()
 
 
 def test_invalid_imported_findings_do_not_falsely_pass(tmp_path: Path) -> None:

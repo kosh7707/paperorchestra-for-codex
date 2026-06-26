@@ -6,7 +6,7 @@ from typing import Any
 
 from paperorchestra.core.errors import ContractError
 from paperorchestra.core.io import read_json, write_json
-from paperorchestra.core.models import utc_now_iso
+from paperorchestra.core.models import SessionState, utc_now_iso
 from paperorchestra.core.session import artifact_path, load_session, save_session
 from paperorchestra.visual.contact_sheet import write_contact_sheet_indexes
 from paperorchestra.visual.page_render import render_pdf_pages
@@ -55,17 +55,26 @@ def write_page_layout_review(
     require_ai_artifact_check: bool = False,
     require_publication_figure_check: bool = False,
 ) -> tuple[Path, dict[str, Any]]:
-    state = load_session(cwd)
-    selected_pdf = Path(pdf_path or state.artifacts.compiled_pdf or "").expanduser()
+    state = _try_load_session(cwd)
+    selected_pdf = Path(pdf_path or (state.artifacts.compiled_pdf if state else "") or "").expanduser()
     if not str(selected_pdf) or str(selected_pdf) == ".":
         raise ContractError("Need compiled PDF or --pdf before page visual audit.")
     selected_pdf = selected_pdf.resolve()
-    selected_render_dir = Path(render_dir).resolve() if render_dir else artifact_path(cwd, "page-visual-render")
+    if render_dir:
+        selected_render_dir = Path(render_dir).resolve()
+    elif state:
+        selected_render_dir = artifact_path(cwd, "page-visual-render")
+    else:
+        selected_render_dir = Path(cwd or ".").resolve() / "page-visual-render"
     render_payload = render_pdf_pages(selected_pdf, selected_render_dir)
     pages = list(render_payload.get("pages") or [])
     contact_sheets = write_contact_sheet_indexes(pages, selected_render_dir) if pages else {}
     imported_findings = read_json(findings_json) if findings_json else None
-    manuscript_path = Path(state.artifacts.paper_full_tex).resolve() if state.artifacts.paper_full_tex else None
+    manuscript_path = (
+        Path(state.artifacts.paper_full_tex).resolve()
+        if state and state.artifacts.paper_full_tex
+        else _infer_manuscript_path(selected_pdf)
+    )
     payload = build_page_layout_review_payload(
         pdf_path=selected_pdf,
         manuscript_path=manuscript_path,
@@ -78,11 +87,29 @@ def write_page_layout_review(
         require_ai_artifact_check=require_ai_artifact_check,
         require_publication_figure_check=require_publication_figure_check,
     )
-    path = Path(output_path).resolve() if output_path else artifact_path(cwd, "page-layout-review.json")
+    if output_path:
+        path = Path(output_path).resolve()
+    elif state:
+        path = artifact_path(cwd, "page-layout-review.json")
+    else:
+        path = Path(cwd or ".").resolve() / "page-layout-review.json"
     write_json(path, payload)
-    state.artifacts.latest_page_layout_review_json = str(path)
-    save_session(cwd, state)
+    if state:
+        state.artifacts.latest_page_layout_review_json = str(path)
+        save_session(cwd, state)
     return path, payload
+
+
+def _try_load_session(cwd: str | Path | None) -> SessionState | None:
+    try:
+        return load_session(cwd)
+    except FileNotFoundError:
+        return None
+
+
+def _infer_manuscript_path(pdf_path: Path) -> Path | None:
+    sibling = pdf_path.with_suffix(".tex")
+    return sibling.resolve() if sibling.exists() else None
 
 
 def build_page_layout_review_payload(

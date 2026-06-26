@@ -1,8 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TypeVar
+
+
+T = TypeVar("T")
+
+
+def _known_dataclass_kwargs(cls: type[T], raw: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {}
+    allowed = {item.name for item in fields(cls)}
+    return {key: value for key, value in raw.items() if key in allowed}
 
 
 def utc_now_iso() -> str:
@@ -90,9 +100,9 @@ class SessionState:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SessionState":
-        inputs = InputBundle(**data["inputs"])
-        artifacts = ArtifactIndex(**data.get("artifacts", {}))
-        history = [ScoreSnapshot(**item) for item in data.get("review_history", [])]
+        inputs = InputBundle(**_known_dataclass_kwargs(InputBundle, data["inputs"]))
+        artifacts = ArtifactIndex(**_known_dataclass_kwargs(ArtifactIndex, data.get("artifacts", {})))
+        history = [ScoreSnapshot(**_known_dataclass_kwargs(ScoreSnapshot, item)) for item in data.get("review_history", [])]
         return cls(
             session_id=data["session_id"],
             created_at=data["created_at"],
