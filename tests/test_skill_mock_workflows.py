@@ -172,7 +172,8 @@ def test_figure_mock_contract() -> None:
     assert_mentions(
         "paperorchestra-figure",
         "paperorchestra visual-audit",
-        "deterministic bitmap render",
+        "deterministic source-of-truth",
+        "output-form gate",
         "imagegen",
         "prompt only / no image generated",
         "$visual-verdict",

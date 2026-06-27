@@ -48,29 +48,42 @@ def test_figure_skill_handles_column_layout_and_latex_environment() -> None:
     )
 
 
-def test_figure_skill_requires_imagegen_and_forbids_vector_final_outputs() -> None:
+def test_figure_skill_routes_exact_label_figures_to_deterministic_outputs() -> None:
     body = text(FIGURE_SKILL)
     assert_contains(
         "paperorchestra-figure",
         body,
-        "Mermaid",
-        "SVG",
-        "TikZ",
-        "mandatory generation path",
-        "imagegen",
-        "bitmap",
-        "Do **not** create Mermaid, SVG, TikZ, Graphviz, canvas, or other vector/code-native diagrams as final generated figure content.",
+        "Use output-form routing instead of a blanket imagegen mandate",
+        "Exact-label, data-bearing, arrow-bearing, code-semantic, or rule-semantic figures default to deterministic source-of-truth final assets.",
+        "deterministic vector/PDF/PNG/SVG source-of-truth render",
+        "deterministic script/data plot asset",
+        "LaTeX listing or deterministic diagram/listing asset",
+        "Do not reintroduce a blanket ban on TikZ/SVG/Mermaid/Graphviz/vector/code-native sources.",
     )
 
 
-def test_figure_skill_moves_exact_content_to_caption_or_tables() -> None:
+def test_figure_skill_scopes_imagegen_to_concept_or_policy_allowed_art() -> None:
     body = text(FIGURE_SKILL)
     assert_contains(
         "paperorchestra-figure",
         body,
-        "translate exact evidence requirements into an imagegen prompt with short, high-level labels",
-        "Put exact terminology, verdict mappings, numeric values, and caveats in the caption/evidence map",
-        "Keep exact numbers in tables or captions",
+        "Use the installed `imagegen` skill/tool for imagegen final art and for mixed concept/style exploration.",
+        "Imagegen is not a substitute for deterministic source-of-truth rendering when exact labels, arrows, code semantics, or numeric values carry the claim.",
+        "imagegen bitmap final only when venue policy allows",
+        "imagegen concept/style reference + deterministic final asset",
+        "record the imagegen prompt/result role as `concept_only` or `style_reference`",
+    )
+
+
+def test_figure_skill_blocks_imagegen_final_when_venue_policy_unknown() -> None:
+    body = text(FIGURE_SKILL)
+    assert_contains(
+        "paperorchestra-figure",
+        body,
+        "venue AI final-art gate",
+        "unknown venue policy means deterministic-only for evidence-bearing exact figures",
+        "Unknown venue AI policy means no final imagegen bitmap for evidence-bearing exact figures",
+        "final imagegen art is used only when venue policy and disclosure allow it",
     )
 
 
@@ -150,14 +163,15 @@ def test_live_review_routes_decorative_or_unsupported_figures_to_figure_skill() 
     )
 
 
-def test_figure_skill_fails_closed_on_claimed_bitmap_generation() -> None:
+def test_figure_skill_fails_closed_on_claimed_figure_assets() -> None:
     body = text(FIGURE_SKILL)
     assert_contains(
         "paperorchestra-figure",
         body,
-        "For every new or replacement paper figure asset, invoke the installed `imagegen` skill/tool",
-        "persist the selected bitmap",
-        "Generated image artifact:",
+        "source-of-truth artifact and SHA-256 are mandatory",
+        "rendered-page proof",
+        "Final asset artifact:",
+        "Final asset SHA-256:",
         "prompt only / no image generated",
     )
 
@@ -285,12 +299,29 @@ def test_figure_skill_requires_ralph_backed_plan_critic_generate_visual_loop() -
         "paperorchestra-figure",
         body,
         "Mandatory figure Ralph loop",
-        "figure plan -> Critic validation + reinforcement -> imagegen bitmap generation -> figure visual QA -> repair/regenerate -> compile/render -> page visual audit -> accept or continue",
+        "figure plan -> output-form gate -> Critic validation + reinforcement -> render/generate selected source-of-truth artifact -> figure visual QA -> repair/regenerate -> compile/render -> page visual audit -> accept or continue",
         "Every new or replacement evidence-bearing figure must run this loop",
         "figure-plan.<id>.md",
         "figure-critic.<id>.json",
         "figure-visual-findings.<id>.json",
         "$ralph",
+    )
+
+
+def test_figure_skill_requires_readability_color_source_and_page_audit_gates() -> None:
+    body = text(FIGURE_SKILL)
+    assert_contains(
+        "paperorchestra-figure",
+        body,
+        "figure_message",
+        "source-of-truth artifact",
+        "source SHA-256",
+        "block text that would render below 8 pt equivalent",
+        "target 9--10 pt or larger",
+        "3--4 semantic colors maximum",
+        "no color-only semantics",
+        "page visual audit is required for deterministic outputs and imagegen outputs",
+        "Rendered-page/page-audit proof:",
     )
 
 
