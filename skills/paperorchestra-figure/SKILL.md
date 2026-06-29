@@ -60,7 +60,7 @@ Reject decorative figures. If the figure has no supported claim or source eviden
 Every new or replacement evidence-bearing figure must run this loop before it can be claimed integrated. Treat this as required even when the user asks for a quick figure. Skip only for explicitly review-only/caption-only tasks, and record the skip reason.
 
 ```text
-figure plan -> output-form gate -> Critic validation + reinforcement -> imagegen concept/final generation -> render/generate selected source-of-truth artifact -> figure visual QA -> repair/regenerate -> compile/render -> page visual audit -> accept or continue
+figure plan -> output-form gate -> Architect design -> imagegen concept/final generation -> Critic validation + reinforcement -> render/generate selected source-of-truth artifact -> figure visual QA -> repair/regenerate -> compile/render -> page visual audit -> accept or continue
 ```
 
 Use `$ralph` as the persistence wrapper when the current session has OMX runtime support or the user asks to keep going through the figure. Ralph's stop condition is not "an image exists"; it is: plan accepted, output-form gate recorded, imagegen participation recorded, source-of-truth artifact persisted with SHA-256, final embed path recorded, AI-artifact/visual findings resolved or explicitly human-owned, compiled PDF rendered, and figure/page artifacts recorded. If runtime Ralph is unavailable, execute the same loop locally and record `ralph_unavailable` in the figure manifest.
@@ -68,6 +68,7 @@ Use `$ralph` as the persistence wrapper when the current session has OMX runtime
 Required artifacts for every generated/replacement figure:
 
 - `figure-plan.<id>.md`: figure intent contract, claim/caption/placement contract, prompt strategy, and acceptance checks.
+- `figure-architect.<id>.json`: Architect design verdict before generation. Must include `candidate_designs[]`, selected design, rejected alternatives, composition/layout rules, typography/color rules, arrow/data-flow rules, and exact acceptance criteria. Do not let the main agent silently replace this with its own ad-hoc plan when a new/replacement figure is requested.
 - `figure-critic.<id>.json`: Critic verdict before generation. Must include `verdict`, `blocking_issues[]`, `reinforcements[]`, and `acceptance_checks[]`.
 - `imagegen-concepts.<id>.json` or equivalent manifest entry: imagegen prompt, output role (`concept_only`, `style_reference`, or `final_art`), result artifact path when the tool exposes one, or session evidence when it does not. This artifact is required for every new/replacement evidence-bearing figure unless the task is explicitly review-only/caption-only.
 - `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`: updated for imagegen participation, the selected/final asset, output form, source-of-truth artifact, source SHA-256, and caption evidence map.
@@ -76,7 +77,11 @@ Required artifacts for every generated/replacement figure:
 - `page-layout-review.json`: refreshed after compile/render; cannot be TeX-only.
 - `figure_gate.report.json`: refreshed after artifact checks; it must block matched/generated/realized figure slots whose plan, Critic, or visual findings artifact is missing or failing.
 
-Critic validation must happen before generation. The Critic should reject or reinforce the plan when the figure is a faux figure, overcrowded, decorative, too local-term-heavy, caption-dependent, unsupported by evidence, or better expressed as prose/table. Critic reinforcement should simplify the visual claim, reduce labels, preserve exact terms/numbers in deterministic source-of-truth assets or caption/table evidence maps, and define the visual hierarchy before any render/generation step.
+Architect design must happen before image generation or deterministic rendering. When native subagents are available and the user requested figure generation/replacement, spawn or invoke an `architect` lane for the figure design unless the task is explicitly review-only/caption-only. The Architect must design the visual argument, not draw the final asset: propose 2--3 viable compositions, select one, explain why alternatives were rejected, set layout/typography/color/arrow rules, and define acceptance checks. Record this in `figure-architect.<id>.json`.
+
+Imagegen participation must be a real invocation or a blocking record. For exact-label scientific figures, imagegen is concept/style evidence and the deterministic source remains final authority; however, do not satisfy the imagegen gate with prose saying "imagegen was invoked" unless there is a prompt artifact plus generated result path, tool-session evidence, or an explicit `imagegen_unavailable` / `prompt_only_no_image_generated` blocker.
+
+Critic validation must happen after the Architect design and imagegen concept/style evidence, but before final integration. When native subagents are available and the user requested figure generation/replacement, spawn or invoke a `critic` lane unless the task is explicitly review-only/caption-only. The Critic should reject or reinforce the plan when the figure is a faux figure, overcrowded, decorative, too local-term-heavy, caption-dependent, unsupported by evidence, better expressed as prose/table, or fails the publication-rhetoric gate. Critic reinforcement should simplify the visual claim, reduce labels, preserve exact terms/numbers in deterministic source-of-truth assets or caption/table evidence maps, and define the visual hierarchy before final render/integration.
 
 Critic validation must explicitly answer:
 
@@ -249,7 +254,7 @@ Before generating anything, still consider whether a figure is necessary:
 3. Fill the Figure intent contract and write `figure-plan.<id>.md`.
 4. Choose one-column vs two-column placement and `figure` vs `figure*`.
 5. Build the Caption evidence map and reject/downgrade unsupported caption claims; weak caption rejected/downgraded is the correct outcome when the caption is not self-contained, not evidence-mapped, or stronger than the evidence.
-6. Run Critic validation before generation and write `figure-critic.<id>.json`; reinforce the plan until the Critic verdict is non-blocking.
+6. Run Architect design before generation and write `figure-architect.<id>.json`; use native `architect` subagent/lane when available for new or replacement figures. Block if the Architect does not produce candidate designs, a selected design, rejected alternatives, visual hierarchy, and acceptance checks.
 7. Choose output form:
    - deterministic vector/PDF/PNG/SVG render for exact-label scientific diagrams;
    - deterministic script/listing/table/plot asset for data, code, or case-study figures;
@@ -257,14 +262,16 @@ Before generating anything, still consider whether a figure is necessary:
    - imagegen concept/style reference + deterministic final asset for mixed paths;
    - LaTeX placement snippet only to embed the selected final asset;
    - caption only when the task is explicitly review-only and no new figure asset is requested.
-8. Invoke imagegen for the selected role unless this is explicitly review-only/caption-only. Save the generated result into the PaperOrchestra workspace when the tool exposes a filesystem artifact; otherwise record the prompt, session/tool evidence, and the fact that no local image path was exposed. Then render or generate the selected final asset. If imagegen bitmap art is final, save the selected output into the PaperOrchestra workspace and record it in `plot_assets.json` or the round artifact manifest. If using a deterministic path, render/export the exact-label final asset locally and record the source path, source SHA-256, final asset path, and final asset hash in `plot_assets.json`. If using a mixed path, save the imagegen prompt/result metadata as concept evidence and make the deterministic artifact the final authority.
-9. Run visual-verdict/vision review on the final asset or rendered page and write `figure-visual-findings.<id>.json`; if it reports AI-artifact, readability, hierarchy, label-text, or publication-fit problems, repair/regenerate before continuing.
-10. Draft the caption:
+8. Invoke imagegen for the selected role unless this is explicitly review-only/caption-only. Save the generated result into the PaperOrchestra workspace when the tool exposes a filesystem artifact; otherwise record the prompt, session/tool evidence, and the fact that no local image path was exposed. Do not move on with only a claim that imagegen ran.
+9. Run Critic validation after Architect + imagegen evidence and write `figure-critic.<id>.json`; use native `critic` subagent/lane when available for new or replacement figures. Reinforce or redesign until the Critic verdict is non-blocking.
+10. Render or generate the selected final asset. If imagegen bitmap art is final, save the selected output into the PaperOrchestra workspace and record it in `plot_assets.json` or the round artifact manifest. If using a deterministic path, render/export the exact-label final asset locally and record the source path, source SHA-256, final asset path, and final asset hash in `plot_assets.json`. If using a mixed path, save the imagegen prompt/result metadata as concept evidence and make the deterministic artifact the final authority.
+11. Run visual-verdict/vision review on the final asset or rendered page and write `figure-visual-findings.<id>.json`; if it reports AI-artifact, readability, hierarchy, label-text, or publication-fit problems, repair/regenerate before continuing.
+12. Draft the caption:
    - first sentence: what the figure shows;
    - second sentence: what claim it supports;
    - optional final sentence: key caveat or reading order.
-11. Compile, write or refresh `figure-placement-review.json` from verified manuscript/template facts, run `paperorchestra visual-audit` on rendered pages, run/write `figure_gate.report.json`, and continue the Ralph loop until visual findings pass and the figure gate no longer blocks, or the issue becomes explicit `human_needed`.
-12. Return an artifact card and route follow-up edits to the owning paper workflow.
+13. Compile, write or refresh `figure-placement-review.json` from verified manuscript/template facts, run `paperorchestra visual-audit` on rendered pages, run/write `figure_gate.report.json`, and continue the Ralph loop until visual findings pass and the figure gate no longer blocks, or the issue becomes explicit `human_needed`.
+14. Return an artifact card and route follow-up edits to the owning paper workflow.
 
 ## Review checklist
 
@@ -302,6 +309,7 @@ Imagegen concept evidence:
 Source-of-truth artifact:
 Source SHA-256:
 Figure plan artifact:
+Architect design artifact:
 Critic validation artifact:
 Generated image artifact:
 Final asset artifact:
