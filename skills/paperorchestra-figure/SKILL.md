@@ -11,6 +11,24 @@ Before executing any `$skill`, `omx`, `codex`, MCP, or PaperOrchestra CLI action
 
 Use this skill for paper figures, not generic image requests. A figure is a scholarly argument object: it must support a claim, fit the manuscript layout, and have a caption that explains why the reader should care.
 
+## Publication-rhetoric gate
+
+Before generation, decide whether the figure is a **paper figure** or an internal slide/diagram. Reject or redesign the plan when the figure depends on slide-like scaffolding rather than visual argument.
+
+Hard rejection patterns:
+
+- a title inside the figure that restates the caption or paper claim;
+- a legend whose categories require rereading before the pipeline can be understood;
+- prose panels such as "Evidence contract" that are paragraphs disguised as graphics;
+- offline/evaluation/helper lanes mixed into a runtime architecture figure;
+- box-and-arrow chains with no clear data/control semantics, decision point, or visual hierarchy;
+- random arrow colors, palette semantics not explained by labels, or color-only meaning;
+- pastel card grids, decorative badges, fake UI chrome, or "AI slide" styling;
+- labels likely below 9 pt at final IEEE column/page width;
+- a figure that would still be unclear if all colors were converted to grayscale.
+
+For pipeline/architecture figures, require a one-sentence `figure_message`, then make every visual element serve that message. Prefer one main reading path, neutral process arrows, and at most one accented decision branch. Put benchmark labels, caveats, and long definitions in the caption or prose unless they are part of the runtime mechanism being depicted.
+
 ## Figure intent contract
 
 Before generating or editing a figure, write this compact contract:
@@ -60,6 +78,21 @@ Required artifacts for every generated/replacement figure:
 
 Critic validation must happen before generation. The Critic should reject or reinforce the plan when the figure is a faux figure, overcrowded, decorative, too local-term-heavy, caption-dependent, unsupported by evidence, or better expressed as prose/table. Critic reinforcement should simplify the visual claim, reduce labels, preserve exact terms/numbers in deterministic source-of-truth assets or caption/table evidence maps, and define the visual hierarchy before any render/generation step.
 
+Critic validation must explicitly answer:
+
+```text
+paper_figure_not_slide: pass | fail
+single_visual_message: pass | fail
+legend_dependency: none | acceptable | blocking
+runtime_vs_evaluation_mixed: no | acceptable | blocking
+prose_disguised_as_graphic: no | blocking
+arrow_semantics: clear | blocking
+grayscale_readability: pass | fail
+minimum_label_size: pass | fail
+```
+
+Any `blocking` or `fail` answer above blocks generation or integration until the figure is redesigned.
+
 ## AI-artifact and publication visual QA
 
 For every generated or replacement final asset, inspect the raw asset and the rendered PDF page. This applies to deterministic outputs as well as imagegen outputs. Fail or request repair for:
@@ -81,6 +114,8 @@ Acceptance gates:
 - rendered-page proof: page visual audit is required for deterministic outputs and imagegen outputs.
 
 The default pass threshold is strict: no blocking visual finding, no unresolved `visual_review_pending`, no AI-artifact tell that would make the figure look machine-generated or unserious, and no caption/claim mismatch. If the reviewer finds only aesthetic preference that cannot be resolved objectively, mark it `human_needed` instead of pretending the figure passed.
+
+Do not pass a figure only because text is legible, arrows do not cross, and labels are deterministic. Those are necessary but insufficient. A figure can be technically clean and still fail if it reads like a slide, mixes unrelated lanes, or requires the caption to explain its basic structure.
 
 ## Placement contract
 

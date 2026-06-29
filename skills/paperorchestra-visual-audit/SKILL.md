@@ -30,6 +30,7 @@ Check rendered pages for issues TeX/source review cannot reliably see:
 - float clumps, orphaned headings, column imbalance, excessive whitespace;
 - one-column vs two-column placement mistakes (`figure` vs `figure*`, table width, caption float risk);
 - cross-document visual consistency: figure palette, line weights, typography, diagram density, caption style;
+- publication-figure rhetoric failures: slide-like title text inside the figure, legend dependency, prose boxes disguised as graphics, runtime architecture mixed with offline evaluation lanes, box chains without clear data/control semantics, random arrow colors, or visual hierarchy that is only understandable after reading the caption;
 - generated draft artwork still used as if it were final evidence;
 - AI-generated-artifact tells in figures: garbled/blurry text, warped geometry, object bleeding, inconsistent light/shadow, overdecorated stock-art sheen, fake UI chrome, unsupported decorative icons, or excessive detail that distracts from the scientific claim.
 
@@ -86,6 +87,8 @@ The command writes:
 - `visual_repair_candidate.json` after the brief, with concrete bounded TeX/table/figure repair strategies and claim/location/caption guards before author handoff.
 
 Imported findings should use this compact schema. When `--require-ai-artifact-check` or `--require-publication-figure-check` is used, the corresponding `checks_completed` entries are mandatory; an otherwise empty findings file must not pass.
+
+When `--require-publication-figure-check` is used, do not mark a figure `pass` merely because it is readable. The imported findings must explicitly consider whether the figure works as a paper figure: single visual message, visual hierarchy, no slide-title dependence, no confusing legend, no paragraph-like prose cards, no unrelated evaluation lane in a runtime figure, clear arrow semantics, and grayscale-safe meaning. If those checks were not performed, report `publication_figure_review_incomplete` and keep the audit pending or failing.
 
 Imported findings should use this compact schema:
 
