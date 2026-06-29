@@ -1,6 +1,6 @@
 ---
 name: paperorchestra-figure
-description: Design, draft, review, generate, and repair evidence-bearing PaperOrchestra manuscript figures through an output-form gate, Critic validation, source-of-truth rendering/generation, AI-artifact/publication QA, and repair loop. Use when a paper plan, section, review, or quality gate needs pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, or visual-abstract figures; handles caption/claim alignment, one-column vs two-column LaTeX placement, Ralph-backed iteration, visual-verdict/page-audit checks, deterministic exact-label assets, and imagegen concept or venue-permitted non-exact bitmap assets.
+description: Design, draft, review, generate, and repair evidence-bearing PaperOrchestra manuscript figures through mandatory imagegen participation, an output-form gate, Critic validation, source-of-truth rendering/generation, AI-artifact/publication QA, and repair loop. Use when a paper plan, section, review, or quality gate needs pipeline, architecture, taxonomy, teaser, result-summary, case-study, threat-model, visual-abstract, or imagegen-assisted figure concepts; handles caption/claim alignment, one-column vs two-column LaTeX placement, Ralph-backed iteration, visual-verdict/page-audit checks, imagegen concept/style artifacts, deterministic exact-label final assets, and venue-permitted non-exact imagegen bitmap finals.
 ---
 
 # PaperOrchestra Figure
@@ -29,6 +29,10 @@ source-of-truth artifact:
 source SHA-256:
 venue AI policy:
 output form: deterministic vector/PDF/PNG/SVG render | deterministic code/listing/table/plot asset | imagegen bitmap final | imagegen concept/style reference + deterministic final asset | LaTeX placement snippet | caption only for review-only tasks
+imagegen participation: required concept/style reference | final bitmap art | skipped only for explicit review-only/caption-only task
+imagegen role: concept_only | style_reference | final_art
+imagegen prompt artifact:
+imagegen result artifact or session evidence:
 ```
 
 Reject decorative figures. If the figure has no supported claim or source evidence, route back to `$paperorchestra-plan` or ask for the missing evidence.
@@ -38,16 +42,17 @@ Reject decorative figures. If the figure has no supported claim or source eviden
 Every new or replacement evidence-bearing figure must run this loop before it can be claimed integrated. Treat this as required even when the user asks for a quick figure. Skip only for explicitly review-only/caption-only tasks, and record the skip reason.
 
 ```text
-figure plan -> output-form gate -> Critic validation + reinforcement -> render/generate selected source-of-truth artifact -> figure visual QA -> repair/regenerate -> compile/render -> page visual audit -> accept or continue
+figure plan -> output-form gate -> Critic validation + reinforcement -> imagegen concept/final generation -> render/generate selected source-of-truth artifact -> figure visual QA -> repair/regenerate -> compile/render -> page visual audit -> accept or continue
 ```
 
-Use `$ralph` as the persistence wrapper when the current session has OMX runtime support or the user asks to keep going through the figure. Ralph's stop condition is not "an image exists"; it is: plan accepted, output-form gate recorded, source-of-truth artifact persisted with SHA-256, final embed path recorded, AI-artifact/visual findings resolved or explicitly human-owned, compiled PDF rendered, and figure/page artifacts recorded. If runtime Ralph is unavailable, execute the same loop locally and record `ralph_unavailable` in the figure manifest.
+Use `$ralph` as the persistence wrapper when the current session has OMX runtime support or the user asks to keep going through the figure. Ralph's stop condition is not "an image exists"; it is: plan accepted, output-form gate recorded, imagegen participation recorded, source-of-truth artifact persisted with SHA-256, final embed path recorded, AI-artifact/visual findings resolved or explicitly human-owned, compiled PDF rendered, and figure/page artifacts recorded. If runtime Ralph is unavailable, execute the same loop locally and record `ralph_unavailable` in the figure manifest.
 
 Required artifacts for every generated/replacement figure:
 
 - `figure-plan.<id>.md`: figure intent contract, claim/caption/placement contract, prompt strategy, and acceptance checks.
 - `figure-critic.<id>.json`: Critic verdict before generation. Must include `verdict`, `blocking_issues[]`, `reinforcements[]`, and `acceptance_checks[]`.
-- `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`: updated for the selected/final asset, output form, source-of-truth artifact, source SHA-256, and caption evidence map.
+- `imagegen-concepts.<id>.json` or equivalent manifest entry: imagegen prompt, output role (`concept_only`, `style_reference`, or `final_art`), result artifact path when the tool exposes one, or session evidence when it does not. This artifact is required for every new/replacement evidence-bearing figure unless the task is explicitly review-only/caption-only.
+- `plot_manifest.json`, `plot_assets.json`, `plot_captions.json`: updated for imagegen participation, the selected/final asset, output form, source-of-truth artifact, source SHA-256, and caption evidence map.
 - `figure-visual-findings.<id>.json`: visual-verdict/vision/Critic findings for the final asset or rendered page. It must explicitly address AI-generated-artifact tells and publication-figure readability.
 - `figure-placement-review.json`: refreshed after LaTeX placement changes.
 - `page-layout-review.json`: refreshed after compile/render; cannot be TeX-only.
@@ -144,7 +149,7 @@ For a figure-bearing manuscript, expected figure artifacts must not silently dis
 Use the output-form gate before choosing tools:
 
 - Deterministic exact-label figures may use local script/vector/TikZ/SVG/Graphviz/Pillow/LaTeX-listing/table/plot sources when those are the source of truth. Export/embed as PDF, PNG, or SVG according to the venue/template and record the source path plus SHA-256.
-- Use the installed `imagegen` skill/tool for imagegen final art and for mixed concept/style exploration. Imagegen is not a substitute for deterministic source-of-truth rendering when exact labels, arrows, code semantics, or numeric values carry the claim.
+- Use the installed `imagegen` skill/tool for every new/replacement evidence-bearing figure. For exact-label/data/code/arrow figures, the imagegen output is mandatory concept/style evidence, not final authority. For non-exact conceptual art, imagegen may be final art only when venue policy allows it. Imagegen is not a substitute for deterministic source-of-truth rendering when exact labels, arrows, code semantics, or numeric values carry the claim.
 - PaperOrchestra MCP/source/CLI tools remain useful for state inspection, artifact indexing, placement review, visual/page audit, and quality gates. They do not remove the need for source-of-truth artifacts, caption evidence maps, or rendered-page proof.
 
 If using CLI fallback surfaces, verify each command with `--help` on the exact surface you will run (PATH-installed console, checkout `.venv`, or source-module invocation). Do not call undocumented commands such as `paperorchestra review-figure-placement` unless that same surface lists them. When the verified surface exposes `visual-audit`, integrated rendered-page checks use:
@@ -163,26 +168,28 @@ For evidence-bearing figure work, render/generate the selected final asset, then
 
 ## Output policy
 
-Use output-form routing instead of a blanket imagegen mandate:
+Use mandatory imagegen participation, not mandatory imagegen final authority. The output-form gate must decide whether imagegen is final art or concept/style evidence before deterministic rendering:
 
 | Figure requirement | Default output form | Imagegen role | Required proof |
 | --- | --- | --- | --- |
-| exact-label pipeline, architecture, method, taxonomy, threat-model, or trust-boundary diagram | deterministic vector/PDF/PNG/SVG source-of-truth render | concept/style reference only, if useful | source path + SHA-256, caption evidence map, rendered-page audit |
-| result-summary plot, numeric chart, queue summary, or metric panel | deterministic script/data plot asset | concept/style reference only, if useful | data/script hash, plotted values check, rendered-page audit |
-| case-study, failure anatomy, code idiom, or listing | LaTeX listing or deterministic diagram/listing asset | concept/style reference only, if useful | code/source citation, source hash, rendered-page audit |
+| exact-label pipeline, architecture, method, taxonomy, threat-model, or trust-boundary diagram | deterministic vector/PDF/PNG/SVG source-of-truth render | required concept/style reference | imagegen prompt/result metadata plus source path + SHA-256, caption evidence map, rendered-page audit |
+| result-summary plot, numeric chart, queue summary, or metric panel | deterministic script/data plot asset | required concept/style reference | imagegen prompt/result metadata plus data/script hash, plotted values check, rendered-page audit |
+| case-study, failure anatomy, code idiom, or listing | LaTeX listing or deterministic diagram/listing asset | required concept/style reference | imagegen prompt/result metadata plus code/source citation, source hash, rendered-page audit |
 | teaser, visual abstract, or non-exact conceptual illustration | imagegen bitmap final only when venue policy allows | final art or concept reference | prompt, generated asset path, disclosure/policy evidence, AI-artifact/publication QA |
 | mixed exact+illustrative figure | deterministic final asset with imagegen concept/style reference | concept/style reference, not final authority | concept metadata plus deterministic source path/SHA and page audit |
 | review-only caption/placement task | caption or LaTeX placement snippet only | none unless explicitly requested | caption evidence map or placement review |
 
 Hard defaults:
 
+- Every new/replacement evidence-bearing figure must invoke imagegen once or record a blocking `imagegen_unavailable` / `prompt_only_no_image_generated` status. Do not claim a figure loop is complete without imagegen participation evidence.
 - Exact-label, data-bearing, arrow-bearing, code-semantic, or rule-semantic figures default to deterministic source-of-truth final assets.
 - Unknown venue AI policy means no final imagegen bitmap for evidence-bearing exact figures; use deterministic final art or mark human final artwork required.
-- Imagegen remains valid for non-exact visual art and for concept/style exploration, but it must not be the final authority for exact text, arrows, data, or code semantics.
+- Imagegen is mandatory for concept/style exploration and remains valid for non-exact visual art, but it must not be the final authority for exact text, arrows, data, or code semantics.
 - Deterministic assets are allowed as final generated figure content when their source, evidence, caption map, SHA-256, and rendered-page audit are recorded. Do not reintroduce a blanket ban on TikZ/SVG/Mermaid/Graphviz/vector/code-native sources.
 - Mermaid, TikZ, SVG, Graphviz, canvas, HTML, Pillow/PIL, or LaTeX listings are acceptable only when they are deterministic, source-backed, reviewable, and exported/embedded in a venue-compatible form. Do not use them to invent unsupported diagrams.
 - If an imagegen call cannot be made for an imagegen-final task, stop with a blocker or return `prompt only / no image generated`; do not imply that an image file exists.
-- For mixed imagegen-concept + deterministic final asset paths, record the imagegen prompt/result role as `concept_only` or `style_reference`, then render the exact-label final asset locally and record the render source plus final asset path/hash in `plot_assets.json`.
+- If an imagegen call cannot be made for an exact-label deterministic-final task, record `prompt_only_no_image_generated` and keep the figure in a blocked or conditional state; do not mark the mandatory imagegen gate satisfied.
+- For imagegen-concept + deterministic final asset paths, record the imagegen prompt/result role as `concept_only` or `style_reference`, then render the exact-label final asset locally and record the render source plus final asset path/hash in `plot_assets.json`.
 - Use LaTeX placement snippets to embed final assets, for example `\includegraphics`, figure width, label, and caption. Do not use placement snippets as evidence that the figure itself was reviewed.
 
 Before generating anything, still consider whether a figure is necessary:
@@ -215,7 +222,7 @@ Before generating anything, still consider whether a figure is necessary:
    - imagegen concept/style reference + deterministic final asset for mixed paths;
    - LaTeX placement snippet only to embed the selected final asset;
    - caption only when the task is explicitly review-only and no new figure asset is requested.
-8. Render or generate the selected asset. If imagegen bitmap art is final, save the selected output into the PaperOrchestra workspace and record it in `plot_assets.json` or the round artifact manifest. If using a deterministic path, render/export the exact-label final asset locally and record the source path, source SHA-256, final asset path, and final asset hash in `plot_assets.json`. If using a mixed path, save the imagegen prompt/result metadata as concept evidence and make the deterministic artifact the final authority.
+8. Invoke imagegen for the selected role unless this is explicitly review-only/caption-only. Save the generated result into the PaperOrchestra workspace when the tool exposes a filesystem artifact; otherwise record the prompt, session/tool evidence, and the fact that no local image path was exposed. Then render or generate the selected final asset. If imagegen bitmap art is final, save the selected output into the PaperOrchestra workspace and record it in `plot_assets.json` or the round artifact manifest. If using a deterministic path, render/export the exact-label final asset locally and record the source path, source SHA-256, final asset path, and final asset hash in `plot_assets.json`. If using a mixed path, save the imagegen prompt/result metadata as concept evidence and make the deterministic artifact the final authority.
 9. Run visual-verdict/vision review on the final asset or rendered page and write `figure-visual-findings.<id>.json`; if it reports AI-artifact, readability, hierarchy, label-text, or publication-fit problems, repair/regenerate before continuing.
 10. Draft the caption:
    - first sentence: what the figure shows;
@@ -233,6 +240,7 @@ Check every figure for:
 - caption sufficiency: can the reader understand the figure if it floats?
 - placement: does `figure` vs `figure*` match one-column/two-column readability?
 - visual necessity: would prose or a table be clearer?
+- imagegen participation: is there an imagegen prompt/result artifact or a blocking `prompt_only_no_image_generated` status?
 - no invented components, citations, metrics, labels, or arrows; if imagegen introduces unsupported detail, reject or regenerate the asset.
 - no AI-generated-artifact tells: garbled text, warped geometry, object bleeding, inconsistent lighting/shadows, fake UI chrome, or stock-art gloss.
 - source-of-truth integrity: exact labels/data/arrows/code semantics have deterministic source paths and SHA-256 hashes.
@@ -250,7 +258,11 @@ Source evidence:
 Output form:
 Output-form gate verdict:
 Venue AI policy:
+Imagegen participation status:
+Imagegen role:
 Imagegen prompt:
+Imagegen prompt artifact:
+Imagegen result artifact or session evidence:
 Imagegen concept evidence:
 Source-of-truth artifact:
 Source SHA-256:

@@ -53,11 +53,12 @@ def test_figure_skill_routes_exact_label_figures_to_deterministic_outputs() -> N
     assert_contains(
         "paperorchestra-figure",
         body,
-        "Use output-form routing instead of a blanket imagegen mandate",
+        "Use mandatory imagegen participation, not mandatory imagegen final authority",
         "Exact-label, data-bearing, arrow-bearing, code-semantic, or rule-semantic figures default to deterministic source-of-truth final assets.",
         "deterministic vector/PDF/PNG/SVG source-of-truth render",
         "deterministic script/data plot asset",
         "LaTeX listing or deterministic diagram/listing asset",
+        "required concept/style reference",
         "Do not reintroduce a blanket ban on TikZ/SVG/Mermaid/Graphviz/vector/code-native sources.",
     )
 
@@ -67,7 +68,8 @@ def test_figure_skill_scopes_imagegen_to_concept_or_policy_allowed_art() -> None
     assert_contains(
         "paperorchestra-figure",
         body,
-        "Use the installed `imagegen` skill/tool for imagegen final art and for mixed concept/style exploration.",
+        "Use the installed `imagegen` skill/tool for every new/replacement evidence-bearing figure.",
+        "For exact-label/data/code/arrow figures, the imagegen output is mandatory concept/style evidence, not final authority.",
         "Imagegen is not a substitute for deterministic source-of-truth rendering when exact labels, arrows, code semantics, or numeric values carry the claim.",
         "imagegen bitmap final only when venue policy allows",
         "imagegen concept/style reference + deterministic final asset",
@@ -168,10 +170,12 @@ def test_figure_skill_fails_closed_on_claimed_figure_assets() -> None:
     assert_contains(
         "paperorchestra-figure",
         body,
+        "Every new/replacement evidence-bearing figure must invoke imagegen once",
         "source-of-truth artifact and SHA-256 are mandatory",
         "rendered-page proof",
         "Final asset artifact:",
         "Final asset SHA-256:",
+        "prompt_only_no_image_generated",
         "prompt only / no image generated",
     )
 
@@ -299,11 +303,12 @@ def test_figure_skill_requires_ralph_backed_plan_critic_generate_visual_loop() -
         "paperorchestra-figure",
         body,
         "Mandatory figure Ralph loop",
-        "figure plan -> output-form gate -> Critic validation + reinforcement -> render/generate selected source-of-truth artifact -> figure visual QA -> repair/regenerate -> compile/render -> page visual audit -> accept or continue",
+        "figure plan -> output-form gate -> Critic validation + reinforcement -> imagegen concept/final generation -> render/generate selected source-of-truth artifact -> figure visual QA -> repair/regenerate -> compile/render -> page visual audit -> accept or continue",
         "Every new or replacement evidence-bearing figure must run this loop",
         "figure-plan.<id>.md",
         "figure-critic.<id>.json",
         "figure-visual-findings.<id>.json",
+        "imagegen-concepts.<id>.json",
         "$ralph",
     )
 
